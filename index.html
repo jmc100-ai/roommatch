@@ -3,118 +3,124 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>RoomMatch — Find Hotels by Room Style</title>
+<title>RoomMatch — Visual Hotel Search</title>
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
   :root {
-    --bg: #0d0d0d;
-    --surface: #161616;
-    --surface2: #1e1e1e;
-    --border: rgba(255,255,255,0.08);
-    --border2: rgba(255,255,255,0.14);
-    --text: #f0ede8;
-    --muted: rgba(240,237,232,0.45);
-    --accent: #c9a96e;
-    --accent2: #8b6f47;
-    --green: #4caf80;
-    --red: #e06060;
+    --bg: #0d0d0d; --surface: #161616; --surface2: #1e1e1e;
+    --border: rgba(255,255,255,0.07); --border2: rgba(255,255,255,0.13);
+    --text: #f0ede8; --muted: rgba(240,237,232,0.42);
+    --accent: #c9a96e; --accent2: #8b6f47; --accent-bg: rgba(201,169,110,0.09);
+    --green: #4caf80; --red: #e06060;
     --font-display: 'Playfair Display', Georgia, serif;
     --font-body: 'DM Sans', sans-serif;
   }
   body { background: var(--bg); color: var(--text); font-family: var(--font-body); font-size: 15px; line-height: 1.6; min-height: 100vh; }
-
-  header { padding: 28px 40px; display: flex; align-items: baseline; gap: 16px; border-bottom: 0.5px solid var(--border); }
-  .logo { font-family: var(--font-display); font-size: 26px; color: var(--accent); letter-spacing: -0.5px; }
-  .tagline { font-size: 12px; color: var(--muted); letter-spacing: 0.08em; text-transform: uppercase; }
-
-  .main { display: grid; grid-template-columns: 340px 1fr; min-height: calc(100vh - 85px); }
-
-  .sidebar { border-right: 0.5px solid var(--border); padding: 28px 24px; display: flex; flex-direction: column; gap: 24px; overflow-y: auto; }
-
-  .section-label { font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); margin-bottom: 10px; }
-
-  .upload-zone { border: 1px dashed var(--border2); border-radius: 12px; padding: 32px 20px; text-align: center; cursor: pointer; transition: border-color 0.2s, background 0.2s; background: var(--surface); }
-  .upload-zone:hover { border-color: var(--accent2); background: var(--surface2); }
-  .upload-zone.dragging { border-color: var(--accent); background: rgba(201,169,110,0.06); }
-  .upload-icon { font-size: 28px; margin-bottom: 10px; opacity: 0.5; }
-  .upload-text { font-size: 13px; color: var(--muted); }
+  header { padding: 20px 36px; display: flex; align-items: center; justify-content: space-between; border-bottom: 0.5px solid var(--border); }
+  .logo { font-family: var(--font-display); font-size: 24px; color: var(--accent); letter-spacing: -0.3px; }
+  .header-sub { font-size: 11px; color: var(--muted); letter-spacing: 0.07em; text-transform: uppercase; }
+  .main { display: grid; grid-template-columns: 320px 1fr; min-height: calc(100vh - 65px); }
+  .sidebar { border-right: 0.5px solid var(--border); padding: 20px; display: flex; flex-direction: column; gap: 18px; overflow-y: auto; }
+  .section-label { font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); margin-bottom: 7px; }
+  .upload-zone { border: 1px dashed var(--border2); border-radius: 10px; padding: 24px 14px; text-align: center; cursor: pointer; transition: border-color 0.2s, background 0.2s; background: var(--surface); }
+  .upload-zone:hover, .upload-zone.dragging { border-color: var(--accent2); background: var(--accent-bg); }
+  .upload-icon { font-size: 22px; margin-bottom: 6px; opacity: 0.4; }
+  .upload-text { font-size: 12px; color: var(--muted); }
   .upload-text strong { color: var(--accent); font-weight: 500; }
-
-  .preview-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px; }
-  .preview-thumb { position: relative; border-radius: 8px; overflow: hidden; aspect-ratio: 1; background: var(--surface2); }
+  .preview-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; margin-top: 8px; }
+  .preview-thumb { position: relative; border-radius: 7px; overflow: hidden; aspect-ratio: 1; background: var(--surface2); }
   .preview-thumb img { width: 100%; height: 100%; object-fit: cover; }
-  .remove-btn { position: absolute; top: 4px; right: 4px; width: 20px; height: 20px; border-radius: 50%; background: rgba(0,0,0,0.7); border: none; color: #fff; font-size: 14px; cursor: pointer; display: flex; align-items: center; justify-content: center; line-height: 1; }
-
-  .filters-wrap { display: flex; flex-direction: column; gap: 10px; }
-  .filter-chip { display: flex; align-items: center; justify-content: space-between; padding: 9px 14px; border-radius: 8px; border: 0.5px solid var(--border); background: var(--surface); cursor: pointer; font-size: 13px; transition: border-color 0.15s, background 0.15s; user-select: none; }
-  .filter-chip:hover { border-color: var(--border2); background: var(--surface2); }
-  .filter-chip.active { border-color: var(--accent); background: rgba(201,169,110,0.1); }
-  .filter-check { width: 16px; height: 16px; border-radius: 4px; border: 1px solid var(--border2); display: flex; align-items: center; justify-content: center; font-size: 9px; color: var(--accent); flex-shrink: 0; }
+  .remove-btn { position: absolute; top: 3px; right: 3px; width: 18px; height: 18px; border-radius: 50%; background: rgba(0,0,0,0.8); border: none; color: #fff; font-size: 12px; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+  .field-wrap { display: flex; flex-direction: column; gap: 5px; }
+  .field-wrap label { font-size: 10px; letter-spacing: 0.09em; text-transform: uppercase; color: var(--muted); }
+  input[type=text], input[type=password], input[type=date], select {
+    width: 100%; padding: 8px 11px; background: var(--surface); border: 0.5px solid var(--border2);
+    border-radius: 7px; color: var(--text); font-family: var(--font-body); font-size: 13px; outline: none;
+  }
+  input:focus, select:focus { border-color: var(--accent2); }
+  select { cursor: pointer; }
+  .date-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .filters-wrap { display: flex; flex-direction: column; gap: 6px; }
+  .filter-chip { display: flex; align-items: center; justify-content: space-between; padding: 7px 11px; border-radius: 7px; border: 0.5px solid var(--border); background: var(--surface); cursor: pointer; font-size: 12px; transition: border-color 0.15s, background 0.15s; user-select: none; }
+  .filter-chip:hover { border-color: var(--border2); }
+  .filter-chip.active { border-color: var(--accent); background: var(--accent-bg); }
+  .filter-check { width: 14px; height: 14px; border-radius: 3px; border: 1px solid var(--border2); display: flex; align-items: center; justify-content: center; font-size: 8px; flex-shrink: 0; }
   .filter-chip.active .filter-check { background: var(--accent); color: #000; border-color: var(--accent); }
+  .backend-row { display: flex; align-items: center; gap: 8px; }
+  .backend-row input { flex: 1; font-size: 12px; }
+  .status-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--red); flex-shrink: 0; transition: background 0.4s; }
+  .status-dot.ok { background: var(--green); }
+  .status-label { font-size: 11px; color: var(--muted); margin-top: 4px; }
+  .search-btn { width: 100%; padding: 12px; background: var(--accent); color: #1a1200; border: none; border-radius: 9px; font-family: var(--font-body); font-size: 14px; font-weight: 500; cursor: pointer; transition: opacity 0.15s; }
+  .search-btn:hover { opacity: 0.88; }
+  .search-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+  .content { overflow-y: auto; }
 
-  .analyze-btn { width: 100%; padding: 13px; background: var(--accent); color: #1a1200; border: none; border-radius: 10px; font-family: var(--font-body); font-size: 14px; font-weight: 500; cursor: pointer; transition: opacity 0.15s, transform 0.1s; letter-spacing: 0.01em; }
-  .analyze-btn:hover { opacity: 0.88; }
-  .analyze-btn:active { transform: scale(0.99); }
-  .analyze-btn:disabled { opacity: 0.35; cursor: not-allowed; }
-
-  .content { padding: 28px 32px; overflow-y: auto; }
-
-  .state-empty { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 60vh; gap: 16px; text-align: center; padding: 60px; color: var(--muted); }
-  .state-empty .big-icon { font-size: 52px; opacity: 0.3; }
-  .state-empty p { max-width: 340px; font-size: 14px; line-height: 1.8; }
-
-  .loading-state { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 60vh; gap: 20px; }
-  .spinner { width: 36px; height: 36px; border: 2px solid var(--border2); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.8s linear infinite; }
+  /* Empty / pipeline */
+  .state-empty { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 70vh; gap: 14px; text-align: center; padding: 40px; color: var(--muted); }
+  .state-empty .big-icon { font-size: 52px; opacity: 0.18; }
+  .state-empty p { max-width: 400px; font-size: 14px; line-height: 1.85; }
+  .pipeline { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 70vh; gap: 0; padding: 40px; }
+  .pipeline-step { display: flex; align-items: flex-start; gap: 14px; padding: 14px 0; width: 100%; max-width: 440px; }
+  .pipeline-step + .pipeline-step { border-top: 0.5px solid var(--border); }
+  .step-icon { width: 32px; height: 32px; border-radius: 50%; background: var(--surface2); border: 0.5px solid var(--border2); display: flex; align-items: center; justify-content: center; font-size: 14px; flex-shrink: 0; margin-top: 2px; transition: all 0.3s; }
+  .step-icon.active { background: var(--accent-bg); border-color: var(--accent); animation: spin 1s linear infinite; }
+  .step-icon.done   { background: rgba(76,175,128,0.15); border-color: var(--green); animation: none; }
   @keyframes spin { to { transform: rotate(360deg); } }
-  .loading-msg { font-size: 13px; color: var(--muted); }
+  .step-title { font-size: 13px; font-weight: 500; }
+  .step-sub   { font-size: 12px; color: var(--muted); margin-top: 2px; }
 
-  .analysis-panel { background: var(--surface); border: 0.5px solid var(--border); border-radius: 14px; padding: 20px 24px; margin-bottom: 28px; }
-  .analysis-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
-  .analysis-title { font-family: var(--font-display); font-size: 17px; }
-  .score-badge { font-size: 11px; padding: 4px 10px; border-radius: 20px; background: rgba(201,169,110,0.15); color: var(--accent); border: 0.5px solid var(--accent2); }
-  .attrs-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px; }
-  .attr-item { padding: 8px 12px; border-radius: 8px; background: var(--surface2); }
-  .attr-label { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 3px; }
-  .attr-value { font-size: 13px; font-weight: 500; color: var(--text); }
+  /* Results */
+  .results-wrap { padding: 24px 28px; }
+  .analysis-panel { background: var(--surface); border: 0.5px solid var(--border); border-radius: 12px; padding: 16px 20px; margin-bottom: 22px; }
+  .analysis-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+  .analysis-title { font-family: var(--font-display); font-size: 16px; }
+  .score-badge { font-size: 11px; padding: 3px 10px; border-radius: 20px; background: var(--accent-bg); color: var(--accent); border: 0.5px solid var(--accent2); }
+  .attrs-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 6px; }
+  .attr-item { padding: 6px 9px; border-radius: 6px; background: var(--surface2); }
+  .attr-label { font-size: 9px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.07em; margin-bottom: 2px; }
+  .attr-value { font-size: 12px; font-weight: 500; }
   .attr-value.yes { color: var(--green); }
-  .attr-value.no { color: var(--red); }
-
-  .results-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; }
+  .attr-value.no  { color: var(--red); }
+  .results-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
   .results-title { font-family: var(--font-display); font-size: 20px; }
-  .results-count { font-size: 12px; color: var(--muted); }
+  .results-meta  { font-size: 11px; color: var(--muted); }
+  .hotel-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 16px; }
 
-  .hotel-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 18px; }
-  .hotel-card { background: var(--surface); border: 0.5px solid var(--border); border-radius: 14px; overflow: hidden; transition: border-color 0.2s, transform 0.2s; }
+  /* Card */
+  .hotel-card { background: var(--surface); border: 0.5px solid var(--border); border-radius: 13px; overflow: hidden; transition: border-color 0.2s, transform 0.18s; }
   .hotel-card:hover { border-color: var(--border2); transform: translateY(-2px); }
-  .hotel-img { width: 100%; aspect-ratio: 4/3; background: var(--surface2); overflow: hidden; position: relative; }
-  .hotel-img img { width: 100%; height: 100%; object-fit: cover; }
-  .match-badge { position: absolute; top: 10px; right: 10px; background: rgba(0,0,0,0.75); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); border: 0.5px solid var(--accent2); color: var(--accent); font-size: 11px; font-weight: 500; padding: 3px 9px; border-radius: 20px; }
-  .hotel-body { padding: 14px 16px; }
-  .hotel-name { font-family: var(--font-display); font-size: 15px; margin-bottom: 3px; }
-  .hotel-location { font-size: 12px; color: var(--muted); margin-bottom: 10px; }
-  .hotel-tags { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 12px; }
-  .hotel-tag { font-size: 10px; padding: 3px 8px; border-radius: 20px; background: var(--surface2); color: var(--muted); border: 0.5px solid var(--border); }
-  .hotel-tag.match { color: var(--accent); border-color: var(--accent2); background: rgba(201,169,110,0.08); }
+  .photo-strip { display: flex; height: 160px; gap: 2px; background: var(--surface2); position: relative; overflow: hidden; }
+  .photo-strip img { flex: 1; min-width: 0; object-fit: cover; transition: flex 0.3s ease; cursor: pointer; }
+  .photo-strip img:hover { flex: 2.5; }
+  .photo-ph { flex: 1; display: flex; align-items: center; justify-content: center; font-size: 32px; opacity: 0.1; }
+  .match-badge { position: absolute; top: 8px; right: 8px; font-size: 11px; font-weight: 500; padding: 3px 9px; border-radius: 20px; background: rgba(0,0,0,0.78); border: 0.5px solid var(--accent2); color: var(--accent); }
+  .rating-badge { position: absolute; top: 8px; left: 8px; font-size: 11px; color: #ffd97d; background: rgba(0,0,0,0.72); padding: 2px 7px; border-radius: 20px; }
+  .scanning-overlay { position: absolute; inset: 0; background: rgba(13,13,13,0.82); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; }
+  .scan-label { font-size: 10px; color: var(--accent); letter-spacing: 0.1em; text-transform: uppercase; }
+  .scan-bar { width: 72px; height: 2px; background: var(--border2); border-radius: 2px; overflow: hidden; }
+  .scan-fill { height: 100%; background: var(--accent); border-radius: 2px; animation: scanpulse 1.1s ease-in-out infinite; }
+  @keyframes scanpulse { 0%,100%{width:15%} 50%{width:88%} }
+  .hotel-body { padding: 12px 14px; }
+  .hotel-name { font-family: var(--font-display); font-size: 14px; margin-bottom: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .hotel-meta { font-size: 11px; color: var(--muted); margin-bottom: 7px; }
+  .vision-summary { font-size: 11px; color: var(--muted); font-style: italic; margin-bottom: 7px; line-height: 1.5; }
+  .tags-row { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 9px; min-height: 20px; }
+  .tag { font-size: 10px; padding: 2px 7px; border-radius: 20px; background: var(--surface2); color: var(--muted); border: 0.5px solid var(--border); }
+  .tag.match    { color: var(--accent); border-color: var(--accent2); background: var(--accent-bg); }
+  .tag.detected { color: var(--green); border-color: rgba(76,175,128,0.4); background: rgba(76,175,128,0.07); }
   .hotel-footer { display: flex; align-items: center; justify-content: space-between; }
-  .hotel-price { font-size: 14px; font-weight: 500; }
-  .hotel-price span { font-size: 11px; color: var(--muted); font-weight: 400; }
-  .view-btn { font-size: 11px; padding: 6px 14px; border: 0.5px solid var(--border2); border-radius: 6px; background: transparent; color: var(--text); cursor: pointer; font-family: var(--font-body); transition: background 0.15s, border-color 0.15s; }
-  .view-btn:hover { background: var(--surface2); border-color: var(--accent2); }
-
-  .error-box { background: rgba(224,96,96,0.1); border: 0.5px solid var(--red); border-radius: 10px; padding: 14px 18px; font-size: 13px; color: var(--red); margin-bottom: 20px; }
-
-  .api-notice { background: rgba(201,169,110,0.08); border: 0.5px solid var(--accent2); border-radius: 10px; padding: 14px 18px; font-size: 12px; color: var(--muted); margin-bottom: 20px; line-height: 1.7; }
-  .api-notice strong { color: var(--accent); }
-  .api-notice a { color: var(--accent); }
-
+  .price-block .amount { font-size: 15px; font-weight: 500; }
+  .price-block .label  { font-size: 10px; color: var(--muted); }
+  .view-btn { font-size: 11px; padding: 5px 12px; border: 0.5px solid var(--border2); border-radius: 6px; background: transparent; color: var(--text); cursor: pointer; font-family: var(--font-body); text-decoration: none; transition: background 0.15s, color 0.15s, border-color 0.15s; display: inline-block; }
+  .view-btn:hover { background: var(--surface2); color: var(--accent); border-color: var(--accent2); }
+  .error-box { background: rgba(224,96,96,0.1); border: 0.5px solid var(--red); border-radius: 9px; padding: 12px 16px; font-size: 13px; color: var(--red); line-height: 1.7; }
+  code { font-size: 11px; background: var(--surface2); padding: 1px 5px; border-radius: 3px; }
   input[type=file] { display: none; }
-
-  @media (max-width: 768px) {
+  @media (max-width: 800px) {
     .main { grid-template-columns: 1fr; }
     .sidebar { border-right: none; border-bottom: 0.5px solid var(--border); }
-    header { padding: 20px 20px; }
-    .content { padding: 20px; }
   }
 </style>
 </head>
@@ -122,310 +128,462 @@
 
 <header>
   <div class="logo">RoomMatch</div>
-  <div class="tagline">Find hotels by room style</div>
+  <div class="header-sub">Visual hotel search · Hotels.com + Claude Vision</div>
 </header>
 
 <div class="main">
   <div class="sidebar">
+
     <div>
-      <div class="section-label">Your reference images</div>
+      <div class="section-label">1 · Your reference photos</div>
       <div class="upload-zone" id="dropZone" onclick="document.getElementById('fileInput').click()">
-        <div class="upload-icon">&#128247;</div>
-        <div class="upload-text">Drop hotel room photos here<br><strong>or click to browse</strong></div>
+        <div class="upload-icon">📷</div>
+        <div class="upload-text">Drop hotel room photos<br><strong>or click to browse</strong></div>
       </div>
       <input type="file" id="fileInput" accept="image/*" multiple>
       <div class="preview-grid" id="previewGrid"></div>
     </div>
 
     <div>
-      <div class="section-label">Must-have features</div>
-      <div class="filters-wrap" id="filtersWrap">
-        <div class="filter-chip" data-key="large_bathroom" onclick="toggleFilter(this)">
-          <span>&#127742; Large bathroom</span><div class="filter-check">✓</div>
-        </div>
-        <div class="filter-chip" data-key="double_sinks" onclick="toggleFilter(this)">
-          <span>&#129524; Double sinks</span><div class="filter-check">✓</div>
-        </div>
-        <div class="filter-chip" data-key="sofa" onclick="toggleFilter(this)">
-          <span>&#128716; Sofa / lounge seating</span><div class="filter-check">✓</div>
-        </div>
-        <div class="filter-chip" data-key="large_room" onclick="toggleFilter(this)">
-          <span>&#8596; Spacious room</span><div class="filter-check">✓</div>
-        </div>
-        <div class="filter-chip" data-key="modern_style" onclick="toggleFilter(this)">
-          <span>&#10024; Modern / contemporary</span><div class="filter-check">✓</div>
-        </div>
-        <div class="filter-chip" data-key="bathtub" onclick="toggleFilter(this)">
-          <span>&#128703; Bathtub</span><div class="filter-check">✓</div>
-        </div>
-        <div class="filter-chip" data-key="workspace" onclick="toggleFilter(this)">
-          <span>&#128203; Workspace / desk</span><div class="filter-check">✓</div>
-        </div>
-        <div class="filter-chip" data-key="great_view" onclick="toggleFilter(this)">
-          <span>&#127968; Great view</span><div class="filter-check">✓</div>
-        </div>
+      <div class="section-label">2 · Destination &amp; dates</div>
+      <div class="field-wrap" style="margin-bottom:9px">
+        <label>City</label>
+        <input type="text" id="cityInput" placeholder="Paris, Tokyo, New York...">
+      </div>
+      <div class="date-row">
+        <div class="field-wrap"><label>Check-in</label><input type="date" id="checkin"></div>
+        <div class="field-wrap"><label>Check-out</label><input type="date" id="checkout"></div>
       </div>
     </div>
 
     <div>
-      <div class="section-label">Anthropic API Key</div>
-      <input type="password" id="apiKeyInput" placeholder="sk-ant-..." style="width:100%;padding:10px 12px;background:var(--surface);border:0.5px solid var(--border2);border-radius:8px;color:var(--text);font-family:var(--font-body);font-size:13px;">
-      <p style="font-size:11px;color:var(--muted);margin-top:6px;">Your key stays in your browser and is never stored. Get one at <a href="https://console.anthropic.com" target="_blank" style="color:var(--accent);">console.anthropic.com</a></p>
+      <div class="section-label">3 · Must-have features</div>
+      <div class="filters-wrap">
+        <div class="filter-chip" data-key="large_bathroom" onclick="toggleFilter(this)"><span>🛁 Large bathroom</span><div class="filter-check">✓</div></div>
+        <div class="filter-chip" data-key="double_sinks"   onclick="toggleFilter(this)"><span>🪠 Double sinks</span><div class="filter-check">✓</div></div>
+        <div class="filter-chip" data-key="bathtub"        onclick="toggleFilter(this)"><span>🛁 Bathtub</span><div class="filter-check">✓</div></div>
+        <div class="filter-chip" data-key="sofa"           onclick="toggleFilter(this)"><span>🛋 Sofa / lounge</span><div class="filter-check">✓</div></div>
+        <div class="filter-chip" data-key="large_room"     onclick="toggleFilter(this)"><span>↔ Spacious room</span><div class="filter-check">✓</div></div>
+        <div class="filter-chip" data-key="modern_style"   onclick="toggleFilter(this)"><span>✨ Modern style</span><div class="filter-check">✓</div></div>
+        <div class="filter-chip" data-key="workspace"      onclick="toggleFilter(this)"><span>💼 Workspace</span><div class="filter-check">✓</div></div>
+        <div class="filter-chip" data-key="great_view"     onclick="toggleFilter(this)"><span>🏙 Great view</span><div class="filter-check">✓</div></div>
+      </div>
     </div>
 
-    <button class="analyze-btn" id="analyzeBtn" onclick="analyze()" disabled>
-      Analyze &amp; Find Matches
+    <div>
+      <div class="section-label">4 · Backend URL</div>
+      <div class="backend-row">
+        <input type="text" id="backendUrl" placeholder="https://your-app.onrender.com">
+        <div class="status-dot" id="statusDot"></div>
+      </div>
+      <div class="status-label" id="statusLabel">Enter your Render URL above</div>
+    </div>
+
+    <div>
+      <div class="section-label">5 · Anthropic key</div>
+      <input type="password" id="anthropicKey" placeholder="sk-ant-...">
+      <p style="font-size:11px;color:var(--muted);margin-top:5px;line-height:1.6">Used to analyze your reference photos only. Hotel room scanning runs on the backend.</p>
+    </div>
+
+    <button class="search-btn" id="searchBtn" onclick="runSearch()" disabled>
+      Find Matching Hotels
     </button>
   </div>
 
   <div class="content" id="content">
     <div class="state-empty">
-      <div class="big-icon">&#127968;</div>
-      <p>Upload photos of hotel rooms you've loved, select must-have features, enter your Anthropic API key, and we'll find your perfect match.</p>
+      <div class="big-icon">🏨</div>
+      <p>Upload room photos you love, set a destination and dates, and RoomMatch will visually scan each hotel's room photos with Claude Vision to find your perfect match.</p>
+      <p style="font-size:12px;margin-top:4px;opacity:0.6">Hotels.com inventory · Claude Vision AI · Deployed on Render</p>
     </div>
   </div>
 </div>
 
 <script>
-const SAMPLE_HOTELS = [
-  { name: "The Aman Tokyo", location: "Tokyo, Japan", price: "$1,200", img: "https://images.unsplash.com/photo-1631049307264-da0ec9d70304?w=600&q=80", tags: ["large_bathroom","double_sinks","sofa","modern_style","great_view","large_room"] },
-  { name: "Park Hyatt New York", location: "New York, USA", price: "$895", img: "https://images.unsplash.com/photo-1618773928121-c32242e63f39?w=600&q=80", tags: ["large_room","workspace","sofa","modern_style","great_view","large_bathroom"] },
-  { name: "Bvlgari Hotel Milan", location: "Milan, Italy", price: "$1,050", img: "https://images.unsplash.com/photo-1590490360182-c33d57733427?w=600&q=80", tags: ["large_bathroom","double_sinks","bathtub","modern_style","sofa","large_room"] },
-  { name: "Six Senses Ibiza", location: "Ibiza, Spain", price: "$620", img: "https://images.unsplash.com/photo-1582719478250-c89cae4dc85b?w=600&q=80", tags: ["large_bathroom","bathtub","sofa","great_view","large_room"] },
-  { name: "Rosewood Hong Kong", location: "Hong Kong", price: "$780", img: "https://images.unsplash.com/photo-1596394516093-501ba68a0ba6?w=600&q=80", tags: ["large_room","double_sinks","workspace","modern_style","great_view","sofa"] },
-  { name: "Nobu Ryokan Malibu", location: "Malibu, USA", price: "$3,200", img: "https://images.unsplash.com/photo-1600011689032-8b628b8a8747?w=600&q=80", tags: ["large_bathroom","bathtub","great_view","sofa","large_room"] },
-  { name: "Four Seasons Bangkok", location: "Bangkok, Thailand", price: "$450", img: "https://images.unsplash.com/photo-1566073771259-6a8506099945?w=600&q=80", tags: ["large_bathroom","double_sinks","sofa","workspace","modern_style","large_room"] },
-  { name: "1 Hotel Brooklyn Bridge", location: "Brooklyn, USA", price: "$560", img: "https://images.unsplash.com/photo-1601918774946-25832a4be0d6?w=600&q=80", tags: ["modern_style","workspace","sofa","great_view","large_room"] },
-  { name: "Amangiri Utah", location: "Utah, USA", price: "$2,400", img: "https://images.unsplash.com/photo-1614267861476-0d129972a0f4?w=600&q=80", tags: ["large_bathroom","bathtub","great_view","large_room","sofa"] },
-  { name: "The Connaught London", location: "London, UK", price: "$1,100", img: "https://images.unsplash.com/photo-1578683010236-d716f9a3f461?w=600&q=80", tags: ["large_bathroom","double_sinks","bathtub","sofa","workspace","large_room"] },
-];
-
-const FEATURE_LABELS = {
-  large_bathroom: "Large bathroom", double_sinks: "Double sinks", sofa: "Sofa",
-  large_room: "Spacious", modern_style: "Modern", bathtub: "Bathtub",
-  workspace: "Workspace", great_view: "Great view"
-};
-
+// ── State ──────────────────────────────────────────────────────────────────────
 let uploadedImages = [];
-let activeFilters = new Set();
+let activeFilters  = new Set();
+let styleAttrs     = {};
 
-const fileInput = document.getElementById('fileInput');
+// Default dates
+const today    = new Date();
+const tomorrow = new Date(today); tomorrow.setDate(today.getDate() + 1);
+const fmt      = d => d.toISOString().split('T')[0];
+document.getElementById('checkin').value  = fmt(today);
+document.getElementById('checkout').value = fmt(tomorrow);
+
+// ── Input wiring ───────────────────────────────────────────────────────────────
+document.getElementById('fileInput').addEventListener('change', e => handleFiles(e.target.files));
+['cityInput','checkin','checkout','anthropicKey','backendUrl'].forEach(id =>
+  document.getElementById(id).addEventListener('input', () => { checkServer(); updateBtn(); }));
+
 const dropZone = document.getElementById('dropZone');
-const previewGrid = document.getElementById('previewGrid');
-const analyzeBtn = document.getElementById('analyzeBtn');
-const content = document.getElementById('content');
-const apiKeyInput = document.getElementById('apiKeyInput');
-
-fileInput.addEventListener('change', e => handleFiles(e.target.files));
-apiKeyInput.addEventListener('input', updateBtn);
-
-dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('dragging'); });
+dropZone.addEventListener('dragover',  e => { e.preventDefault(); dropZone.classList.add('dragging'); });
 dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragging'));
-dropZone.addEventListener('drop', e => {
-  e.preventDefault();
-  dropZone.classList.remove('dragging');
-  handleFiles(e.dataTransfer.files);
-});
+dropZone.addEventListener('drop', e => { e.preventDefault(); dropZone.classList.remove('dragging'); handleFiles(e.dataTransfer.files); });
 
 function handleFiles(files) {
-  const remaining = 4 - uploadedImages.length;
-  Array.from(files).slice(0, remaining).forEach(file => {
+  Array.from(files).slice(0, 4 - uploadedImages.length).forEach(file => {
     if (!file.type.startsWith('image/')) return;
     const reader = new FileReader();
-    reader.onload = e => {
-      uploadedImages.push({ file, dataUrl: e.target.result, name: file.name });
-      renderPreviews();
-      updateBtn();
-    };
+    reader.onload = e => { uploadedImages.push({ file, dataUrl: e.target.result }); renderPreviews(); updateBtn(); };
     reader.readAsDataURL(file);
   });
 }
-
 function renderPreviews() {
-  previewGrid.innerHTML = uploadedImages.map((img, i) => `
+  document.getElementById('previewGrid').innerHTML = uploadedImages.map((img, i) => `
     <div class="preview-thumb">
-      <img src="${img.dataUrl}" alt="Room ${i+1}">
+      <img src="${img.dataUrl}">
       <button class="remove-btn" onclick="removeImg(${i})">×</button>
-    </div>
-  `).join('');
+    </div>`).join('');
   dropZone.style.display = uploadedImages.length >= 4 ? 'none' : '';
 }
-
-function removeImg(i) {
-  uploadedImages.splice(i, 1);
-  renderPreviews();
-  updateBtn();
-}
-
+function removeImg(i) { uploadedImages.splice(i, 1); renderPreviews(); updateBtn(); }
 function toggleFilter(el) {
   el.classList.toggle('active');
-  const key = el.dataset.key;
-  activeFilters.has(key) ? activeFilters.delete(key) : activeFilters.add(key);
+  const k = el.dataset.key;
+  activeFilters.has(k) ? activeFilters.delete(k) : activeFilters.add(k);
 }
+
+// ── Server status ping ─────────────────────────────────────────────────────────
+let serverOk = false;
+async function checkServer() {
+  const url = document.getElementById('backendUrl').value.trim();
+  const dot = document.getElementById('statusDot');
+  const lbl = document.getElementById('statusLabel');
+  if (!url) { dot.className = 'status-dot'; lbl.textContent = 'Enter your Render URL above'; serverOk = false; updateBtn(); return; }
+  lbl.textContent = 'Checking...';
+  try {
+    const res = await fetch(url.replace(/\/$/, '') + '/', { signal: AbortSignal.timeout(5000) });
+    serverOk = res.ok;
+  } catch { serverOk = false; }
+  dot.className  = 'status-dot' + (serverOk ? ' ok' : '');
+  lbl.textContent = serverOk ? '✓ Backend connected' : '✗ Cannot reach backend';
+  updateBtn();
+}
+checkServer();
+setInterval(checkServer, 15000);
 
 function updateBtn() {
-  const hasKey = apiKeyInput.value.trim().startsWith('sk-ant-');
-  analyzeBtn.disabled = uploadedImages.length === 0 || !hasKey;
-  analyzeBtn.textContent = !hasKey ? 'Enter API key to continue' : 'Analyze & Find Matches';
+  const hasImages = uploadedImages.length > 0;
+  const hasCity   = document.getElementById('cityInput').value.trim().length > 1;
+  const hasKey    = document.getElementById('anthropicKey').value.trim().startsWith('sk-ant-');
+  const btn = document.getElementById('searchBtn');
+  btn.disabled = !(hasImages && hasCity && hasKey && serverOk);
+  if      (!serverOk)   btn.textContent = 'Waiting for backend...';
+  else if (!hasImages)  btn.textContent = 'Upload room photos';
+  else if (!hasCity)    btn.textContent = 'Enter a destination';
+  else if (!hasKey)     btn.textContent = 'Enter Anthropic key';
+  else                  btn.textContent = 'Find Matching Hotels';
 }
 
-async function analyze() {
-  const apiKey = apiKeyInput.value.trim();
-  if (!apiKey || uploadedImages.length === 0) return;
+function api(path, opts = {}) {
+  const base = document.getElementById('backendUrl').value.trim().replace(/\/$/, '');
+  return fetch(base + path, opts).then(async r => {
+    if (!r.ok) { const e = await r.json().catch(() => ({})); throw new Error(e.detail || `Server error ${r.status}`); }
+    return r.json();
+  });
+}
 
-  content.innerHTML = `
-    <div class="loading-state">
-      <div class="spinner"></div>
-      <div class="loading-msg">Claude is analyzing your room preferences...</div>
-    </div>
-  `;
-  analyzeBtn.disabled = true;
+// ── Pipeline ───────────────────────────────────────────────────────────────────
+const STEPS = [
+  { id:'s1', icon:'🔍', title:'Analyzing your style with Claude Vision', sub:'Reading your reference photos...' },
+  { id:'s2', icon:'🏨', title:'Searching Hotels.com',                    sub:'Finding hotels for your dates...' },
+  { id:'s3', icon:'📸', title:'Scanning hotel room photos',              sub:'Claude is examining each room...' },
+  { id:'s4', icon:'⭐', title:'Ranking matches',                         sub:'Scoring by visual similarity...' },
+];
+function showPipeline() {
+  document.getElementById('content').innerHTML = `
+    <div class="pipeline">
+      ${STEPS.map(s => `
+        <div class="pipeline-step" id="${s.id}">
+          <div class="step-icon" id="${s.id}-icon">${s.icon}</div>
+          <div>
+            <div class="step-title">${s.title}</div>
+            <div class="step-sub" id="${s.id}-sub">${s.sub}</div>
+          </div>
+        </div>`).join('')}
+    </div>`;
+}
+function activateStep(id, sub) {
+  const idx = STEPS.findIndex(s => s.id === id);
+  if (idx > 0) {
+    const prev = STEPS[idx - 1];
+    const pi = document.getElementById(prev.id + '-icon');
+    if (pi) { pi.className = 'step-icon done'; pi.textContent = '✓'; }
+  }
+  const ic = document.getElementById(id + '-icon');
+  const sb = document.getElementById(id + '-sub');
+  if (ic) ic.className = 'step-icon active';
+  if (sb && sub) sb.textContent = sub;
+}
+function finishStep(id) {
+  const ic = document.getElementById(id + '-icon');
+  if (ic) { ic.className = 'step-icon done'; ic.textContent = '✓'; }
+}
+
+// ── Main search ────────────────────────────────────────────────────────────────
+async function runSearch() {
+  document.getElementById('searchBtn').disabled = true;
+  showPipeline();
 
   try {
-    const imageContents = uploadedImages.map(img => ({
-      type: "image",
-      source: { type: "base64", media_type: img.file.type, data: img.dataUrl.split(',')[1] }
-    }));
+    // Step 1: Claude Vision on user's own photos (direct from browser)
+    activateStep('s1');
+    styleAttrs = await analyzeReferencePhotos();
+    styleAttrs.checkin  = document.getElementById('checkin').value;
+    styleAttrs.checkout = document.getElementById('checkout').value;
+    finishStep('s1');
 
-    const prompt = `Analyze these hotel room images and extract room preferences as JSON. Return ONLY valid JSON with no explanation, no markdown, no backticks.
-
-Return exactly this schema:
-{
-  "overall_style": "modern OR traditional OR minimalist OR rustic OR luxury OR boutique",
-  "luxury_score": number from 1 to 10,
-  "room_size": "compact OR standard OR large OR suite",
-  "large_bathroom": true or false,
-  "double_sinks": true or false,
-  "bathtub": true or false,
-  "walk_in_shower": true or false,
-  "sofa": true or false,
-  "workspace": true or false,
-  "great_view": true or false,
-  "large_room": true or false,
-  "modern_style": true or false,
-  "key_features": ["3 to 5 notable features visible in the images"],
-  "summary": "one sentence describing what this person values in hotel rooms"
-}`;
-
-    const res = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-api-key": apiKey,
-        "anthropic-version": "2023-06-01",
-        "anthropic-dangerous-direct-browser-access": "true"
-      },
+    // Step 2: Hotel search via backend
+    activateStep('s2', `Searching Hotels.com in ${document.getElementById('cityInput').value}...`);
+    const searchRes = await api('/search', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        model: "claude-sonnet-4-20250514",
-        max_tokens: 1000,
-        messages: [{ role: "user", content: [...imageContents, { type: "text", text: prompt }] }]
+        destination: document.getElementById('cityInput').value.trim(),
+        checkin:     styleAttrs.checkin,
+        checkout:    styleAttrs.checkout,
+        adults: 2, min_rating: 0,
       })
     });
+    if (!searchRes.hotels?.length) throw new Error('No hotels found. Try a different city or dates.');
+    finishStep('s2');
 
-    if (!res.ok) {
-      const err = await res.json();
-      throw new Error(err.error?.message || `API error ${res.status}`);
-    }
+    // Step 3: Scan room photos with Claude Vision (via backend)
+    activateStep('s3', `Scanning rooms for ${searchRes.hotels.length} hotels...`);
+    renderScanningCards(searchRes.hotels, searchRes.destination);
+    const analyzed = await scanHotelsInBatches(searchRes.hotels);
+    finishStep('s3');
 
-    const data = await res.json();
-    const text = data.content.map(b => b.text || '').join('');
-    const jsonMatch = text.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) throw new Error("Could not parse analysis response");
-    const attrs = JSON.parse(jsonMatch[0]);
+    // Step 4: Rank & render
+    activateStep('s4');
+    await new Promise(r => setTimeout(r, 350));
+    finishStep('s4');
+    renderFinalResults(styleAttrs, analyzed, searchRes.destination);
 
-    const detectedFilters = new Set(Object.keys(attrs).filter(k => attrs[k] === true));
-    const mergedFilters = new Set([...detectedFilters, ...activeFilters]);
-
-    renderResults(attrs, mergedFilters);
   } catch (err) {
-    content.innerHTML = `
-      <div class="error-box">&#9888; Analysis failed: ${err.message}</div>
-      <div class="state-empty"><p>Check your API key and make sure your images are clear hotel room photos, then try again.</p></div>
-    `;
+    document.getElementById('content').innerHTML = `
+      <div style="padding:28px 32px">
+        <div class="error-box">
+          <strong>Error:</strong> ${err.message}<br><br>
+          Things to check:<br>
+          · Backend URL is your Render service URL (e.g. <code>https://roommatch-api.onrender.com</code>)<br>
+          · Green dot confirms backend is reachable<br>
+          · <code>RAPIDAPI_KEY</code> and <code>ANTHROPIC_KEY</code> are set in Render → Environment
+        </div>
+      </div>`;
   } finally {
+    document.getElementById('searchBtn').disabled = false;
     updateBtn();
   }
 }
 
-function renderResults(attrs, matchedFilters) {
-  const scored = SAMPLE_HOTELS.map(hotel => {
-    const hotelSet = new Set(hotel.tags);
-    const required = [...activeFilters];
-    const passesRequired = required.length === 0 || required.every(f => hotelSet.has(f));
-    const matchCount = [...matchedFilters].filter(f => hotelSet.has(f)).length;
-    const score = matchedFilters.size > 0 ? Math.round((matchCount / matchedFilters.size) * 100) : 75;
-    return { ...hotel, score, passesRequired };
-  })
-  .filter(h => h.passesRequired)
-  .sort((a, b) => b.score - a.score);
+// ── Analyze user's reference photos (browser → Claude direct) ─────────────────
+async function analyzeReferencePhotos() {
+  const imageContents = uploadedImages.map(img => ({
+    type: 'image',
+    source: { type: 'base64', media_type: img.file.type, data: img.dataUrl.split(',')[1] }
+  }));
+  const res = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': document.getElementById('anthropicKey').value.trim(),
+      'anthropic-version': '2023-06-01',
+      'anthropic-dangerous-direct-browser-access': 'true'
+    },
+    body: JSON.stringify({
+      model: 'claude-sonnet-4-20250514', max_tokens: 800,
+      messages: [{ role: 'user', content: [
+        ...imageContents,
+        { type: 'text', text: `Analyze these hotel room images. Return ONLY valid JSON, no markdown:
+{
+  "overall_style": "modern|traditional|minimalist|rustic|luxury|boutique",
+  "luxury_score": 1-10,
+  "room_size": "compact|standard|large|suite",
+  "large_bathroom": true/false,
+  "double_sinks": true/false,
+  "bathtub": true/false,
+  "sofa": true/false,
+  "workspace": true/false,
+  "great_view": true/false,
+  "large_room": true/false,
+  "modern_style": true/false,
+  "key_features": ["3-5 features"],
+  "summary": "one sentence"
+}` }
+      ]}]
+    })
+  });
+  if (!res.ok) { const e = await res.json(); throw new Error('Claude: ' + (e.error?.message || res.status)); }
+  const data = await res.json();
+  const text = data.content.map(b => b.text || '').join('');
+  const m = text.match(/\{[\s\S]*\}/);
+  if (!m) throw new Error('Could not parse Claude response');
+  return JSON.parse(m[0]);
+}
+
+// ── Render cards in scanning state ────────────────────────────────────────────
+function renderScanningCards(hotels, destination) {
+  document.getElementById('content').innerHTML = `
+    <div class="results-wrap">
+      <div class="results-header">
+        <div class="results-title">Hotels in ${destination}</div>
+        <div class="results-meta">Scanning ${hotels.length} hotels with Claude Vision...</div>
+      </div>
+      <div class="hotel-grid" id="hotelGrid">
+        ${hotels.map(h => cardHTML(h, null)).join('')}
+      </div>
+    </div>`;
+}
+
+// ── Scan hotels in parallel batches of 3 ──────────────────────────────────────
+async function scanHotelsInBatches(hotels) {
+  const results = [];
+  const batchSize = 3;
+  for (let i = 0; i < hotels.length; i += batchSize) {
+    const batch = hotels.slice(i, i + batchSize);
+    const batchResults = await Promise.all(batch.map(async hotel => {
+      // Show scanning overlay
+      const card = document.getElementById(`card-${hotel.id}`);
+      if (card) {
+        const strip = card.querySelector('.photo-strip');
+        if (strip && !strip.querySelector('.scanning-overlay')) {
+          const ov = document.createElement('div');
+          ov.className = 'scanning-overlay';
+          ov.innerHTML = `<div class="scan-label">Scanning rooms</div><div class="scan-bar"><div class="scan-fill"></div></div>`;
+          strip.appendChild(ov);
+        }
+      }
+      try {
+        const analysis = await api(`/analyze/${hotel.id}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ hotel_id: hotel.id, style_attrs: styleAttrs })
+        });
+        // Update card in-place
+        const existing = document.getElementById(`card-${hotel.id}`);
+        if (existing) existing.outerHTML = cardHTML(hotel, analysis);
+        return { ...hotel, analysis };
+      } catch {
+        const ov = document.querySelector(`#card-${hotel.id} .scanning-overlay`);
+        if (ov) ov.remove();
+        return { ...hotel, analysis: null };
+      }
+    }));
+    results.push(...batchResults);
+  }
+  return results;
+}
+
+// ── Card HTML ──────────────────────────────────────────────────────────────────
+function cardHTML(hotel, analysis) {
+  const score    = analysis?.score ?? null;
+  const photos   = analysis?.photos || [];
+  const features = analysis?.features || {};
+  const summary  = analysis?.summary || '';
+  const rooms    = analysis?.rooms || [];
+  const price    = hotel.price || rooms[0]?.price || '';
+
+  // Photo strip
+  const stripContent = photos.length
+    ? photos.slice(0, 3).map(u =>
+        `<img src="${u}" loading="lazy" onerror="this.style.display='none'">`).join('')
+    : hotel.thumbnail
+      ? `<img src="${hotel.thumbnail}" loading="lazy">`
+      : `<div class="photo-ph">🏨</div>`;
+
+  // Feature tags
+  const featKeys   = ['large_bathroom','double_sinks','bathtub','sofa','workspace','great_view','large_room','modern_style'];
+  const featLabels = { large_bathroom:'Bathroom', double_sinks:'Dbl sinks', bathtub:'Bathtub', sofa:'Sofa', workspace:'Desk', great_view:'View', large_room:'Spacious', modern_style:'Modern' };
+  const featureTags = analysis
+    ? featKeys.filter(k => features[k]).map(k =>
+        `<span class="tag ${activeFilters.has(k) ? 'match' : 'detected'}">${featLabels[k]}</span>`
+      ).join('')
+    : '';
+
+  const amenityTags = (analysis?.amenities || []).slice(0, 3)
+    .map(a => `<span class="tag">${a}</span>`).join('');
+
+  const bookingUrl = `https://www.hotels.com/ho${hotel.id}`;
+
+  return `
+    <div class="hotel-card" id="card-${hotel.id}">
+      <div class="photo-strip">
+        ${stripContent}
+        ${score !== null ? `<div class="match-badge">${score}% match</div>` : ''}
+        ${hotel.rating ? `<div class="rating-badge">★ ${hotel.rating}</div>` : ''}
+        ${!analysis ? `<div class="scanning-overlay"><div class="scan-label">Awaiting scan</div></div>` : ''}
+      </div>
+      <div class="hotel-body">
+        <div class="hotel-name" title="${hotel.name}">${hotel.name}</div>
+        <div class="hotel-meta">
+          ${hotel.neighborhood || ''}
+          ${hotel.reviewCount > 0 ? ` · ${hotel.reviewCount.toLocaleString()} reviews` : ''}
+          ${hotel.starRating > 0 ? ` · ${'★'.repeat(Math.min(hotel.starRating,5))}` : ''}
+        </div>
+        ${summary ? `<div class="vision-summary">"${summary}"</div>` : ''}
+        <div class="tags-row">
+          ${featureTags}${amenityTags}
+          ${!featureTags && !amenityTags ? `<span class="tag" style="opacity:0.35">Scanning...</span>` : ''}
+        </div>
+        <div class="hotel-footer">
+          <div class="price-block">
+            ${price
+              ? `<div class="amount">${price}</div><div class="label">per night</div>`
+              : `<div class="label" style="opacity:0.5">See site for pricing</div>`}
+          </div>
+          <a class="view-btn" href="${bookingUrl}" target="_blank" rel="noopener">Book →</a>
+        </div>
+      </div>
+    </div>`;
+}
+
+// ── Final render (sorted by score) ────────────────────────────────────────────
+function renderFinalResults(attrs, hotels, destination) {
+  const sorted = [...hotels].sort((a, b) => (b.analysis?.score ?? 0) - (a.analysis?.score ?? 0));
 
   const attrItems = [
-    { label: "Style", value: attrs.overall_style || "—" },
-    { label: "Luxury score", value: `${attrs.luxury_score || "—"}/10` },
-    { label: "Room size", value: attrs.room_size || "—" },
-    { label: "Large bathroom", value: attrs.large_bathroom },
-    { label: "Double sinks", value: attrs.double_sinks },
-    { label: "Bathtub", value: attrs.bathtub },
-    { label: "Walk-in shower", value: attrs.walk_in_shower },
-    { label: "Sofa", value: attrs.sofa },
-    { label: "Workspace", value: attrs.workspace },
-    { label: "Modern style", value: attrs.modern_style },
-    { label: "Great view", value: attrs.great_view },
+    { label:'Style',        value: attrs.overall_style || '—' },
+    { label:'Luxury',       value: `${attrs.luxury_score || '—'}/10` },
+    { label:'Room size',    value: attrs.room_size || '—' },
+    { label:'Bathroom',     value: attrs.large_bathroom },
+    { label:'Double sinks', value: attrs.double_sinks },
+    { label:'Bathtub',      value: attrs.bathtub },
+    { label:'Sofa',         value: attrs.sofa },
+    { label:'Workspace',    value: attrs.workspace },
+    { label:'Great view',   value: attrs.great_view },
+    { label:'Modern',       value: attrs.modern_style },
   ];
 
-  content.innerHTML = `
-    <div class="analysis-panel">
-      <div class="analysis-header">
-        <div class="analysis-title">What Claude sees in your photos</div>
-        <div class="score-badge">Luxury ${attrs.luxury_score || "—"}/10</div>
-      </div>
-      ${attrs.summary ? `<p style="font-size:13px;color:var(--muted);margin-bottom:16px;font-style:italic;">"${attrs.summary}"</p>` : ''}
-      ${attrs.key_features ? `<p style="font-size:12px;color:var(--muted);margin-bottom:14px;">Detected: ${attrs.key_features.join(' · ')}</p>` : ''}
-      <div class="attrs-grid">
-        ${attrItems.map(a => `
-          <div class="attr-item">
-            <div class="attr-label">${a.label}</div>
-            <div class="attr-value ${a.value === true ? 'yes' : a.value === false ? 'no' : ''}">
-              ${a.value === true ? '✓ Yes' : a.value === false ? '✗ No' : a.value}
-            </div>
-          </div>
-        `).join('')}
-      </div>
-    </div>
-
-    <div class="results-header">
-      <div class="results-title">Matched Hotels</div>
-      <div class="results-count">${scored.length} result${scored.length !== 1 ? 's' : ''}</div>
-    </div>
-
-    ${scored.length === 0 ? `
-      <div class="state-empty">
-        <p>No hotels match all your required filters. Try removing some must-have requirements.</p>
-      </div>
-    ` : ''}
-
-    <div class="hotel-grid">
-      ${scored.map(h => `
-        <div class="hotel-card">
-          <div class="hotel-img">
-            <img src="${h.img}" alt="${h.name}" loading="lazy">
-            <div class="match-badge">${h.score}% match</div>
-          </div>
-          <div class="hotel-body">
-            <div class="hotel-name">${h.name}</div>
-            <div class="hotel-location">${h.location}</div>
-            <div class="hotel-tags">
-              ${h.tags.map(t => `<div class="hotel-tag ${matchedFilters.has(t) ? 'match' : ''}">${FEATURE_LABELS[t] || t}</div>`).join('')}
-            </div>
-            <div class="hotel-footer">
-              <div class="hotel-price">${h.price} <span>/ night</span></div>
-              <button class="view-btn" onclick="alert('In the full app, this would open booking details for ${h.name}')">View hotel</button>
-            </div>
-          </div>
+  document.getElementById('content').innerHTML = `
+    <div class="results-wrap">
+      <div class="analysis-panel">
+        <div class="analysis-header">
+          <div class="analysis-title">Your room style</div>
+          <div class="score-badge">Luxury ${attrs.luxury_score || '—'}/10</div>
         </div>
-      `).join('')}
-    </div>
-  `;
+        ${attrs.summary ? `<p style="font-size:12px;color:var(--muted);margin-bottom:10px;font-style:italic">"${attrs.summary}"</p>` : ''}
+        ${attrs.key_features?.length ? `<p style="font-size:11px;color:var(--muted);margin-bottom:10px">Detected: ${attrs.key_features.join(' · ')}</p>` : ''}
+        <div class="attrs-grid">
+          ${attrItems.map(a => `
+            <div class="attr-item">
+              <div class="attr-label">${a.label}</div>
+              <div class="attr-value ${a.value===true?'yes':a.value===false?'no':''}">
+                ${a.value===true?'✓ Yes':a.value===false?'✗ No':a.value}
+              </div>
+            </div>`).join('')}
+        </div>
+      </div>
+      <div class="results-header">
+        <div class="results-title">Hotels in ${destination}</div>
+        <div class="results-meta">${sorted.length} hotels · room photos analyzed by Claude Vision</div>
+      </div>
+      <div class="hotel-grid">
+        ${sorted.map(h => cardHTML(h, h.analysis)).join('')}
+      </div>
+    </div>`;
 }
 </script>
 </body>
