@@ -26,8 +26,57 @@ PORT         = int(os.getenv("PORT", 8000))
 LITEAPI_BASE = "https://api.liteapi.travel/v3.0"
 
 # ── In-memory caches ───────────────────────────────────────────────────────────
-_hotel_cache:      dict = {}   # city → list of hotels
-_room_photo_cache: dict = {}   # hotel_id → list of photo URLs
+_hotel_cache:      dict = {}   # iata_code → list of hotels
+_room_photo_cache: dict = {}   # hotel_id  → list of photo URLs
+
+# ── City → IATA code lookup ────────────────────────────────────────────────────
+# LiteAPI requires countryCode, lat/lng, placeId, or IATA code — not plain city name.
+CITY_IATA = {
+    # North America
+    "new york": "NYC", "new york city": "NYC", "nyc": "NYC", "manhattan": "NYC",
+    "los angeles": "LAX", "la": "LAX", "chicago": "CHI", "miami": "MIA",
+    "las vegas": "LAS", "san francisco": "SFO", "seattle": "SEA",
+    "boston": "BOS", "washington": "WAS", "dc": "WAS", "washington dc": "WAS",
+    "new orleans": "MSY", "austin": "AUS", "denver": "DEN", "portland": "PDX",
+    "toronto": "YTO", "vancouver": "YVR", "montreal": "YMQ",
+    "mexico city": "MEX", "cancun": "CUN",
+    # South America
+    "rio de janeiro": "RIO", "rio": "RIO", "sao paulo": "SAO",
+    "buenos aires": "BUE", "bogota": "BOG", "lima": "LIM", "santiago": "SCL",
+    # Europe
+    "london": "LON", "paris": "PAR", "barcelona": "BCN", "madrid": "MAD",
+    "rome": "ROM", "milan": "MIL", "florence": "FLR", "venice": "VCE",
+    "amsterdam": "AMS", "berlin": "BER", "munich": "MUC", "hamburg": "HAM",
+    "prague": "PRG", "vienna": "VIE", "budapest": "BUD", "warsaw": "WAW",
+    "lisbon": "LIS", "porto": "OPO", "athens": "ATH", "istanbul": "IST",
+    "zurich": "ZRH", "geneva": "GVA", "brussels": "BRU", "copenhagen": "CPH",
+    "oslo": "OSL", "stockholm": "STO", "helsinki": "HEL", "bucharest": "OTP",
+    "dublin": "DUB", "edinburgh": "EDI", "manchester": "MAN",
+    # Middle East & Africa
+    "dubai": "DXB", "abu dhabi": "AUH", "cairo": "CAI",
+    "cape town": "CPT", "nairobi": "NBO", "marrakech": "RAK",
+    "tel aviv": "TLV", "doha": "DOH",
+    # Asia Pacific
+    "tokyo": "TYO", "osaka": "OSA", "kyoto": "UKY",
+    "bangkok": "BKK", "singapore": "SIN", "hong kong": "HKG",
+    "bali": "DPS", "jakarta": "JKT", "kuala lumpur": "KUL",
+    "sydney": "SYD", "melbourne": "MEL", "auckland": "AKL",
+    "mumbai": "BOM", "delhi": "DEL", "new delhi": "DEL",
+    "phuket": "HKT", "chiang mai": "CNX", "maldives": "MLE",
+    "beijing": "BJS", "shanghai": "SHA", "seoul": "SEL",
+}
+
+def resolve_iata(city: str) -> str:
+    key  = city.strip().lower()
+    code = CITY_IATA.get(key)
+    if not code:
+        for k, v in CITY_IATA.items():
+            if key in k or k in key:
+                code = v
+                break
+    if not code:
+        raise HTTPException(404, f"City '{city}' not recognised. Try: London, Paris, New York, Tokyo, Dubai…")
+    return code
 
 # ── Auth header ────────────────────────────────────────────────────────────────
 def la_headers() -> dict:
@@ -91,16 +140,17 @@ async def search_hotels(req: SearchRequest):
         raise HTTPException(500, "LITEAPI_KEY not set in Render environment")
 
     city      = req.destination.strip()
-    cache_key = city.lower()
+    iata_code = resolve_iata(city)
+    cache_key = iata_code
 
     if cache_key in _hotel_cache:
-        logger.info(f"[search] cache hit for '{city}'")
+        logger.info(f"[search] cache hit for '{city}' ({iata_code})")
         raw_hotels = _hotel_cache[cache_key]
     else:
-        logger.info(f"[search] fetching hotels for city='{city}'")
+        logger.info(f"[search] fetching hotels for '{city}' → IATA={iata_code}")
         async with httpx.AsyncClient(timeout=30) as c:
             res = await c.get(f"{LITEAPI_BASE}/data/hotels", headers=la_headers(),
-                              params={"city": city, "limit": 50})
+                              params={"iataCodes": iata_code, "limit": 50})
 
         logger.info(f"[search] status={res.status_code} body={res.text[:300]}")
 
@@ -118,7 +168,7 @@ async def search_hotels(req: SearchRequest):
             raise HTTPException(404, f"No hotels found for '{city}'. Try 'London', 'Paris' or 'Tokyo'.")
 
         _hotel_cache[cache_key] = raw_hotels
-        logger.info(f"[search] fetched {len(raw_hotels)} hotels, cached")
+        logger.info(f"[search] fetched {len(raw_hotels)} hotels for {iata_code}, cached")
 
     def stars(h):
         r = h.get("starRating") or h.get("stars") or h.get("rating") or 0

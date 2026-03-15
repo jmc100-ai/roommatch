@@ -133,7 +133,7 @@
 
 <header>
   <div class="logo">RoomMatch</div>
-  <div class="header-sub">Visual hotel search · Hotelbeds + Gemini Vision</div>
+  <div class="header-sub">Visual hotel search · LiteAPI + Gemini Vision</div>
 </header>
 
 <div class="main">
@@ -202,7 +202,7 @@
     <div class="state-empty">
       <div class="big-icon">🏨</div>
       <p>Upload room photos you love, set a destination and dates, and RoomMatch will visually scan each hotel's room photos with Gemini Vision to find your perfect match.</p>
-      <p style="font-size:12px;margin-top:4px;opacity:0.6">Hotelbeds inventory · Google Gemini Vision · Deployed on Render</p>
+      <p style="font-size:12px;margin-top:4px;opacity:0.6">LiteAPI inventory · Google Gemini Vision · Deployed on Render</p>
     </div>
   </div>
 </div>
@@ -296,7 +296,7 @@ function api(path, opts = {}) {
 // ── Pipeline ───────────────────────────────────────────────────────────────────
 const STEPS = [
   { id:'s1', icon:'🔍', title:'Analyzing your style with Gemini Vision', sub:'Reading your reference photos...' },
-  { id:'s2', icon:'🏨', title:'Searching Hotelbeds inventory',             sub:'Finding hotels for your dates...' },
+  { id:'s2', icon:'🏨', title:'Searching LiteAPI inventory',             sub:'Finding hotels for your dates...' },
   { id:'s3', icon:'📸', title:'Scanning hotel room photos',              sub:'Gemini is examining each room...' },
   { id:'s4', icon:'⭐', title:'Ranking matches',                         sub:'Scoring by visual similarity...' },
 ];
@@ -344,7 +344,7 @@ async function runSearch() {
     finishStep('s1');
 
     // Step 2: Hotel search via backend
-    activateStep('s2', `Searching Hotelbeds in ${document.getElementById('cityInput').value}...`);
+    activateStep('s2', `Searching hotels in ${document.getElementById('cityInput').value}...`);
     const searchRes = await api('/search', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -378,7 +378,7 @@ async function runSearch() {
           Things to check:<br>
           · Backend URL is your Render service URL (e.g. <code>https://roommatch-api.onrender.com</code>)<br>
           · Green dot confirms backend is reachable<br>
-          · <code>HOTELBEDS_KEY</code>, <code>HOTELBEDS_SECRET</code> and <code>GEMINI_KEY</code> are set in Render → Environment
+          · <code>LITEAPI_KEY</code> and <code>GEMINI_KEY</code> are set in Render → Environment
         </div>
       </div>`;
   } finally {
