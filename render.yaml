@@ -5,9 +5,11 @@ services:
     buildCommand: pip install -r requirements.txt
     startCommand: uvicorn server:app --host 0.0.0.0 --port $PORT
     envVars:
-      - key: RAPIDAPI_KEY
-        sync: false        # from rapidapi.com
+      - key: HOTELBEDS_KEY
+        sync: false        # from developer.hotelbeds.com dashboard
+      - key: HOTELBEDS_SECRET
+        sync: false        # from developer.hotelbeds.com dashboard
       - key: GEMINI_KEY
-        sync: false        # from aistudio.google.com (free, no credit card)
-      - key: ANTHROPIC_KEY
-        sync: false        # optional Claude fallback
+        sync: false        # from aistudio.google.com (free)
+      - key: GOOGLE_KEY
+        sync: false        # optional — for hotel thumbnails fallback

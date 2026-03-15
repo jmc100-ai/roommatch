@@ -1,17 +1,18 @@
 """
 RoomMatch — server.py
-FastAPI backend: proxies Hotels.com (RapidAPI) and runs Gemini Vision on room photos.
-Deploy to Render as a Web Service. Set env vars in the Render dashboard.
+Hotelbeds API for hotel search + room-tagged photos
+Gemini Vision for room photo analysis
 
-Required environment variables:
-  RAPIDAPI_KEY   — from rapidapi.com (hotels-com-provider by tipsters)
-  GEMINI_KEY     — from aistudio.google.com (free, no credit card needed)
+Required environment variables (set in Render dashboard):
+  HOTELBEDS_KEY    — your Hotelbeds API key
+  HOTELBEDS_SECRET — your Hotelbeds shared secret
+  GEMINI_KEY       — from aistudio.google.com (free)
 
 Optional:
-  ANTHROPIC_KEY  — fallback if you want to use Claude instead of Gemini
+  GOOGLE_KEY       — Google Places key (used as fallback for hotel thumbnails)
 """
 
-import os, base64, asyncio, re, json
+import os, base64, asyncio, re, json, hashlib, time
 from typing import Optional
 import httpx
 from fastapi import FastAPI, HTTPException
@@ -19,12 +20,15 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from contextlib import asynccontextmanager
 
-RAPIDAPI_KEY  = os.getenv("RAPIDAPI_KEY", "")
-GEMINI_KEY    = os.getenv("GEMINI_KEY", "")
-ANTHROPIC_KEY = os.getenv("ANTHROPIC_KEY", "")   # optional fallback
-PORT          = int(os.getenv("PORT", 8000))
+HOTELBEDS_KEY    = os.getenv("HOTELBEDS_KEY", "")
+HOTELBEDS_SECRET = os.getenv("HOTELBEDS_SECRET", "")
+GEMINI_KEY       = os.getenv("GEMINI_KEY", "")
+GOOGLE_KEY       = os.getenv("GOOGLE_KEY", "")   # optional fallback
+PORT             = int(os.getenv("PORT", 8000))
 
-# ── Keepalive: ping self every 10 min so Render free tier doesn't sleep ────────
+HOTELBEDS_BASE   = "https://api.test.hotelbeds.com"   # sandbox — change to api.hotelbeds.com for production
+
+# ── Keepalive ──────────────────────────────────────────────────────────────────
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     task = asyncio.create_task(self_ping())
@@ -32,195 +36,218 @@ async def lifespan(app: FastAPI):
     task.cancel()
 
 async def self_ping():
-    await asyncio.sleep(60)           # wait for server to fully start
+    await asyncio.sleep(60)
     render_url = os.getenv("RENDER_EXTERNAL_URL", "")
     if not render_url:
-        return                        # skip if not on Render
-    async with httpx.AsyncClient() as client:
+        return
+    async with httpx.AsyncClient() as c:
         while True:
             try:
-                await client.get(f"{render_url}/", timeout=10)
+                await c.get(f"{render_url}/", timeout=10)
             except Exception:
                 pass
-            await asyncio.sleep(600)  # ping every 10 minutes
+            await asyncio.sleep(600)
 
 app = FastAPI(title="RoomMatch API", lifespan=lifespan)
-
 app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_methods=["*"],
-    allow_headers=["*"],
+    CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"]
 )
 
-HOTELS_HOST    = "hotels-com-provider.p.rapidapi.com"
-HOTELS_HEADERS = {
-    "X-RapidAPI-Key":  RAPIDAPI_KEY,
-    "X-RapidAPI-Host": HOTELS_HOST,
-}
+# ── Hotelbeds signature auth ───────────────────────────────────────────────────
+def hb_headers() -> dict:
+    """Generate Hotelbeds required auth headers."""
+    ts  = str(int(time.time()))
+    sig = hashlib.sha256((HOTELBEDS_KEY + HOTELBEDS_SECRET + ts).encode()).hexdigest()
+    return {
+        "Api-key":       HOTELBEDS_KEY,
+        "X-Signature":   sig,
+        "Accept":        "application/json",
+        "Accept-Encoding": "gzip",
+        "Content-Type":  "application/json",
+    }
 
 # ── Models ─────────────────────────────────────────────────────────────────────
 class SearchRequest(BaseModel):
     destination: str
-    checkin:     str    # YYYY-MM-DD
-    checkout:    str    # YYYY-MM-DD
+    checkin:     str   # YYYY-MM-DD
+    checkout:    str   # YYYY-MM-DD
     adults:      int = 2
     min_rating:  float = 0.0
 
 class AnalyzeRequest(BaseModel):
-    hotel_id:    str
+    hotel_code:  str
     style_attrs: dict
 
 # ── Health ─────────────────────────────────────────────────────────────────────
 @app.get("/")
 def root():
-    return {"status": "ok", "service": "RoomMatch API"}
+    return {"status": "ok", "service": "RoomMatch API — Hotelbeds"}
 
-# ── Destination lookup ─────────────────────────────────────────────────────────
-@app.get("/destinations")
-async def get_destinations(q: str):
-    url    = f"https://{HOTELS_HOST}/locations/v3/search"
-    params = {"q": q, "locale": "en_US", "langid": "1033", "siteid": "300000001"}
-    async with httpx.AsyncClient(timeout=12) as c:
-        res = await c.get(url, headers=HOTELS_HEADERS, params=params)
+# ── Step 1: Resolve destination name → Hotelbeds destination code ─────────────
+async def resolve_destination(name: str) -> tuple[str, str]:
+    """Returns (destinationCode, countryCode) for a city name."""
+    url = f"{HOTELBEDS_BASE}/hotel-content-api/1.0/locations/destinations"
+    params = {
+        "fields":  "code,name,countryCode",
+        "language":"ENG",
+        "from":    1,
+        "to":      5,
+    }
+    # Filter by name using the `name` query parameter
+    params["name"] = name
+
+    async with httpx.AsyncClient(timeout=15) as c:
+        res = await c.get(url, headers=hb_headers(), params=params)
+
     if res.status_code != 200:
-        raise HTTPException(502, f"Location lookup failed ({res.status_code})")
-    for item in res.json().get("sr", []):
-        if item.get("type") in ("CITY", "REGION", "NEIGHBORHOOD", "AIRPORT"):
-            return {
-                "regionId":    item.get("gaiaId") or item.get("regionId"),
-                "displayName": item.get("regionNames", {}).get("fullName", q),
-            }
-    raise HTTPException(404, f"No destination found for '{q}'")
+        raise HTTPException(502, f"Destination lookup failed ({res.status_code}): {res.text[:150]}")
 
-# ── Hotel search ───────────────────────────────────────────────────────────────
+    destinations = res.json().get("destinations", [])
+    if not destinations:
+        raise HTTPException(404, f"No destination found for '{name}'. Try a major city name.")
+
+    dest = destinations[0]
+    return dest["code"], dest.get("countryCode", "")
+
+# ── Step 2: Search hotels ──────────────────────────────────────────────────────
 @app.post("/search")
 async def search_hotels(req: SearchRequest):
-    dest      = await get_destinations(req.destination)
-    region_id = dest["regionId"]
+    if not HOTELBEDS_KEY:
+        raise HTTPException(500, "HOTELBEDS_KEY not set in Render environment")
 
-    def parse_date(d):
-        y, m, day = d.split("-")
-        return {"day": int(day), "month": int(m), "year": int(y)}
+    dest_code, country_code = await resolve_destination(req.destination)
 
     payload = {
-        "currency": "USD", "eapid": 1, "locale": "en_US", "siteId": 300000001,
-        "destination":   {"regionId": str(region_id)},
-        "checkInDate":   parse_date(req.checkin),
-        "checkOutDate":  parse_date(req.checkout),
-        "rooms":         [{"adults": req.adults}],
-        "resultsStartingIndex": 0,
-        "resultsSize":   15,
-        "sort":          "REVIEW",
-        "filters":       {"price": {"max": 99999, "min": 1}},
+        "stay": {
+            "checkIn":  req.checkin,
+            "checkOut": req.checkout,
+        },
+        "occupancies": [{"rooms": 1, "adults": req.adults, "children": 0}],
+        "destination": {"code": dest_code},
+        "filter": {"maxHotels": 15, "minCategory": 3},
+        "reviews": [{"type": "TRIPADVISOR", "minReviewRating": req.min_rating or 6}],
     }
 
-    async with httpx.AsyncClient(timeout=20) as c:
+    async with httpx.AsyncClient(timeout=25) as c:
         res = await c.post(
-            f"https://{HOTELS_HOST}/properties/v2/list",
-            headers={**HOTELS_HEADERS, "Content-Type": "application/json"},
+            f"{HOTELBEDS_BASE}/hotel-api/1.0/hotels",
+            headers=hb_headers(),
             json=payload,
         )
+
     if res.status_code != 200:
         raise HTTPException(502, f"Hotel search failed ({res.status_code}): {res.text[:200]}")
 
-    properties = (res.json()
-                  .get("data", {})
-                  .get("propertySearch", {})
-                  .get("properties", []))
+    data   = res.json()
+    hotels_raw = data.get("hotels", {}).get("hotels", [])
+
+    if not hotels_raw:
+        raise HTTPException(404, f"No hotels found in '{req.destination}'. Try a different city.")
 
     hotels = []
-    for p in properties:
-        rating = p.get("reviews", {}).get("score", 0) or 0
-        if req.min_rating > 0 and rating < req.min_rating:
-            continue
-        price_info = p.get("price", {}).get("lead", {})
+    for h in hotels_raw[:12]:
+        min_rate = None
+        for room in h.get("rooms", []):
+            for rate in room.get("rates", []):
+                net = float(rate.get("net", 0) or 0)
+                if net > 0 and (min_rate is None or net < min_rate):
+                    min_rate = net
+
+        price_str = f"USD {min_rate:.0f}" if min_rate else ""
+
         hotels.append({
-            "id":           p.get("id"),
-            "name":         p.get("name", "Hotel"),
-            "rating":       rating,
-            "reviewCount":  p.get("reviews", {}).get("total", 0),
-            "starRating":   p.get("star", 0),
-            "price":        price_info.get("formatted", ""),
-            "priceRaw":     price_info.get("amount", 0),
-            "thumbnail":    p.get("propertyImage", {}).get("image", {}).get("url", ""),
-            "neighborhood": p.get("neighborhood", {}).get("name", ""),
+            "id":          str(h["code"]),
+            "name":        h.get("name", "Hotel"),
+            "rating":      h.get("categoryCode", ""),
+            "reviewCount": 0,
+            "starRating":  int(h.get("categoryCode", "0").replace("EST", "") or 0)
+                           if h.get("categoryCode", "").replace("EST","").isdigit() else 0,
+            "price":       price_str,
+            "thumbnail":   "",      # filled by content API below
+            "neighborhood": h.get("zoneName", ""),
+            "address":     h.get("address", {}).get("content", ""),
         })
 
-    return {"hotels": hotels[:12], "destination": dest["displayName"]}
+    # Enrich with a thumbnail from content API (quick, just first image)
+    hotel_codes = [h["id"] for h in hotels]
+    thumbnail_map = await fetch_thumbnails(hotel_codes)
+    for h in hotels:
+        h["thumbnail"] = thumbnail_map.get(h["id"], "")
 
-# ── Hotel room photos ──────────────────────────────────────────────────────────
-async def fetch_room_photos(hotel_id: str, checkin: str, checkout: str):
-    def parse_date(d):
-        y, m, day = d.split("-")
-        return {"day": int(day), "month": int(m), "year": int(y)}
+    return {"hotels": hotels, "destination": req.destination}
 
-    payload = {
-        "currency": "USD", "eapid": 1, "locale": "en_US", "siteId": 300000001,
-        "propertyId":  hotel_id,
-        "checkInDate": parse_date(checkin),
-        "checkOutDate":parse_date(checkout),
-        "rooms":       [{"adults": 2}],
+# ── Fetch thumbnails for hotel list ───────────────────────────────────────────
+async def fetch_thumbnails(codes: list[str]) -> dict:
+    """Quick fetch of one thumbnail per hotel for the results grid."""
+    if not codes:
+        return {}
+    url    = f"{HOTELBEDS_BASE}/hotel-content-api/1.0/hotels"
+    params = {
+        "codes":    ",".join(codes[:12]),
+        "fields":   "code,images",
+        "language": "ENG",
+        "from":     1,
+        "to":       len(codes),
     }
-    async with httpx.AsyncClient(timeout=20) as c:
-        res = await c.post(
-            f"https://{HOTELS_HOST}/properties/v2/detail",
-            headers={**HOTELS_HEADERS, "Content-Type": "application/json"},
-            json=payload,
-        )
+    try:
+        async with httpx.AsyncClient(timeout=20) as c:
+            res = await c.get(url, headers=hb_headers(), params=params)
+        if res.status_code != 200:
+            return {}
+        result = {}
+        for hotel in res.json().get("hotels", []):
+            images = hotel.get("images", [])
+            # Prefer room images (HAB), fall back to any
+            room_imgs = [i for i in images if i.get("imageTypeCode") == "HAB"]
+            chosen    = room_imgs[0] if room_imgs else (images[0] if images else None)
+            if chosen:
+                path = chosen.get("path", "")
+                result[str(hotel["code"])] = f"https://photos.hotelbeds.com/giata/original/{path}"
+        return result
+    except Exception:
+        return {}
+
+# ── Step 3: Fetch room photos for a specific hotel ────────────────────────────
+async def fetch_room_photos(hotel_code: str) -> list[str]:
+    """
+    Fetch images tagged HAB (room) from Hotelbeds Content API.
+    Returns list of full image URLs.
+    """
+    url    = f"{HOTELBEDS_BASE}/hotel-content-api/1.0/hotels"
+    params = {
+        "codes":    hotel_code,
+        "fields":   "images",
+        "language": "ENG",
+        "from":     1,
+        "to":       1,
+    }
+    async with httpx.AsyncClient(timeout=15) as c:
+        res = await c.get(url, headers=hb_headers(), params=params)
+
     if res.status_code != 200:
-        return {"photos": [], "amenities": [], "rooms": [], "address": ""}
+        return []
 
-    data      = res.json()
-    prop_info = data.get("data", {}).get("propertyInfo", {})
-    all_imgs  = prop_info.get("propertyGallery", {}).get("images", [])
+    hotels = res.json().get("hotels", [])
+    if not hotels:
+        return []
 
-    room_imgs, other_imgs = [], []
-    for img in all_imgs:
-        url  = img.get("image", {}).get("url", "")
-        cat  = (img.get("imageCategory", "") or "").lower()
-        desc = (img.get("image", {}).get("description", "") or "").lower()
-        if not url:
-            continue
-        if any(k in cat + desc for k in ["room", "bathroom", "suite", "bath", "bedroom"]):
-            room_imgs.append({"url": url, "desc": desc})
-        else:
-            other_imgs.append({"url": url, "desc": desc})
+    images     = hotels[0].get("images", [])
+    room_imgs  = [i for i in images if i.get("imageTypeCode") == "HAB"]
+    other_imgs = [i for i in images if i.get("imageTypeCode") != "HAB"]
 
-    selected = room_imgs[:6] or other_imgs[:4]
+    # Use room photos, fall back to other photos if none
+    chosen = room_imgs[:6] if room_imgs else other_imgs[:4]
 
-    amenities = [
-        item.get("text", "")
-        for item in (prop_info.get("summary", {})
-                               .get("amenities", {})
-                               .get("topAmenities", {})
-                               .get("items", []))
-        if item.get("text")
+    return [
+        f"https://photos.hotelbeds.com/giata/original/{img['path']}"
+        for img in chosen
+        if img.get("path")
     ]
-
-    rooms = []
-    for unit in (data.get("data", {}).get("propertyOffers", {}).get("units", [])[:3]):
-        name  = unit.get("header", {}).get("text", "")
-        plans = unit.get("ratePlans", [])
-        price = ""
-        if plans:
-            details = plans[0].get("priceDetails", [])
-            if details:
-                price = details[0].get("price", {}).get("lead", {}).get("formatted", "")
-        if name:
-            rooms.append({"name": name, "price": price})
-
-    address = (prop_info.get("summary", {})
-                         .get("location", {})
-                         .get("address", {})
-                         .get("addressLine", ""))
-
-    return {"photos": selected, "amenities": amenities, "rooms": rooms, "address": address}
 
 # ── Fetch image as base64 ──────────────────────────────────────────────────────
 async def fetch_b64(url: str) -> Optional[tuple]:
     try:
-        async with httpx.AsyncClient(timeout=12, follow_redirects=True) as c:
+        async with httpx.AsyncClient(timeout=15, follow_redirects=True) as c:
             res = await c.get(url, headers={"User-Agent": "Mozilla/5.0"})
         if res.status_code != 200:
             return None
@@ -229,53 +256,49 @@ async def fetch_b64(url: str) -> Optional[tuple]:
     except Exception:
         return None
 
-# ── Analyze hotel rooms with Claude Vision ─────────────────────────────────────
-@app.post("/analyze/{hotel_id}")
-async def analyze_hotel(hotel_id: str, req: AnalyzeRequest):
-    attrs    = req.style_attrs
-    checkin  = attrs.get("checkin",  "2025-06-01")
-    checkout = attrs.get("checkout", "2025-06-02")
+# ── Step 4: Analyze hotel room photos with Gemini Vision ──────────────────────
+@app.post("/analyze/{hotel_code}")
+async def analyze_hotel(hotel_code: str, req: AnalyzeRequest):
+    attrs = req.style_attrs
 
-    photo_data = await fetch_room_photos(hotel_id, checkin, checkout)
-    photos     = photo_data.get("photos", [])
+    # Get room-tagged photos from Hotelbeds
+    photo_urls = await fetch_room_photos(hotel_code)
 
-    if not photos:
+    if not photo_urls:
         return {
-            "hotelId": hotel_id, "score": 50,
+            "hotelCode": hotel_code, "score": 50,
             "features": {}, "summary": "No room photos available",
-            "photos": [], "amenities": photo_data.get("amenities", []),
-            "rooms": photo_data.get("rooms", []),
+            "photos": [], "roomPhotoCount": 0,
         }
 
-    # Download up to 4 photos in parallel
-    b64_results = await asyncio.gather(*[fetch_b64(p["url"]) for p in photos[:4]])
+    # Download up to 4 photos as base64 in parallel
+    b64_results = await asyncio.gather(*[fetch_b64(u) for u in photo_urls[:4]])
     images      = [r for r in b64_results if r]
 
     if not images:
         return {
-            "hotelId": hotel_id, "score": 50,
+            "hotelCode": hotel_code, "score": 50,
             "features": {}, "summary": "Could not load room photos",
-            "photos": [p["url"] for p in photos[:3]],
-            "amenities": photo_data.get("amenities", []),
-            "rooms": photo_data.get("rooms", []),
+            "photos": photo_urls[:3], "roomPhotoCount": len(photo_urls),
         }
 
-    prompt = f"""Analyze these hotel room photos and score how well they match this traveler's preferences.
+    prompt = f"""You are analyzing actual hotel ROOM photos (bedroom, bathroom, suite interiors).
+Score how well these rooms match the traveler's preferences.
 
-Traveler wants:
-- Style: {attrs.get('overall_style','unknown')}
-- Luxury level: {attrs.get('luxury_score',5)}/10
-- Room size: {attrs.get('room_size','standard')}
-- Large bathroom: {attrs.get('large_bathroom',False)}
-- Double sinks: {attrs.get('double_sinks',False)}
-- Bathtub: {attrs.get('bathtub',False)}
-- Sofa/lounge: {attrs.get('sofa',False)}
-- Workspace: {attrs.get('workspace',False)}
-- Great view: {attrs.get('great_view',False)}
-- Spacious room: {attrs.get('large_room',False)}
-- Modern style: {attrs.get('modern_style',False)}
+The traveler wants:
+- Style: {attrs.get('overall_style', 'unknown')}
+- Luxury level: {attrs.get('luxury_score', 5)}/10
+- Room size preference: {attrs.get('room_size', 'standard')}
+- Large bathroom: {attrs.get('large_bathroom', False)}
+- Double sinks: {attrs.get('double_sinks', False)}
+- Bathtub: {attrs.get('bathtub', False)}
+- Sofa or lounge seating in room: {attrs.get('sofa', False)}
+- Workspace or desk: {attrs.get('workspace', False)}
+- Great view from room: {attrs.get('great_view', False)}
+- Spacious room: {attrs.get('large_room', False)}
+- Modern/contemporary style: {attrs.get('modern_style', False)}
 
-Return ONLY valid JSON, no markdown or explanation:
+Return ONLY valid JSON, no markdown, no explanation:
 {{
   "match_score": 0-100,
   "large_bathroom": true/false,
@@ -287,12 +310,10 @@ Return ONLY valid JSON, no markdown or explanation:
   "large_room": true/false,
   "modern_style": true/false,
   "room_style": "one word",
-  "standout_features": ["2-3 specific things visible in the photos"],
-  "match_summary": "one sentence why this room does or doesn't match"
+  "standout_features": ["2-3 specific things you can see in these room photos"],
+  "match_summary": "one sentence explaining why this room does or doesn't match"
 }}"""
 
-    # ── Use Gemini Flash (free tier) for hotel room analysis ──────────────────
-    # Build Gemini parts: inline base64 images + text prompt
     parts = []
     for b64, mime in images:
         parts.append({"inline_data": {"mime_type": mime, "data": b64}})
@@ -306,53 +327,43 @@ Return ONLY valid JSON, no markdown or explanation:
         )
 
     if res.status_code != 200:
-        # Fallback to Claude if Gemini fails and Anthropic key is set
-        if ANTHROPIC_KEY:
-            content = []
-            for b64, mime in images:
-                content.append({"type": "image", "source": {"type": "base64", "media_type": mime, "data": b64}})
-            content.append({"type": "text", "text": prompt})
-            async with httpx.AsyncClient(timeout=45) as c2:
-                res = await c2.post(
-                    "https://api.anthropic.com/v1/messages",
-                    headers={"x-api-key": ANTHROPIC_KEY, "anthropic-version": "2023-06-01", "Content-Type": "application/json"},
-                    json={"model": "claude-haiku-4-5-20251001", "max_tokens": 600,
-                          "messages": [{"role": "user", "content": content}]},
-                )
-            if res.status_code != 200:
-                raise HTTPException(502, f"Both Gemini and Claude failed: {res.text[:200]}")
-            text = "".join(b.get("text", "") for b in res.json().get("content", []))
-        else:
-            raise HTTPException(502, f"Gemini error {res.status_code}: {res.text[:200]}")
-    else:
-        text = (res.json()
-                   .get("candidates", [{}])[0]
-                   .get("content", {})
-                   .get("parts", [{}])[0]
-                   .get("text", ""))
-    match = re.search(r"\{[\s\S]*\}", text)
-    if not match:
-        return {"hotelId": hotel_id, "score": 50, "features": {},
-                "summary": "Analysis parse error", "photos": [p["url"] for p in photos[:3]]}
+        # Return a partial result with photos even if Gemini fails
+        return {
+            "hotelCode": hotel_code, "score": 55,
+            "features": {}, "summary": f"Vision analysis unavailable ({res.status_code})",
+            "photos": photo_urls[:4], "roomPhotoCount": len(photo_urls),
+        }
 
-    analysis = json.loads(match.group())
+    text  = (res.json()
+               .get("candidates", [{}])[0]
+               .get("content", {})
+               .get("parts", [{}])[0]
+               .get("text", ""))
+
+    m = re.search(r"\{[\s\S]*\}", text)
+    if not m:
+        return {
+            "hotelCode": hotel_code, "score": 50, "features": {},
+            "summary": "Analysis parse error", "photos": photo_urls[:4],
+            "roomPhotoCount": len(photo_urls),
+        }
+
+    analysis  = json.loads(m.group())
     feat_keys = ["large_bathroom","double_sinks","bathtub","sofa",
                  "workspace","great_view","large_room","modern_style"]
 
     return {
-        "hotelId":          hotel_id,
+        "hotelCode":        hotel_code,
         "score":            analysis.get("match_score", 50),
         "features":         {k: analysis[k] for k in feat_keys if k in analysis},
         "roomStyle":        analysis.get("room_style", ""),
         "standoutFeatures": analysis.get("standout_features", []),
         "summary":          analysis.get("match_summary", ""),
-        "photos":           [p["url"] for p in photos[:4]],
-        "amenities":        photo_data.get("amenities", []),
-        "rooms":            photo_data.get("rooms", []),
-        "address":          photo_data.get("address", ""),
+        "photos":           photo_urls[:4],
+        "roomPhotoCount":   len(photo_urls),
     }
 
-# ── Entry point (for local dev) ────────────────────────────────────────────────
+# ── Entry point ────────────────────────────────────────────────────────────────
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run("server:app", host="0.0.0.0", port=PORT, reload=True)
