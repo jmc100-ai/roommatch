@@ -247,8 +247,9 @@ async def search_hotels(req: SearchRequest):
     return {"hotels": hotels, "destination": city}
 
 
-# ── Fetch room photos for a specific hotel ─────────────────────────────────────
+# ── Fetch candidate photo URLs for a hotel (no Gemini here) ──────────────────
 async def fetch_room_photos(hotel_id: str) -> list[str]:
+    """Return up to 8 candidate image URLs from LiteAPI. Gemini will filter in analyze."""
     if hotel_id in _room_photo_cache:
         return _room_photo_cache[hotel_id]
 
@@ -258,13 +259,12 @@ async def fetch_room_photos(hotel_id: str) -> list[str]:
                           params={"hotelId": hotel_id})
 
     if res.status_code != 200:
-        logger.warning(f"[room_photos] failed {res.status_code} for hotel {hotel_id}")
+        logger.warning(f"[room_photos] failed {res.status_code} for {hotel_id}")
         return []
 
     data  = res.json()
     hotel = data.get("data") or data
 
-    # Collect ALL image URLs — don't trust LiteAPI type tags, they're inconsistent
     all_urls = []
     for img in (hotel.get("images") or hotel.get("hotelImages") or []):
         url = img if isinstance(img, str) else (
@@ -272,67 +272,10 @@ async def fetch_room_photos(hotel_id: str) -> list[str]:
         if url:
             all_urls.append(url)
 
-    if not all_urls:
-        _room_photo_cache[hotel_id] = []
-        return []
-
-    # Use Gemini to classify which photos are actually interior room/bathroom shots
-    # Download up to 12 candidates in parallel for classification
-    candidates = all_urls[:12]
-    b64_results = await asyncio.gather(*[fetch_b64(u) for u in candidates])
-    loaded = [(i, r) for i, r in enumerate(b64_results) if r]
-
-    if not loaded:
-        _room_photo_cache[hotel_id] = all_urls[:6]
-        return all_urls[:6]
-
-    # Ask Gemini to identify which images show hotel room interiors
-    classify_prompt = (
-        f"You are looking at {len(loaded)} hotel photos numbered 0 to {len(loaded)-1}. "
-        "For each photo, decide if it shows a hotel room INTERIOR — meaning a bedroom, "
-        "bathroom, suite, or any indoor living/sleeping/bathing space inside a guest room. "
-        "EXCLUDE: lobbies, restaurants, pools, gyms, spas, exterior shots, hallways, "
-        "meeting rooms, rooftops, gardens, or any non-guest-room areas. "
-        "Return ONLY a JSON array of the indices that ARE room interiors, e.g. [0,2,4]. "
-        "If none qualify return []."
-    )
-
-    parts = []
-    for _, (b64, mime) in loaded:
-        parts.append({"inline_data": {"mime_type": mime, "data": b64}})
-    parts.append({"text": classify_prompt})
-
-    try:
-        async with httpx.AsyncClient(timeout=30) as c:
-            gr = await c.post(
-                f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key={GEMINI_KEY}",
-                headers={"Content-Type": "application/json"},
-                json={"contents": [{"parts": parts}]},
-            )
-        text = (gr.json().get("candidates", [{}])[0]
-                         .get("content", {})
-                         .get("parts", [{}])[0]
-                         .get("text", ""))
-        m = re.search(r"\[[\d,\s]*\]", text)
-        if m:
-            indices = json.loads(m.group())
-            room_urls = [candidates[i] for i in indices if i < len(candidates)]
-            logger.info(f"[room_photos] Gemini classified {len(room_urls)}/{len(loaded)} as room photos for {hotel_id}")
-            if room_urls:
-                _room_photo_cache[hotel_id] = room_urls
-                return room_urls
-    except Exception as e:
-        logger.warning(f"[room_photos] Gemini classify failed: {e}")
-
-    # Fallback: use tag hints if Gemini failed
-    tag_urls = []
-    for img in (hotel.get("images") or []):
-        url = img if isinstance(img, str) else (img.get("url") or img.get("link") or "")
-        tag = "" if isinstance(img, str) else (img.get("type") or img.get("category") or img.get("tag") or "").lower()
-        if url and any(t in tag for t in ["room", "bedroom", "bathroom", "suite"]):
-            tag_urls.append(url)
-    chosen = tag_urls[:8] if tag_urls else all_urls[:6]
+    # Return up to 8 — Gemini will filter to room-only in the analysis call
+    chosen = all_urls[:8]
     _room_photo_cache[hotel_id] = chosen
+    logger.info(f"[room_photos] {len(chosen)} candidates for {hotel_id}")
     return chosen
 
 
@@ -378,18 +321,21 @@ async def analyze_hotel(hotel_code: str, req: AnalyzeRequest):
     if attrs.get("modern_style"):   wanted_features.append("modern contemporary design")
     wanted_str = ", ".join(wanted_features) if wanted_features else "overall room quality and style"
 
-    prompt = f"""You are analyzing {len(indexed_images)} hotel room photos numbered 0 to {len(indexed_images)-1}.
+    prompt = f"""You are analyzing {len(indexed_images)} hotel photos numbered 0 to {len(indexed_images)-1}.
 
-The traveler's key preferences are: {wanted_str}
+STEP 1 — FILTER: First identify which photos show a hotel ROOM INTERIOR only.
+Room interiors = bedroom, bathroom, suite, living area inside a guest room.
+NOT room interiors = lobby, restaurant, pool, gym, spa, exterior, hallway, rooftop, garden.
+Only include room interior photos in your ranking. Skip all others entirely.
 
-Tasks:
-1. Rank photos so those best showing the traveler's desired features appear first
-2. Score the overall match
-3. Note which features are visible in each photo
+STEP 2 — RANK the room interior photos by how well they show: {wanted_str}
+Put the most relevant photo first.
+
+STEP 3 — SCORE the overall match to traveler preferences.
 
 Return ONLY valid JSON, no markdown:
 {{
-  "photo_ranking": [list of photo indices 0-{len(indexed_images)-1} ordered most to least relevant],
+  "photo_ranking": [indices of ROOM INTERIOR photos only, ordered best match first — exclude non-room photos entirely],
   "photo_features": {{"0": ["features in photo 0"], "1": ["features in photo 1"]}},
   "match_score": 0-100,
   "large_bathroom": true/false,
@@ -401,7 +347,7 @@ Return ONLY valid JSON, no markdown:
   "large_room": true/false,
   "modern_style": true/false,
   "room_style": "one word",
-  "standout_features": ["2-3 specific features visible"],
+  "standout_features": ["2-3 specific features visible in the room photos"],
   "match_summary": "one sentence explaining the match"
 }}"""
 
