@@ -26,7 +26,49 @@ HOTELBEDS_SECRET = os.getenv("HOTELBEDS_SECRET", "")
 GEMINI_KEY       = os.getenv("GEMINI_KEY", "")
 GOOGLE_KEY       = os.getenv("GOOGLE_KEY", "")
 PORT             = int(os.getenv("PORT", 8000))
-HOTELBEDS_BASE   = "https://api.test.hotelbeds.com"  # sandbox; change to api.hotelbeds.com for production
+HOTELBEDS_BASE   = "https://api.test.hotelbeds.com"  # sandbox
+
+# ── Hardcoded destination codes for common cities ──────────────────────────────
+# Avoids real-time Content API calls which Hotelbeds explicitly discourages.
+# Add more as needed from: developer.hotelbeds.com dashboard → Content API → Destinations
+CITY_CODES = {
+    "paris": "PAR", "london": "LON", "new york": "NYC", "barcelona": "BCN",
+    "madrid": "MAD", "rome": "ROM", "amsterdam": "AMS", "berlin": "BER",
+    "prague": "PRG", "vienna": "VIE", "lisbon": "LIS", "athens": "ATH",
+    "istanbul": "IST", "dubai": "DXB", "tokyo": "TYO", "bangkok": "BKK",
+    "singapore": "SIN", "hong kong": "HKG", "sydney": "SYD", "miami": "MIA",
+    "los angeles": "LAX", "chicago": "CHI", "las vegas": "LAS",
+    "san francisco": "SFO", "new orleans": "MSY", "seattle": "SEA",
+    "toronto": "YTO", "mexico city": "MEX", "cancun": "CUN",
+    "rio de janeiro": "RIO", "buenos aires": "BUE", "bogota": "BOG",
+    "cairo": "CAI", "cape town": "CPT", "nairobi": "NBO",
+    "munich": "MUC", "milan": "MIL", "florence": "FLR", "venice": "VCE",
+    "zurich": "ZRH", "geneva": "GVA", "brussels": "BRU", "Copenhagen": "CPH",
+    "oslo": "OSL", "stockholm": "STO", "helsinki": "HEL",
+    "budapest": "BUD", "warsaw": "WAW", "bucharest": "OTP",
+    "mumbai": "BOM", "delhi": "DEL", "bali": "DPS", "maldives": "MLE",
+    "marrakech": "RAK", "casablanca": "CAS",
+}
+
+async def resolve_destination(name: str) -> tuple[str, str]:
+    """Resolve city name to Hotelbeds destination code using local lookup table."""
+    key  = name.strip().lower()
+    code = CITY_CODES.get(key)
+
+    # Try partial match if exact not found
+    if not code:
+        for city, c in CITY_CODES.items():
+            if key in city or city in key:
+                code = c
+                break
+
+    if not code:
+        available = ", ".join(sorted(CITY_CODES.keys())[:20])
+        raise HTTPException(404,
+            f"City '{name}' not in supported list. Try one of: {available}...")
+
+    logger.info(f"[destinations] resolved '{name}' → {code}")
+    return code, ""
 
 import logging
 logging.basicConfig(level=logging.INFO)
@@ -107,49 +149,6 @@ class AnalyzeRequest(BaseModel):
 @app.get("/")
 def root():
     return {"status": "ok", "service": "RoomMatch API — Hotelbeds"}
-
-# ── Step 1: Resolve destination name → Hotelbeds destination code ─────────────
-async def resolve_destination(name: str) -> tuple[str, str]:
-    """Returns (destinationCode, countryCode) for a city name."""
-    url    = f"{HOTELBEDS_BASE}/hotel-content-api/1.0/locations/destinations"
-    # The API ignores the name filter — fetch all and filter client-side
-    # Use a large page and search by name in the content field
-    params = {
-        "fields":   "code,name,countryCode",
-        "language": "ENG",
-        "from":     1,
-        "to":       3000,   # fetch enough to find major cities
-    }
-    logger.info(f"[destinations] querying for name={name}")
-    async with httpx.AsyncClient(timeout=20) as c:
-        res = await c.get(url, headers=hb_headers(), params=params)
-    if res.status_code != 200:
-        raise HTTPException(502, f"Destination lookup failed ({res.status_code}): {res.text[:200]}")
-
-    destinations = res.json().get("destinations", [])
-    name_lower   = name.strip().lower()
-
-    # Score each destination — exact match wins, then startswith, then contains
-    exact = partial = contained = None
-    for d in destinations:
-        raw  = d.get("name", "")
-        text = (raw.get("content", "") if isinstance(raw, dict) else str(raw)).lower()
-        if text == name_lower:
-            exact = d
-            break
-        if text.startswith(name_lower) and not partial:
-            partial = d
-        if name_lower in text and not contained:
-            contained = d
-
-    best = exact or partial or contained
-    if not best:
-        raise HTTPException(404, f"Destination '{name}' not found. Try a major city like 'London', 'Barcelona' or 'New York'.")
-
-    raw      = best.get("name", "")
-    display  = raw.get("content", "") if isinstance(raw, dict) else str(raw)
-    logger.info(f"[destinations] matched: code={best['code']} name={display}")
-    return best["code"], best.get("countryCode", "")
 
 # ── Step 1: Get hotel codes for a destination from Content API ────────────────
 async def get_hotel_codes_for_destination(dest_code: str, min_category: int = 3) -> list[int]:
