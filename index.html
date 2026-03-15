@@ -128,7 +128,7 @@
 
 <header>
   <div class="logo">RoomMatch</div>
-  <div class="header-sub">Visual hotel search · Hotels.com + Claude Vision</div>
+  <div class="header-sub">Visual hotel search · Hotelbeds + Gemini Vision</div>
 </header>
 
 <div class="main">
@@ -197,7 +197,7 @@
     <div class="state-empty">
       <div class="big-icon">🏨</div>
       <p>Upload room photos you love, set a destination and dates, and RoomMatch will visually scan each hotel's room photos with Gemini Vision to find your perfect match.</p>
-      <p style="font-size:12px;margin-top:4px;opacity:0.6">Hotels.com inventory · Google Gemini Vision · Deployed on Render</p>
+      <p style="font-size:12px;margin-top:4px;opacity:0.6">Hotelbeds inventory · Google Gemini Vision · Deployed on Render</p>
     </div>
   </div>
 </div>
@@ -291,7 +291,7 @@ function api(path, opts = {}) {
 // ── Pipeline ───────────────────────────────────────────────────────────────────
 const STEPS = [
   { id:'s1', icon:'🔍', title:'Analyzing your style with Gemini Vision', sub:'Reading your reference photos...' },
-  { id:'s2', icon:'🏨', title:'Searching Hotels.com',                    sub:'Finding hotels for your dates...' },
+  { id:'s2', icon:'🏨', title:'Searching Hotelbeds inventory',             sub:'Finding hotels for your dates...' },
   { id:'s3', icon:'📸', title:'Scanning hotel room photos',              sub:'Gemini is examining each room...' },
   { id:'s4', icon:'⭐', title:'Ranking matches',                         sub:'Scoring by visual similarity...' },
 ];
@@ -331,7 +331,7 @@ async function runSearch() {
   showPipeline();
 
   try {
-    // Step 1: Claude Vision on user's own photos (direct from browser)
+    // Step 1: Gemini Vision on user's own photos (direct from browser)
     activateStep('s1');
     styleAttrs = await analyzeReferencePhotos();
     styleAttrs.checkin  = document.getElementById('checkin').value;
@@ -339,7 +339,7 @@ async function runSearch() {
     finishStep('s1');
 
     // Step 2: Hotel search via backend
-    activateStep('s2', `Searching Hotels.com in ${document.getElementById('cityInput').value}...`);
+    activateStep('s2', `Searching Hotelbeds in ${document.getElementById('cityInput').value}...`);
     const searchRes = await api('/search', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -353,7 +353,7 @@ async function runSearch() {
     if (!searchRes.hotels?.length) throw new Error('No hotels found. Try a different city or dates.');
     finishStep('s2');
 
-    // Step 3: Scan room photos with Claude Vision (via backend)
+    // Step 3: Scan room photos with Gemini Vision (via backend)
     activateStep('s3', `Scanning rooms for ${searchRes.hotels.length} hotels...`);
     renderScanningCards(searchRes.hotels, searchRes.destination);
     const analyzed = await scanHotelsInBatches(searchRes.hotels);
@@ -436,7 +436,7 @@ function renderScanningCards(hotels, destination) {
     <div class="results-wrap">
       <div class="results-header">
         <div class="results-title">Hotels in ${destination}</div>
-        <div class="results-meta">Scanning ${hotels.length} hotels with Claude Vision...</div>
+        <div class="results-meta">Scanning ${hotels.length} hotels with Gemini Vision...</div>
       </div>
       <div class="hotel-grid" id="hotelGrid">
         ${hotels.map(h => cardHTML(h, null)).join('')}
@@ -515,8 +515,7 @@ function cardHTML(hotel, analysis) {
   const amenityTags = (analysis?.amenities || []).slice(0, 3)
     .map(a => `<span class="tag">${a}</span>`).join('');
 
-  const bookingUrl = `https://www.hotelbeds.com/hotel-booking/${hotel.id}` ||
-                     `https://www.google.com/maps/search/${encodeURIComponent(h.name)}`;
+  const bookingUrl = `https://www.google.com/search?q=${encodeURIComponent(hotel.name + ' ' + hotel.neighborhood + ' book hotel')}`;
 
   return `
     <div class="hotel-card" id="card-${hotel.id}">
@@ -588,7 +587,7 @@ function renderFinalResults(attrs, hotels, destination) {
       </div>
       <div class="results-header">
         <div class="results-title">Hotels in ${destination}</div>
-        <div class="results-meta">${sorted.length} hotels · room photos analyzed by Claude Vision</div>
+        <div class="results-meta">${sorted.length} hotels · room photos analyzed by Gemini Vision</div>
       </div>
       <div class="hotel-grid">
         ${sorted.map(h => cardHTML(h, h.analysis)).join('')}
