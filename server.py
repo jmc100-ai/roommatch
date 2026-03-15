@@ -109,26 +109,57 @@ async def resolve_destination(name: str) -> tuple[str, str]:
     dest = destinations[0]
     return dest["code"], dest.get("countryCode", "")
 
+# ── Step 1: Get hotel codes for a destination from Content API ────────────────
+async def get_hotel_codes_for_destination(dest_code: str, min_category: int = 3) -> list[int]:
+    """Use Content API to get hotel codes for a destination code."""
+    url    = f"{HOTELBEDS_BASE}/hotel-content-api/1.0/hotels"
+    params = {
+        "destinationCode": dest_code,
+        "fields":          "code,name,categoryCode,address,images,facilities",
+        "language":        "ENG",
+        "from":            1,
+        "to":              20,
+    }
+    async with httpx.AsyncClient(timeout=20) as c:
+        res = await c.get(url, headers=hb_headers(), params=params)
+    if res.status_code != 200:
+        return []
+    hotels = res.json().get("hotels", [])
+    # Filter by star category (3+ stars)
+    codes = []
+    for h in hotels:
+        cat = h.get("categoryCode", "")
+        # categoryCode like "3EST", "4EST", "5EST" — extract number
+        num = "".join(filter(str.isdigit, cat))
+        if num and int(num) >= min_category:
+            codes.append(h["code"])
+    return codes[:15]
+
 # ── Step 2: Search hotels ──────────────────────────────────────────────────────
 @app.post("/search")
 async def search_hotels(req: SearchRequest):
     if not HOTELBEDS_KEY:
         raise HTTPException(500, "HOTELBEDS_KEY not set in Render environment")
 
+    # Resolve destination name → code
     dest_code, country_code = await resolve_destination(req.destination)
 
+    # Get hotel codes for that destination from Content API
+    hotel_codes = await get_hotel_codes_for_destination(dest_code)
+    if not hotel_codes:
+        raise HTTPException(404, f"No hotels found for '{req.destination}'. Try a different city.")
+
+    # Search availability for those hotels
     payload = {
         "stay": {
             "checkIn":  req.checkin,
             "checkOut": req.checkout,
         },
         "occupancies": [{"rooms": 1, "adults": req.adults, "children": 0}],
-        "destination": {"code": dest_code},
-        "filter": {"maxHotels": 15, "minCategory": 3},
-        "reviews": [{"type": "TRIPADVISOR", "minReviewRating": req.min_rating or 6}],
+        "hotels": {"hotel": hotel_codes},
     }
 
-    async with httpx.AsyncClient(timeout=25) as c:
+    async with httpx.AsyncClient(timeout=30) as c:
         res = await c.post(
             f"{HOTELBEDS_BASE}/hotel-api/1.0/hotels",
             headers=hb_headers(),
@@ -136,16 +167,17 @@ async def search_hotels(req: SearchRequest):
         )
 
     if res.status_code != 200:
-        raise HTTPException(502, f"Hotel search failed ({res.status_code}): {res.text[:200]}")
+        raise HTTPException(502, f"Hotel availability failed ({res.status_code}): {res.text[:200]}")
 
-    data   = res.json()
+    data       = res.json()
     hotels_raw = data.get("hotels", {}).get("hotels", [])
 
     if not hotels_raw:
-        raise HTTPException(404, f"No hotels found in '{req.destination}'. Try a different city.")
+        raise HTTPException(404, f"No available hotels in '{req.destination}' for those dates. Try different dates.")
 
     hotels = []
     for h in hotels_raw[:12]:
+        # Find lowest net rate across all rooms
         min_rate = None
         for room in h.get("rooms", []):
             for rate in room.get("rates", []):
@@ -153,24 +185,24 @@ async def search_hotels(req: SearchRequest):
                 if net > 0 and (min_rate is None or net < min_rate):
                     min_rate = net
 
-        price_str = f"USD {min_rate:.0f}" if min_rate else ""
+        price_str  = f"USD {min_rate:.0f}" if min_rate else ""
+        cat        = h.get("categoryCode", "")
+        star_num   = int("".join(filter(str.isdigit, cat))) if any(c.isdigit() for c in cat) else 0
 
         hotels.append({
-            "id":          str(h["code"]),
-            "name":        h.get("name", "Hotel"),
-            "rating":      h.get("categoryCode", ""),
-            "reviewCount": 0,
-            "starRating":  int(h.get("categoryCode", "0").replace("EST", "") or 0)
-                           if h.get("categoryCode", "").replace("EST","").isdigit() else 0,
-            "price":       price_str,
-            "thumbnail":   "",      # filled by content API below
+            "id":           str(h["code"]),
+            "name":         h.get("name", "Hotel"),
+            "rating":       round(float(h.get("minRate", 0) or 0), 1),
+            "reviewCount":  0,
+            "starRating":   star_num,
+            "price":        price_str,
+            "thumbnail":    "",
             "neighborhood": h.get("zoneName", ""),
-            "address":     h.get("address", {}).get("content", ""),
+            "address":      "",
         })
 
-    # Enrich with a thumbnail from content API (quick, just first image)
-    hotel_codes = [h["id"] for h in hotels]
-    thumbnail_map = await fetch_thumbnails(hotel_codes)
+    # Enrich with thumbnails from Content API
+    thumbnail_map = await fetch_thumbnails([h["id"] for h in hotels])
     for h in hotels:
         h["thumbnail"] = thumbnail_map.get(h["id"], "")
 
