@@ -28,6 +28,10 @@ GOOGLE_KEY       = os.getenv("GOOGLE_KEY", "")
 PORT             = int(os.getenv("PORT", 8000))
 HOTELBEDS_BASE   = "https://api.test.hotelbeds.com"  # sandbox
 
+# ── Simple in-memory caches to reduce Hotelbeds quota usage ───────────────────
+_hotel_content_cache: dict = {}   # dest_code → list of hotels
+_room_photo_cache:    dict = {}   # hotel_code → list of photo URLs
+
 # ── Hardcoded destination codes for common cities ──────────────────────────────
 # Avoids real-time Content API calls which Hotelbeds explicitly discourages.
 # Add more as needed from: developer.hotelbeds.com dashboard → Content API → Destinations
@@ -200,31 +204,38 @@ async def search_hotels(req: SearchRequest):
     dest_code, _ = await resolve_destination(req.destination)
     logger.info(f"[search] {req.destination} → {dest_code}")
 
-    url    = f"{HOTELBEDS_BASE}/hotel-content-api/1.0/hotels"
-    params = {
-        "destinationCode": dest_code,
-        "fields":          "code,name,categoryCode,address,images,facilities",
-        "language":        "ENG",
-        "from":            1,
-        "to":              50,
-    }
-    async with httpx.AsyncClient(timeout=30) as c:
-        res = await c.get(url, headers=hb_headers(), params=params)
+    # Serve from cache if available — saves Hotelbeds quota
+    if dest_code in _hotel_content_cache:
+        logger.info(f"[search] cache hit for {dest_code}")
+        raw_hotels = _hotel_content_cache[dest_code]
+    else:
+        url    = f"{HOTELBEDS_BASE}/hotel-content-api/1.0/hotels"
+        params = {
+            "destinationCode": dest_code,
+            "fields":          "code,name,categoryCode,address,images,facilities",
+            "language":        "ENG",
+            "from":            1,
+            "to":              50,
+        }
+        async with httpx.AsyncClient(timeout=30) as c:
+            res = await c.get(url, headers=hb_headers(), params=params)
 
-    if res.status_code == 403:
-        try:
-            err = res.json().get("error", "")
-        except Exception:
-            err = res.text[:100]
-        if "quota" in err.lower() or "quota" in res.text.lower():
-            raise HTTPException(429, "Hotelbeds sandbox quota exceeded. Please wait a few minutes and try again — the sandbox has limited free calls per hour.")
-        raise HTTPException(403, f"Hotelbeds access denied: {err}")
+        if res.status_code == 403:
+            try:
+                err = res.json().get("error", "")
+            except Exception:
+                err = res.text[:100]
+            if "quota" in err.lower() or "quota" in res.text.lower():
+                raise HTTPException(429, "Hotelbeds sandbox quota exceeded. Please wait a few minutes and try again.")
+            raise HTTPException(403, f"Hotelbeds access denied: {err}")
 
-    if res.status_code != 200:
-        raise HTTPException(502, f"Hotel content failed ({res.status_code}): {res.text[:200]}")
+        if res.status_code != 200:
+            raise HTTPException(502, f"Hotel content failed ({res.status_code}): {res.text[:200]}")
 
-    raw_hotels = res.json().get("hotels", [])
-    logger.info(f"[search] got {len(raw_hotels)} hotels from content API")
+        raw_hotels = res.json().get("hotels", [])
+        if raw_hotels:
+            _hotel_content_cache[dest_code] = raw_hotels
+        logger.info(f"[search] fetched {len(raw_hotels)} hotels, now cached")
 
     if not raw_hotels:
         raise HTTPException(404, f"No hotels found for '{req.destination}'. Try London, Barcelona or Tokyo.")
@@ -308,10 +319,9 @@ async def fetch_thumbnails(codes: list[str]) -> dict:
 
 # ── Step 3: Fetch room photos for a specific hotel ────────────────────────────
 async def fetch_room_photos(hotel_code: str) -> list[str]:
-    """
-    Fetch images tagged HAB (room) from Hotelbeds Content API.
-    Returns list of full image URLs.
-    """
+    """Fetch HAB-tagged room photos from Hotelbeds, with caching."""
+    if hotel_code in _room_photo_cache:
+        return _room_photo_cache[hotel_code]
     url    = f"{HOTELBEDS_BASE}/hotel-content-api/1.0/hotels"
     params = {
         "codes":    hotel_code,
@@ -338,11 +348,13 @@ async def fetch_room_photos(hotel_code: str) -> list[str]:
     # Return more room photos so Gemini has more to work with for ranking
     chosen = room_imgs[:10] if room_imgs else other_imgs[:6]
 
-    return [
+    result = [
         f"https://photos.hotelbeds.com/giata/original/{img['path']}"
         for img in chosen
         if img.get("path")
     ]
+    _room_photo_cache[hotel_code] = result
+    return result
 
 # ── Fetch image as base64 ──────────────────────────────────────────────────────
 async def fetch_b64(url: str) -> Optional[tuple]:
