@@ -2,14 +2,12 @@ services:
   - type: web
     name: roommatch-api
     runtime: python
-    buildCommand: pip install -r requirements.txt
+    buildCommand: pip install --no-deps -r requirements.txt
     startCommand: uvicorn server:app --host 0.0.0.0 --port $PORT
     envVars:
-      - key: HOTELBEDS_KEY
-        sync: false        # from developer.hotelbeds.com dashboard
-      - key: HOTELBEDS_SECRET
-        sync: false        # from developer.hotelbeds.com dashboard
+      - key: LITEAPI_KEY
+        sync: false
       - key: GEMINI_KEY
-        sync: false        # from aistudio.google.com (free)
-      - key: GOOGLE_KEY
-        sync: false        # optional — for hotel thumbnails fallback
+        sync: false
+      - key: PIP_PREFER_BINARY
+        value: "1"
