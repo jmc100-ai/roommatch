@@ -211,6 +211,15 @@ async def search_hotels(req: SearchRequest):
     async with httpx.AsyncClient(timeout=30) as c:
         res = await c.get(url, headers=hb_headers(), params=params)
 
+    if res.status_code == 403:
+        try:
+            err = res.json().get("error", "")
+        except Exception:
+            err = res.text[:100]
+        if "quota" in err.lower() or "quota" in res.text.lower():
+            raise HTTPException(429, "Hotelbeds sandbox quota exceeded. Please wait a few minutes and try again — the sandbox has limited free calls per hour.")
+        raise HTTPException(403, f"Hotelbeds access denied: {err}")
+
     if res.status_code != 200:
         raise HTTPException(502, f"Hotel content failed ({res.status_code}): {res.text[:200]}")
 
@@ -314,10 +323,11 @@ async def fetch_room_photos(hotel_code: str) -> list[str]:
     async with httpx.AsyncClient(timeout=15) as c:
         res = await c.get(url, headers=hb_headers(), params=params)
 
+    if res.status_code == 403:
+        logger.warning(f"[room_photos] Hotelbeds quota exceeded for hotel {hotel_code}")
+        return []
     if res.status_code != 200:
         return []
-
-    hotels = res.json().get("hotels", [])
     if not hotels:
         return []
 
