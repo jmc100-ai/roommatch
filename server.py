@@ -159,6 +159,12 @@ async def search_hotels(req: SearchRequest):
         "hotels": {"hotel": hotel_codes},
     }
 
+    import logging
+    logging.basicConfig(level=logging.INFO)
+    logger = logging.getLogger("roommatch")
+
+    logger.info(f"Availability payload: {json.dumps(payload)}")
+
     async with httpx.AsyncClient(timeout=30) as c:
         res = await c.post(
             f"{HOTELBEDS_BASE}/hotel-api/1.0/hotels",
@@ -166,8 +172,16 @@ async def search_hotels(req: SearchRequest):
             json=payload,
         )
 
+    logger.info(f"Hotelbeds response {res.status_code}: {res.text[:800]}")
+
     if res.status_code != 200:
-        raise HTTPException(502, f"Hotel availability failed ({res.status_code}): {res.text[:200]}")
+        # Parse the full error from Hotelbeds response
+        try:
+            err_data = res.json()
+            err_msg  = json.dumps(err_data.get("error", err_data), indent=2)
+        except Exception:
+            err_msg = res.text[:500]
+        raise HTTPException(502, f"Hotel availability failed ({res.status_code}): {err_msg}")
 
     data       = res.json()
     hotels_raw = data.get("hotels", {}).get("hotels", [])
