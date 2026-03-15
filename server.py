@@ -133,13 +133,18 @@ async def resolve_destination(name: str) -> tuple[str, str]:
     # Try to find an exact or close match first
     name_lower = name.lower()
     for d in destinations:
-        if d.get("name", "").lower() == name_lower:
-            logger.info(f"[destinations] exact match: code={d['code']} name={d['name']}")
+        # name field can be a string or a dict like {"content": "Paris"}
+        raw_name = d.get("name", "")
+        d_name   = raw_name.get("content", "") if isinstance(raw_name, dict) else str(raw_name)
+        if d_name.lower() == name_lower:
+            logger.info(f"[destinations] exact match: code={d['code']} name={d_name}")
             return d["code"], d.get("countryCode", "")
 
     # Fall back to first result
-    dest = destinations[0]
-    logger.info(f"[destinations] using first result: code={dest['code']} name={dest.get('name','')}")
+    dest     = destinations[0]
+    raw_name = dest.get("name", "")
+    d_name   = raw_name.get("content", "") if isinstance(raw_name, dict) else str(raw_name)
+    logger.info(f"[destinations] using first result: code={dest['code']} name={d_name}")
     return dest["code"], dest.get("countryCode", "")
 
 # ── Step 1: Get hotel codes for a destination from Content API ────────────────
