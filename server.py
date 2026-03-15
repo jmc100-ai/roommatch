@@ -32,22 +32,37 @@ HOTELBEDS_BASE   = "https://api.test.hotelbeds.com"  # sandbox
 # Avoids real-time Content API calls which Hotelbeds explicitly discourages.
 # Add more as needed from: developer.hotelbeds.com dashboard → Content API → Destinations
 CITY_CODES = {
-    "paris": "PAR", "london": "LON", "new york": "NYC", "barcelona": "BCN",
-    "madrid": "MAD", "rome": "ROM", "amsterdam": "AMS", "berlin": "BER",
-    "prague": "PRG", "vienna": "VIE", "lisbon": "LIS", "athens": "ATH",
-    "istanbul": "IST", "dubai": "DXB", "tokyo": "TYO", "bangkok": "BKK",
-    "singapore": "SIN", "hong kong": "HKG", "sydney": "SYD", "miami": "MIA",
-    "los angeles": "LAX", "chicago": "CHI", "las vegas": "LAS",
-    "san francisco": "SFO", "new orleans": "MSY", "seattle": "SEA",
-    "toronto": "YTO", "mexico city": "MEX", "cancun": "CUN",
-    "rio de janeiro": "RIO", "buenos aires": "BUE", "bogota": "BOG",
-    "cairo": "CAI", "cape town": "CPT", "nairobi": "NBO",
-    "munich": "MUC", "milan": "MIL", "florence": "FLR", "venice": "VCE",
-    "zurich": "ZRH", "geneva": "GVA", "brussels": "BRU", "Copenhagen": "CPH",
-    "oslo": "OSL", "stockholm": "STO", "helsinki": "HEL",
-    "budapest": "BUD", "warsaw": "WAW", "bucharest": "OTP",
-    "mumbai": "BOM", "delhi": "DEL", "bali": "DPS", "maldives": "MLE",
-    "marrakech": "RAK", "casablanca": "CAS",
+    # North America
+    "new york": "NYC", "new york city": "NYC", "nyc": "NYC", "manhattan": "NYC",
+    "los angeles": "LAX", "la": "LAX", "chicago": "CHI", "miami": "MIA",
+    "las vegas": "LAS", "san francisco": "SFO", "seattle": "SEA",
+    "new orleans": "MSY", "boston": "BOS", "washington": "WAS", "dc": "WAS",
+    "toronto": "YTO", "vancouver": "YVR", "montreal": "YMQ",
+    "mexico city": "MEX", "cancun": "CUN",
+    # South America
+    "rio de janeiro": "RIO", "rio": "RIO", "buenos aires": "BUE", "bogota": "BOG",
+    "lima": "LIM", "santiago": "SCL",
+    # Europe
+    "london": "LON", "paris": "PAR", "barcelona": "BCN", "madrid": "MAD",
+    "rome": "ROM", "milan": "MIL", "florence": "FLR", "venice": "VCE",
+    "amsterdam": "AMS", "berlin": "BER", "munich": "MUC", "hamburg": "HAM",
+    "prague": "PRG", "vienna": "VIE", "budapest": "BUD", "warsaw": "WAW",
+    "lisbon": "LIS", "porto": "OPO", "athens": "ATH", "istanbul": "IST",
+    "zurich": "ZRH", "geneva": "GVA", "brussels": "BRU", "copenhagen": "CPH",
+    "oslo": "OSL", "stockholm": "STO", "helsinki": "HEL", "bucharest": "OTP",
+    "dublin": "DUB", "edinburgh": "EDI", "amsterdam": "AMS",
+    # Middle East & Africa
+    "dubai": "DXB", "abu dhabi": "AUH", "cairo": "CAI",
+    "cape town": "CPT", "nairobi": "NBO", "marrakech": "RAK", "casablanca": "CAS",
+    "tel aviv": "TLV",
+    # Asia Pacific
+    "tokyo": "TYO", "osaka": "OSA", "kyoto": "UKY",
+    "bangkok": "BKK", "singapore": "SIN", "hong kong": "HKG",
+    "bali": "DPS", "jakarta": "JKT", "kuala lumpur": "KUL",
+    "sydney": "SYD", "melbourne": "MEL", "auckland": "AKL",
+    "mumbai": "BOM", "delhi": "DEL", "new delhi": "DEL",
+    "maldives": "MLE", "phuket": "HKT", "chiang mai": "CNX",
+    "beijing": "BJS", "shanghai": "SHA", "seoul": "SEL",
 }
 
 async def resolve_destination(name: str) -> tuple[str, str]:
@@ -191,22 +206,29 @@ async def search_hotels(req: SearchRequest):
         "fields":          "code,name,categoryCode,address,images,facilities",
         "language":        "ENG",
         "from":            1,
-        "to":              20,
+        "to":              50,
     }
-    async with httpx.AsyncClient(timeout=20) as c:
+    async with httpx.AsyncClient(timeout=30) as c:
         res = await c.get(url, headers=hb_headers(), params=params)
 
     if res.status_code != 200:
         raise HTTPException(502, f"Hotel content failed ({res.status_code}): {res.text[:200]}")
 
     raw_hotels = res.json().get("hotels", [])
-    logger.info(f"[search] got {len(raw_hotels)} hotels")
+    logger.info(f"[search] got {len(raw_hotels)} hotels from content API")
 
     if not raw_hotels:
         raise HTTPException(404, f"No hotels found for '{req.destination}'. Try London, Barcelona or Tokyo.")
 
+    # Sort by star rating descending so best hotels appear first
+    def star_num(h):
+        cat = h.get("categoryCode", "")
+        return int("".join(filter(str.isdigit, cat))) if any(c.isdigit() for c in cat) else 0
+
+    raw_hotels.sort(key=star_num, reverse=True)
+
     hotels = []
-    for h in raw_hotels[:12]:
+    for h in raw_hotels[:30]:
         images    = h.get("images", [])
         room_imgs = [i for i in images if i.get("imageTypeCode") == "HAB"]
         thumb_img = room_imgs[0] if room_imgs else (images[0] if images else None)
@@ -303,8 +325,8 @@ async def fetch_room_photos(hotel_code: str) -> list[str]:
     room_imgs  = [i for i in images if i.get("imageTypeCode") == "HAB"]
     other_imgs = [i for i in images if i.get("imageTypeCode") != "HAB"]
 
-    # Use room photos, fall back to other photos if none
-    chosen = room_imgs[:6] if room_imgs else other_imgs[:4]
+    # Return more room photos so Gemini has more to work with for ranking
+    chosen = room_imgs[:10] if room_imgs else other_imgs[:6]
 
     return [
         f"https://photos.hotelbeds.com/giata/original/{img['path']}"
@@ -339,35 +361,47 @@ async def analyze_hotel(hotel_code: str, req: AnalyzeRequest):
             "photos": [], "roomPhotoCount": 0,
         }
 
-    # Download up to 4 photos as base64 in parallel
-    b64_results = await asyncio.gather(*[fetch_b64(u) for u in photo_urls[:4]])
-    images      = [r for r in b64_results if r]
+    # Download up to 6 photos in parallel for better ranking coverage
+    b64_results = await asyncio.gather(*[fetch_b64(u) for u in photo_urls[:6]])
+    indexed_images = [(i, r) for i, r in enumerate(b64_results) if r]
 
-    if not images:
+    if not indexed_images:
         return {
             "hotelCode": hotel_code, "score": 50,
             "features": {}, "summary": "Could not load room photos",
             "photos": photo_urls[:3], "roomPhotoCount": len(photo_urls),
         }
 
-    prompt = f"""You are analyzing actual hotel ROOM photos (bedroom, bathroom, suite interiors).
-Score how well these rooms match the traveler's preferences.
+    # Build list of features the user actually cares about for photo ranking
+    wanted_features = []
+    if attrs.get('double_sinks'):   wanted_features.append("double sinks / two bathroom sinks")
+    if attrs.get('large_bathroom'): wanted_features.append("large spacious bathroom")
+    if attrs.get('bathtub'):        wanted_features.append("bathtub or soaking tub")
+    if attrs.get('sofa'):           wanted_features.append("sofa or lounge seating area")
+    if attrs.get('workspace'):      wanted_features.append("desk or workspace")
+    if attrs.get('great_view'):     wanted_features.append("window view or panoramic view")
+    if attrs.get('large_room'):     wanted_features.append("spacious room layout")
+    if attrs.get('modern_style'):   wanted_features.append("modern contemporary design")
 
-The traveler wants:
-- Style: {attrs.get('overall_style', 'unknown')}
-- Luxury level: {attrs.get('luxury_score', 5)}/10
-- Room size preference: {attrs.get('room_size', 'standard')}
-- Large bathroom: {attrs.get('large_bathroom', False)}
-- Double sinks: {attrs.get('double_sinks', False)}
-- Bathtub: {attrs.get('bathtub', False)}
-- Sofa or lounge seating in room: {attrs.get('sofa', False)}
-- Workspace or desk: {attrs.get('workspace', False)}
-- Great view from room: {attrs.get('great_view', False)}
-- Spacious room: {attrs.get('large_room', False)}
-- Modern/contemporary style: {attrs.get('modern_style', False)}
+    wanted_str = ", ".join(wanted_features) if wanted_features else "overall room quality and style"
 
-Return ONLY valid JSON, no markdown, no explanation:
+    prompt = f"""You are analyzing {len(indexed_images)} hotel room photos numbered 0 to {len(indexed_images)-1}.
+
+The traveler's key preferences are: {wanted_str}
+
+Tasks:
+1. Identify which photos best show the traveler's desired features (e.g. if they want double sinks, rank bathroom photos showing sinks first)
+2. Score the overall match
+3. Detect which features are actually visible across all photos
+
+Return ONLY valid JSON, no markdown:
 {{
+  "photo_ranking": [list of photo indices 0-{len(indexed_images)-1} ordered from most relevant to least, e.g. [2,0,3,1]],
+  "photo_features": {{
+    "0": ["features visible in photo 0, e.g. double sinks, bathtub"],
+    "1": ["features visible in photo 1"],
+    ...
+  }},
   "match_score": 0-100,
   "large_bathroom": true/false,
   "double_sinks": true/false,
@@ -378,16 +412,16 @@ Return ONLY valid JSON, no markdown, no explanation:
   "large_room": true/false,
   "modern_style": true/false,
   "room_style": "one word",
-  "standout_features": ["2-3 specific things you can see in these room photos"],
-  "match_summary": "one sentence explaining why this room does or doesn't match"
+  "standout_features": ["2-3 specific features visible"],
+  "match_summary": "one sentence explaining the match"
 }}"""
 
     parts = []
-    for b64, mime in images:
+    for idx, (orig_idx, (b64, mime)) in enumerate(indexed_images):
         parts.append({"inline_data": {"mime_type": mime, "data": b64}})
     parts.append({"text": prompt})
 
-    async with httpx.AsyncClient(timeout=45) as c:
+    async with httpx.AsyncClient(timeout=60) as c:
         res = await c.post(
             f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key={GEMINI_KEY}",
             headers={"Content-Type": "application/json"},
@@ -395,14 +429,13 @@ Return ONLY valid JSON, no markdown, no explanation:
         )
 
     if res.status_code != 200:
-        # Return a partial result with photos even if Gemini fails
         return {
             "hotelCode": hotel_code, "score": 55,
             "features": {}, "summary": f"Vision analysis unavailable ({res.status_code})",
             "photos": photo_urls[:4], "roomPhotoCount": len(photo_urls),
         }
 
-    text  = (res.json()
+    text = (res.json()
                .get("candidates", [{}])[0]
                .get("content", {})
                .get("parts", [{}])[0]
@@ -420,15 +453,37 @@ Return ONLY valid JSON, no markdown, no explanation:
     feat_keys = ["large_bathroom","double_sinks","bathtub","sofa",
                  "workspace","great_view","large_room","modern_style"]
 
+    # Re-order photos by Gemini's ranking so best-match photos appear first
+    ranking      = analysis.get("photo_ranking", list(range(len(indexed_images))))
+    ordered_urls = []
+    for rank_idx in ranking:
+        if rank_idx < len(indexed_images):
+            orig_idx = indexed_images[rank_idx][0]
+            if orig_idx < len(photo_urls):
+                ordered_urls.append(photo_urls[orig_idx])
+    # Append any remaining photos not in ranking
+    ranked_set = set(ordered_urls)
+    for url in photo_urls[:6]:
+        if url not in ranked_set:
+            ordered_urls.append(url)
+
+    # Build per-photo feature labels for the UI
+    photo_features = analysis.get("photo_features", {})
+    photos_with_features = []
+    for i, url in enumerate(ordered_urls[:4]):
+        feats = photo_features.get(str(ranking[i] if i < len(ranking) else i), [])
+        photos_with_features.append({"url": url, "features": feats})
+
     return {
-        "hotelCode":        hotel_code,
-        "score":            analysis.get("match_score", 50),
-        "features":         {k: analysis[k] for k in feat_keys if k in analysis},
-        "roomStyle":        analysis.get("room_style", ""),
-        "standoutFeatures": analysis.get("standout_features", []),
-        "summary":          analysis.get("match_summary", ""),
-        "photos":           photo_urls[:4],
-        "roomPhotoCount":   len(photo_urls),
+        "hotelCode":          hotel_code,
+        "score":              analysis.get("match_score", 50),
+        "features":           {k: analysis[k] for k in feat_keys if k in analysis},
+        "roomStyle":          analysis.get("room_style", ""),
+        "standoutFeatures":   analysis.get("standout_features", []),
+        "summary":            analysis.get("match_summary", ""),
+        "photos":             ordered_urls[:4],
+        "photosWithFeatures": photos_with_features,
+        "roomPhotoCount":     len(photo_urls),
     }
 
 # ── Entry point ────────────────────────────────────────────────────────────────
