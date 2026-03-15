@@ -176,109 +176,71 @@ async def get_hotel_codes_for_destination(dest_code: str, min_category: int = 3)
     logger.info(f"[hotel_codes] codes: {codes[:10]}")
     return codes[:15]
 
-# ── Step 2: Search hotels ──────────────────────────────────────────────────────
+# ── Step 2: Search hotels using Content API (no availability call needed) ──────
 @app.post("/search")
 async def search_hotels(req: SearchRequest):
     if not HOTELBEDS_KEY:
         raise HTTPException(500, "HOTELBEDS_KEY not set in Render environment")
 
-    # Resolve destination name → code
-    dest_code, country_code = await resolve_destination(req.destination)
+    dest_code, _ = await resolve_destination(req.destination)
+    logger.info(f"[search] {req.destination} → {dest_code}")
 
-    # Get hotel codes for that destination from Content API
-    hotel_codes = await get_hotel_codes_for_destination(dest_code)
-    if not hotel_codes:
-        raise HTTPException(404, f"No hotels found for '{req.destination}' (resolved to destination code: '{dest_code}'). The sandbox may have limited data — try 'London' or 'Barcelona'.")
-
-    # Search availability for those hotels
-    payload = {
-        "stay": {
-            "checkIn":  req.checkin,
-            "checkOut": req.checkout,
-        },
-        "occupancies": [{"rooms": 1, "adults": req.adults, "children": 0}],
-        "hotels": {"hotel": hotel_codes},
+    url    = f"{HOTELBEDS_BASE}/hotel-content-api/1.0/hotels"
+    params = {
+        "destinationCode": dest_code,
+        "fields":          "code,name,categoryCode,address,images,facilities",
+        "language":        "ENG",
+        "from":            1,
+        "to":              20,
     }
-
-    logger.info(f"[search] destination={req.destination} checkin={req.checkin} checkout={req.checkout}")
-
-    # Resolve destination name → code
-    dest_code, country_code = await resolve_destination(req.destination)
-    logger.info(f"[search] resolved dest_code={dest_code} country={country_code}")
-
-    # Get hotel codes for that destination from Content API
-    hotel_codes = await get_hotel_codes_for_destination(dest_code)
-    logger.info(f"[search] got {len(hotel_codes)} hotel codes: {hotel_codes[:5]}")
-
-    if not hotel_codes:
-        raise HTTPException(404, f"No hotels found for '{req.destination}'. Try a different city.")
-
-    # Search availability for those hotels
-    payload = {
-        "stay": {
-            "checkIn":  req.checkin,
-            "checkOut": req.checkout,
-        },
-        "occupancies": [{"rooms": 1, "adults": req.adults, "children": 0}],
-        "hotels": {"hotel": hotel_codes},
-    }
-
-    logger.info(f"[search] availability payload: {json.dumps(payload)}")
-
-    async with httpx.AsyncClient(timeout=30) as c:
-        res = await c.post(
-            f"{HOTELBEDS_BASE}/hotel-api/1.0/hotels",
-            headers=hb_headers(),
-            json=payload,
-        )
-
-    logger.info(f"[search] availability response {res.status_code}: {res.text[:600]}")
+    async with httpx.AsyncClient(timeout=20) as c:
+        res = await c.get(url, headers=hb_headers(), params=params)
 
     if res.status_code != 200:
-        # Parse the full error from Hotelbeds response
-        try:
-            err_data = res.json()
-            err_msg  = json.dumps(err_data.get("error", err_data), indent=2)
-        except Exception:
-            err_msg = res.text[:500]
-        raise HTTPException(502, f"Hotel availability failed ({res.status_code}): {err_msg}")
+        raise HTTPException(502, f"Hotel content failed ({res.status_code}): {res.text[:200]}")
 
-    data       = res.json()
-    hotels_raw = data.get("hotels", {}).get("hotels", [])
+    raw_hotels = res.json().get("hotels", [])
+    logger.info(f"[search] got {len(raw_hotels)} hotels")
 
-    if not hotels_raw:
-        raise HTTPException(404, f"No available hotels in '{req.destination}' for those dates. Try different dates.")
+    if not raw_hotels:
+        raise HTTPException(404, f"No hotels found for '{req.destination}'. Try London, Barcelona or Tokyo.")
 
     hotels = []
-    for h in hotels_raw[:12]:
-        # Find lowest net rate across all rooms
-        min_rate = None
-        for room in h.get("rooms", []):
-            for rate in room.get("rates", []):
-                net = float(rate.get("net", 0) or 0)
-                if net > 0 and (min_rate is None or net < min_rate):
-                    min_rate = net
+    for h in raw_hotels[:12]:
+        images    = h.get("images", [])
+        room_imgs = [i for i in images if i.get("imageTypeCode") == "HAB"]
+        thumb_img = room_imgs[0] if room_imgs else (images[0] if images else None)
+        thumbnail = f"https://photos.hotelbeds.com/giata/original/{thumb_img['path']}" if thumb_img else ""
 
-        price_str  = f"USD {min_rate:.0f}" if min_rate else ""
-        cat        = h.get("categoryCode", "")
-        star_num   = int("".join(filter(str.isdigit, cat))) if any(c.isdigit() for c in cat) else 0
+        cat      = h.get("categoryCode", "")
+        star_num = int("".join(filter(str.isdigit, cat))) if any(c.isdigit() for c in cat) else 0
+
+        addr_obj  = h.get("address", {})
+        address   = addr_obj.get("content", "") if isinstance(addr_obj, dict) else str(addr_obj)
+
+        raw_name  = h.get("name", {})
+        name      = raw_name.get("content", "Hotel") if isinstance(raw_name, dict) else str(raw_name)
+
+        facilities = h.get("facilities", [])
+        amenities  = []
+        for f in facilities[:6]:
+            desc = f.get("description", {})
+            txt  = desc.get("content", "") if isinstance(desc, dict) else str(desc)
+            if txt:
+                amenities.append(txt)
 
         hotels.append({
-            "id":           str(h["code"]),
-            "name":         h.get("name", "Hotel"),
-            "rating":       round(float(h.get("minRate", 0) or 0), 1),
-            "reviewCount":  0,
-            "starRating":   star_num,
-            "price":        price_str,
-            "thumbnail":    "",
-            "neighborhood": h.get("zoneName", ""),
-            "address":      "",
+            "id":          str(h["code"]),
+            "name":        name,
+            "rating":      0,
+            "reviewCount": 0,
+            "starRating":  star_num,
+            "price":       "",
+            "thumbnail":   thumbnail,
+            "neighborhood": "",
+            "address":     address,
+            "amenities":   amenities,
         })
-
-    # Enrich with thumbnails from Content API
-    thumbnail_map = await fetch_thumbnails([h["id"] for h in hotels])
-    for h in hotels:
-        h["thumbnail"] = thumbnail_map.get(h["id"], "")
 
     return {"hotels": hotels, "destination": req.destination}
 
