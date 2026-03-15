@@ -24,8 +24,9 @@ from contextlib import asynccontextmanager
 HOTELBEDS_KEY    = os.getenv("HOTELBEDS_KEY", "")
 HOTELBEDS_SECRET = os.getenv("HOTELBEDS_SECRET", "")
 GEMINI_KEY       = os.getenv("GEMINI_KEY", "")
-GOOGLE_KEY       = os.getenv("GOOGLE_KEY", "")   # optional fallback
+GOOGLE_KEY       = os.getenv("GOOGLE_KEY", "")
 PORT             = int(os.getenv("PORT", 8000))
+HOTELBEDS_BASE   = "https://api.test.hotelbeds.com"  # sandbox; change to api.hotelbeds.com for production
 
 import logging
 logging.basicConfig(level=logging.INFO)
@@ -63,23 +64,6 @@ app.add_middleware(
 
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
-    return JSONResponse(
-        status_code=500,
-        content={"detail": str(exc)},
-        headers={"Access-Control-Allow-Origin": "*"},
-    )
-
-@app.exception_handler(HTTPException)
-async def http_exception_handler(request: Request, exc: HTTPException):
-    return JSONResponse(
-        status_code=exc.status_code,
-        content={"detail": exc.detail},
-        headers={"Access-Control-Allow-Origin": "*"},
-    )
-
-@app.exception_handler(Exception)
-async def global_exception_handler(request: Request, exc: Exception):
-    """Catch-all handler that always includes CORS headers so browser sees the real error."""
     return JSONResponse(
         status_code=500,
         content={"detail": str(exc)},
