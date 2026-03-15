@@ -26,7 +26,9 @@ GEMINI_KEY       = os.getenv("GEMINI_KEY", "")
 GOOGLE_KEY       = os.getenv("GOOGLE_KEY", "")   # optional fallback
 PORT             = int(os.getenv("PORT", 8000))
 
-HOTELBEDS_BASE   = "https://api.test.hotelbeds.com"   # sandbox — change to api.hotelbeds.com for production
+import logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger("roommatch")
 
 # ── Keepalive ──────────────────────────────────────────────────────────────────
 @asynccontextmanager
@@ -86,27 +88,35 @@ def root():
 # ── Step 1: Resolve destination name → Hotelbeds destination code ─────────────
 async def resolve_destination(name: str) -> tuple[str, str]:
     """Returns (destinationCode, countryCode) for a city name."""
-    url = f"{HOTELBEDS_BASE}/hotel-content-api/1.0/locations/destinations"
+    url    = f"{HOTELBEDS_BASE}/hotel-content-api/1.0/locations/destinations"
     params = {
-        "fields":  "code,name,countryCode",
-        "language":"ENG",
-        "from":    1,
-        "to":      5,
+        "fields":   "code,name,countryCode",
+        "language": "ENG",
+        "from":     1,
+        "to":       100,
+        "name":     name,   # filter by name
     }
-    # Filter by name using the `name` query parameter
-    params["name"] = name
-
+    logger.info(f"[destinations] querying name={name}")
     async with httpx.AsyncClient(timeout=15) as c:
         res = await c.get(url, headers=hb_headers(), params=params)
-
+    logger.info(f"[destinations] response {res.status_code}: {res.text[:600]}")
     if res.status_code != 200:
-        raise HTTPException(502, f"Destination lookup failed ({res.status_code}): {res.text[:150]}")
+        raise HTTPException(502, f"Destination lookup failed ({res.status_code}): {res.text[:200]}")
 
     destinations = res.json().get("destinations", [])
     if not destinations:
-        raise HTTPException(404, f"No destination found for '{name}'. Try a major city name.")
+        raise HTTPException(404, f"No destination found for '{name}'. Try a major city name like 'Paris' or 'London'.")
 
+    # Try to find an exact or close match first
+    name_lower = name.lower()
+    for d in destinations:
+        if d.get("name", "").lower() == name_lower:
+            logger.info(f"[destinations] exact match: code={d['code']} name={d['name']}")
+            return d["code"], d.get("countryCode", "")
+
+    # Fall back to first result
     dest = destinations[0]
+    logger.info(f"[destinations] using first result: code={dest['code']} name={dest.get('name','')}")
     return dest["code"], dest.get("countryCode", "")
 
 # ── Step 1: Get hotel codes for a destination from Content API ────────────────
@@ -120,8 +130,10 @@ async def get_hotel_codes_for_destination(dest_code: str, min_category: int = 3)
         "from":            1,
         "to":              20,
     }
+    logger.info(f"[hotel_codes] querying dest_code={dest_code}")
     async with httpx.AsyncClient(timeout=20) as c:
         res = await c.get(url, headers=hb_headers(), params=params)
+    logger.info(f"[hotel_codes] response {res.status_code}: {res.text[:400]}")
     if res.status_code != 200:
         return []
     hotels = res.json().get("hotels", [])
@@ -159,11 +171,30 @@ async def search_hotels(req: SearchRequest):
         "hotels": {"hotel": hotel_codes},
     }
 
-    import logging
-    logging.basicConfig(level=logging.INFO)
-    logger = logging.getLogger("roommatch")
+    logger.info(f"[search] destination={req.destination} checkin={req.checkin} checkout={req.checkout}")
 
-    logger.info(f"Availability payload: {json.dumps(payload)}")
+    # Resolve destination name → code
+    dest_code, country_code = await resolve_destination(req.destination)
+    logger.info(f"[search] resolved dest_code={dest_code} country={country_code}")
+
+    # Get hotel codes for that destination from Content API
+    hotel_codes = await get_hotel_codes_for_destination(dest_code)
+    logger.info(f"[search] got {len(hotel_codes)} hotel codes: {hotel_codes[:5]}")
+
+    if not hotel_codes:
+        raise HTTPException(404, f"No hotels found for '{req.destination}'. Try a different city.")
+
+    # Search availability for those hotels
+    payload = {
+        "stay": {
+            "checkIn":  req.checkin,
+            "checkOut": req.checkout,
+        },
+        "occupancies": [{"rooms": 1, "adults": req.adults, "children": 0}],
+        "hotels": {"hotel": hotel_codes},
+    }
+
+    logger.info(f"[search] availability payload: {json.dumps(payload)}")
 
     async with httpx.AsyncClient(timeout=30) as c:
         res = await c.post(
@@ -172,7 +203,7 @@ async def search_hotels(req: SearchRequest):
             json=payload,
         )
 
-    logger.info(f"Hotelbeds response {res.status_code}: {res.text[:800]}")
+    logger.info(f"[search] availability response {res.status_code}: {res.text[:600]}")
 
     if res.status_code != 200:
         # Parse the full error from Hotelbeds response
