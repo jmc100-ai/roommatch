@@ -173,16 +173,19 @@
     <div>
       <div class="section-label">4 · Backend URL</div>
       <div class="backend-row">
-        <input type="text" id="backendUrl" value="https://roommatch-a8mu.onrender.com">
+        <input type="text" id="backendUrl" placeholder="https://your-app.onrender.com">
         <div class="status-dot" id="statusDot"></div>
       </div>
       <div class="status-label" id="statusLabel">Enter your Render URL above</div>
     </div>
 
     <div>
-      <div class="section-label">5 · Anthropic key</div>
-      <input type="password" id="anthropicKey" placeholder="sk-ant-...">
-      <p style="font-size:11px;color:var(--muted);margin-top:5px;line-height:1.6">Used to analyze your reference photos only. Hotel room scanning runs on the backend.</p>
+      <div class="section-label">5 · Google Gemini key</div>
+      <input type="text" id="geminiKey" placeholder="AIza...">
+      <p style="font-size:11px;color:var(--muted);margin-top:5px;line-height:1.6">
+        Free at <a href="https://aistudio.google.com" target="_blank" style="color:var(--accent)">aistudio.google.com</a> — no credit card needed.<br>
+        Used to analyze your reference photos. Hotel scanning runs on the backend.
+      </p>
     </div>
 
     <button class="search-btn" id="searchBtn" onclick="runSearch()" disabled>
@@ -193,8 +196,8 @@
   <div class="content" id="content">
     <div class="state-empty">
       <div class="big-icon">🏨</div>
-      <p>Upload room photos you love, set a destination and dates, and RoomMatch will visually scan each hotel's room photos with Claude Vision to find your perfect match.</p>
-      <p style="font-size:12px;margin-top:4px;opacity:0.6">Hotels.com inventory · Claude Vision AI · Deployed on Render</p>
+      <p>Upload room photos you love, set a destination and dates, and RoomMatch will visually scan each hotel's room photos with Gemini Vision to find your perfect match.</p>
+      <p style="font-size:12px;margin-top:4px;opacity:0.6">Hotels.com inventory · Google Gemini Vision · Deployed on Render</p>
     </div>
   </div>
 </div>
@@ -214,7 +217,7 @@ document.getElementById('checkout').value = fmt(tomorrow);
 
 // ── Input wiring ───────────────────────────────────────────────────────────────
 document.getElementById('fileInput').addEventListener('change', e => handleFiles(e.target.files));
-['cityInput','checkin','checkout','anthropicKey','backendUrl'].forEach(id =>
+['cityInput','checkin','checkout','geminiKey','backendUrl'].forEach(id =>
   document.getElementById(id).addEventListener('input', () => { checkServer(); updateBtn(); }));
 
 const dropZone = document.getElementById('dropZone');
@@ -267,13 +270,13 @@ setInterval(checkServer, 15000);
 function updateBtn() {
   const hasImages = uploadedImages.length > 0;
   const hasCity   = document.getElementById('cityInput').value.trim().length > 1;
-  const hasKey    = document.getElementById('anthropicKey').value.trim().startsWith('sk-ant-');
+  const hasKey    = document.getElementById('geminiKey').value.trim().length > 10;
   const btn = document.getElementById('searchBtn');
   btn.disabled = !(hasImages && hasCity && hasKey && serverOk);
   if      (!serverOk)   btn.textContent = 'Waiting for backend...';
   else if (!hasImages)  btn.textContent = 'Upload room photos';
   else if (!hasCity)    btn.textContent = 'Enter a destination';
-  else if (!hasKey)     btn.textContent = 'Enter Anthropic key';
+  else if (!hasKey)     btn.textContent = 'Enter Gemini API key';
   else                  btn.textContent = 'Find Matching Hotels';
 }
 
@@ -287,9 +290,9 @@ function api(path, opts = {}) {
 
 // ── Pipeline ───────────────────────────────────────────────────────────────────
 const STEPS = [
-  { id:'s1', icon:'🔍', title:'Analyzing your style with Claude Vision', sub:'Reading your reference photos...' },
+  { id:'s1', icon:'🔍', title:'Analyzing your style with Gemini Vision', sub:'Reading your reference photos...' },
   { id:'s2', icon:'🏨', title:'Searching Hotels.com',                    sub:'Finding hotels for your dates...' },
-  { id:'s3', icon:'📸', title:'Scanning hotel room photos',              sub:'Claude is examining each room...' },
+  { id:'s3', icon:'📸', title:'Scanning hotel room photos',              sub:'Gemini is examining each room...' },
   { id:'s4', icon:'⭐', title:'Ranking matches',                         sub:'Scoring by visual similarity...' },
 ];
 function showPipeline() {
@@ -370,7 +373,7 @@ async function runSearch() {
           Things to check:<br>
           · Backend URL is your Render service URL (e.g. <code>https://roommatch-api.onrender.com</code>)<br>
           · Green dot confirms backend is reachable<br>
-          · <code>RAPIDAPI_KEY</code> and <code>ANTHROPIC_KEY</code> are set in Render → Environment
+          · <code>RAPIDAPI_KEY</code> and <code>GEMINI_KEY</code> are set in Render → Environment
         </div>
       </div>`;
   } finally {
@@ -379,25 +382,18 @@ async function runSearch() {
   }
 }
 
-// ── Analyze user's reference photos (browser → Claude direct) ─────────────────
+// ── Analyze user's reference photos (browser → Gemini direct) ─────────────────
 async function analyzeReferencePhotos() {
-  const imageContents = uploadedImages.map(img => ({
-    type: 'image',
-    source: { type: 'base64', media_type: img.file.type, data: img.dataUrl.split(',')[1] }
+  const gkey = document.getElementById('geminiKey').value.trim();
+
+  const parts = uploadedImages.map(img => ({
+    inline_data: {
+      mime_type: img.file.type,
+      data: img.dataUrl.split(',')[1]
+    }
   }));
-  const res = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': document.getElementById('anthropicKey').value.trim(),
-      'anthropic-version': '2023-06-01',
-      'anthropic-dangerous-direct-browser-access': 'true'
-    },
-    body: JSON.stringify({
-      model: 'claude-sonnet-4-20250514', max_tokens: 800,
-      messages: [{ role: 'user', content: [
-        ...imageContents,
-        { type: 'text', text: `Analyze these hotel room images. Return ONLY valid JSON, no markdown:
+
+  parts.push({ text: `Analyze these hotel room images. Return ONLY valid JSON, no markdown, no explanation:
 {
   "overall_style": "modern|traditional|minimalist|rustic|luxury|boutique",
   "luxury_score": 1-10,
@@ -412,15 +408,25 @@ async function analyzeReferencePhotos() {
   "modern_style": true/false,
   "key_features": ["3-5 features"],
   "summary": "one sentence"
-}` }
-      ]}]
-    })
-  });
-  if (!res.ok) { const e = await res.json(); throw new Error('Claude: ' + (e.error?.message || res.status)); }
+}` });
+
+  const res = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${gkey}`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ contents: [{ parts }] })
+    }
+  );
+
+  if (!res.ok) {
+    const e = await res.json().catch(() => ({}));
+    throw new Error('Gemini: ' + (e.error?.message || `Status ${res.status}`));
+  }
   const data = await res.json();
-  const text = data.content.map(b => b.text || '').join('');
+  const text = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
   const m = text.match(/\{[\s\S]*\}/);
-  if (!m) throw new Error('Could not parse Claude response');
+  if (!m) throw new Error('Could not parse Gemini response — please try again.');
   return JSON.parse(m[0]);
 }
 
