@@ -300,7 +300,7 @@ Return ONLY valid JSON, no markdown or explanation:
 
     async with httpx.AsyncClient(timeout=45) as c:
         res = await c.post(
-            f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={GEMINI_KEY}",
+            f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key={GEMINI_KEY}",
             headers={"Content-Type": "application/json"},
             json={"contents": [{"parts": parts}]},
         )
