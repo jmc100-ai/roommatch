@@ -29,54 +29,75 @@ LITEAPI_BASE = "https://api.liteapi.travel/v3.0"
 _hotel_cache:      dict = {}   # iata_code → list of hotels
 _room_photo_cache: dict = {}   # hotel_id  → list of photo URLs
 
-# ── City → IATA code lookup ────────────────────────────────────────────────────
-# LiteAPI requires countryCode, lat/lng, placeId, or IATA code — not plain city name.
-CITY_IATA = {
+# ── City → lat/lng lookup ─────────────────────────────────────────────────────
+# LiteAPI /data/hotels requires countryCode, lat+lng+radius, placeId, or hotelIds.
+# We use lat/lng with a 15km radius — unambiguous and works for any city.
+CITY_COORDS = {
     # North America
-    "new york": "NYC", "new york city": "NYC", "nyc": "NYC", "manhattan": "NYC",
-    "los angeles": "LAX", "la": "LAX", "chicago": "CHI", "miami": "MIA",
-    "las vegas": "LAS", "san francisco": "SFO", "seattle": "SEA",
-    "boston": "BOS", "washington": "WAS", "dc": "WAS", "washington dc": "WAS",
-    "new orleans": "MSY", "austin": "AUS", "denver": "DEN", "portland": "PDX",
-    "toronto": "YTO", "vancouver": "YVR", "montreal": "YMQ",
-    "mexico city": "MEX", "cancun": "CUN",
+    "new york": (40.7128, -74.0060), "new york city": (40.7128, -74.0060),
+    "nyc": (40.7128, -74.0060), "manhattan": (40.7580, -73.9855),
+    "los angeles": (34.0522, -118.2437), "la": (34.0522, -118.2437),
+    "chicago": (41.8781, -87.6298), "miami": (25.7617, -80.1918),
+    "las vegas": (36.1699, -115.1398), "san francisco": (37.7749, -122.4194),
+    "seattle": (47.6062, -122.3321), "boston": (42.3601, -71.0589),
+    "washington": (38.9072, -77.0369), "dc": (38.9072, -77.0369),
+    "washington dc": (38.9072, -77.0369), "new orleans": (29.9511, -90.0715),
+    "austin": (30.2672, -97.7431), "denver": (39.7392, -104.9903),
+    "portland": (45.5051, -122.6750), "toronto": (43.6532, -79.3832),
+    "vancouver": (49.2827, -123.1207), "montreal": (45.5017, -73.5673),
+    "mexico city": (19.4326, -99.1332), "cancun": (21.1619, -86.8515),
     # South America
-    "rio de janeiro": "RIO", "rio": "RIO", "sao paulo": "SAO",
-    "buenos aires": "BUE", "bogota": "BOG", "lima": "LIM", "santiago": "SCL",
+    "rio de janeiro": (-22.9068, -43.1729), "rio": (-22.9068, -43.1729),
+    "sao paulo": (-23.5505, -46.6333), "buenos aires": (-34.6037, -58.3816),
+    "bogota": (4.7110, -74.0721), "lima": (-12.0464, -77.0428),
+    "santiago": (-33.4489, -70.6693),
     # Europe
-    "london": "LON", "paris": "PAR", "barcelona": "BCN", "madrid": "MAD",
-    "rome": "ROM", "milan": "MIL", "florence": "FLR", "venice": "VCE",
-    "amsterdam": "AMS", "berlin": "BER", "munich": "MUC", "hamburg": "HAM",
-    "prague": "PRG", "vienna": "VIE", "budapest": "BUD", "warsaw": "WAW",
-    "lisbon": "LIS", "porto": "OPO", "athens": "ATH", "istanbul": "IST",
-    "zurich": "ZRH", "geneva": "GVA", "brussels": "BRU", "copenhagen": "CPH",
-    "oslo": "OSL", "stockholm": "STO", "helsinki": "HEL", "bucharest": "OTP",
-    "dublin": "DUB", "edinburgh": "EDI", "manchester": "MAN",
+    "london": (51.5074, -0.1278), "paris": (48.8566, 2.3522),
+    "barcelona": (41.3851, 2.1734), "madrid": (40.4168, -3.7038),
+    "rome": (41.9028, 12.4964), "milan": (45.4654, 9.1859),
+    "florence": (43.7696, 11.2558), "venice": (45.4408, 12.3155),
+    "amsterdam": (52.3676, 4.9041), "berlin": (52.5200, 13.4050),
+    "munich": (48.1351, 11.5820), "hamburg": (53.5753, 10.0153),
+    "prague": (50.0755, 14.4378), "vienna": (48.2082, 16.3738),
+    "budapest": (47.4979, 19.0402), "warsaw": (52.2297, 21.0122),
+    "lisbon": (38.7223, -9.1393), "porto": (41.1579, -8.6291),
+    "athens": (37.9838, 23.7275), "istanbul": (41.0082, 28.9784),
+    "zurich": (47.3769, 8.5417), "geneva": (46.2044, 6.1432),
+    "brussels": (50.8503, 4.3517), "copenhagen": (55.6761, 12.5683),
+    "oslo": (59.9139, 10.7522), "stockholm": (59.3293, 18.0686),
+    "helsinki": (60.1699, 24.9384), "bucharest": (44.4268, 26.1025),
+    "dublin": (53.3498, -6.2603), "edinburgh": (55.9533, -3.1883),
+    "manchester": (53.4808, -2.2426),
     # Middle East & Africa
-    "dubai": "DXB", "abu dhabi": "AUH", "cairo": "CAI",
-    "cape town": "CPT", "nairobi": "NBO", "marrakech": "RAK",
-    "tel aviv": "TLV", "doha": "DOH",
+    "dubai": (25.2048, 55.2708), "abu dhabi": (24.4539, 54.3773),
+    "cairo": (30.0444, 31.2357), "cape town": (-33.9249, 18.4241),
+    "nairobi": (-1.2921, 36.8219), "marrakech": (31.6295, -7.9811),
+    "tel aviv": (32.0853, 34.7818), "doha": (25.2854, 51.5310),
     # Asia Pacific
-    "tokyo": "TYO", "osaka": "OSA", "kyoto": "UKY",
-    "bangkok": "BKK", "singapore": "SIN", "hong kong": "HKG",
-    "bali": "DPS", "jakarta": "JKT", "kuala lumpur": "KUL",
-    "sydney": "SYD", "melbourne": "MEL", "auckland": "AKL",
-    "mumbai": "BOM", "delhi": "DEL", "new delhi": "DEL",
-    "phuket": "HKT", "chiang mai": "CNX", "maldives": "MLE",
-    "beijing": "BJS", "shanghai": "SHA", "seoul": "SEL",
+    "tokyo": (35.6762, 139.6503), "osaka": (34.6937, 135.5023),
+    "kyoto": (35.0116, 135.7681), "bangkok": (13.7563, 100.5018),
+    "singapore": (1.3521, 103.8198), "hong kong": (22.3193, 114.1694),
+    "bali": (-8.3405, 115.0920), "jakarta": (-6.2088, 106.8456),
+    "kuala lumpur": (3.1390, 101.6869), "sydney": (-33.8688, 151.2093),
+    "melbourne": (-37.8136, 144.9631), "auckland": (-36.8485, 174.7633),
+    "mumbai": (19.0760, 72.8777), "delhi": (28.6139, 77.2090),
+    "new delhi": (28.6139, 77.2090), "phuket": (7.8804, 98.3923),
+    "chiang mai": (18.7883, 98.9853), "maldives": (3.2028, 73.2207),
+    "beijing": (39.9042, 116.4074), "shanghai": (31.2304, 121.4737),
+    "seoul": (37.5665, 126.9780),
 }
 
-def resolve_iata(city: str) -> str:
-    key  = city.strip().lower()
-    code = CITY_IATA.get(key)
-    if not code:
-        for k, v in CITY_IATA.items():
+def resolve_coords(city: str) -> tuple:
+    key    = city.strip().lower()
+    coords = CITY_COORDS.get(key)
+    if not coords:
+        for k, v in CITY_COORDS.items():
             if key in k or k in key:
-                code = v
+                coords = v
                 break
-    if not code:
+    if not coords:
         raise HTTPException(404, f"City '{city}' not recognised. Try: London, Paris, New York, Tokyo, Dubai…")
-    return code
+    return coords
 
 # ── Auth header ────────────────────────────────────────────────────────────────
 def la_headers() -> dict:
@@ -139,18 +160,19 @@ async def search_hotels(req: SearchRequest):
     if not LITEAPI_KEY:
         raise HTTPException(500, "LITEAPI_KEY not set in Render environment")
 
-    city      = req.destination.strip()
-    iata_code = resolve_iata(city)
-    cache_key = iata_code
+    city        = req.destination.strip()
+    lat, lng    = resolve_coords(city)
+    cache_key   = city.lower()
 
     if cache_key in _hotel_cache:
-        logger.info(f"[search] cache hit for '{city}' ({iata_code})")
+        logger.info(f"[search] cache hit for '{city}'")
         raw_hotels = _hotel_cache[cache_key]
     else:
-        logger.info(f"[search] fetching hotels for '{city}' → IATA={iata_code}")
+        logger.info(f"[search] fetching hotels for '{city}' → ({lat},{lng})")
         async with httpx.AsyncClient(timeout=30) as c:
             res = await c.get(f"{LITEAPI_BASE}/data/hotels", headers=la_headers(),
-                              params={"iataCodes": iata_code, "limit": 50})
+                              params={"latitude": lat, "longitude": lng,
+                                      "radius": 15, "limit": 50})
 
         logger.info(f"[search] status={res.status_code} body={res.text[:300]}")
 
@@ -168,7 +190,7 @@ async def search_hotels(req: SearchRequest):
             raise HTTPException(404, f"No hotels found for '{city}'. Try 'London', 'Paris' or 'Tokyo'.")
 
         _hotel_cache[cache_key] = raw_hotels
-        logger.info(f"[search] fetched {len(raw_hotels)} hotels for {iata_code}, cached")
+        logger.info(f"[search] fetched {len(raw_hotels)} hotels for '{city}', cached")
 
     def stars(h):
         r = h.get("starRating") or h.get("stars") or h.get("rating") or 0
