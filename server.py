@@ -1,11 +1,14 @@
 """
 RoomMatch — server.py
-FastAPI backend: proxies Hotels.com (RapidAPI) and runs Claude Vision on room photos.
+FastAPI backend: proxies Hotels.com (RapidAPI) and runs Gemini Vision on room photos.
 Deploy to Render as a Web Service. Set env vars in the Render dashboard.
 
 Required environment variables:
   RAPIDAPI_KEY   — from rapidapi.com (hotels-com-provider by tipsters)
-  ANTHROPIC_KEY  — from console.anthropic.com
+  GEMINI_KEY     — from aistudio.google.com (free, no credit card needed)
+
+Optional:
+  ANTHROPIC_KEY  — fallback if you want to use Claude instead of Gemini
 """
 
 import os, base64, asyncio, re, json
@@ -17,7 +20,8 @@ from pydantic import BaseModel
 from contextlib import asynccontextmanager
 
 RAPIDAPI_KEY  = os.getenv("RAPIDAPI_KEY", "")
-ANTHROPIC_KEY = os.getenv("ANTHROPIC_KEY", "")
+GEMINI_KEY    = os.getenv("GEMINI_KEY", "")
+ANTHROPIC_KEY = os.getenv("ANTHROPIC_KEY", "")   # optional fallback
 PORT          = int(os.getenv("PORT", 8000))
 
 # ── Keepalive: ping self every 10 min so Render free tier doesn't sleep ────────
@@ -287,27 +291,45 @@ Return ONLY valid JSON, no markdown or explanation:
   "match_summary": "one sentence why this room does or doesn't match"
 }}"""
 
-    content = []
+    # ── Use Gemini Flash (free tier) for hotel room analysis ──────────────────
+    # Build Gemini parts: inline base64 images + text prompt
+    parts = []
     for b64, mime in images:
-        content.append({"type": "image", "source": {"type": "base64", "media_type": mime, "data": b64}})
-    content.append({"type": "text", "text": prompt})
+        parts.append({"inline_data": {"mime_type": mime, "data": b64}})
+    parts.append({"text": prompt})
 
     async with httpx.AsyncClient(timeout=45) as c:
         res = await c.post(
-            "https://api.anthropic.com/v1/messages",
-            headers={
-                "x-api-key":         ANTHROPIC_KEY,
-                "anthropic-version": "2023-06-01",
-                "Content-Type":      "application/json",
-            },
-            json={"model": "claude-sonnet-4-20250514", "max_tokens": 600,
-                  "messages": [{"role": "user", "content": content}]},
+            f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={GEMINI_KEY}",
+            headers={"Content-Type": "application/json"},
+            json={"contents": [{"parts": parts}]},
         )
 
     if res.status_code != 200:
-        raise HTTPException(502, f"Claude error: {res.text[:200]}")
-
-    text  = "".join(b.get("text", "") for b in res.json().get("content", []))
+        # Fallback to Claude if Gemini fails and Anthropic key is set
+        if ANTHROPIC_KEY:
+            content = []
+            for b64, mime in images:
+                content.append({"type": "image", "source": {"type": "base64", "media_type": mime, "data": b64}})
+            content.append({"type": "text", "text": prompt})
+            async with httpx.AsyncClient(timeout=45) as c2:
+                res = await c2.post(
+                    "https://api.anthropic.com/v1/messages",
+                    headers={"x-api-key": ANTHROPIC_KEY, "anthropic-version": "2023-06-01", "Content-Type": "application/json"},
+                    json={"model": "claude-haiku-4-5-20251001", "max_tokens": 600,
+                          "messages": [{"role": "user", "content": content}]},
+                )
+            if res.status_code != 200:
+                raise HTTPException(502, f"Both Gemini and Claude failed: {res.text[:200]}")
+            text = "".join(b.get("text", "") for b in res.json().get("content", []))
+        else:
+            raise HTTPException(502, f"Gemini error {res.status_code}: {res.text[:200]}")
+    else:
+        text = (res.json()
+                   .get("candidates", [{}])[0]
+                   .get("content", {})
+                   .get("parts", [{}])[0]
+                   .get("text", ""))
     match = re.search(r"\{[\s\S]*\}", text)
     if not match:
         return {"hotelId": hotel_id, "score": 50, "features": {},

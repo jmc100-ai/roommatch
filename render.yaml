@@ -6,6 +6,8 @@ services:
     startCommand: uvicorn server:app --host 0.0.0.0 --port $PORT
     envVars:
       - key: RAPIDAPI_KEY
-        sync: false        # you set this in the Render dashboard
+        sync: false        # from rapidapi.com
+      - key: GEMINI_KEY
+        sync: false        # from aistudio.google.com (free, no credit card)
       - key: ANTHROPIC_KEY
-        sync: false        # you set this in the Render dashboard
+        sync: false        # optional Claude fallback
