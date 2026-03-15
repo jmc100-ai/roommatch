@@ -112,40 +112,44 @@ def root():
 async def resolve_destination(name: str) -> tuple[str, str]:
     """Returns (destinationCode, countryCode) for a city name."""
     url    = f"{HOTELBEDS_BASE}/hotel-content-api/1.0/locations/destinations"
+    # The API ignores the name filter — fetch all and filter client-side
+    # Use a large page and search by name in the content field
     params = {
         "fields":   "code,name,countryCode",
         "language": "ENG",
         "from":     1,
-        "to":       100,
-        "name":     name,   # filter by name
+        "to":       3000,   # fetch enough to find major cities
     }
-    logger.info(f"[destinations] querying name={name}")
-    async with httpx.AsyncClient(timeout=15) as c:
+    logger.info(f"[destinations] querying for name={name}")
+    async with httpx.AsyncClient(timeout=20) as c:
         res = await c.get(url, headers=hb_headers(), params=params)
-    logger.info(f"[destinations] response {res.status_code}: {res.text[:600]}")
     if res.status_code != 200:
         raise HTTPException(502, f"Destination lookup failed ({res.status_code}): {res.text[:200]}")
 
     destinations = res.json().get("destinations", [])
-    if not destinations:
-        raise HTTPException(404, f"No destination found for '{name}'. Try a major city name like 'Paris' or 'London'.")
+    name_lower   = name.strip().lower()
 
-    # Try to find an exact or close match first
-    name_lower = name.lower()
+    # Score each destination — exact match wins, then startswith, then contains
+    exact = partial = contained = None
     for d in destinations:
-        # name field can be a string or a dict like {"content": "Paris"}
-        raw_name = d.get("name", "")
-        d_name   = raw_name.get("content", "") if isinstance(raw_name, dict) else str(raw_name)
-        if d_name.lower() == name_lower:
-            logger.info(f"[destinations] exact match: code={d['code']} name={d_name}")
-            return d["code"], d.get("countryCode", "")
+        raw  = d.get("name", "")
+        text = (raw.get("content", "") if isinstance(raw, dict) else str(raw)).lower()
+        if text == name_lower:
+            exact = d
+            break
+        if text.startswith(name_lower) and not partial:
+            partial = d
+        if name_lower in text and not contained:
+            contained = d
 
-    # Fall back to first result
-    dest     = destinations[0]
-    raw_name = dest.get("name", "")
-    d_name   = raw_name.get("content", "") if isinstance(raw_name, dict) else str(raw_name)
-    logger.info(f"[destinations] using first result: code={dest['code']} name={d_name}")
-    return dest["code"], dest.get("countryCode", "")
+    best = exact or partial or contained
+    if not best:
+        raise HTTPException(404, f"Destination '{name}' not found. Try a major city like 'London', 'Barcelona' or 'New York'.")
+
+    raw      = best.get("name", "")
+    display  = raw.get("content", "") if isinstance(raw, dict) else str(raw)
+    logger.info(f"[destinations] matched: code={best['code']} name={display}")
+    return best["code"], best.get("countryCode", "")
 
 # ── Step 1: Get hotel codes for a destination from Content API ────────────────
 async def get_hotel_codes_for_destination(dest_code: str, min_category: int = 3) -> list[int]:
@@ -153,7 +157,7 @@ async def get_hotel_codes_for_destination(dest_code: str, min_category: int = 3)
     url    = f"{HOTELBEDS_BASE}/hotel-content-api/1.0/hotels"
     params = {
         "destinationCode": dest_code,
-        "fields":          "code,name,categoryCode,address,images,facilities",
+        "fields":          "code,name,categoryCode",
         "language":        "ENG",
         "from":            1,
         "to":              20,
@@ -161,18 +165,16 @@ async def get_hotel_codes_for_destination(dest_code: str, min_category: int = 3)
     logger.info(f"[hotel_codes] querying dest_code={dest_code}")
     async with httpx.AsyncClient(timeout=20) as c:
         res = await c.get(url, headers=hb_headers(), params=params)
-    logger.info(f"[hotel_codes] response {res.status_code}: {res.text[:400]}")
+    logger.info(f"[hotel_codes] response {res.status_code}: {res.text[:600]}")
     if res.status_code != 200:
         return []
     hotels = res.json().get("hotels", [])
-    # Filter by star category (3+ stars)
-    codes = []
-    for h in hotels:
-        cat = h.get("categoryCode", "")
-        # categoryCode like "3EST", "4EST", "5EST" — extract number
-        num = "".join(filter(str.isdigit, cat))
-        if num and int(num) >= min_category:
-            codes.append(h["code"])
+    logger.info(f"[hotel_codes] total hotels returned: {len(hotels)}")
+    if not hotels:
+        return []
+    # Return all codes — don't filter by category in sandbox as data may be sparse
+    codes = [h["code"] for h in hotels if h.get("code")]
+    logger.info(f"[hotel_codes] codes: {codes[:10]}")
     return codes[:15]
 
 # ── Step 2: Search hotels ──────────────────────────────────────────────────────
@@ -187,7 +189,7 @@ async def search_hotels(req: SearchRequest):
     # Get hotel codes for that destination from Content API
     hotel_codes = await get_hotel_codes_for_destination(dest_code)
     if not hotel_codes:
-        raise HTTPException(404, f"No hotels found for '{req.destination}'. Try a different city.")
+        raise HTTPException(404, f"No hotels found for '{req.destination}' (resolved to destination code: '{dest_code}'). The sandbox may have limited data — try 'London' or 'Barcelona'.")
 
     # Search availability for those hotels
     payload = {
