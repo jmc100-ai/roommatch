@@ -247,9 +247,12 @@ async def search_hotels(req: SearchRequest):
     return {"hotels": hotels, "destination": city}
 
 
-# ── Fetch candidate photo URLs for a hotel (no Gemini here) ──────────────────
+# ── Fetch room photos from LiteAPI rooms[].photos — not hotelImages ───────────
 async def fetch_room_photos(hotel_id: str) -> list[str]:
-    """Return up to 8 candidate image URLs from LiteAPI. Gemini will filter in analyze."""
+    """
+    Use the rooms[].photos field from LiteAPI hotel detail — these are guaranteed
+    room interior photos. Falls back to caption-filtered hotelImages if rooms is empty.
+    """
     if hotel_id in _room_photo_cache:
         return _room_photo_cache[hotel_id]
 
@@ -265,17 +268,55 @@ async def fetch_room_photos(hotel_id: str) -> list[str]:
     data  = res.json()
     hotel = data.get("data") or data
 
-    all_urls = []
-    for img in (hotel.get("images") or hotel.get("hotelImages") or []):
-        url = img if isinstance(img, str) else (
-            img.get("url") or img.get("link") or img.get("path") or "")
-        if url:
-            all_urls.append(url)
+    # ── PRIMARY: rooms[].photos — these are actual room interior photos ──────
+    room_urls = []
+    bathroom_urls = []
+    for room in (hotel.get("rooms") or []):
+        for photo in (room.get("photos") or []):
+            url = photo if isinstance(photo, str) else (
+                photo.get("url") or photo.get("link") or "")
+            if not url:
+                continue
+            # Separate bathroom photos so we can prioritise them
+            caption = (photo.get("caption") or photo.get("tag") or "").lower() if isinstance(photo, dict) else ""
+            if any(w in caption for w in ["bathroom", "bath", "shower", "sink", "toilet"]):
+                bathroom_urls.append(url)
+            else:
+                room_urls.append(url)
 
-    # Return up to 8 — Gemini will filter to room-only in the analysis call
-    chosen = all_urls[:8]
+    # Put bathroom photos first, then other room photos
+    combined = bathroom_urls + room_urls
+    if combined:
+        chosen = combined[:10]
+        logger.info(f"[room_photos] {hotel_id}: {len(bathroom_urls)} bathroom + {len(room_urls)} room = {len(chosen)} chosen from rooms[]")
+        _room_photo_cache[hotel_id] = chosen
+        return chosen
+
+    # ── FALLBACK: hotelImages filtered by caption keywords ───────────────────
+    logger.info(f"[room_photos] {hotel_id}: no rooms[], falling back to hotelImages caption filter")
+    ROOM_WORDS = {"room", "bedroom", "suite", "bathroom", "bath", "shower",
+                  "sink", "toilet", "bed", "interior", "guest", "deluxe", "double", "twin"}
+    EXCLUDE_WORDS = {"pool", "lobby", "restaurant", "gym", "spa", "exterior",
+                     "facade", "garden", "rooftop", "bar", "lounge", "meeting",
+                     "conference", "parking", "reception", "view", "beach", "street"}
+    fb_bath, fb_room, fb_other = [], [], []
+    for img in (hotel.get("hotelImages") or hotel.get("images") or []):
+        url = img if isinstance(img, str) else (img.get("url") or img.get("link") or img.get("path") or "")
+        if not url:
+            continue
+        caption = (img.get("caption") or img.get("tag") or img.get("type") or "").lower() if isinstance(img, dict) else ""
+        if any(w in caption for w in EXCLUDE_WORDS):
+            continue  # skip non-room photos entirely
+        if any(w in caption for w in ["bathroom", "bath", "shower", "sink"]):
+            fb_bath.append(url)
+        elif any(w in caption for w in ROOM_WORDS):
+            fb_room.append(url)
+        else:
+            fb_other.append(url)
+
+    chosen = (fb_bath + fb_room + fb_other)[:8]
+    logger.info(f"[room_photos] {hotel_id}: fallback {len(fb_bath)} bath + {len(fb_room)} room + {len(fb_other)} other = {len(chosen)}")
     _room_photo_cache[hotel_id] = chosen
-    logger.info(f"[room_photos] {len(chosen)} candidates for {hotel_id}")
     return chosen
 
 
@@ -321,22 +362,15 @@ async def analyze_hotel(hotel_code: str, req: AnalyzeRequest):
     if attrs.get("modern_style"):   wanted_features.append("modern contemporary design")
     wanted_str = ", ".join(wanted_features) if wanted_features else "overall room quality and style"
 
-    prompt = f"""You are analyzing {len(indexed_images)} hotel photos numbered 0 to {len(indexed_images)-1}.
+    prompt = f"""You are analyzing {len(indexed_images)} hotel room photos numbered 0 to {len(indexed_images)-1}.
+All photos are room interiors. The traveler wants: {wanted_str}
 
-STEP 1 — FILTER: First identify which photos show a hotel ROOM INTERIOR only.
-Room interiors = bedroom, bathroom, suite, living area inside a guest room.
-NOT room interiors = lobby, restaurant, pool, gym, spa, exterior, hallway, rooftop, garden.
-Only include room interior photos in your ranking. Skip all others entirely.
-
-STEP 2 — RANK the room interior photos by how well they show: {wanted_str}
-Put the most relevant photo first.
-
-STEP 3 — SCORE the overall match to traveler preferences.
+Rank photos so the most relevant appear first. Always put bathroom photos showing sinks, bathtubs or showers near the top if the traveler wants bathroom features.
 
 Return ONLY valid JSON, no markdown:
 {{
-  "photo_ranking": [indices of ROOM INTERIOR photos only, ordered best match first — exclude non-room photos entirely],
-  "photo_features": {{"0": ["features in photo 0"], "1": ["features in photo 1"]}},
+  "photo_ranking": [all indices 0-{len(indexed_images)-1} ordered best match first],
+  "photo_features": {{"0": ["features visible e.g. double sinks, bathtub"], "1": ["..."]}},
   "match_score": 0-100,
   "large_bathroom": true/false,
   "double_sinks": true/false,
@@ -347,7 +381,7 @@ Return ONLY valid JSON, no markdown:
   "large_room": true/false,
   "modern_style": true/false,
   "room_style": "one word",
-  "standout_features": ["2-3 specific features visible in the room photos"],
+  "standout_features": ["2-3 specific features visible"],
   "match_summary": "one sentence explaining the match"
 }}"""
 
