@@ -172,7 +172,7 @@ async def search_hotels(req: SearchRequest):
         async with httpx.AsyncClient(timeout=30) as c:
             res = await c.get(f"{LITEAPI_BASE}/data/hotels", headers=la_headers(),
                               params={"latitude": lat, "longitude": lng,
-                                      "radius": 15, "limit": 50})
+                                      "radius": 15000, "limit": 50})
 
         logger.info(f"[search] status={res.status_code} body={res.text[:300]}")
 
