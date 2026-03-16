@@ -107,6 +107,11 @@ app.get("/api/room-search", async (req, res) => {
 
     const raw = await response.json();
     console.log(`[room-search] status=${response.status} hotels=${raw?.data?.length ?? 0}`);
+    if (raw?.data?.length > 0) {
+      const first = raw.data[0];
+      console.log("[room-search] first hotel keys:", Object.keys(first));
+      console.log("[room-search] first rooms:", JSON.stringify((first.rooms || []).slice(0,1), null, 2));
+    }
 
     if (!response.ok) {
       return res.status(response.status).json({
