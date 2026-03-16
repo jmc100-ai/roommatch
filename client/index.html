@@ -295,6 +295,41 @@
       font-size: 32px;
     }
 
+    /* ── Dual photo layout ──────────────────────────────────────────────── */
+    .photo-strip {
+      display: grid;
+      grid-template-columns: 2fr 1fr;
+      gap: 2px;
+      background: var(--bg);
+    }
+
+    .photo-strip .room-photo {
+      aspect-ratio: unset;
+      height: 100%;
+      min-height: 180px;
+    }
+
+    .photo-strip .photo-secondary {
+      aspect-ratio: unset;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+      background: var(--surface);
+      min-height: 180px;
+    }
+
+    .photo-secondary-wrap {
+      position: relative;
+      overflow: hidden;
+    }
+
+    .photo-secondary-wrap .score-badge {
+      top: 8px; right: 8px;
+      font-size: 10px;
+      padding: 3px 8px;
+    }
+
     /* ── Score badge ────────────────────────────────────────────────────── */
     .photo-wrap {
       position: relative;
@@ -611,22 +646,43 @@
     }
 
     function cardHTML(h, i) {
-      const bestRoom   = h.rooms && h.rooms.length > 0 ? h.rooms[0] : null;
-      const scoreVal   = bestRoom ? Math.round(bestRoom.score * 100) : null;
+      const rooms      = h.rooms && h.rooms.length > 0 ? h.rooms : [];
+      const bestRoom   = rooms[0] || null;
+      const secondRoom = rooms[1] || null;
+      const scoreVal   = bestRoom ? bestRoom.score : null;
       const imageUrl   = bestRoom?.imageUrl || h.mainPhoto || '';
+      const image2Url  = secondRoom?.imageUrl || '';
       const roomName   = bestRoom?.name || '';
       const stars      = '★'.repeat(Math.min(Math.max(Math.round(h.starRating || 0), 0), 5));
       const bookUrl    = `https://www.google.com/search?q=${encodeURIComponent(h.name + ' ' + (h.city || '') + ' hotel booking')}`;
       const location   = [h.address, h.city, h.country].filter(Boolean).join(', ') || h.city || '';
       const ratingStr  = h.rating > 0 ? `<strong>${parseFloat(h.rating).toFixed(1)}</strong> guest score` : '';
 
-      const photoBlock = imageUrl
-        ? `<div class="photo-wrap">
-             <img class="room-photo" src="${imageUrl}" alt="${h.name} room" loading="lazy"
-                  onerror="this.parentElement.innerHTML='<div class=photo-placeholder>🛏</div>'">
-             ${scoreVal !== null ? `<div class="score-badge">${scoreVal}% match</div>` : ''}
-           </div>`
-        : `<div class="photo-placeholder">🛏</div>`;
+      // Build photo block — dual if we have 2 images, single otherwise
+      let photoBlock;
+      if (imageUrl && image2Url) {
+        photoBlock = `
+          <div class="photo-strip">
+            <div class="photo-wrap">
+              <img class="room-photo" src="${imageUrl}" alt="${h.name} room" loading="lazy"
+                   onerror="this.style.display='none'">
+              ${scoreVal !== null ? `<div class="score-badge">${scoreVal}% match</div>` : ''}
+            </div>
+            <div class="photo-secondary-wrap">
+              <img class="photo-secondary" src="${image2Url}" alt="${h.name} room 2" loading="lazy"
+                   onerror="this.parentElement.style.display='none'">
+            </div>
+          </div>`;
+      } else if (imageUrl) {
+        photoBlock = `
+          <div class="photo-wrap">
+            <img class="room-photo" src="${imageUrl}" alt="${h.name} room" loading="lazy"
+                 onerror="this.parentElement.innerHTML='<div class=photo-placeholder>🛏</div>'">
+            ${scoreVal !== null ? `<div class="score-badge">${scoreVal}% match</div>` : ''}
+          </div>`;
+      } else {
+        photoBlock = `<div class="photo-placeholder">🛏</div>`;
+      }
 
       const roomStrip = roomName
         ? `<div class="room-name-strip">${roomName}</div>`
