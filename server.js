@@ -130,9 +130,9 @@ app.get("/api/room-search", async (req, res) => {
       rating:      h.rating      || h.guestRating || 0,
       mainPhoto:   h.main_photo  || h.mainPhoto || "",
       rooms: (h.rooms || []).map(r => ({
-        name:       r.roomName  || r.name || "",
-        imageUrl:   r.imageUrl  || r.image || r.url || "",
-        score:      r.score     || r.similarity || 0,
+        name:       r.room_name  || r.roomName  || r.name || "",
+        imageUrl:   r.image_url  || r.imageUrl  || r.image || r.url || "",
+        score:      r.similarity || r.score || 0,
       }))
     }));
 
