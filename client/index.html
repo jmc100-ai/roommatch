@@ -8,20 +8,18 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet" />
   <style>
-    /* ── Reset & base ───────────────────────────────────────────────────── */
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
     :root {
-      --bg:        #0c0c0e;
-      --surface:   #131316;
-      --card:      #18181c;
-      --border:    rgba(255,255,255,0.07);
-      --text:      #e8e4dc;
-      --muted:     #6b6760;
-      --accent:    #c9a96e;
-      --accent2:   #e8d5b0;
-      --score-bg:  rgba(201,169,110,0.12);
-      --radius:    12px;
+      --bg:       #0c0c0e;
+      --surface:  #131316;
+      --card:     #18181c;
+      --border:   rgba(255,255,255,0.07);
+      --text:     #e8e4dc;
+      --muted:    #6b6760;
+      --accent:   #c9a96e;
+      --accent2:  #e8d5b0;
+      --radius:   14px;
     }
 
     html { scroll-behavior: smooth; }
@@ -34,7 +32,6 @@
       overflow-x: hidden;
     }
 
-    /* ── Noise grain overlay ────────────────────────────────────────────── */
     body::before {
       content: '';
       position: fixed; inset: 0;
@@ -44,23 +41,20 @@
 
     /* ── Header ─────────────────────────────────────────────────────────── */
     header {
-      padding: 48px 48px 0;
+      padding: 40px 56px 0;
       display: flex;
       align-items: baseline;
       gap: 16px;
     }
-
     .logo {
       font-family: 'Cormorant Garamond', serif;
-      font-size: 28px;
+      font-size: 26px;
       font-weight: 300;
-      letter-spacing: 0.12em;
+      letter-spacing: 0.14em;
       color: var(--accent2);
       text-transform: uppercase;
     }
-
     .logo-dot { color: var(--accent); }
-
     .tagline {
       font-size: 11px;
       letter-spacing: 0.18em;
@@ -69,51 +63,31 @@
       font-weight: 300;
     }
 
-    /* ── Hero search ────────────────────────────────────────────────────── */
+    /* ── Hero ────────────────────────────────────────────────────────────── */
     .hero {
-      padding: 64px 48px 48px;
-      max-width: 860px;
+      padding: 52px 56px 40px;
+      max-width: 900px;
     }
-
     .hero-heading {
       font-family: 'Cormorant Garamond', serif;
-      font-size: clamp(38px, 5vw, 62px);
+      font-size: clamp(36px, 4.5vw, 58px);
       font-weight: 300;
       line-height: 1.1;
-      color: var(--text);
       margin-bottom: 8px;
     }
-
-    .hero-heading em {
-      font-style: italic;
-      color: var(--accent);
-    }
-
+    .hero-heading em { font-style: italic; color: var(--accent); }
     .hero-sub {
-      font-size: 14px;
+      font-size: 13px;
       color: var(--muted);
       font-weight: 300;
-      margin-bottom: 40px;
+      margin-bottom: 36px;
       letter-spacing: 0.02em;
     }
 
-    /* ── Search form ────────────────────────────────────────────────────── */
-    .search-form {
-      display: flex;
-      flex-direction: column;
-      gap: 12px;
-      max-width: 760px;
-    }
+    /* ── Search form ─────────────────────────────────────────────────────── */
+    .search-form { display: flex; flex-direction: column; gap: 12px; max-width: 800px; }
 
-    .input-row {
-      display: grid;
-      grid-template-columns: 1fr 220px;
-      gap: 12px;
-    }
-
-    .field-wrap {
-      position: relative;
-    }
+    .input-row { display: grid; grid-template-columns: 1fr 200px; gap: 12px; }
 
     .field-label {
       display: block;
@@ -122,7 +96,6 @@
       text-transform: uppercase;
       color: var(--muted);
       margin-bottom: 6px;
-      font-weight: 400;
     }
 
     input[type="text"], textarea {
@@ -134,35 +107,19 @@
       font-family: 'DM Sans', sans-serif;
       font-size: 14px;
       font-weight: 300;
-      padding: 14px 18px;
+      padding: 13px 16px;
       outline: none;
       transition: border-color 0.2s, box-shadow 0.2s;
       resize: none;
     }
-
     input[type="text"]:focus, textarea:focus {
       border-color: rgba(201,169,110,0.4);
       box-shadow: 0 0 0 3px rgba(201,169,110,0.07);
     }
+    textarea { min-height: 76px; line-height: 1.6; }
+    textarea::placeholder, input::placeholder { color: var(--muted); font-style: italic; }
 
-    textarea {
-      min-height: 80px;
-      line-height: 1.6;
-    }
-
-    textarea::placeholder, input::placeholder {
-      color: var(--muted);
-      font-style: italic;
-    }
-
-    /* ── Suggestion chips ───────────────────────────────────────────────── */
-    .chips {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 8px;
-      margin-top: 4px;
-    }
-
+    .chips { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 2px; }
     .chip {
       font-size: 11px;
       padding: 5px 12px;
@@ -175,14 +132,8 @@
       font-family: 'DM Sans', sans-serif;
       white-space: nowrap;
     }
+    .chip:hover { border-color: var(--accent); color: var(--accent); background: rgba(201,169,110,0.07); }
 
-    .chip:hover {
-      border-color: var(--accent);
-      color: var(--accent);
-      background: var(--score-bg);
-    }
-
-    /* ── Search button ──────────────────────────────────────────────────── */
     .search-btn {
       align-self: flex-end;
       background: var(--accent);
@@ -190,41 +141,34 @@
       border: none;
       border-radius: var(--radius);
       font-family: 'DM Sans', sans-serif;
-      font-size: 13px;
+      font-size: 12px;
       font-weight: 500;
-      letter-spacing: 0.06em;
-      padding: 14px 32px;
+      letter-spacing: 0.08em;
+      padding: 13px 28px;
       cursor: pointer;
       transition: background 0.2s, transform 0.1s;
       text-transform: uppercase;
     }
-
     .search-btn:hover  { background: var(--accent2); }
     .search-btn:active { transform: scale(0.98); }
     .search-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
-    /* ── Divider ────────────────────────────────────────────────────────── */
-    .divider {
-      height: 1px;
-      background: var(--border);
-      margin: 0 48px;
-    }
+    .divider { height: 1px; background: var(--border); margin: 0 56px; }
 
-    /* ── Status bar ─────────────────────────────────────────────────────── */
+    /* ── Status ──────────────────────────────────────────────────────────── */
     #status {
-      padding: 20px 48px;
-      font-size: 12px;
+      padding: 18px 56px;
+      font-size: 11px;
       letter-spacing: 0.1em;
       text-transform: uppercase;
       color: var(--muted);
-      min-height: 56px;
+      min-height: 52px;
       display: flex;
       align-items: center;
       gap: 10px;
     }
-
     .spinner {
-      width: 14px; height: 14px;
+      width: 13px; height: 13px;
       border: 1.5px solid var(--border);
       border-top-color: var(--accent);
       border-radius: 50%;
@@ -233,199 +177,189 @@
     }
     @keyframes spin { to { transform: rotate(360deg); } }
 
-    /* ── Results grid ───────────────────────────────────────────────────── */
+    /* ── Results: full-width rows ────────────────────────────────────────── */
     #results {
-      padding: 0 48px 80px;
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
-      gap: 24px;
-    }
-
-    /* ── Hotel card ─────────────────────────────────────────────────────── */
-    .card {
-      background: var(--card);
-      border: 1px solid var(--border);
-      border-radius: 16px;
-      overflow: hidden;
+      padding: 0 56px 80px;
       display: flex;
       flex-direction: column;
-      transition: border-color 0.2s, transform 0.2s;
-      animation: fadeUp 0.4s ease both;
+      gap: 20px;
     }
 
-    .card:hover {
-      border-color: rgba(201,169,110,0.25);
-      transform: translateY(-2px);
+    /* ── Hotel row card ──────────────────────────────────────────────────── */
+    .hotel-row {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      overflow: hidden;
+      animation: fadeUp 0.4s ease both;
+      transition: border-color 0.2s;
     }
+    .hotel-row:hover { border-color: rgba(201,169,110,0.2); }
 
     @keyframes fadeUp {
-      from { opacity: 0; transform: translateY(16px); }
+      from { opacity: 0; transform: translateY(14px); }
       to   { opacity: 1; transform: translateY(0); }
     }
+    .hotel-row:nth-child(1)  { animation-delay: 0.04s; }
+    .hotel-row:nth-child(2)  { animation-delay: 0.08s; }
+    .hotel-row:nth-child(3)  { animation-delay: 0.12s; }
+    .hotel-row:nth-child(4)  { animation-delay: 0.16s; }
+    .hotel-row:nth-child(5)  { animation-delay: 0.20s; }
+    .hotel-row:nth-child(6)  { animation-delay: 0.24s; }
+    .hotel-row:nth-child(7)  { animation-delay: 0.28s; }
+    .hotel-row:nth-child(8)  { animation-delay: 0.32s; }
 
-    /* stagger */
-    .card:nth-child(1)  { animation-delay: 0.04s; }
-    .card:nth-child(2)  { animation-delay: 0.08s; }
-    .card:nth-child(3)  { animation-delay: 0.12s; }
-    .card:nth-child(4)  { animation-delay: 0.16s; }
-    .card:nth-child(5)  { animation-delay: 0.20s; }
-    .card:nth-child(6)  { animation-delay: 0.24s; }
-    .card:nth-child(7)  { animation-delay: 0.28s; }
-    .card:nth-child(8)  { animation-delay: 0.32s; }
-    .card:nth-child(9)  { animation-delay: 0.36s; }
-    .card:nth-child(10) { animation-delay: 0.40s; }
+    /* ── Hotel header ────────────────────────────────────────────────────── */
+    .hotel-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 18px 24px 14px;
+      border-bottom: 1px solid var(--border);
+      gap: 16px;
+    }
+    .hotel-header-left { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
 
-    /* ── Room photo ─────────────────────────────────────────────────────── */
-    .room-photo {
+    .hotel-name {
+      font-family: 'Cormorant Garamond', serif;
+      font-size: 22px;
+      font-weight: 400;
+      color: var(--text);
+      line-height: 1.2;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .hotel-meta {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+    .stars { color: var(--accent); font-size: 11px; letter-spacing: 2px; }
+    .hotel-location { font-size: 12px; color: var(--muted); font-weight: 300; }
+    .hotel-guest-score {
+      font-size: 12px;
+      color: var(--muted);
+      padding: 2px 8px;
+      border-radius: 100px;
+      border: 1px solid var(--border);
+    }
+    .hotel-guest-score strong { color: var(--text); font-weight: 500; }
+
+    .hotel-header-right { flex-shrink: 0; }
+
+    .book-btn {
+      display: inline-block;
+      padding: 9px 20px;
+      border-radius: 8px;
+      border: 1px solid rgba(201,169,110,0.3);
+      color: var(--accent);
+      font-family: 'DM Sans', sans-serif;
+      font-size: 11px;
+      font-weight: 500;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      text-decoration: none;
+      transition: all 0.2s;
+      white-space: nowrap;
+    }
+    .book-btn:hover { background: rgba(201,169,110,0.08); border-color: var(--accent); }
+
+    /* ── Room strip ──────────────────────────────────────────────────────── */
+    .room-strip-wrap {
+      overflow-x: auto;
+      scrollbar-width: thin;
+      scrollbar-color: rgba(201,169,110,0.2) transparent;
+    }
+    .room-strip-wrap::-webkit-scrollbar { height: 4px; }
+    .room-strip-wrap::-webkit-scrollbar-track { background: transparent; }
+    .room-strip-wrap::-webkit-scrollbar-thumb { background: rgba(201,169,110,0.2); border-radius: 2px; }
+
+    .room-strip {
+      display: flex;
+      gap: 2px;
+      padding: 0;
+      /* Each cell fixed width so they don't shrink */
+    }
+
+    /* ── Individual room cell ────────────────────────────────────────────── */
+    .room-cell {
+      flex: 0 0 220px;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      position: relative;
+      cursor: default;
+    }
+
+    .room-cell:first-child { border-radius: 0; }
+
+    .room-img-wrap {
+      position: relative;
       width: 100%;
-      aspect-ratio: 4/3;
-      object-fit: cover;
-      display: block;
+      height: 160px;
+      overflow: hidden;
       background: var(--surface);
     }
 
-    .photo-placeholder {
+    .room-img {
       width: 100%;
-      aspect-ratio: 4/3;
-      background: var(--surface);
+      height: 100%;
+      object-fit: cover;
+      display: block;
+      transition: transform 0.3s ease;
+    }
+    .room-cell:hover .room-img { transform: scale(1.04); }
+
+    .room-img-placeholder {
+      width: 100%;
+      height: 100%;
       display: flex;
       align-items: center;
       justify-content: center;
+      font-size: 28px;
       color: var(--muted);
-      font-size: 32px;
     }
 
-    /* ── Dual photo layout ──────────────────────────────────────────────── */
-    .photo-strip {
-      display: grid;
-      grid-template-columns: 2fr 1fr;
-      gap: 2px;
-      background: var(--bg);
-    }
-
-    .photo-strip .room-photo {
-      aspect-ratio: unset;
-      height: 100%;
-      min-height: 180px;
-    }
-
-    .photo-strip .photo-secondary {
-      aspect-ratio: unset;
-      width: 100%;
-      height: 100%;
-      object-fit: cover;
-      display: block;
-      background: var(--surface);
-      min-height: 180px;
-    }
-
-    .photo-secondary-wrap {
-      position: relative;
-      overflow: hidden;
-    }
-
-    .photo-secondary-wrap .score-badge {
-      top: 8px; right: 8px;
-      font-size: 10px;
-      padding: 3px 8px;
-    }
-
-    /* ── Score badge ────────────────────────────────────────────────────── */
-    .photo-wrap {
-      position: relative;
-    }
-
-    .score-badge {
+    /* Match badge on photo */
+    .room-match-badge {
       position: absolute;
-      top: 12px; right: 12px;
-      background: rgba(12,12,14,0.82);
-      backdrop-filter: blur(8px);
-      border: 1px solid rgba(201,169,110,0.3);
+      bottom: 8px; left: 8px;
+      background: rgba(12,12,14,0.85);
+      backdrop-filter: blur(6px);
+      border: 1px solid rgba(201,169,110,0.35);
       border-radius: 100px;
-      padding: 4px 10px;
-      font-size: 11px;
+      padding: 3px 9px;
+      font-size: 10px;
       font-weight: 500;
       color: var(--accent);
       letter-spacing: 0.04em;
     }
 
-    /* ── Room name strip ────────────────────────────────────────────────── */
-    .room-name-strip {
-      padding: 8px 16px;
-      background: rgba(201,169,110,0.06);
-      border-bottom: 1px solid var(--border);
+    /* Room info below photo */
+    .room-info {
+      padding: 10px 12px 12px;
+      background: var(--card);
+      border-top: 1px solid var(--border);
+      flex: 1;
+    }
+
+    .room-cell-name {
       font-size: 11px;
-      color: var(--accent);
-      letter-spacing: 0.08em;
-      text-transform: uppercase;
+      font-weight: 400;
+      color: var(--text);
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
+      margin-bottom: 6px;
     }
 
-    /* ── Card body ──────────────────────────────────────────────────────── */
-    .card-body {
-      padding: 18px 20px 20px;
-      flex: 1;
-      display: flex;
-      flex-direction: column;
-      gap: 10px;
-    }
-
-    .hotel-name {
-      font-family: 'Cormorant Garamond', serif;
-      font-size: 20px;
-      font-weight: 400;
-      color: var(--text);
-      line-height: 1.2;
-    }
-
-    .hotel-meta {
+    .match-bar-row {
       display: flex;
       align-items: center;
-      gap: 8px;
-      flex-wrap: wrap;
+      gap: 6px;
     }
-
-    .stars {
-      color: var(--accent);
-      font-size: 11px;
-      letter-spacing: 2px;
-    }
-
-    .hotel-location {
-      font-size: 12px;
-      color: var(--muted);
-      font-weight: 300;
-    }
-
-    .hotel-rating {
-      font-size: 12px;
-      color: var(--muted);
-      margin-left: auto;
-    }
-
-    .hotel-rating strong {
-      color: var(--text);
-      font-weight: 500;
-    }
-
-    /* ── Match bar ──────────────────────────────────────────────────────── */
-    .match-section {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      margin-top: 2px;
-    }
-
-    .match-label {
-      font-size: 10px;
-      letter-spacing: 0.1em;
-      text-transform: uppercase;
-      color: var(--muted);
-      white-space: nowrap;
-    }
-
     .match-bar-track {
       flex: 1;
       height: 2px;
@@ -433,98 +367,59 @@
       border-radius: 2px;
       overflow: hidden;
     }
-
     .match-bar-fill {
       height: 100%;
       background: linear-gradient(90deg, var(--accent), var(--accent2));
       border-radius: 2px;
-      transition: width 0.6s ease;
     }
-
     .match-pct {
-      font-size: 12px;
+      font-size: 10px;
       color: var(--accent);
       font-weight: 500;
       white-space: nowrap;
+      min-width: 28px;
+      text-align: right;
     }
 
-    /* ── Book button ────────────────────────────────────────────────────── */
-    .book-btn {
-      display: block;
-      text-align: center;
-      margin-top: auto;
-      padding: 11px 20px;
-      border-radius: 8px;
-      border: 1px solid rgba(201,169,110,0.3);
-      color: var(--accent);
-      font-family: 'DM Sans', sans-serif;
-      font-size: 12px;
-      font-weight: 500;
+    /* ── Room count label ────────────────────────────────────────────────── */
+    .room-count-label {
+      padding: 8px 24px;
+      font-size: 10px;
       letter-spacing: 0.1em;
       text-transform: uppercase;
-      text-decoration: none;
-      transition: all 0.2s;
+      color: var(--muted);
+      border-top: 1px solid var(--border);
     }
 
-    .book-btn:hover {
-      background: var(--score-bg);
-      border-color: var(--accent);
-    }
-
-    /* ── Empty / error state ────────────────────────────────────────────── */
+    /* ── Empty / error ───────────────────────────────────────────────────── */
     .empty-state {
-      grid-column: 1 / -1;
       text-align: center;
       padding: 80px 20px;
     }
+    .empty-icon  { font-size: 44px; margin-bottom: 16px; opacity: 0.3; }
+    .empty-title { font-family: 'Cormorant Garamond', serif; font-size: 24px; font-weight: 300; color: var(--muted); margin-bottom: 8px; }
+    .empty-sub   { font-size: 13px; color: var(--muted); font-weight: 300; }
 
-    .empty-icon {
-      font-size: 48px;
-      margin-bottom: 16px;
-      opacity: 0.3;
-    }
-
-    .empty-title {
-      font-family: 'Cormorant Garamond', serif;
-      font-size: 24px;
-      font-weight: 300;
-      color: var(--muted);
-      margin-bottom: 8px;
-    }
-
-    .empty-sub {
-      font-size: 13px;
-      color: var(--muted);
-      font-weight: 300;
-    }
-
-    /* ── Footer ─────────────────────────────────────────────────────────── */
+    /* ── Footer ──────────────────────────────────────────────────────────── */
     footer {
       border-top: 1px solid var(--border);
-      padding: 20px 48px;
+      padding: 18px 56px;
       display: flex;
       align-items: center;
       justify-content: space-between;
     }
+    .footer-text { font-size: 11px; color: var(--muted); letter-spacing: 0.05em; }
+    .footer-text a { color: var(--accent); text-decoration: none; }
 
-    .footer-text {
-      font-size: 11px;
-      color: var(--muted);
-      letter-spacing: 0.06em;
-    }
-
-    .footer-text a {
-      color: var(--accent);
-      text-decoration: none;
-    }
-
-    /* ── Responsive ─────────────────────────────────────────────────────── */
+    /* ── Responsive ──────────────────────────────────────────────────────── */
     @media (max-width: 640px) {
-      header, .hero, .divider { padding-left: 20px; padding-right: 20px; }
-      #status, #results, footer { padding-left: 20px; padding-right: 20px; }
+      header, .hero { padding-left: 20px; padding-right: 20px; }
+      .divider, #status, #results, footer { padding-left: 20px; padding-right: 20px; }
       .input-row { grid-template-columns: 1fr; }
-      .hero-heading { font-size: 36px; }
-      #results { grid-template-columns: 1fr; }
+      .hero-heading { font-size: 34px; }
+      .hotel-header { flex-wrap: wrap; }
+      .room-cell { flex: 0 0 180px; }
+      .room-img-wrap { height: 130px; }
     }
   </style>
 </head>
@@ -537,11 +432,10 @@
 
   <section class="hero">
     <h1 class="hero-heading">Find rooms that<br><em>look</em> the way you want</h1>
-    <p class="hero-sub">Describe the room you're imagining. We'll find hotels that match.</p>
+    <p class="hero-sub">Describe the room you're imagining. We'll show every matching room at each hotel.</p>
 
     <form class="search-form" onsubmit="handleSearch(event)">
-
-      <div class="field-wrap">
+      <div>
         <label class="field-label" for="queryInput">Describe your ideal room</label>
         <textarea
           id="queryInput"
@@ -550,7 +444,7 @@
         ></textarea>
       </div>
 
-      <div class="chips" id="suggestionChips">
+      <div class="chips">
         <button type="button" class="chip" onclick="setQuery(this)">Luxury bathroom with soaking tub</button>
         <button type="button" class="chip" onclick="setQuery(this)">Modern suite with city view</button>
         <button type="button" class="chip" onclick="setQuery(this)">Art deco room with warm lighting</button>
@@ -560,35 +454,28 @@
       </div>
 
       <div class="input-row">
-        <div class="field-wrap">
+        <div>
           <label class="field-label" for="cityInput">City</label>
-          <input
-            type="text"
-            id="cityInput"
-            placeholder="e.g. Paris, New York, Tokyo…"
-          />
+          <input type="text" id="cityInput" placeholder="e.g. Paris, New York, Tokyo…" />
         </div>
         <button type="submit" class="search-btn" id="searchBtn">Search rooms</button>
       </div>
-
     </form>
   </section>
 
   <div class="divider"></div>
-
   <div id="status"></div>
-
   <div id="results"></div>
 
   <footer>
     <span class="footer-text">Powered by <a href="https://liteapi.travel" target="_blank">LiteAPI</a> room-search</span>
-    <span class="footer-text">Results are ranked by visual similarity score</span>
+    <span class="footer-text">Rooms ranked by visual similarity score</span>
   </footer>
 
   <script>
-    const BACKEND = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+    const BACKEND = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
       ? 'http://localhost:3000'
-      : window.BACKEND_URL || '';  // set via window.BACKEND_URL in production or same-origin
+      : '';
 
     function setQuery(chip) {
       document.getElementById('queryInput').value = chip.textContent.trim();
@@ -606,7 +493,6 @@
       e.preventDefault();
       const query = document.getElementById('queryInput').value.trim();
       const city  = document.getElementById('cityInput').value.trim();
-
       if (!query) { alert('Please describe the room you\'re looking for.'); return; }
       if (!city)  { alert('Please enter a city.'); return; }
 
@@ -617,10 +503,8 @@
       document.getElementById('results').innerHTML = '';
 
       try {
-        const url  = `${BACKEND}/api/room-search?` + new URLSearchParams({ query, city });
-        const resp = await fetch(url);
+        const resp = await fetch(`${BACKEND}/api/room-search?` + new URLSearchParams({ query, city }));
         const data = await resp.json();
-
         if (!resp.ok) throw new Error(data.error || 'Search failed');
 
         const hotels = data.hotels || [];
@@ -628,8 +512,9 @@
           setStatus('');
           renderEmpty(query, city);
         } else {
-          setStatus(`${hotels.length} hotels found in ${city} matching your description`);
-          renderResults(hotels, query);
+          const totalRooms = hotels.reduce((n, h) => n + (h.rooms?.length || 0), 0);
+          setStatus(`${hotels.length} hotels · ${totalRooms} matching rooms in ${city}`);
+          renderResults(hotels);
         }
       } catch (err) {
         setStatus('');
@@ -640,80 +525,73 @@
       }
     }
 
-    function renderResults(hotels, query) {
-      const container = document.getElementById('results');
-      container.innerHTML = hotels.map((h, i) => cardHTML(h, i)).join('');
+    function renderResults(hotels) {
+      document.getElementById('results').innerHTML = hotels.map((h, i) => hotelRowHTML(h, i)).join('');
     }
 
-    function cardHTML(h, i) {
-      const rooms      = h.rooms && h.rooms.length > 0 ? h.rooms : [];
-      const bestRoom   = rooms[0] || null;
-      const secondRoom = rooms[1] || null;
-      const scoreVal   = bestRoom ? bestRoom.score : null;
-      const imageUrl   = bestRoom?.imageUrl || h.mainPhoto || '';
-      const image2Url  = secondRoom?.imageUrl || '';
-      const roomName   = bestRoom?.name || '';
-      const stars      = '★'.repeat(Math.min(Math.max(Math.round(h.starRating || 0), 0), 5));
-      const bookUrl    = `https://www.google.com/search?q=${encodeURIComponent(h.name + ' ' + (h.city || '') + ' hotel booking')}`;
-      const location   = [h.address, h.city, h.country].filter(Boolean).join(', ') || h.city || '';
-      const ratingStr  = h.rating > 0 ? `<strong>${parseFloat(h.rating).toFixed(1)}</strong> guest score` : '';
+    function hotelRowHTML(h, i) {
+      const stars     = '★'.repeat(Math.min(Math.max(Math.round(h.starRating || 0), 0), 5));
+      const location  = [h.address, h.city, h.country].filter(Boolean).join(', ') || h.city || '';
+      const bookUrl   = `https://www.google.com/search?q=${encodeURIComponent(h.name + ' ' + (h.city || '') + ' hotel booking')}`;
+      const ratingStr = h.rating > 0 ? `<strong>${parseFloat(h.rating).toFixed(1)}</strong> guest score` : '';
+      const rooms     = h.rooms || [];
+      const roomCount = rooms.length;
 
-      // Build photo block — dual if we have 2 images, single otherwise
-      let photoBlock;
-      if (imageUrl && image2Url) {
-        photoBlock = `
-          <div class="photo-strip">
-            <div class="photo-wrap">
-              <img class="room-photo" src="${imageUrl}" alt="${h.name} room" loading="lazy"
-                   onerror="this.style.display='none'">
-              ${scoreVal !== null ? `<div class="score-badge">${scoreVal}% match</div>` : ''}
+      const roomCells = rooms.map(r => {
+        const img = r.imageUrl
+          ? `<img class="room-img" src="${r.imageUrl}" alt="${r.name || 'Room'}" loading="lazy"
+                  onerror="this.parentElement.innerHTML='<div class=room-img-placeholder>🛏</div>'">`
+          : `<div class="room-img-placeholder">🛏</div>`;
+
+        const badge = r.score
+          ? `<div class="room-match-badge">${r.score}%</div>`
+          : '';
+
+        const name = r.name
+          ? `<div class="room-cell-name" title="${r.name}">${r.name}</div>`
+          : '';
+
+        const bar = r.score
+          ? `<div class="match-bar-row">
+               <div class="match-bar-track">
+                 <div class="match-bar-fill" style="width:${r.score}%"></div>
+               </div>
+               <span class="match-pct">${r.score}%</span>
+             </div>`
+          : '';
+
+        return `
+          <div class="room-cell">
+            <div class="room-img-wrap">
+              ${img}
+              ${badge}
             </div>
-            <div class="photo-secondary-wrap">
-              <img class="photo-secondary" src="${image2Url}" alt="${h.name} room 2" loading="lazy"
-                   onerror="this.parentElement.style.display='none'">
+            <div class="room-info">
+              ${name}
+              ${bar}
             </div>
           </div>`;
-      } else if (imageUrl) {
-        photoBlock = `
-          <div class="photo-wrap">
-            <img class="room-photo" src="${imageUrl}" alt="${h.name} room" loading="lazy"
-                 onerror="this.parentElement.innerHTML='<div class=photo-placeholder>🛏</div>'">
-            ${scoreVal !== null ? `<div class="score-badge">${scoreVal}% match</div>` : ''}
-          </div>`;
-      } else {
-        photoBlock = `<div class="photo-placeholder">🛏</div>`;
-      }
-
-      const roomStrip = roomName
-        ? `<div class="room-name-strip">${roomName}</div>`
-        : '';
-
-      const matchBar = scoreVal !== null
-        ? `<div class="match-section">
-             <span class="match-label">Match</span>
-             <div class="match-bar-track">
-               <div class="match-bar-fill" style="width:${scoreVal}%"></div>
-             </div>
-             <span class="match-pct">${scoreVal}%</span>
-           </div>`
-        : '';
+      }).join('');
 
       return `
-        <div class="card" style="animation-delay:${i * 0.05}s">
-          ${photoBlock}
-          ${roomStrip}
-          <div class="card-body">
-            <div class="hotel-name">${h.name}</div>
-            <div class="hotel-meta">
-              ${stars ? `<span class="stars">${stars}</span>` : ''}
-              <span class="hotel-location">${location}</span>
-              ${ratingStr ? `<span class="hotel-rating">${ratingStr}</span>` : ''}
+        <div class="hotel-row" style="animation-delay:${i * 0.06}s">
+          <div class="hotel-header">
+            <div class="hotel-header-left">
+              <div class="hotel-name">${h.name}</div>
+              <div class="hotel-meta">
+                ${stars ? `<span class="stars">${stars}</span>` : ''}
+                ${location ? `<span class="hotel-location">${location}</span>` : ''}
+                ${ratingStr ? `<span class="hotel-guest-score">${ratingStr}</span>` : ''}
+              </div>
             </div>
-            ${matchBar}
-            <a class="book-btn" href="${bookUrl}" target="_blank" rel="noopener">
-              Find &amp; book →
-            </a>
+            <div class="hotel-header-right">
+              <a class="book-btn" href="${bookUrl}" target="_blank" rel="noopener">Find &amp; Book →</a>
+            </div>
           </div>
+          <div class="room-strip-wrap">
+            <div class="room-strip">${roomCells}</div>
+          </div>
+          ${roomCount > 1 ? `<div class="room-count-label">${roomCount} matching rooms</div>` : ''}
         </div>`;
     }
 
@@ -722,10 +600,7 @@
         <div class="empty-state">
           <div class="empty-icon">🔍</div>
           <div class="empty-title">No rooms found</div>
-          <div class="empty-sub">
-            No rooms matched "${query}" in ${city}.<br>
-            Try a different description or a major city like Paris, London or New York.
-          </div>
+          <div class="empty-sub">No rooms matched "${query}" in ${city}.<br>Try a different description or city.</div>
         </div>`;
     }
 
