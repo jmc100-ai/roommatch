@@ -119,8 +119,8 @@ app.get("/api/room-search", async (req, res) => {
       });
     }
 
-    // Normalise response: each item has hotel metadata + rooms[] with photos + scores
-    const hotels = (raw.data || []).map(h => ({
+    // Normalise response
+    const rawHotels = (raw.data || []).map(h => ({
       id:          h.id          || h.hotelId || "",
       name:        h.name        || h.hotelName || "Hotel",
       address:     h.address     || "",
@@ -133,6 +133,24 @@ app.get("/api/room-search", async (req, res) => {
         name:       r.room_name  || r.roomName  || r.name || "",
         imageUrl:   r.image_url  || r.imageUrl  || r.image || r.url || "",
         score:      r.similarity || r.score || 0,
+      }))
+    }));
+
+    // Normalise scores: cosine similarity ranges ~0.15–0.35, looks bad as raw %.
+    // Scale so the best result = 95% and floor = 30%, everything else scales between.
+    const allScores = rawHotels.flatMap(h => h.rooms.map(r => r.score)).filter(s => s > 0);
+    const maxScore  = allScores.length > 0 ? Math.max(...allScores) : 1;
+    const minScore  = allScores.length > 0 ? Math.min(...allScores) : 0;
+    const range     = maxScore - minScore || 1;
+    const FLOOR = 30, CEIL = 95;
+
+    const hotels = rawHotels.map(h => ({
+      ...h,
+      rooms: h.rooms.map(r => ({
+        ...r,
+        score: r.score > 0
+          ? Math.round(FLOOR + ((r.score - minScore) / range) * (CEIL - FLOOR))
+          : 0
       }))
     }));
 
