@@ -1,0 +1,686 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>RoomMatch</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet" />
+  <style>
+    /* ── Reset & base ───────────────────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:        #0c0c0e;
+      --surface:   #131316;
+      --card:      #18181c;
+      --border:    rgba(255,255,255,0.07);
+      --text:      #e8e4dc;
+      --muted:     #6b6760;
+      --accent:    #c9a96e;
+      --accent2:   #e8d5b0;
+      --score-bg:  rgba(201,169,110,0.12);
+      --radius:    12px;
+    }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      font-family: 'DM Sans', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    /* ── Noise grain overlay ────────────────────────────────────────────── */
+    body::before {
+      content: '';
+      position: fixed; inset: 0;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.035'/%3E%3C/svg%3E");
+      pointer-events: none; z-index: 9999; opacity: 0.4;
+    }
+
+    /* ── Header ─────────────────────────────────────────────────────────── */
+    header {
+      padding: 48px 48px 0;
+      display: flex;
+      align-items: baseline;
+      gap: 16px;
+    }
+
+    .logo {
+      font-family: 'Cormorant Garamond', serif;
+      font-size: 28px;
+      font-weight: 300;
+      letter-spacing: 0.12em;
+      color: var(--accent2);
+      text-transform: uppercase;
+    }
+
+    .logo-dot { color: var(--accent); }
+
+    .tagline {
+      font-size: 11px;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: var(--muted);
+      font-weight: 300;
+    }
+
+    /* ── Hero search ────────────────────────────────────────────────────── */
+    .hero {
+      padding: 64px 48px 48px;
+      max-width: 860px;
+    }
+
+    .hero-heading {
+      font-family: 'Cormorant Garamond', serif;
+      font-size: clamp(38px, 5vw, 62px);
+      font-weight: 300;
+      line-height: 1.1;
+      color: var(--text);
+      margin-bottom: 8px;
+    }
+
+    .hero-heading em {
+      font-style: italic;
+      color: var(--accent);
+    }
+
+    .hero-sub {
+      font-size: 14px;
+      color: var(--muted);
+      font-weight: 300;
+      margin-bottom: 40px;
+      letter-spacing: 0.02em;
+    }
+
+    /* ── Search form ────────────────────────────────────────────────────── */
+    .search-form {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      max-width: 760px;
+    }
+
+    .input-row {
+      display: grid;
+      grid-template-columns: 1fr 220px;
+      gap: 12px;
+    }
+
+    .field-wrap {
+      position: relative;
+    }
+
+    .field-label {
+      display: block;
+      font-size: 10px;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 6px;
+      font-weight: 400;
+    }
+
+    input[type="text"], textarea {
+      width: 100%;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      color: var(--text);
+      font-family: 'DM Sans', sans-serif;
+      font-size: 14px;
+      font-weight: 300;
+      padding: 14px 18px;
+      outline: none;
+      transition: border-color 0.2s, box-shadow 0.2s;
+      resize: none;
+    }
+
+    input[type="text"]:focus, textarea:focus {
+      border-color: rgba(201,169,110,0.4);
+      box-shadow: 0 0 0 3px rgba(201,169,110,0.07);
+    }
+
+    textarea {
+      min-height: 80px;
+      line-height: 1.6;
+    }
+
+    textarea::placeholder, input::placeholder {
+      color: var(--muted);
+      font-style: italic;
+    }
+
+    /* ── Suggestion chips ───────────────────────────────────────────────── */
+    .chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 4px;
+    }
+
+    .chip {
+      font-size: 11px;
+      padding: 5px 12px;
+      border-radius: 100px;
+      border: 1px solid var(--border);
+      color: var(--muted);
+      cursor: pointer;
+      transition: all 0.15s;
+      background: transparent;
+      font-family: 'DM Sans', sans-serif;
+      white-space: nowrap;
+    }
+
+    .chip:hover {
+      border-color: var(--accent);
+      color: var(--accent);
+      background: var(--score-bg);
+    }
+
+    /* ── Search button ──────────────────────────────────────────────────── */
+    .search-btn {
+      align-self: flex-end;
+      background: var(--accent);
+      color: #0c0c0e;
+      border: none;
+      border-radius: var(--radius);
+      font-family: 'DM Sans', sans-serif;
+      font-size: 13px;
+      font-weight: 500;
+      letter-spacing: 0.06em;
+      padding: 14px 32px;
+      cursor: pointer;
+      transition: background 0.2s, transform 0.1s;
+      text-transform: uppercase;
+    }
+
+    .search-btn:hover  { background: var(--accent2); }
+    .search-btn:active { transform: scale(0.98); }
+    .search-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    /* ── Divider ────────────────────────────────────────────────────────── */
+    .divider {
+      height: 1px;
+      background: var(--border);
+      margin: 0 48px;
+    }
+
+    /* ── Status bar ─────────────────────────────────────────────────────── */
+    #status {
+      padding: 20px 48px;
+      font-size: 12px;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--muted);
+      min-height: 56px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .spinner {
+      width: 14px; height: 14px;
+      border: 1.5px solid var(--border);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+      flex-shrink: 0;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── Results grid ───────────────────────────────────────────────────── */
+    #results {
+      padding: 0 48px 80px;
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+      gap: 24px;
+    }
+
+    /* ── Hotel card ─────────────────────────────────────────────────────── */
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      transition: border-color 0.2s, transform 0.2s;
+      animation: fadeUp 0.4s ease both;
+    }
+
+    .card:hover {
+      border-color: rgba(201,169,110,0.25);
+      transform: translateY(-2px);
+    }
+
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(16px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    /* stagger */
+    .card:nth-child(1)  { animation-delay: 0.04s; }
+    .card:nth-child(2)  { animation-delay: 0.08s; }
+    .card:nth-child(3)  { animation-delay: 0.12s; }
+    .card:nth-child(4)  { animation-delay: 0.16s; }
+    .card:nth-child(5)  { animation-delay: 0.20s; }
+    .card:nth-child(6)  { animation-delay: 0.24s; }
+    .card:nth-child(7)  { animation-delay: 0.28s; }
+    .card:nth-child(8)  { animation-delay: 0.32s; }
+    .card:nth-child(9)  { animation-delay: 0.36s; }
+    .card:nth-child(10) { animation-delay: 0.40s; }
+
+    /* ── Room photo ─────────────────────────────────────────────────────── */
+    .room-photo {
+      width: 100%;
+      aspect-ratio: 4/3;
+      object-fit: cover;
+      display: block;
+      background: var(--surface);
+    }
+
+    .photo-placeholder {
+      width: 100%;
+      aspect-ratio: 4/3;
+      background: var(--surface);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--muted);
+      font-size: 32px;
+    }
+
+    /* ── Score badge ────────────────────────────────────────────────────── */
+    .photo-wrap {
+      position: relative;
+    }
+
+    .score-badge {
+      position: absolute;
+      top: 12px; right: 12px;
+      background: rgba(12,12,14,0.82);
+      backdrop-filter: blur(8px);
+      border: 1px solid rgba(201,169,110,0.3);
+      border-radius: 100px;
+      padding: 4px 10px;
+      font-size: 11px;
+      font-weight: 500;
+      color: var(--accent);
+      letter-spacing: 0.04em;
+    }
+
+    /* ── Room name strip ────────────────────────────────────────────────── */
+    .room-name-strip {
+      padding: 8px 16px;
+      background: rgba(201,169,110,0.06);
+      border-bottom: 1px solid var(--border);
+      font-size: 11px;
+      color: var(--accent);
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    /* ── Card body ──────────────────────────────────────────────────────── */
+    .card-body {
+      padding: 18px 20px 20px;
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .hotel-name {
+      font-family: 'Cormorant Garamond', serif;
+      font-size: 20px;
+      font-weight: 400;
+      color: var(--text);
+      line-height: 1.2;
+    }
+
+    .hotel-meta {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .stars {
+      color: var(--accent);
+      font-size: 11px;
+      letter-spacing: 2px;
+    }
+
+    .hotel-location {
+      font-size: 12px;
+      color: var(--muted);
+      font-weight: 300;
+    }
+
+    .hotel-rating {
+      font-size: 12px;
+      color: var(--muted);
+      margin-left: auto;
+    }
+
+    .hotel-rating strong {
+      color: var(--text);
+      font-weight: 500;
+    }
+
+    /* ── Match bar ──────────────────────────────────────────────────────── */
+    .match-section {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-top: 2px;
+    }
+
+    .match-label {
+      font-size: 10px;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--muted);
+      white-space: nowrap;
+    }
+
+    .match-bar-track {
+      flex: 1;
+      height: 2px;
+      background: var(--border);
+      border-radius: 2px;
+      overflow: hidden;
+    }
+
+    .match-bar-fill {
+      height: 100%;
+      background: linear-gradient(90deg, var(--accent), var(--accent2));
+      border-radius: 2px;
+      transition: width 0.6s ease;
+    }
+
+    .match-pct {
+      font-size: 12px;
+      color: var(--accent);
+      font-weight: 500;
+      white-space: nowrap;
+    }
+
+    /* ── Book button ────────────────────────────────────────────────────── */
+    .book-btn {
+      display: block;
+      text-align: center;
+      margin-top: auto;
+      padding: 11px 20px;
+      border-radius: 8px;
+      border: 1px solid rgba(201,169,110,0.3);
+      color: var(--accent);
+      font-family: 'DM Sans', sans-serif;
+      font-size: 12px;
+      font-weight: 500;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      text-decoration: none;
+      transition: all 0.2s;
+    }
+
+    .book-btn:hover {
+      background: var(--score-bg);
+      border-color: var(--accent);
+    }
+
+    /* ── Empty / error state ────────────────────────────────────────────── */
+    .empty-state {
+      grid-column: 1 / -1;
+      text-align: center;
+      padding: 80px 20px;
+    }
+
+    .empty-icon {
+      font-size: 48px;
+      margin-bottom: 16px;
+      opacity: 0.3;
+    }
+
+    .empty-title {
+      font-family: 'Cormorant Garamond', serif;
+      font-size: 24px;
+      font-weight: 300;
+      color: var(--muted);
+      margin-bottom: 8px;
+    }
+
+    .empty-sub {
+      font-size: 13px;
+      color: var(--muted);
+      font-weight: 300;
+    }
+
+    /* ── Footer ─────────────────────────────────────────────────────────── */
+    footer {
+      border-top: 1px solid var(--border);
+      padding: 20px 48px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .footer-text {
+      font-size: 11px;
+      color: var(--muted);
+      letter-spacing: 0.06em;
+    }
+
+    .footer-text a {
+      color: var(--accent);
+      text-decoration: none;
+    }
+
+    /* ── Responsive ─────────────────────────────────────────────────────── */
+    @media (max-width: 640px) {
+      header, .hero, .divider { padding-left: 20px; padding-right: 20px; }
+      #status, #results, footer { padding-left: 20px; padding-right: 20px; }
+      .input-row { grid-template-columns: 1fr; }
+      .hero-heading { font-size: 36px; }
+      #results { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <span class="logo">Room<span class="logo-dot">·</span>Match</span>
+    <span class="tagline">Visual hotel room search</span>
+  </header>
+
+  <section class="hero">
+    <h1 class="hero-heading">Find rooms that<br><em>look</em> the way you want</h1>
+    <p class="hero-sub">Describe the room you're imagining. We'll find hotels that match.</p>
+
+    <form class="search-form" onsubmit="handleSearch(event)">
+
+      <div class="field-wrap">
+        <label class="field-label" for="queryInput">Describe your ideal room</label>
+        <textarea
+          id="queryInput"
+          placeholder="e.g. minimalist bathroom with double sinks and a soaking tub, warm lighting…"
+          rows="3"
+        ></textarea>
+      </div>
+
+      <div class="chips" id="suggestionChips">
+        <button type="button" class="chip" onclick="setQuery(this)">Luxury bathroom with soaking tub</button>
+        <button type="button" class="chip" onclick="setQuery(this)">Modern suite with city view</button>
+        <button type="button" class="chip" onclick="setQuery(this)">Art deco room with warm lighting</button>
+        <button type="button" class="chip" onclick="setQuery(this)">Double sinks and walk-in shower</button>
+        <button type="button" class="chip" onclick="setQuery(this)">Bright minimalist room with desk</button>
+        <button type="button" class="chip" onclick="setQuery(this)">Cozy suite with fireplace</button>
+      </div>
+
+      <div class="input-row">
+        <div class="field-wrap">
+          <label class="field-label" for="cityInput">City</label>
+          <input
+            type="text"
+            id="cityInput"
+            placeholder="e.g. Paris, New York, Tokyo…"
+          />
+        </div>
+        <button type="submit" class="search-btn" id="searchBtn">Search rooms</button>
+      </div>
+
+    </form>
+  </section>
+
+  <div class="divider"></div>
+
+  <div id="status"></div>
+
+  <div id="results"></div>
+
+  <footer>
+    <span class="footer-text">Powered by <a href="https://liteapi.travel" target="_blank">LiteAPI</a> room-search</span>
+    <span class="footer-text">Results are ranked by visual similarity score</span>
+  </footer>
+
+  <script>
+    const BACKEND = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+      ? 'http://localhost:3000'
+      : window.BACKEND_URL || '';  // set via window.BACKEND_URL in production or same-origin
+
+    function setQuery(chip) {
+      document.getElementById('queryInput').value = chip.textContent.trim();
+      document.getElementById('queryInput').focus();
+    }
+
+    function setStatus(msg, loading = false) {
+      const el = document.getElementById('status');
+      el.innerHTML = loading
+        ? `<div class="spinner"></div><span>${msg}</span>`
+        : `<span>${msg}</span>`;
+    }
+
+    async function handleSearch(e) {
+      e.preventDefault();
+      const query = document.getElementById('queryInput').value.trim();
+      const city  = document.getElementById('cityInput').value.trim();
+
+      if (!query) { alert('Please describe the room you\'re looking for.'); return; }
+      if (!city)  { alert('Please enter a city.'); return; }
+
+      const btn = document.getElementById('searchBtn');
+      btn.disabled = true;
+      btn.textContent = 'Searching…';
+      setStatus(`Searching for "${query}" in ${city}…`, true);
+      document.getElementById('results').innerHTML = '';
+
+      try {
+        const url  = `${BACKEND}/api/room-search?` + new URLSearchParams({ query, city });
+        const resp = await fetch(url);
+        const data = await resp.json();
+
+        if (!resp.ok) throw new Error(data.error || 'Search failed');
+
+        const hotels = data.hotels || [];
+        if (hotels.length === 0) {
+          setStatus('');
+          renderEmpty(query, city);
+        } else {
+          setStatus(`${hotels.length} hotels found in ${city} matching your description`);
+          renderResults(hotels, query);
+        }
+      } catch (err) {
+        setStatus('');
+        renderError(err.message);
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Search rooms';
+      }
+    }
+
+    function renderResults(hotels, query) {
+      const container = document.getElementById('results');
+      container.innerHTML = hotels.map((h, i) => cardHTML(h, i)).join('');
+    }
+
+    function cardHTML(h, i) {
+      const bestRoom   = h.rooms && h.rooms.length > 0 ? h.rooms[0] : null;
+      const scoreVal   = bestRoom ? Math.round(bestRoom.score * 100) : null;
+      const imageUrl   = bestRoom?.imageUrl || h.mainPhoto || '';
+      const roomName   = bestRoom?.name || '';
+      const stars      = '★'.repeat(Math.min(Math.max(Math.round(h.starRating || 0), 0), 5));
+      const bookUrl    = `https://www.google.com/search?q=${encodeURIComponent(h.name + ' ' + (h.city || '') + ' hotel booking')}`;
+      const location   = [h.address, h.city, h.country].filter(Boolean).join(', ') || h.city || '';
+      const ratingStr  = h.rating > 0 ? `<strong>${parseFloat(h.rating).toFixed(1)}</strong> guest score` : '';
+
+      const photoBlock = imageUrl
+        ? `<div class="photo-wrap">
+             <img class="room-photo" src="${imageUrl}" alt="${h.name} room" loading="lazy"
+                  onerror="this.parentElement.innerHTML='<div class=photo-placeholder>🛏</div>'">
+             ${scoreVal !== null ? `<div class="score-badge">${scoreVal}% match</div>` : ''}
+           </div>`
+        : `<div class="photo-placeholder">🛏</div>`;
+
+      const roomStrip = roomName
+        ? `<div class="room-name-strip">${roomName}</div>`
+        : '';
+
+      const matchBar = scoreVal !== null
+        ? `<div class="match-section">
+             <span class="match-label">Match</span>
+             <div class="match-bar-track">
+               <div class="match-bar-fill" style="width:${scoreVal}%"></div>
+             </div>
+             <span class="match-pct">${scoreVal}%</span>
+           </div>`
+        : '';
+
+      return `
+        <div class="card" style="animation-delay:${i * 0.05}s">
+          ${photoBlock}
+          ${roomStrip}
+          <div class="card-body">
+            <div class="hotel-name">${h.name}</div>
+            <div class="hotel-meta">
+              ${stars ? `<span class="stars">${stars}</span>` : ''}
+              <span class="hotel-location">${location}</span>
+              ${ratingStr ? `<span class="hotel-rating">${ratingStr}</span>` : ''}
+            </div>
+            ${matchBar}
+            <a class="book-btn" href="${bookUrl}" target="_blank" rel="noopener">
+              Find &amp; book →
+            </a>
+          </div>
+        </div>`;
+    }
+
+    function renderEmpty(query, city) {
+      document.getElementById('results').innerHTML = `
+        <div class="empty-state">
+          <div class="empty-icon">🔍</div>
+          <div class="empty-title">No rooms found</div>
+          <div class="empty-sub">
+            No rooms matched "${query}" in ${city}.<br>
+            Try a different description or a major city like Paris, London or New York.
+          </div>
+        </div>`;
+    }
+
+    function renderError(msg) {
+      document.getElementById('results').innerHTML = `
+        <div class="empty-state">
+          <div class="empty-icon">⚠️</div>
+          <div class="empty-title">Something went wrong</div>
+          <div class="empty-sub">${msg}</div>
+        </div>`;
+    }
+  </script>
+</body>
+</html>
