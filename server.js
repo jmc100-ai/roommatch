@@ -119,41 +119,97 @@ app.get("/api/room-search", async (req, res) => {
       });
     }
 
-    // Normalise response
-    const rawHotels = (raw.data || []).map(h => ({
-      id:          h.id          || h.hotelId || "",
-      name:        h.name        || h.hotelName || "Hotel",
-      address:     h.address     || "",
-      city:        h.city        || city,
-      country:     h.country     || "",
-      starRating:  h.starRating  || h.stars || 0,
-      rating:      h.rating      || h.guestRating || 0,
-      mainPhoto:   h.main_photo  || h.mainPhoto || "",
-      rooms: (h.rooms || []).map(r => ({
-        name:       r.room_name  || r.roomName  || r.name || "",
-        imageUrl:   r.image_url  || r.imageUrl  || r.image || r.url || "",
-        score:      r.similarity || r.score || 0,
-      }))
+    // Step 1: normalise room-search results (one best room per hotel + similarity score)
+    const searchResults = (raw.data || []).map(h => ({
+      id:        h.id   || "",
+      name:      h.name || "Hotel",
+      address:   h.address || "",
+      city:      h.city    || city,
+      country:   h.country || "",
+      starRating: h.starRating || h.stars || 0,
+      rating:    h.rating || 0,
+      bestRoom: h.rooms?.[0] ? {
+        name:     h.rooms[0].room_name  || "",
+        imageUrl: h.rooms[0].image_url  || "",
+        score:    h.rooms[0].similarity || 0,
+      } : null,
     }));
 
-    // Normalise scores: cosine similarity ranges ~0.15–0.35, looks bad as raw %.
-    // Scale so the best result = 95% and floor = 30%, everything else scales between.
-    const allScores = rawHotels.flatMap(h => h.rooms.map(r => r.score)).filter(s => s > 0);
+    // Normalise similarity scores to 30–95% range relative to best result
+    const allScores = searchResults.map(h => h.bestRoom?.score || 0).filter(s => s > 0);
     const maxScore  = allScores.length > 0 ? Math.max(...allScores) : 1;
     const minScore  = allScores.length > 0 ? Math.min(...allScores) : 0;
-    const range     = maxScore - minScore || 1;
+    const scoreRange = maxScore - minScore || 1;
     const FLOOR = 30, CEIL = 95;
+    const normalise = s => s > 0
+      ? Math.round(FLOOR + ((s - minScore) / scoreRange) * (CEIL - FLOOR))
+      : 0;
 
-    const hotels = rawHotels.map(h => ({
-      ...h,
-      rooms: h.rooms.map(r => ({
-        ...r,
-        score: r.score > 0
-          ? Math.round(FLOOR + ((r.score - minScore) / range) * (CEIL - FLOOR))
-          : 0
-      }))
-    }));
+    // Step 2: parallel-fetch full hotel details to get all rooms with photos
+    const detailResults = await Promise.all(
+      searchResults.map(async h => {
+        try {
+          const dr = await fetch(
+            `https://api.liteapi.travel/v3.0/data/hotel?hotelId=${h.id}`,
+            { headers: { "X-API-Key": LITEAPI_KEY, "accept": "application/json" } }
+          );
+          if (!dr.ok) return null;
+          const dj = await dr.json();
+          return dj.data || null;
+        } catch { return null; }
+      })
+    );
 
+    // Step 3: merge — best-match room first, then remaining rooms from hotel detail
+    const hotels = searchResults.map((h, i) => {
+      const detail   = detailResults[i];
+      const bestRoom = h.bestRoom ? { ...h.bestRoom, score: normalise(h.bestRoom.score), isBestMatch: true } : null;
+
+      // Pull all rooms from detail endpoint
+      const detailRooms = [];
+      for (const room of (detail?.rooms || [])) {
+        for (const photo of (room.photos || [])) {
+          const url = photo?.url || photo || "";
+          if (!url) continue;
+          // Skip if it's the same image as the best match
+          if (bestRoom && url === bestRoom.imageUrl) continue;
+          detailRooms.push({
+            name:     room.roomName || room.name || "",
+            imageUrl: url,
+            score:    null,
+            isBestMatch: false,
+          });
+        }
+      }
+
+      // Also pull from hotelImages if rooms[] is empty
+      if (detailRooms.length === 0) {
+        for (const img of (detail?.hotelImages || [])) {
+          const url = img?.url || img || "";
+          if (url && (!bestRoom || url !== bestRoom.imageUrl)) {
+            detailRooms.push({ name: "", imageUrl: url, score: null, isBestMatch: false });
+          }
+        }
+      }
+
+      const allRooms = [
+        ...(bestRoom ? [bestRoom] : []),
+        ...detailRooms.slice(0, 7),  // up to 7 additional rooms
+      ];
+
+      return {
+        id:         h.id,
+        name:       detail?.name      || h.name,
+        address:    detail?.address   || h.address,
+        city:       detail?.city      || h.city,
+        country:    detail?.country   || h.country,
+        starRating: detail?.starRating || h.starRating,
+        rating:     detail?.rating    || h.rating,
+        rooms:      allRooms,
+      };
+    });
+
+    console.log(`[room-search] enriched ${hotels.length} hotels, rooms per hotel: ${hotels.map(h => h.rooms.length).join(",")}`);
     res.json({ hotels, query, city });
   } catch (err) {
     console.error("[room-search] error:", err);
