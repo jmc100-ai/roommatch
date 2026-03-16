@@ -1,13 +1,11 @@
 services:
   - type: web
     name: roommatch-api
-    runtime: python
-    buildCommand: pip install -r requirements.txt
-    startCommand: uvicorn server:app --host 0.0.0.0 --port $PORT
+    runtime: node
+    buildCommand: npm install
+    startCommand: npm start
     envVars:
       - key: LITEAPI_KEY
         sync: false
-      - key: GEMINI_KEY
-        sync: false
-      - key: PIP_PREFER_BINARY
-        value: "1"
+      - key: NODE_ENV
+        value: production
