@@ -203,4 +203,20 @@ app.get("*", (req, res) => {
   res.sendFile(path.join(__dirname, "client", "index.html"));
 });
 
-app.listen(PORT, () => console.log(`RoomMatch on port ${PORT}`));
+app.listen(PORT, () => {
+  console.log(`RoomMatch on port ${PORT}`);
+
+  // ── Keepalive: ping self every 10 min to prevent Render free tier spin-down
+  const RENDER_URL = process.env.RENDER_EXTERNAL_URL;
+  if (RENDER_URL) {
+    console.log(`[keepalive] pinging ${RENDER_URL} every 10 min`);
+    setInterval(async () => {
+      try {
+        await fetch(`${RENDER_URL}/api/health`);
+        console.log('[keepalive] ping ok');
+      } catch (e) {
+        console.warn('[keepalive] ping failed:', e.message);
+      }
+    }, 10 * 60 * 1000);
+  }
+});
