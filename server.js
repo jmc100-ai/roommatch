@@ -81,6 +81,29 @@ app.use(express.static(path.join(__dirname, "client")));
 
 app.get("/api/health", (_, res) => res.json({ status: "ok" }));
 
+// ── City autocomplete via LiteAPI places search ───────────────────────────────
+app.get("/api/places", async (req, res) => {
+  const q = (req.query.q || "").trim();
+  if (!q || q.length < 2) return res.json({ places: [] });
+
+  try {
+    const r = await liteGet(`/data/places?textQuery=${encodeURIComponent(q)}&type=city`);
+    if (!r.ok) return res.json({ places: [] });
+
+    const raw = r.data?.data || r.data || [];
+    const places = raw.slice(0, 8).map(p => ({
+      name:    p.name        || p.city      || p.displayName || "",
+      country: p.countryName || p.country   || "",
+      placeId: p.placeId     || p.id        || "",
+    })).filter(p => p.name);
+
+    res.json({ places });
+  } catch (err) {
+    console.error("[places]", err.message);
+    res.json({ places: [] });
+  }
+});
+
 // ── Main search endpoint ───────────────────────────────────────────────────────
 app.get("/api/room-search", async (req, res) => {
   const { query, city } = req.query;
