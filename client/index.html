@@ -156,17 +156,21 @@
     }
     .room-type-header:hover { background: rgba(255,255,255,0.02); }
 
-    .room-type-left { display: flex; align-items: center; gap: 12px; min-width: 0; }
+    .room-type-left { display: flex; align-items: center; gap: 10px; min-width: 0; flex: 1; flex-wrap: wrap; }
 
     .room-type-name {
       font-size: 13px; font-weight: 400; color: var(--text);
       white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+      flex-shrink: 0;
     }
 
-    .room-type-meta { display: flex; align-items: center; gap: 8px; flex-shrink: 0; flex-wrap: wrap; justify-content: flex-start; margin-left: 12px; }
+    /* Separator dot between name and meta */
+    .room-meta-sep { color: var(--muted); font-size: 10px; flex-shrink: 0; }
 
-    .room-size { font-size: 11px; color: #a09a94; }
-    .room-beds { font-size: 11px; color: #a09a94; }
+    .room-type-meta { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+
+    .room-size { font-size: 11px; color: #a09a94; white-space: nowrap; }
+    .room-beds { font-size: 11px; color: #a09a94; white-space: nowrap; }
 
     /* Score pill — hidden on desktop header, shown in photo overlay instead */
     .score-pill { display: none; }
@@ -232,9 +236,8 @@
       /* Book btn drops to its own line on mobile */
       .hotel-name-row { flex-direction: column; align-items: flex-start; gap: 8px; }
       .book-btn { align-self: flex-start; }
-      /* Room meta sits below room name on mobile */
-      .room-type-header { flex-wrap: wrap; gap: 4px; }
-      .room-type-meta { margin-left: 0; }
+      /* Room type header wraps naturally on small screens */
+      .room-type-header { flex-wrap: nowrap; }
     }
   </style>
 </head>
@@ -402,11 +405,10 @@
         <div class="room-type-header" onclick="toggleRoom(this.parentElement)">
           <div class="room-type-left">
             <span class="room-type-name">${rt.name}</span>
+            ${(bedsHTML || sizeHTML) ? '<span class="room-meta-sep">·</span>' : ''}
+            <div class="room-type-meta">${bedsHTML}${sizeHTML}</div>
           </div>
-          <div class="room-type-meta">
-            ${bedsHTML}${sizeHTML}
-            <span class="chevron">▼</span>
-          </div>
+          <span class="chevron">▼</span>
         </div>
         <div class="photo-strip-wrap">
           <div class="photo-strip">${photoHTML}</div>
