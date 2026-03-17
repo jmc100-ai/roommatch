@@ -88,6 +88,7 @@ app.get("/api/places", async (req, res) => {
 
   try {
     const r = await liteGet(`/data/places?textQuery=${encodeURIComponent(q)}&type=city`);
+    console.log(`[places] status=${r.status} raw=`, JSON.stringify(r.data).slice(0, 400));
     if (!r.ok) return res.json({ places: [] });
 
     const raw = r.data?.data || r.data || [];
