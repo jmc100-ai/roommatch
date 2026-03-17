@@ -106,10 +106,10 @@
 
     /* ── Hotel header ───────────── */
     .hotel-header {
-      display: flex; align-items: center; justify-content: space-between;
-      padding: 20px 24px 16px; border-bottom: 1px solid var(--border); gap: 16px;
+      padding: 20px 24px 16px; border-bottom: 1px solid var(--border);
     }
     .hotel-header-left { min-width: 0; display: flex; flex-direction: column; gap: 5px; }
+    .hotel-name-row { display: flex; align-items: center; gap: 14px; min-width: 0; }
     .hotel-name { font-family: 'Cormorant Garamond', serif; font-size: 22px; font-weight: 400; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .hotel-meta { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
     .stars { color: var(--accent); font-size: 11px; letter-spacing: 2px; }
@@ -333,14 +333,16 @@
       <div class="hotel-card">
         <div class="hotel-header">
           <div class="hotel-header-left">
-            <div class="hotel-name">${h.name}</div>
+            <div class="hotel-name-row">
+              <div class="hotel-name">${h.name}</div>
+              <a class="book-btn" href="${bookUrl}" target="_blank" rel="noopener">Find &amp; Book →</a>
+            </div>
             <div class="hotel-meta">
               ${stars ? `<span class="stars">${stars}</span>` : ''}
               ${location ? `<span class="hotel-location">${location}</span>` : ''}
               ${rating}
             </div>
           </div>
-          <a class="book-btn" href="${bookUrl}" target="_blank" rel="noopener">Find &amp; Book →</a>
         </div>
         ${roomRows}
       </div>`;
@@ -378,9 +380,10 @@
         <div class="room-type-header" onclick="toggleRoom(this.parentElement)">
           <div class="room-type-left">
             <span class="room-type-name">${rt.name}</span>
+            ${scoreHTML}
           </div>
           <div class="room-type-meta">
-            ${bedsHTML}${sizeHTML}${scoreHTML}
+            ${bedsHTML}${sizeHTML}
             <span class="chevron">▼</span>
           </div>
         </div>
