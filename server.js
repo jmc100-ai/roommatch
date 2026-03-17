@@ -55,8 +55,126 @@ const CITY_COORDS = {
   "bali": [-8.3405, 115.092], "kuala lumpur": [3.139, 101.6869],
   "sydney": [-33.8688, 151.2093], "melbourne": [-37.8136, 144.9631],
   "mumbai": [19.076, 72.8777], "delhi": [28.6139, 77.209],
-  "phuket": [7.8804, 98.3923], "beijing": [39.9042, 116.4074],
-  "shanghai": [31.2304, 121.4737], "seoul": [37.5665, 126.978],
+  "phuket": [7.8804, 98.3923], "koh samui": [9.5120, 100.0136],
+  "beijing": [39.9042, 116.4074], "shanghai": [31.2304, 121.4737],
+  "seoul": [37.5665, 126.978], "busan": [35.1796, 129.0756],
+  "taipei": [25.0330, 121.5654], "ho chi minh city": [10.8231, 106.6297],
+  "hanoi": [21.0285, 105.8542], "da nang": [16.0544, 108.2022],
+  "hoi an": [15.8801, 108.3380], "siem reap": [13.3633, 103.8564],
+  "phnom penh": [11.5564, 104.9282], "yangon": [16.8661, 96.1951],
+  "colombo": [6.9271, 79.8612], "kathmandu": [27.7172, 85.3240],
+  "dhaka": [23.8103, 90.4125], "karachi": [24.8607, 67.0011],
+  "lahore": [31.5204, 74.3587], "islamabad": [33.6844, 73.0479],
+  "goa": [15.2993, 74.1240], "jaipur": [26.9124, 75.7873],
+  "agra": [27.1767, 78.0081], "varanasi": [25.3176, 82.9739],
+  "udaipur": [24.5854, 73.7125], "kochi": [9.9312, 76.2673],
+  "hyderabad": [17.3850, 78.4867], "chennai": [13.0827, 80.2707],
+  "bangalore": [12.9716, 77.5946], "kolkata": [22.5726, 88.3639],
+  "brisbane": [-27.4698, 153.0251], "perth": [-31.9505, 115.8605],
+  "adelaide": [-34.9285, 138.6007], "gold coast": [-28.0167, 153.4000],
+  "cairns": [-16.9186, 145.7781], "auckland": [-36.8485, 174.7633],
+  "wellington": [-41.2866, 174.7756], "queenstown": [-45.0312, 168.6626],
+  "christchurch": [-43.5321, 172.6362],
+  "cape town": [-33.9249, 18.4241], "johannesburg": [-26.2041, 28.0473],
+  "durban": [-29.8587, 31.0218], "cairo": [30.0444, 31.2357],
+  "luxor": [25.6872, 32.6396], "marrakech": [31.6295, -7.9811],
+  "casablanca": [33.5731, -7.5898], "nairobi": [-1.2921, 36.8219],
+  "zanzibar": [-6.1659, 39.2026], "addis ababa": [9.0320, 38.7469],
+  "kigali": [-1.9441, 30.0619], "accra": [5.6037, -0.1870],
+  "lagos": [6.5244, 3.3792], "dakar": [14.7167, -17.4677],
+  "havana": [23.1136, -82.3666], "nassau": [25.0480, -77.3554],
+  "santo domingo": [18.4861, -69.9312], "punta cana": [18.5820, -68.4050],
+  "san juan": [18.4655, -66.1057], "montego bay": [18.4762, -77.8939],
+  "reykjavik": [64.1355, -21.8954], "tallinn": [59.4370, 24.7536],
+  "riga": [56.9460, 24.1059], "vilnius": [54.6872, 25.2797],
+  "sofia": [42.6977, 23.3219], "belgrade": [44.7866, 20.4489],
+  "zagreb": [45.8150, 15.9819], "split": [43.5081, 16.4402],
+  "dubrovnik": [42.6507, 18.0944], "sarajevo": [43.8563, 18.4131],
+  "ljubljana": [46.0569, 14.5058], "bratislava": [48.1486, 17.1077],
+  "wroclaw": [51.1079, 17.0385], "krakow": [50.0647, 19.9450],
+  "gdansk": [54.3520, 18.6466], "salzburg": [47.8095, 13.0550],
+  "innsbruck": [47.2692, 11.4041], "lucerne": [47.0502, 8.3093],
+  "bern": [46.9480, 7.4474], "basel": [47.5596, 7.5886],
+  "bruges": [51.2093, 3.2247], "ghent": [51.0500, 3.7303],
+  "antwerp": [51.2213, 4.4051], "luxembourg": [49.6117, 6.1319],
+  "nice": [43.7102, 7.2620], "bordeaux": [44.8378, -0.5792],
+  "lyon": [45.7640, 4.8357], "marseille": [43.2965, 5.3698],
+  "seville": [37.3891, -5.9845], "valencia": [39.4699, -0.3763],
+  "malaga": [36.7213, -4.4214], "bilbao": [43.2630, -2.9350],
+  "ibiza": [38.9067, 1.4206], "naples": [40.8518, 14.2681],
+  "palermo": [38.1157, 13.3615], "bologna": [44.4949, 11.3426],
+  "turin": [45.0703, 7.6869], "amalfi": [40.6340, 14.6027],
+  "santorini": [36.3932, 25.4615], "mykonos": [37.4467, 25.3289],
+  "thessaloniki": [40.6401, 22.9444], "edinburgh": [55.9533, -3.1883],
+  "manchester": [53.4808, -2.2426], "liverpool": [53.4084, -2.9916],
+  "bristol": [51.4545, -2.5879], "bath": [51.3781, -2.3597],
+  "oxford": [51.7520, -1.2577], "birmingham": [52.4862, -1.8904],
+  "galway": [53.2707, -9.0568], "florence": [43.7696, 11.2558],
+  "porto": [41.1579, -8.6291], "lisbon": [38.7223, -9.1393],
+  "algarve": [37.0179, -7.9307], "madeira": [32.7607, -16.9595],
+  "oslo": [59.9139, 10.7522], "bergen": [60.3929, 5.3241],
+  "gothenburg": [57.7089, 11.9746], "helsinki": [60.1699, 24.9384],
+  "copenhagen": [55.6761, 12.5683], "stockholm": [59.3293, 18.0686],
+  "brussels": [50.8503, 4.3517], "amsterdam": [52.3676, 4.9041],
+  "rotterdam": [51.9244, 4.4777], "berlin": [52.52, 13.405],
+  "hamburg": [53.5753, 10.0153], "munich": [48.1351, 11.582],
+  "frankfurt": [50.1109, 8.6821], "cologne": [50.9333, 6.9500],
+  "dresden": [51.0504, 13.7373], "stuttgart": [48.7758, 9.1829],
+  "vienna": [48.2082, 16.3738], "prague": [50.0755, 14.4378],
+  "budapest": [47.4979, 19.0402], "warsaw": [52.2297, 21.0122],
+  "bucharest": [44.4268, 26.1025], "istanbul": [41.0082, 28.9784],
+  "antalya": [36.8841, 30.7056], "bodrum": [37.0344, 27.4305],
+  "cappadocia": [38.6431, 34.8289], "beirut": [33.8938, 35.5018],
+  "amman": [31.9454, 35.9284], "jerusalem": [31.7683, 35.2137],
+  "riyadh": [24.7136, 46.6753], "jeddah": [21.5433, 39.1728],
+  "muscat": [23.5880, 58.3829], "doha": [25.2854, 51.531],
+  "manama": [26.2154, 50.5832], "tashkent": [41.2995, 69.2401],
+  "almaty": [43.2220, 76.8512], "tbilisi": [41.7151, 44.8271],
+  "yerevan": [40.1872, 44.5152], "baku": [40.4093, 49.8671],
+  "ho chi minh": [10.8231, 106.6297], "saigon": [10.8231, 106.6297],
+  "penang": [5.4141, 100.3288], "langkawi": [6.3500, 99.8000],
+  "lombok": [-8.5833, 116.1167], "yogyakarta": [-7.7956, 110.3695],
+  "manila": [14.5995, 120.9842], "cebu": [10.3157, 123.8854],
+  "boracay": [11.9674, 121.9248], "palawan": [9.8349, 118.7384],
+  "luang prabang": [19.8845, 102.1348], "vientiane": [17.9757, 102.6331],
+  "chengdu": [30.5728, 104.0668], "xian": [34.3416, 108.9398],
+  "hangzhou": [30.2741, 120.1551], "guilin": [25.2736, 110.2899],
+  "macau": [22.1987, 113.5439], "kaohsiung": [22.6273, 120.3014],
+  "osaka": [34.6937, 135.5023], "kyoto": [35.0116, 135.7681],
+  "hiroshima": [34.3853, 132.4553], "sapporo": [43.0618, 141.3545],
+  "fukuoka": [33.5904, 130.4017], "nara": [34.6851, 135.8050],
+  "guadalajara": [20.6597, -103.3496], "monterrey": [25.6866, -100.3161],
+  "tulum": [20.2114, -87.4654], "cabo san lucas": [22.8905, -109.9167],
+  "playa del carmen": [20.6296, -87.0739], "cancun": [21.1619, -86.8515],
+  "medellin": [6.2442, -75.5812], "cartagena": [10.3910, -75.4794],
+  "cusco": [13.5319, -71.9675], "montevideo": [-34.9011, -56.1645],
+  "quito": [-0.1807, -78.4678], "la paz": [-16.5000, -68.1193],
+  "salvador": [-12.9714, -38.5014], "brasilia": [-15.7801, -47.9292],
+  "asuncion": [-25.2637, -57.5759], "lima": [-12.0464, -77.0428],
+  "mendoza": [-32.8908, -68.8272], "santiago": [-33.4489, -70.6693],
+  "bora bora": [-16.5004, -151.7415], "tahiti": [-17.6509, -149.4260],
+  "fiji": [-18.1416, 178.4419], "maldives": [3.2028, 73.2207],
+  "seychelles": [-4.6796, 55.4920], "mauritius": [-20.3484, 57.5522],
+  "reunion": [-21.1151, 55.5364], "zanzibar": [-6.1659, 39.2026],
+  "kampala": [0.3476, 32.5825], "mombasa": [-4.0435, 39.6682],
+  "dar es salaam": [-6.7924, 39.2083], "sharm el sheikh": [27.9158, 34.3300],
+  "hurghada": [27.2578, 33.8117], "luxor": [25.6872, 32.6396],
+  "fez": [34.0181, -5.0078], "tangier": [35.7595, -5.8340],
+  "tunis": [36.8065, 10.1815], "algiers": [36.7538, 3.0588],
+  "accra": [5.6037, -0.1870], "abuja": [9.0765, 7.3986],
+  "dakar": [14.7167, -17.4677], "addis ababa": [9.0320, 38.7469],
+  "kigali": [-1.9441, 30.0619], "harare": [-17.8252, 31.0335],
+  "nashville": [36.1627, -86.7816], "atlanta": [33.7490, -84.3880],
+  "dallas": [32.7767, -96.7970], "houston": [29.7604, -95.3698],
+  "phoenix": [33.4484, -112.0740], "san diego": [32.7157, -117.1611],
+  "minneapolis": [44.9778, -93.2650], "detroit": [42.3314, -83.0458],
+  "philadelphia": [39.9526, -75.1652], "orlando": [28.5383, -81.3792],
+  "salt lake city": [40.7608, -111.8910], "kansas city": [39.0997, -94.5786],
+  "pittsburgh": [40.4406, -79.9959], "portland": [45.5051, -122.6750],
+  "denver": [39.7392, -104.9903], "austin": [30.2672, -97.7431],
+  "calgary": [51.0447, -114.0719], "ottawa": [45.4215, -75.6919],
+  "quebec city": [46.8139, -71.2082], "edmonton": [53.5461, -113.4938],
+  "winnipeg": [49.8951, -97.1384],
 };
 
 function resolveCoords(city) {
@@ -81,28 +199,113 @@ app.use(express.static(path.join(__dirname, "client")));
 
 app.get("/api/health", (_, res) => res.json({ status: "ok" }));
 
-// ── City autocomplete via LiteAPI places search ───────────────────────────────
-app.get("/api/places", async (req, res) => {
-  const q = (req.query.q || "").trim();
+// ── City autocomplete — local list, instant, no API cost ─────────────────────
+const CITIES = [
+  // North America
+  ["New York City","US"],["Los Angeles","US"],["Chicago","US"],["Miami","US"],
+  ["San Francisco","US"],["Las Vegas","US"],["Seattle","US"],["Boston","US"],
+  ["Washington DC","US"],["New Orleans","US"],["Austin","US"],["Denver","US"],
+  ["Portland","US"],["Nashville","US"],["Atlanta","US"],["Dallas","US"],
+  ["Houston","US"],["Phoenix","US"],["San Diego","US"],["Minneapolis","US"],
+  ["Detroit","US"],["Philadelphia","US"],["Orlando","US"],["Tampa","US"],
+  ["Baltimore","US"],["Salt Lake City","US"],["Kansas City","US"],["Pittsburgh","US"],
+  ["Toronto","CA"],["Vancouver","CA"],["Montreal","CA"],["Calgary","CA"],
+  ["Ottawa","CA"],["Quebec City","CA"],["Edmonton","CA"],["Winnipeg","CA"],
+  ["Mexico City","MX"],["Cancun","MX"],["Guadalajara","MX"],["Monterrey","MX"],
+  ["Tulum","MX"],["Playa del Carmen","MX"],["Cabo San Lucas","MX"],
+  // South America
+  ["Rio de Janeiro","BR"],["Sao Paulo","BR"],["Salvador","BR"],["Brasilia","BR"],
+  ["Buenos Aires","AR"],["Mendoza","AR"],["Bogota","CO"],["Cartagena","CO"],
+  ["Medellin","CO"],["Lima","PE"],["Cusco","PE"],["Santiago","CL"],
+  ["Montevideo","UY"],["Quito","EC"],["Guayaquil","EC"],["La Paz","BO"],
+  // Europe
+  ["London","GB"],["Edinburgh","GB"],["Manchester","GB"],["Liverpool","GB"],
+  ["Birmingham","GB"],["Bristol","GB"],["Bath","GB"],["Oxford","GB"],
+  ["Paris","FR"],["Nice","FR"],["Lyon","FR"],["Marseille","FR"],["Bordeaux","FR"],
+  ["Barcelona","ES"],["Madrid","ES"],["Seville","ES"],["Valencia","ES"],
+  ["Malaga","ES"],["Bilbao","ES"],["San Sebastian","ES"],["Ibiza","ES"],
+  ["Rome","IT"],["Milan","IT"],["Florence","IT"],["Venice","IT"],["Naples","IT"],
+  ["Amalfi","IT"],["Bologna","IT"],["Turin","IT"],["Palermo","IT"],
+  ["Amsterdam","NL"],["Rotterdam","NL"],["The Hague","NL"],
+  ["Berlin","DE"],["Munich","DE"],["Hamburg","DE"],["Frankfurt","DE"],
+  ["Cologne","DE"],["Stuttgart","DE"],["Dresden","DE"],["Dusseldorf","DE"],
+  ["Vienna","AT"],["Salzburg","AT"],["Innsbruck","AT"],
+  ["Zurich","CH"],["Geneva","CH"],["Basel","CH"],["Bern","CH"],["Lucerne","CH"],
+  ["Brussels","BE"],["Bruges","BE"],["Ghent","BE"],["Antwerp","BE"],
+  ["Prague","CZ"],["Brno","CZ"],["Budapest","HU"],["Warsaw","PL"],["Krakow","PL"],
+  ["Gdansk","PL"],["Wroclaw","PL"],["Bucharest","RO"],["Ljubljana","SI"],
+  ["Zagreb","HR"],["Split","HR"],["Dubrovnik","HR"],["Sarajevo","BA"],
+  ["Belgrade","RS"],["Sofia","BG"],["Athens","GR"],["Thessaloniki","GR"],
+  ["Santorini","GR"],["Mykonos","GR"],["Rhodes","GR"],["Crete","GR"],
+  ["Lisbon","PT"],["Porto","PT"],["Algarve","PT"],["Madeira","PT"],
+  ["Oslo","NO"],["Bergen","NO"],["Stockholm","SE"],["Gothenburg","SE"],
+  ["Copenhagen","DK"],["Helsinki","FI"],["Tallinn","EE"],["Riga","LV"],
+  ["Vilnius","LT"],["Reykjavik","IS"],["Dublin","IE"],["Galway","IE"],
+  ["Luxembourg","LU"],["Monaco","MC"],["Malta","MT"],["Valletta","MT"],
+  ["Istanbul","TR"],["Ankara","TR"],["Antalya","TR"],["Bodrum","TR"],
+  ["Cappadocia","TR"],["Izmir","TR"],
+  // Middle East
+  ["Dubai","AE"],["Abu Dhabi","AE"],["Doha","QA"],["Riyadh","SA"],
+  ["Jeddah","SA"],["Tel Aviv","IL"],["Jerusalem","IL"],["Beirut","LB"],
+  ["Amman","JO"],["Petra","JO"],["Kuwait City","KW"],["Muscat","OM"],
+  ["Bahrain","BH"],["Oman","OM"],
+  // Africa
+  ["Cairo","EG"],["Luxor","EG"],["Sharm El Sheikh","EG"],["Hurghada","EG"],
+  ["Cape Town","ZA"],["Johannesburg","ZA"],["Durban","ZA"],
+  ["Marrakech","MA"],["Casablanca","MA"],["Fez","MA"],["Tangier","MA"],
+  ["Nairobi","KE"],["Mombasa","KE"],["Zanzibar","TZ"],["Dar es Salaam","TZ"],
+  ["Addis Ababa","ET"],["Accra","GH"],["Lagos","NG"],["Abuja","NG"],
+  ["Dakar","SN"],["Tunis","TN"],["Algiers","DZ"],["Kampala","UG"],
+  ["Kigali","RW"],["Mauritius","MU"],["Reunion","RE"],["Seychelles","SC"],
+  // Asia
+  ["Tokyo","JP"],["Osaka","JP"],["Kyoto","JP"],["Hiroshima","JP"],
+  ["Nara","JP"],["Sapporo","JP"],["Fukuoka","JP"],["Yokohama","JP"],
+  ["Seoul","KR"],["Busan","KR"],["Jeju","KR"],
+  ["Beijing","CN"],["Shanghai","CN"],["Guangzhou","CN"],["Shenzhen","CN"],
+  ["Chengdu","CN"],["Xi'an","CN"],["Hangzhou","CN"],["Guilin","CN"],
+  ["Hong Kong","HK"],["Macau","MO"],["Taipei","TW"],["Kaohsiung","TW"],
+  ["Bangkok","TH"],["Chiang Mai","TH"],["Phuket","TH"],["Koh Samui","TH"],
+  ["Pattaya","TH"],["Krabi","TH"],
+  ["Singapore","SG"],["Kuala Lumpur","MY"],["Penang","MY"],["Langkawi","MY"],
+  ["Bali","ID"],["Jakarta","ID"],["Yogyakarta","ID"],["Lombok","ID"],
+  ["Manila","PH"],["Cebu","PH"],["Boracay","PH"],["Palawan","PH"],
+  ["Hanoi","VN"],["Ho Chi Minh City","VN"],["Da Nang","VN"],["Hoi An","VN"],
+  ["Phnom Penh","KH"],["Siem Reap","KH"],["Vientiane","LA"],["Luang Prabang","LA"],
+  ["Yangon","MM"],["Mandalay","MM"],["Colombo","LK"],
+  ["Mumbai","IN"],["Delhi","IN"],["Bangalore","IN"],["Chennai","IN"],
+  ["Kolkata","IN"],["Hyderabad","IN"],["Goa","IN"],["Jaipur","IN"],
+  ["Agra","IN"],["Varanasi","IN"],["Udaipur","IN"],["Kochi","IN"],
+  ["Kathmandu","NP"],["Pokhara","NP"],["Dhaka","BD"],["Karachi","PK"],
+  ["Lahore","PK"],["Islamabad","PK"],["Tashkent","UZ"],["Almaty","KZ"],
+  // Oceania
+  ["Sydney","AU"],["Melbourne","AU"],["Brisbane","AU"],["Perth","AU"],
+  ["Adelaide","AU"],["Gold Coast","AU"],["Cairns","AU"],["Darwin","AU"],
+  ["Auckland","NZ"],["Wellington","NZ"],["Queenstown","NZ"],["Christchurch","NZ"],
+  ["Fiji","FJ"],["Bora Bora","PF"],["Tahiti","PF"],["Maldives","MV"],
+  // Caribbean
+  ["Havana","CU"],["Kingston","JM"],["Montego Bay","JM"],["Nassau","BS"],
+  ["Barbados","BB"],["Trinidad","TT"],["Puerto Rico","PR"],["Aruba","AW"],
+  ["Curacao","CW"],["Cancun","MX"],["Santo Domingo","DO"],["Punta Cana","DO"],
+];
+
+app.get("/api/places", (req, res) => {
+  const q = (req.query.q || "").trim().toLowerCase();
   if (!q || q.length < 2) return res.json({ places: [] });
 
-  try {
-    const r = await liteGet(`/data/places?textQuery=${encodeURIComponent(q)}&type=city`);
-    console.log(`[places] status=${r.status} raw=`, JSON.stringify(r.data).slice(0, 400));
-    if (!r.ok) return res.json({ places: [] });
+  const matches = CITIES
+    .filter(([name]) => name.toLowerCase().includes(q))
+    .sort((a, b) => {
+      // Exact start matches first
+      const aStart = a[0].toLowerCase().startsWith(q);
+      const bStart = b[0].toLowerCase().startsWith(q);
+      if (aStart && !bStart) return -1;
+      if (!aStart && bStart) return 1;
+      return a[0].localeCompare(b[0]);
+    })
+    .slice(0, 8)
+    .map(([name, country]) => ({ name, country }));
 
-    const raw = r.data?.data || r.data || [];
-    const places = raw.slice(0, 8).map(p => ({
-      name:    p.name        || p.city      || p.displayName || "",
-      country: p.countryName || p.country   || "",
-      placeId: p.placeId     || p.id        || "",
-    })).filter(p => p.name);
-
-    res.json({ places });
-  } catch (err) {
-    console.error("[places]", err.message);
-    res.json({ places: [] });
-  }
+  res.json({ places: matches });
 });
 
 // ── Main search endpoint ───────────────────────────────────────────────────────
