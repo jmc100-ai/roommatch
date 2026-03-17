@@ -209,6 +209,9 @@ app.get("/api/room-search", async (req, res) => {
       };
     });
 
+    if (detailResults[0]) {
+      console.log("[detail] first hotel rooms sample:", JSON.stringify((detailResults[0]?.rooms || []).slice(0,2), null, 2));
+    }
     console.log(`[room-search] enriched ${hotels.length} hotels, rooms per hotel: ${hotels.map(h => h.rooms.length).join(",")}`);
     res.json({ hotels, query, city });
   } catch (err) {
