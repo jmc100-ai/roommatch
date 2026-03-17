@@ -199,114 +199,50 @@ app.use(express.static(path.join(__dirname, "client")));
 
 app.get("/api/health", (_, res) => res.json({ status: "ok" }));
 
-// ── City autocomplete — local list, instant, no API cost ─────────────────────
-const CITIES = [
-  // North America
-  ["New York City","US"],["Los Angeles","US"],["Chicago","US"],["Miami","US"],
-  ["San Francisco","US"],["Las Vegas","US"],["Seattle","US"],["Boston","US"],
-  ["Washington DC","US"],["New Orleans","US"],["Austin","US"],["Denver","US"],
-  ["Portland","US"],["Nashville","US"],["Atlanta","US"],["Dallas","US"],
-  ["Houston","US"],["Phoenix","US"],["San Diego","US"],["Minneapolis","US"],
-  ["Detroit","US"],["Philadelphia","US"],["Orlando","US"],["Tampa","US"],
-  ["Baltimore","US"],["Salt Lake City","US"],["Kansas City","US"],["Pittsburgh","US"],
-  ["Toronto","CA"],["Vancouver","CA"],["Montreal","CA"],["Calgary","CA"],
-  ["Ottawa","CA"],["Quebec City","CA"],["Edmonton","CA"],["Winnipeg","CA"],
-  ["Mexico City","MX"],["Cancun","MX"],["Guadalajara","MX"],["Monterrey","MX"],
-  ["Tulum","MX"],["Playa del Carmen","MX"],["Cabo San Lucas","MX"],
-  // South America
-  ["Rio de Janeiro","BR"],["Sao Paulo","BR"],["Salvador","BR"],["Brasilia","BR"],
-  ["Buenos Aires","AR"],["Mendoza","AR"],["Bogota","CO"],["Cartagena","CO"],
-  ["Medellin","CO"],["Lima","PE"],["Cusco","PE"],["Santiago","CL"],
-  ["Montevideo","UY"],["Quito","EC"],["Guayaquil","EC"],["La Paz","BO"],
-  // Europe
-  ["London","GB"],["Edinburgh","GB"],["Manchester","GB"],["Liverpool","GB"],
-  ["Birmingham","GB"],["Bristol","GB"],["Bath","GB"],["Oxford","GB"],
-  ["Paris","FR"],["Nice","FR"],["Lyon","FR"],["Marseille","FR"],["Bordeaux","FR"],
-  ["Barcelona","ES"],["Madrid","ES"],["Seville","ES"],["Valencia","ES"],
-  ["Malaga","ES"],["Bilbao","ES"],["San Sebastian","ES"],["Ibiza","ES"],
-  ["Rome","IT"],["Milan","IT"],["Florence","IT"],["Venice","IT"],["Naples","IT"],
-  ["Amalfi","IT"],["Bologna","IT"],["Turin","IT"],["Palermo","IT"],
-  ["Amsterdam","NL"],["Rotterdam","NL"],["The Hague","NL"],
-  ["Berlin","DE"],["Munich","DE"],["Hamburg","DE"],["Frankfurt","DE"],
-  ["Cologne","DE"],["Stuttgart","DE"],["Dresden","DE"],["Dusseldorf","DE"],
-  ["Vienna","AT"],["Salzburg","AT"],["Innsbruck","AT"],
-  ["Zurich","CH"],["Geneva","CH"],["Basel","CH"],["Bern","CH"],["Lucerne","CH"],
-  ["Brussels","BE"],["Bruges","BE"],["Ghent","BE"],["Antwerp","BE"],
-  ["Prague","CZ"],["Brno","CZ"],["Budapest","HU"],["Warsaw","PL"],["Krakow","PL"],
-  ["Gdansk","PL"],["Wroclaw","PL"],["Bucharest","RO"],["Ljubljana","SI"],
-  ["Zagreb","HR"],["Split","HR"],["Dubrovnik","HR"],["Sarajevo","BA"],
-  ["Belgrade","RS"],["Sofia","BG"],["Athens","GR"],["Thessaloniki","GR"],
-  ["Santorini","GR"],["Mykonos","GR"],["Rhodes","GR"],["Crete","GR"],
-  ["Lisbon","PT"],["Porto","PT"],["Algarve","PT"],["Madeira","PT"],
-  ["Oslo","NO"],["Bergen","NO"],["Stockholm","SE"],["Gothenburg","SE"],
-  ["Copenhagen","DK"],["Helsinki","FI"],["Tallinn","EE"],["Riga","LV"],
-  ["Vilnius","LT"],["Reykjavik","IS"],["Dublin","IE"],["Galway","IE"],
-  ["Luxembourg","LU"],["Monaco","MC"],["Malta","MT"],["Valletta","MT"],
-  ["Istanbul","TR"],["Ankara","TR"],["Antalya","TR"],["Bodrum","TR"],
-  ["Cappadocia","TR"],["Izmir","TR"],
-  // Middle East
-  ["Dubai","AE"],["Abu Dhabi","AE"],["Doha","QA"],["Riyadh","SA"],
-  ["Jeddah","SA"],["Tel Aviv","IL"],["Jerusalem","IL"],["Beirut","LB"],
-  ["Amman","JO"],["Petra","JO"],["Kuwait City","KW"],["Muscat","OM"],
-  ["Bahrain","BH"],["Oman","OM"],
-  // Africa
-  ["Cairo","EG"],["Luxor","EG"],["Sharm El Sheikh","EG"],["Hurghada","EG"],
-  ["Cape Town","ZA"],["Johannesburg","ZA"],["Durban","ZA"],
-  ["Marrakech","MA"],["Casablanca","MA"],["Fez","MA"],["Tangier","MA"],
-  ["Nairobi","KE"],["Mombasa","KE"],["Zanzibar","TZ"],["Dar es Salaam","TZ"],
-  ["Addis Ababa","ET"],["Accra","GH"],["Lagos","NG"],["Abuja","NG"],
-  ["Dakar","SN"],["Tunis","TN"],["Algiers","DZ"],["Kampala","UG"],
-  ["Kigali","RW"],["Mauritius","MU"],["Reunion","RE"],["Seychelles","SC"],
-  // Asia
-  ["Tokyo","JP"],["Osaka","JP"],["Kyoto","JP"],["Hiroshima","JP"],
-  ["Nara","JP"],["Sapporo","JP"],["Fukuoka","JP"],["Yokohama","JP"],
-  ["Seoul","KR"],["Busan","KR"],["Jeju","KR"],
-  ["Beijing","CN"],["Shanghai","CN"],["Guangzhou","CN"],["Shenzhen","CN"],
-  ["Chengdu","CN"],["Xi'an","CN"],["Hangzhou","CN"],["Guilin","CN"],
-  ["Hong Kong","HK"],["Macau","MO"],["Taipei","TW"],["Kaohsiung","TW"],
-  ["Bangkok","TH"],["Chiang Mai","TH"],["Phuket","TH"],["Koh Samui","TH"],
-  ["Pattaya","TH"],["Krabi","TH"],
-  ["Singapore","SG"],["Kuala Lumpur","MY"],["Penang","MY"],["Langkawi","MY"],
-  ["Bali","ID"],["Jakarta","ID"],["Yogyakarta","ID"],["Lombok","ID"],
-  ["Manila","PH"],["Cebu","PH"],["Boracay","PH"],["Palawan","PH"],
-  ["Hanoi","VN"],["Ho Chi Minh City","VN"],["Da Nang","VN"],["Hoi An","VN"],
-  ["Phnom Penh","KH"],["Siem Reap","KH"],["Vientiane","LA"],["Luang Prabang","LA"],
-  ["Yangon","MM"],["Mandalay","MM"],["Colombo","LK"],
-  ["Mumbai","IN"],["Delhi","IN"],["Bangalore","IN"],["Chennai","IN"],
-  ["Kolkata","IN"],["Hyderabad","IN"],["Goa","IN"],["Jaipur","IN"],
-  ["Agra","IN"],["Varanasi","IN"],["Udaipur","IN"],["Kochi","IN"],
-  ["Kathmandu","NP"],["Pokhara","NP"],["Dhaka","BD"],["Karachi","PK"],
-  ["Lahore","PK"],["Islamabad","PK"],["Tashkent","UZ"],["Almaty","KZ"],
-  // Oceania
-  ["Sydney","AU"],["Melbourne","AU"],["Brisbane","AU"],["Perth","AU"],
-  ["Adelaide","AU"],["Gold Coast","AU"],["Cairns","AU"],["Darwin","AU"],
-  ["Auckland","NZ"],["Wellington","NZ"],["Queenstown","NZ"],["Christchurch","NZ"],
-  ["Fiji","FJ"],["Bora Bora","PF"],["Tahiti","PF"],["Maldives","MV"],
-  // Caribbean
-  ["Havana","CU"],["Kingston","JM"],["Montego Bay","JM"],["Nassau","BS"],
-  ["Barbados","BB"],["Trinidad","TT"],["Puerto Rico","PR"],["Aruba","AW"],
-  ["Curacao","CW"],["Cancun","MX"],["Santo Domingo","DO"],["Punta Cana","DO"],
-];
+// ── City autocomplete via Geoapify (free tier: 3000 req/day, no card needed) ──
+// Get a free key at: https://myprojects.geoapify.com
+const GEOAPIFY_KEY = process.env.GEOAPIFY_KEY || "";
 
-app.get("/api/places", (req, res) => {
-  const q = (req.query.q || "").trim().toLowerCase();
+app.get("/api/places", async (req, res) => {
+  const q = (req.query.q || "").trim();
   if (!q || q.length < 2) return res.json({ places: [] });
 
-  const matches = CITIES
-    .filter(([name]) => name.toLowerCase().includes(q))
-    .sort((a, b) => {
-      // Exact start matches first
-      const aStart = a[0].toLowerCase().startsWith(q);
-      const bStart = b[0].toLowerCase().startsWith(q);
-      if (aStart && !bStart) return -1;
-      if (!aStart && bStart) return 1;
-      return a[0].localeCompare(b[0]);
-    })
-    .slice(0, 8)
-    .map(([name, country]) => ({ name, country }));
+  // No key — return empty, frontend will just have no suggestions
+  if (!GEOAPIFY_KEY) {
+    console.warn("[places] GEOAPIFY_KEY not set");
+    return res.json({ places: [] });
+  }
 
-  res.json({ places: matches });
+  try {
+    const url = "https://api.geoapify.com/v1/geocode/autocomplete?" + new URLSearchParams({
+      text:    q,
+      type:    "city",
+      limit:   8,
+      format:  "json",
+      apiKey:  GEOAPIFY_KEY,
+    });
+    const r    = await fetch(url);
+    const data = await r.json();
+
+    const places = (data.results || [])
+      .filter(p => p.city || p.name)
+      .map(p => ({
+        name:    p.city || p.name || "",
+        country: p.country || "",
+        state:   p.state   || "",
+      }))
+      // Deduplicate by name+country
+      .filter((p, i, arr) =>
+        arr.findIndex(x => x.name === p.name && x.country === p.country) === i
+      );
+
+    res.json({ places });
+  } catch (err) {
+    console.error("[places]", err.message);
+    res.json({ places: [] });
+  }
 });
+
 
 // ── Main search endpoint ───────────────────────────────────────────────────────
 app.get("/api/room-search", async (req, res) => {

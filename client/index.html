@@ -460,13 +460,19 @@
           dd.innerHTML = '<div class="city-loading">No cities found</div>';
           return;
         }
-        dd.innerHTML = places.map((p, i) => `
-          <div class="city-option" data-name="${p.name}" data-idx="${i}"
-               onmousedown="selectCity('${p.name.replace(/'/g,"\'")}')">
-            <span class="city-option-icon">📍</span>
-            <span>${p.name}</span>
-            ${p.country ? `<span class="city-option-sub">${p.country}</span>` : ''}
-          </div>`).join('');
+        dd.innerHTML = places.map((p, i) => {
+          const label   = p.name;
+          const subParts = [p.state, p.country].filter(Boolean);
+          const sub      = subParts.join(', ');
+          const safeLabel = label.replace(/'/g, "\'");
+          return `
+            <div class="city-option" data-name="${label}" data-idx="${i}"
+                 onmousedown="selectCity('${safeLabel}')">
+              <span class="city-option-icon">📍</span>
+              <span>${label}</span>
+              ${sub ? `<span class="city-option-sub">${sub}</span>` : ''}
+            </div>`;
+        }).join('');
       } catch {
         dd.classList.remove('visible');
       }
