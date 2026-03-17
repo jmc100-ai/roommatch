@@ -1,9 +1,6 @@
 /**
  * RoomMatch — server.js
- * Node.js / Express backend using LiteAPI room-search
- *
- * Environment variables (set in Render dashboard):
- *   LITEAPI_KEY  — sandbox key from dashboard.liteapi.travel
+ * Room-search for hotel discovery + hotel detail for full room inventory
  */
 
 const express = require("express");
@@ -11,11 +8,10 @@ const cors    = require("cors");
 const path    = require("path");
 require("dotenv").config();
 
-const app        = express();
+const app         = express();
 const LITEAPI_KEY = process.env.LITEAPI_KEY || "";
 const PORT        = process.env.PORT || 3000;
 
-// ── City → lat/lng for geo-filtered room search ───────────────────────────────
 const CITY_COORDS = {
   "new york": [40.7128, -74.006], "new york city": [40.7128, -74.006],
   "nyc": [40.7128, -74.006], "manhattan": [40.758, -73.9855],
@@ -64,165 +60,147 @@ function resolveCoords(city) {
   return null;
 }
 
+async function liteGet(path) {
+  const r = await fetch(`https://api.liteapi.travel/v3.0${path}`, {
+    headers: { "X-API-Key": LITEAPI_KEY, "accept": "application/json" }
+  });
+  return { ok: r.ok, status: r.status, data: await r.json() };
+}
+
 app.use(cors({ origin: "*" }));
 app.use(express.json());
 app.use(express.static(path.join(__dirname, "client")));
 
-// ── Health ────────────────────────────────────────────────────────────────────
-app.get("/api/health", (req, res) => {
-  res.json({ status: "ok", service: "RoomMatch — LiteAPI" });
-});
+app.get("/api/health", (_, res) => res.json({ status: "ok" }));
 
-// ── Room search ───────────────────────────────────────────────────────────────
+// ── Main search endpoint ───────────────────────────────────────────────────────
 app.get("/api/room-search", async (req, res) => {
   const { query, city } = req.query;
+  if (!query || !city) return res.status(400).json({ error: "query and city are required" });
+  if (!LITEAPI_KEY)    return res.status(500).json({ error: "LITEAPI_KEY not configured" });
 
-  if (!query || !city) {
-    return res.status(400).json({ error: "query and city are required" });
-  }
-  if (!LITEAPI_KEY) {
-    return res.status(500).json({ error: "LITEAPI_KEY not configured" });
-  }
-
+  // ── Step 1: room-search → ranked hotels + best matching room per hotel ──────
   const params = new URLSearchParams({ query, limit: 20 });
-
-  // Add geo filter using lat/lng (most reliable)
   const coords = resolveCoords(city);
   if (coords) {
-    params.set("latitude",  coords[0]);
+    params.set("latitude", coords[0]);
     params.set("longitude", coords[1]);
-    params.set("radius",    15); // km
+    params.set("radius", 15);
   } else {
-    // Fall back to city name param
     params.set("city", city);
   }
 
-  console.log(`[room-search] query="${query}" city="${city}" → ${params}`);
+  console.log(`[search] "${query}" in ${city}`);
+  const searchRes = await liteGet(`/data/hotels/room-search?${params}`);
+  if (!searchRes.ok) {
+    return res.status(searchRes.status).json({
+      error: searchRes.data?.error?.description || "Room search failed"
+    });
+  }
 
-  try {
-    const response = await fetch(
-      `https://api.liteapi.travel/v3.0/data/hotels/room-search?${params}`,
-      { headers: { "X-API-Key": LITEAPI_KEY, "accept": "application/json" } }
-    );
+  const searchData = searchRes.data?.data || [];
+  if (searchData.length === 0) return res.json({ hotels: [], query, city });
 
-    const raw = await response.json();
-    console.log(`[room-search] status=${response.status} hotels=${raw?.data?.length ?? 0}`);
-    if (raw?.data?.length > 0) {
-      const first = raw.data[0];
-      console.log("[room-search] first hotel keys:", Object.keys(first));
-      console.log("[room-search] first hotel full:", JSON.stringify(first, null, 2));
-    }
+  // Normalise similarity scores to 30–95% range
+  const rawScores = searchData.map(h => h.rooms?.[0]?.similarity || 0);
+  const maxS = Math.max(...rawScores) || 1;
+  const minS = Math.min(...rawScores.filter(s => s > 0)) || 0;
+  const norm = s => s > 0 ? Math.round(30 + ((s - minS) / (maxS - minS || 1)) * 65) : null;
 
-    if (!response.ok) {
-      return res.status(response.status).json({
-        error: raw?.error?.description || raw?.error?.message || "LiteAPI error"
-      });
-    }
+  // Build a map of hotelId → best match info from room-search
+  const bestMatchMap = {};
+  searchData.forEach((h, i) => {
+    const r = h.rooms?.[0];
+    bestMatchMap[h.id] = {
+      roomName: r?.room_name || "",
+      imageUrl: r?.image_url || "",
+      score:    norm(r?.similarity || 0),
+    };
+  });
 
-    // Step 1: normalise room-search results (one best room per hotel + similarity score)
-    const searchResults = (raw.data || []).map(h => ({
-      id:        h.id   || "",
-      name:      h.name || "Hotel",
-      address:   h.address || "",
-      city:      h.city    || city,
-      country:   h.country || "",
-      starRating: h.starRating || h.stars || 0,
-      rating:    h.rating || 0,
-      bestRoom: h.rooms?.[0] ? {
-        name:     h.rooms[0].room_name  || "",
-        imageUrl: h.rooms[0].image_url  || "",
-        score:    h.rooms[0].similarity || 0,
-      } : null,
-    }));
+  // ── Step 2: parallel-fetch hotel details for full room inventory ─────────────
+  const detailResults = await Promise.all(
+    searchData.map(h => liteGet(`/data/hotel?hotelId=${h.id}`).catch(() => null))
+  );
 
-    // Normalise similarity scores to 30–95% range relative to best result
-    const allScores = searchResults.map(h => h.bestRoom?.score || 0).filter(s => s > 0);
-    const maxScore  = allScores.length > 0 ? Math.max(...allScores) : 1;
-    const minScore  = allScores.length > 0 ? Math.min(...allScores) : 0;
-    const scoreRange = maxScore - minScore || 1;
-    const FLOOR = 30, CEIL = 95;
-    const normalise = s => s > 0
-      ? Math.round(FLOOR + ((s - minScore) / scoreRange) * (CEIL - FLOOR))
-      : 0;
+  // ── Step 3: build structured hotel + room-type response ──────────────────────
+  const hotels = searchData.map((h, i) => {
+    const detail  = detailResults[i]?.data?.data || null;
+    const best    = bestMatchMap[h.id];
 
-    // Step 2: parallel-fetch full hotel details to get all rooms with photos
-    const detailResults = await Promise.all(
-      searchResults.map(async h => {
-        try {
-          const dr = await fetch(
-            `https://api.liteapi.travel/v3.0/data/hotel?hotelId=${h.id}`,
-            { headers: { "X-API-Key": LITEAPI_KEY, "accept": "application/json" } }
-          );
-          if (!dr.ok) return null;
-          const dj = await dr.json();
-          return dj.data || null;
-        } catch { return null; }
-      })
-    );
+    // Group detail rooms by roomName, collecting all photos per type
+    const roomTypeMap = new Map();
+    for (const room of (detail?.rooms || [])) {
+      const name    = room.roomName || room.name || "Room";
+      const photos  = (room.photos || []).map(p => p.url || p.hd_url || "").filter(Boolean);
+      const size    = room.roomSizeSquare
+        ? `${room.roomSizeSquare} ${room.roomSizeUnit || "sqm"}`
+        : "";
+      const amenities = (room.roomAmenities || []).map(a => a.name).filter(Boolean).slice(0, 5);
+      const beds    = (room.bedTypes || []).map(b => `${b.quantity}× ${b.bedType}`).join(", ");
+      const views   = (room.views || []).map(v => v.view).filter(Boolean).join(", ");
 
-    // Step 3: merge — best-match room first, then remaining rooms from hotel detail
-    const hotels = searchResults.map((h, i) => {
-      const detail   = detailResults[i];
-      const bestRoom = h.bestRoom ? { ...h.bestRoom, score: normalise(h.bestRoom.score), isBestMatch: true } : null;
-
-      // Pull all rooms from detail endpoint
-      const detailRooms = [];
-      for (const room of (detail?.rooms || [])) {
-        for (const photo of (room.photos || [])) {
-          const url = photo?.url || photo || "";
-          if (!url) continue;
-          // Skip if it's the same image as the best match
-          if (bestRoom && url === bestRoom.imageUrl) continue;
-          detailRooms.push({
-            name:     room.roomName || room.name || "",
-            imageUrl: url,
-            score:    null,
-            isBestMatch: false,
-          });
-        }
+      if (!roomTypeMap.has(name)) {
+        roomTypeMap.set(name, { name, photos: [], size, amenities, beds, views, score: null });
       }
+      // Merge photos, deduplicate by URL
+      const existing = roomTypeMap.get(name);
+      for (const p of photos) {
+        if (!existing.photos.includes(p)) existing.photos.push(p);
+      }
+    }
 
-      // Also pull from hotelImages if rooms[] is empty
-      if (detailRooms.length === 0) {
-        for (const img of (detail?.hotelImages || [])) {
-          const url = img?.url || img || "";
-          if (url && (!bestRoom || url !== bestRoom.imageUrl)) {
-            detailRooms.push({ name: "", imageUrl: url, score: null, isBestMatch: false });
+    // Assign the best-match score to the matching room type (fuzzy name match)
+    if (best.roomName) {
+      const bestNameLower = best.roomName.toLowerCase();
+      let matched = false;
+      for (const [name, rt] of roomTypeMap) {
+        if (name.toLowerCase() === bestNameLower ||
+            name.toLowerCase().includes(bestNameLower) ||
+            bestNameLower.includes(name.toLowerCase())) {
+          rt.score = best.score;
+          // Ensure the best-match image is first in photos
+          if (best.imageUrl && !rt.photos.includes(best.imageUrl)) {
+            rt.photos.unshift(best.imageUrl);
           }
+          matched = true;
+          break;
         }
       }
+      // If no name match, inject the best-match room as its own entry at the top
+      if (!matched && best.imageUrl) {
+        roomTypeMap.set("__best__" + best.roomName, {
+          name: best.roomName, photos: [best.imageUrl],
+          size: "", amenities: [], beds: "", views: "", score: best.score
+        });
+      }
+    }
 
-      const allRooms = [
-        ...(bestRoom ? [bestRoom] : []),
-        ...detailRooms.slice(0, 7),  // up to 7 additional rooms
-      ];
-
-      return {
-        id:         h.id,
-        name:       detail?.name      || h.name,
-        address:    detail?.address   || h.address,
-        city:       detail?.city      || h.city,
-        country:    detail?.country   || h.country,
-        starRating: detail?.starRating || h.starRating,
-        rating:     detail?.rating    || h.rating,
-        rooms:      allRooms,
-      };
+    // Sort: scored room first, then rest alphabetically
+    const roomTypes = [...roomTypeMap.values()].sort((a, b) => {
+      if (a.score !== null && b.score === null) return -1;
+      if (b.score !== null && a.score === null) return 1;
+      return (b.score || 0) - (a.score || 0);
     });
 
-    if (detailResults[0]) {
-      console.log("[detail] first hotel rooms sample:", JSON.stringify((detailResults[0]?.rooms || []).slice(0,2), null, 2));
-    }
-    console.log(`[room-search] enriched ${hotels.length} hotels, rooms per hotel: ${hotels.map(h => h.rooms.length).join(",")}`);
-    res.json({ hotels, query, city });
-  } catch (err) {
-    console.error("[room-search] error:", err);
-    res.status(500).json({ error: "Search failed: " + err.message });
-  }
+    return {
+      id:         h.id,
+      name:       detail?.name      || h.name,
+      address:    detail?.address   || h.address || "",
+      city:       detail?.city      || h.city    || city,
+      country:    detail?.country   || h.country || "",
+      starRating: detail?.starRating || h.starRating || 0,
+      rating:     detail?.rating    || h.rating  || 0,
+      roomTypes:  roomTypes.slice(0, 6), // max 6 room types per hotel
+    };
+  });
+
+  console.log(`[search] done — ${hotels.length} hotels, room types: ${hotels.map(h => h.roomTypes.length).join(",")}`);
+  res.json({ hotels, query, city });
 });
 
-// ── Serve frontend ────────────────────────────────────────────────────────────
 app.get("*", (req, res) => {
   res.sendFile(path.join(__dirname, "client", "index.html"));
 });
 
-app.listen(PORT, () => console.log(`RoomMatch running on port ${PORT}`));
+app.listen(PORT, () => console.log(`RoomMatch on port ${PORT}`));
