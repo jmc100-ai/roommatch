@@ -252,33 +252,42 @@ app.get("/api/room-search", async (req, res) => {
   if (!query || !city) return res.status(400).json({ error: "query and city are required" });
   if (!LITEAPI_KEY)    return res.status(500).json({ error: "LITEAPI_KEY not configured" });
 
-  // ── Step 1: room-search → ranked hotels + best matching room per hotel ──────
-  const params = new URLSearchParams({ query, limit: 50 });
+  // ── Step 1: room-search with 3-attempt strategy to maximise results ─────────
   const coords = resolveCoords(city);
-  if (coords) {
-    params.set("latitude", coords[0]);
-    params.set("longitude", coords[1]);
-    params.set("radius", 30);
-  } else {
-    params.set("city", city);
+
+  async function trySearch(extraParams) {
+    const p = new URLSearchParams({ query, limit: 50, ...extraParams });
+    console.log(`[search] trying: ${p.toString()}`);
+    const r = await liteGet(`/data/hotels/room-search?${p}`);
+    const count = r.data?.data?.length ?? 0;
+    console.log(`[search] got ${count} hotels`);
+    return r.ok ? (r.data?.data || []) : [];
   }
 
-  console.log(`[search] "${query}" in ${city} — params: ${params.toString()}`);
-  const searchRes = await liteGet(`/data/hotels/room-search?${params}`);
-  console.log(`[search] raw response status=${searchRes.status} total hotels=${searchRes.data?.data?.length ?? 0}`);
-  if (searchRes.data?.data?.length > 0) {
-    const scores = searchRes.data.data.map(h => h.rooms?.[0]?.similarity?.toFixed(3) ?? "n/a");
-    console.log(`[search] similarity scores: ${scores.join(", ")}`);
-  } else {
-    console.log(`[search] full raw response:`, JSON.stringify(searchRes.data).slice(0, 500));
-  }
-  if (!searchRes.ok) {
-    return res.status(searchRes.status).json({
-      error: searchRes.data?.error?.description || "Room search failed"
-    });
+  // Attempt 1: lat/lng with radius
+  let searchData = coords
+    ? await trySearch({ latitude: coords[0], longitude: coords[1], radius: 30 })
+    : [];
+
+  // Attempt 2: city name if lat/lng gave < 15
+  if (searchData.length < 15) {
+    const r2 = await trySearch({ city });
+    if (r2.length > searchData.length) {
+      searchData = r2;
+      console.log(`[search] city-name attempt better, using it`);
+    }
   }
 
-  const searchData = searchRes.data?.data || [];
+  // Attempt 3: no geo filter if still sparse
+  if (searchData.length < 15) {
+    const r3 = await trySearch({});
+    if (r3.length > searchData.length) {
+      searchData = r3;
+      console.log(`[search] no-geo attempt better, using it`);
+    }
+  }
+
+  console.log(`[search] final pool: ${searchData.length} hotels`);
   if (searchData.length === 0) return res.json({ hotels: [], query, city });
 
   // Normalise similarity scores to 30–95% range
