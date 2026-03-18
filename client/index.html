@@ -342,17 +342,17 @@
     e.preventDefault();
     const query = document.getElementById('queryInput').value.trim();
     const city  = document.getElementById('cityInput').value.trim();
-    if (!query) { alert('Please describe the room you\'re looking for.'); return; }
+    if (!query) { alert("Please describe the room you're looking for."); return; }
     if (!city)  { alert('Please enter a city.'); return; }
     if (clipES) { clipES.close(); clipES = null; }
     const btn = document.getElementById('searchBtn');
-    btn.disabled = true; btn.textContent = 'Searching\u2026';
+    btn.disabled = true; btn.textContent = 'Searching…';
     document.getElementById('results').innerHTML = '';
     currentMode === 'clip' ? startClip(query, city, btn) : startLiteApi(query, city, btn);
   }
 
   async function startLiteApi(query, city, btn) {
-    setStatus(`Searching for "${query}" in ${city}\u2026`, true);
+    setStatus(`Searching for "${query}" in ${city}…`, true);
     try {
       const resp = await fetch(`${BACKEND}/api/room-search?` + new URLSearchParams({ query, city }));
       const data = await resp.json();
@@ -361,7 +361,7 @@
       if (!hotels.length) { setStatus(''); renderEmpty(query, city); }
       else {
         const totalTypes = hotels.reduce((n, h) => n + (h.roomTypes?.length || 0), 0);
-        setStatus(`${hotels.length} hotels \u00b7 ${totalTypes} room types in ${city}`);
+        setStatus(`${hotels.length} hotels · ${totalTypes} room types in ${city}`);
         render(hotels);
       }
     } catch (err) { setStatus(''); renderError(err.message); }
@@ -369,7 +369,7 @@
   }
 
   function startClip(query, city, btn) {
-    setStatus(`Starting CLIP analysis for "${query}" in ${city}\u2026`, true);
+    setStatus(`Starting CLIP analysis for "${query}" in ${city}…`, true);
     const prog = document.getElementById('clipProgress');
     const fill = document.getElementById('clipProgressFill');
     prog.style.display = 'block'; fill.style.width = '0%';
@@ -385,7 +385,7 @@
         scored.push(msg.hotel);
         const sorted = [...scored].sort((a, b) => (b.clipScore||0) - (a.clipScore||0));
         document.getElementById('results').innerHTML = sorted.map(hotelHTML).join('');
-        setStatus(`Scored ${clipDone} of ${clipTotal} hotels \u2014 ranked by CLIP similarity`);
+        setStatus(`Scored ${clipDone} of ${clipTotal} hotels — ranked by CLIP similarity`);
       }
       else if (msg.type === 'done') {
         clipES.close(); clipES = null;
@@ -393,7 +393,7 @@
         fill.style.width = '100%';
         setTimeout(() => { prog.style.display = 'none'; }, 800);
         if (!scored.length) { setStatus(''); renderEmpty(query, city); }
-        else setStatus(`${scored.length} hotels \u00b7 ranked by CLIP visual similarity`);
+        else setStatus(`${scored.length} hotels · ranked by CLIP visual similarity`);
       }
       else if (msg.type === 'error') {
         clipES.close(); clipES = null;
@@ -406,12 +406,6 @@
       btn.disabled = false; btn.textContent = 'Search rooms';
       prog.style.display = 'none'; setStatus(''); renderError('CLIP search failed');
     };
-  }
-    } catch (err) {
-      setStatus(''); renderError(err.message);
-    } finally {
-      btn.disabled = false; btn.textContent = 'Search rooms';
-    }
   }
 
   function render(hotels) {
