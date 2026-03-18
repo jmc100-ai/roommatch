@@ -262,6 +262,26 @@ app.get("/api/debug-city", async (req, res) => {
   await test("room-search: no geo limit=100",
     `/data/hotels/room-search?query=${q}&limit=100`);
 
+  await test("room-search: countryCode+cityName limit=200",
+    `/data/hotels/room-search?query=${q}&countryCode=${cc}&cityName=${encodeURIComponent(city)}&limit=200`);
+
+  // Broader queries as suggested by LiteAPI docs
+  const qBroad = encodeURIComponent("room OR suite OR bedroom");
+  await test("room-search: broad OR query countryCode+cityName limit=200",
+    `/data/hotels/room-search?query=${qBroad}&countryCode=${cc}&cityName=${encodeURIComponent(city)}&limit=200`);
+
+  // Full catalog with high limit
+  await test("hotels: countryCode+cityName limit=500",
+    `/data/hotels?countryCode=${cc}&cityName=${encodeURIComponent(city)}&limit=500`);
+
+  await test("hotels: countryCode+cityName limit=1000",
+    `/data/hotels?countryCode=${cc}&cityName=${encodeURIComponent(city)}&limit=1000`);
+
+  // Check total count via offset
+  const r500 = await liteGet(`/data/hotels?countryCode=${cc}&cityName=${encodeURIComponent(city)}&limit=1&offset=0`);
+  report.totalHotelsInCatalog = r500.data?.total || r500.data?.count || "unknown";
+  console.log(`[debug] total hotels in LiteAPI catalog for ${city}: ${report.totalHotelsInCatalog}`);
+
   // ── Summary ───────────────────────────────────────────────────────────────
   const roomSearchMax = Math.max(...report.tests
     .filter(t => t.label.includes("room-search"))
