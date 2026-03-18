@@ -263,8 +263,15 @@ app.get("/api/room-search", async (req, res) => {
     params.set("city", city);
   }
 
-  console.log(`[search] "${query}" in ${city}`);
+  console.log(`[search] "${query}" in ${city} — params: ${params.toString()}`);
   const searchRes = await liteGet(`/data/hotels/room-search?${params}`);
+  console.log(`[search] raw response status=${searchRes.status} total hotels=${searchRes.data?.data?.length ?? 0}`);
+  if (searchRes.data?.data?.length > 0) {
+    const scores = searchRes.data.data.map(h => h.rooms?.[0]?.similarity?.toFixed(3) ?? "n/a");
+    console.log(`[search] similarity scores: ${scores.join(", ")}`);
+  } else {
+    console.log(`[search] full raw response:`, JSON.stringify(searchRes.data).slice(0, 500));
+  }
   if (!searchRes.ok) {
     return res.status(searchRes.status).json({
       error: searchRes.data?.error?.description || "Room search failed"
