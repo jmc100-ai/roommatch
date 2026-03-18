@@ -287,6 +287,12 @@ app.get("/api/room-search", async (req, res) => {
     }
   }
 
+  // ── Index size probe: run a generic query to see max available hotels ────────
+  const probeParams = new URLSearchParams({ query: "hotel room", limit: 50, latitude: coords?.[0] ?? "", longitude: coords?.[1] ?? "", radius: 30 });
+  if (!coords) { probeParams.delete("latitude"); probeParams.delete("longitude"); probeParams.delete("radius"); probeParams.set("city", city); }
+  const probe = await liteGet(`/data/hotels/room-search?${probeParams}`);
+  console.log(`[search] INDEX SIZE PROBE — max hotels in index for "${city}": ${probe.data?.data?.length ?? 0}`);
+
   console.log(`[search] final pool: ${searchData.length} hotels`);
   if (searchData.length === 0) return res.json({ hotels: [], query, city });
 
