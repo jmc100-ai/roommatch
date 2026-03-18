@@ -337,14 +337,10 @@ app.get("/api/room-search", async (req, res) => {
     }
   }
 
-  // ── Index size probe: run a generic query to see max available hotels ────────
-  const probeParams = new URLSearchParams({ query: "hotel room", limit: 50, latitude: coords?.[0] ?? "", longitude: coords?.[1] ?? "", radius: 30 });
-  if (!coords) { probeParams.delete("latitude"); probeParams.delete("longitude"); probeParams.delete("radius"); probeParams.set("city", city); }
-  const probe = await liteGet(`/data/hotels/room-search?${probeParams}`);
-  console.log(`[search] INDEX SIZE PROBE — max hotels in index for "${city}": ${probe.data?.data?.length ?? 0}`);
-
   console.log(`[search] final pool: ${searchData.length} hotels`);
-  if (searchData.length === 0) return res.json({ hotels: [], query, city });
+  if (searchData.length === 0 && !countryCode && !coords) {
+    return res.json({ hotels: [], query, city });
+  }
 
   // Normalise similarity scores to 30–95% range
   const rawScores = searchData.map(h => h.rooms?.[0]?.similarity || 0);
@@ -354,26 +350,46 @@ app.get("/api/room-search", async (req, res) => {
 
   // Build a map of hotelId → best match info from room-search
   const bestMatchMap = {};
-  searchData.forEach((h, i) => {
+  const matchedIds = new Set();
+  searchData.forEach(h => {
     const r = h.rooms?.[0];
     bestMatchMap[h.id] = {
       roomName: r?.room_name || "",
       imageUrl: r?.image_url || "",
       score:    norm(r?.similarity || 0),
     };
+    matchedIds.add(h.id);
   });
 
-  // ── Step 2: parallel-fetch hotel details for full room inventory ─────────────
-  // Only enrich top 20 — avoids unnecessary API calls for low-ranked hotels
+  // ── Hybrid: pad with regular hotel list if room-search returned < 15 ─────────
+  let paddingHotels = [];
+  if (searchData.length < 15) {
+    const needed = 20 - searchData.length;
+    const padParams = new URLSearchParams({ limit: needed + 5 }); // fetch a few extra to filter dupes
+    if (countryCode) { padParams.set("countryCode", countryCode); padParams.set("cityName", city); }
+    else if (coords)  { padParams.set("latitude", coords[0]); padParams.set("longitude", coords[1]); padParams.set("radius", 15000); }
+    else               { padParams.set("city", city); }
+
+    const padRes = await liteGet(`/data/hotels?${padParams}`);
+    if (padRes.ok) {
+      paddingHotels = (padRes.data?.data || [])
+        .filter(h => !matchedIds.has(h.id || h.hotelId))
+        .slice(0, needed);
+      console.log(`[search] hybrid: adding ${paddingHotels.length} unmatched hotels to pad results`);
+    }
+  }
+
+  // ── Step 2: parallel-fetch hotel details ─────────────────────────────────────
   const top20 = searchData.slice(0, 20);
-  const detailResults = await Promise.all(
-    top20.map(h => liteGet(`/data/hotel?hotelId=${h.id}`).catch(() => null))
-  );
+  const detailResults = await Promise.all([
+    ...top20.map(h => liteGet(`/data/hotel?hotelId=${h.id}`).catch(() => null)),
+    ...paddingHotels.map(h => liteGet(`/data/hotel?hotelId=${h.id || h.hotelId}`).catch(() => null)),
+  ]);
+  const top20Details     = detailResults.slice(0, top20.length);
+  const paddingDetails   = detailResults.slice(top20.length);
 
   // ── Step 3: build structured hotel + room-type response ──────────────────────
-  const hotels = top20.map((h, i) => {
-    const detail  = detailResults[i]?.data?.data || null;
-    const best    = bestMatchMap[h.id];
+  function buildHotel(h, detail, best, isMatched) {
 
     // Group detail rooms by roomName, collecting all photos per type
     const roomTypeMap = new Map();
@@ -431,16 +447,21 @@ app.get("/api/room-search", async (req, res) => {
     });
 
     return {
-      id:         h.id,
-      name:       detail?.name      || h.name,
-      address:    detail?.address   || h.address || "",
-      city:       detail?.city      || h.city    || city,
-      country:    detail?.country   || h.country || "",
-      starRating: detail?.starRating || h.starRating || 0,
-      rating:     detail?.rating    || h.rating  || 0,
-      roomTypes:  roomTypes.slice(0, 6), // max 6 room types per hotel
+      id:         h.id || h.hotelId,
+      name:       detail?.name      || h.name     || "Hotel",
+      address:    detail?.address   || h.address  || "",
+      city:       detail?.city      || h.city     || city,
+      country:    detail?.country   || h.country  || "",
+      starRating: detail?.starRating || h.starRating || h.stars || 0,
+      rating:     detail?.rating    || h.rating   || h.guestRating || 0,
+      roomTypes:  roomTypes.slice(0, 6),
+      isMatched,  // flag so frontend can show section divider
     };
-  });
+  }
+
+  const matchedHotels  = top20.map((h, i) => buildHotel(h, top20Details[i]?.data?.data, bestMatchMap[h.id], true));
+  const paddedHotels   = paddingHotels.map((h, i) => buildHotel(h, paddingDetails[i]?.data?.data, { roomName:"", imageUrl:"", score:null }, false));
+  const hotels         = [...matchedHotels, ...paddedHotels];
 
   // Re-sort hotels by their best room score (highest first) after enrichment
   // Room-search order can drift once we merge detail data
@@ -455,6 +476,193 @@ app.get("/api/room-search", async (req, res) => {
 
   console.log(`[search] done — ${sortedHotels.length} hotels sorted by score: ${sortedHotels.map(h => h.roomTypes.find(rt=>rt.score)?.score ?? 0).join(",")}`);
   res.json({ hotels: sortedHotels, query, city });
+});
+
+// ── CLIP search via HuggingFace + LiteAPI full catalog ────────────────────────
+// Streams results via SSE so hotels appear progressively as they score
+const HF_KEY = process.env.HUGGINGFACE_KEY || "";
+const CLIP_MODEL = "openai/clip-vit-large-patch14";
+
+const COUNTRY_CODES_CLIP = {
+  "paris":"FR","nice":"FR","lyon":"FR","marseille":"FR","bordeaux":"FR",
+  "london":"GB","edinburgh":"GB","manchester":"GB","liverpool":"GB","bristol":"GB",
+  "barcelona":"ES","madrid":"ES","seville":"ES","valencia":"ES","ibiza":"ES","malaga":"ES",
+  "rome":"IT","milan":"IT","florence":"IT","venice":"IT","naples":"IT","bologna":"IT",
+  "amsterdam":"NL","rotterdam":"NL",
+  "berlin":"DE","munich":"DE","hamburg":"DE","frankfurt":"DE","cologne":"DE","dresden":"DE",
+  "vienna":"AT","salzburg":"AT","zurich":"CH","geneva":"CH","bern":"CH","lucerne":"CH",
+  "brussels":"BE","bruges":"BE","ghent":"BE",
+  "prague":"CZ","budapest":"HU","warsaw":"PL","krakow":"PL","gdansk":"PL","wroclaw":"PL",
+  "athens":"GR","santorini":"GR","mykonos":"GR","thessaloniki":"GR",
+  "lisbon":"PT","porto":"PT",
+  "oslo":"NO","bergen":"NO","stockholm":"SE","gothenburg":"SE","copenhagen":"DK",
+  "helsinki":"FI","reykjavik":"IS","dublin":"IE","galway":"IE",
+  "istanbul":"TR","antalya":"TR","bodrum":"TR",
+  "new york city":"US","new york":"US","nyc":"US","manhattan":"US",
+  "los angeles":"US","chicago":"US","miami":"US","san francisco":"US","las vegas":"US",
+  "seattle":"US","boston":"US","washington dc":"US","austin":"US","denver":"US",
+  "nashville":"US","atlanta":"US","dallas":"US","houston":"US","portland":"US",
+  "new orleans":"US","tacoma":"US","phoenix":"US","san diego":"US","orlando":"US",
+  "toronto":"CA","vancouver":"CA","montreal":"CA","calgary":"CA",
+  "mexico city":"MX","cancun":"MX","tulum":"MX",
+  "rio de janeiro":"BR","sao paulo":"BR","salvador":"BR",
+  "buenos aires":"AR","bogota":"CO","cartagena":"CO","lima":"PE","santiago":"CL",
+  "tokyo":"JP","osaka":"JP","kyoto":"JP","hiroshima":"JP","sapporo":"JP",
+  "seoul":"KR","busan":"KR",
+  "beijing":"CN","shanghai":"CN","chengdu":"CN","guilin":"CN",
+  "hong kong":"HK","macau":"MO","taipei":"TW",
+  "bangkok":"TH","chiang mai":"TH","phuket":"TH","koh samui":"TH","krabi":"TH",
+  "singapore":"SG","kuala lumpur":"MY","penang":"MY","langkawi":"MY",
+  "bali":"ID","jakarta":"ID","yogyakarta":"ID","lombok":"ID",
+  "hanoi":"VN","ho chi minh city":"VN","da nang":"VN","hoi an":"VN",
+  "siem reap":"KH","phnom penh":"KH","luang prabang":"LA",
+  "mumbai":"IN","delhi":"IN","bangalore":"IN","goa":"IN","jaipur":"IN","agra":"IN",
+  "dubai":"AE","abu dhabi":"AE","doha":"QA","riyadh":"SA","muscat":"OM",
+  "tel aviv":"IL","jerusalem":"IL","amman":"JO","beirut":"LB",
+  "cairo":"EG","luxor":"EG","hurghada":"EG","sharm el sheikh":"EG",
+  "marrakech":"MA","casablanca":"MA","fez":"MA",
+  "cape town":"ZA","johannesburg":"ZA","nairobi":"KE","zanzibar":"TZ",
+  "sydney":"AU","melbourne":"AU","brisbane":"AU","perth":"AU","cairns":"AU",
+  "auckland":"NZ","queenstown":"NZ",
+  "maldives":"MV","bora bora":"PF","fiji":"FJ",
+};
+
+async function clipScore(imageUrl, textQuery) {
+  if (!HF_KEY) return 0;
+  try {
+    const r = await fetch(
+      `https://api-inference.huggingface.co/models/${CLIP_MODEL}`,
+      {
+        method: "POST",
+        headers: { "Authorization": `Bearer ${HF_KEY}`, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          inputs: { image: imageUrl },
+          parameters: { candidate_labels: [textQuery, "hotel lobby", "exterior building"] }
+        }),
+        signal: AbortSignal.timeout(10000),
+      }
+    );
+    if (!r.ok) return 0;
+    const data = await r.json();
+    // Returns [{label, score}] sorted by score desc — first entry matching our query
+    const match = data.find(d => d.label === textQuery);
+    return match ? match.score : (data[0]?.score || 0);
+  } catch { return 0; }
+}
+
+app.get("/api/clip-search", async (req, res) => {
+  const { query, city } = req.query;
+  if (!query || !city) return res.status(400).json({ error: "query and city are required" });
+  if (!LITEAPI_KEY)    return res.status(500).json({ error: "LITEAPI_KEY not configured" });
+  if (!HF_KEY)         return res.status(500).json({ error: "HUGGINGFACE_KEY not configured" });
+
+  // SSE headers — allows streaming hotels to frontend as they score
+  res.setHeader("Content-Type", "text/event-stream");
+  res.setHeader("Cache-Control", "no-cache");
+  res.setHeader("Connection", "keep-alive");
+  res.setHeader("Access-Control-Allow-Origin", "*");
+
+  const send = (data) => res.write(`data: ${JSON.stringify(data)}
+
+`);
+
+  try {
+    // Step 1: fetch full hotel catalog for city
+    const cityKey     = city.trim().toLowerCase();
+    const countryCode = COUNTRY_CODES_CLIP[cityKey] || "";
+    const hotelParams = new URLSearchParams({ limit: 50 });
+    if (countryCode) { hotelParams.set("countryCode", countryCode); hotelParams.set("cityName", city); }
+    else             { hotelParams.set("latitude", resolveCoords(city)?.[0] || ""); hotelParams.set("longitude", resolveCoords(city)?.[1] || ""); hotelParams.set("radius", 15000); }
+
+    send({ type: "status", message: `Fetching hotels in ${city}…` });
+    const hotelsRes = await liteGet(`/data/hotels?${hotelParams}`);
+    const allHotels = hotelsRes.data?.data || [];
+    if (!allHotels.length) { send({ type: "done", total: 0 }); return res.end(); }
+
+    const top10 = allHotels.slice(0, 10);
+    send({ type: "status", message: `Scoring ${top10.length} hotels with CLIP…` });
+
+    // Step 2: for each hotel fetch details + score all room photos
+    for (let i = 0; i < top10.length; i++) {
+      const h = top10[i];
+      send({ type: "status", message: `Analyzing hotel ${i + 1} of ${top10.length}: ${h.name || h.id}` });
+
+      // Fetch hotel detail
+      const detailRes = await liteGet(`/data/hotel?hotelId=${h.id || h.hotelId}`);
+      const detail    = detailRes.data?.data || null;
+
+      // Collect all room photos grouped by room type
+      const roomTypeMap = new Map();
+      for (const room of (detail?.rooms || [])) {
+        const name   = room.roomName || room.name || "Room";
+        const photos = (room.photos || []).map(p => p.url || p.hd_url || "").filter(Boolean);
+        const size   = room.roomSizeSquare ? `${room.roomSizeSquare} ${room.roomSizeUnit || "sqm"}` : "";
+        const beds   = (room.bedTypes || []).map(b => `${b.quantity}× ${b.bedType}`).join(", ");
+        const amenities = (room.roomAmenities || []).map(a => a.name).filter(Boolean).slice(0, 5);
+        if (!roomTypeMap.has(name)) {
+          roomTypeMap.set(name, { name, photos: [], size, beds, amenities, scores: [] });
+        }
+        const rt = roomTypeMap.get(name);
+        for (const p of photos) {
+          if (!rt.photos.includes(p)) rt.photos.push(p);
+        }
+      }
+
+      // Score all photos for each room type with CLIP
+      for (const rt of roomTypeMap.values()) {
+        const photoScores = await Promise.all(
+          rt.photos.slice(0, 5).map(url => clipScore(url, query))
+        );
+        rt.scores = photoScores;
+      }
+
+      // Build room types sorted by best photo score
+      const roomTypes = [...roomTypeMap.values()]
+        .map(rt => {
+          const bestIdx   = rt.scores.indexOf(Math.max(...rt.scores, 0));
+          const bestScore = rt.scores[bestIdx] || 0;
+          // Re-order photos: best scoring first
+          const orderedPhotos = rt.photos.length
+            ? [rt.photos[bestIdx], ...rt.photos.filter((_, i) => i !== bestIdx)]
+            : rt.photos;
+          return {
+            name:      rt.name,
+            photos:    orderedPhotos,
+            size:      rt.size,
+            beds:      rt.beds,
+            amenities: rt.amenities,
+            score:     bestScore > 0 ? Math.round(bestScore * 100) : null,
+            rawScore:  bestScore,
+          };
+        })
+        .sort((a, b) => (b.rawScore || 0) - (a.rawScore || 0));
+
+      const hotelBestScore = roomTypes[0]?.rawScore || 0;
+
+      send({
+        type: "hotel",
+        hotel: {
+          id:         h.id || h.hotelId || "",
+          name:       detail?.name      || h.name || "Hotel",
+          address:    detail?.address   || h.address || "",
+          city:       detail?.city      || h.city   || city,
+          country:    detail?.country   || h.country || "",
+          starRating: detail?.starRating || h.starRating || h.stars || 0,
+          rating:     detail?.rating    || h.rating || h.guestRating || 0,
+          roomTypes:  roomTypes.slice(0, 6),
+          clipScore:  Math.round(hotelBestScore * 100),
+          isMatched:  true,
+        }
+      });
+    }
+
+    send({ type: "done", total: top10.length });
+  } catch (err) {
+    console.error("[clip-search]", err);
+    send({ type: "error", message: err.message });
+  }
+
+  res.end();
 });
 
 app.get("*", (req, res) => {
