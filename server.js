@@ -201,6 +201,89 @@ app.use(express.static(path.join(__dirname, "client")));
 
 app.get("/api/health", (_, res) => res.json({ status: "ok" }));
 
+// ── Deep debug endpoint — tests all LiteAPI params for a city ─────────────────
+app.get("/api/debug-city", async (req, res) => {
+  const city = (req.query.city || "Paris").trim();
+  const report = { city, tests: [] };
+
+  async function test(label, path) {
+    try {
+      const r = await liteGet(path);
+      const data = r.data?.data || r.data || [];
+      const count = Array.isArray(data) ? data.length : (r.data?.total ?? "?");
+      const sample = Array.isArray(data) && data[0]
+        ? { id: data[0].id || data[0].hotelId, name: data[0].name }
+        : null;
+      report.tests.push({ label, status: r.status, count, sample, ok: r.ok });
+      console.log(`[debug] ${label}: status=${r.status} count=${count}`);
+    } catch(e) {
+      report.tests.push({ label, error: e.message });
+      console.log(`[debug] ${label}: ERROR ${e.message}`);
+    }
+  }
+
+  const coords = resolveCoords(city);
+  const cc = { "paris":"FR","london":"GB","new york city":"US","nyc":"US",
+                "tokyo":"JP","sydney":"AU","dubai":"AE","barcelona":"ES" }[city.toLowerCase()] || "";
+
+  // ── Full hotel catalog tests ───────────────────────────────────────────────
+  await test("hotels: countryCode+cityName limit=50",
+    `/data/hotels?countryCode=${cc}&cityName=${encodeURIComponent(city)}&limit=50`);
+
+  await test("hotels: countryCode+cityName limit=200",
+    `/data/hotels?countryCode=${cc}&cityName=${encodeURIComponent(city)}&limit=200`);
+
+  if (coords) {
+    await test("hotels: lat/lng radius=15000m limit=50",
+      `/data/hotels?latitude=${coords[0]}&longitude=${coords[1]}&radius=15000&limit=50`);
+    await test("hotels: lat/lng radius=30000m limit=200",
+      `/data/hotels?latitude=${coords[0]}&longitude=${coords[1]}&radius=30000&limit=200`);
+  }
+
+  // ── Room-search index tests ────────────────────────────────────────────────
+  const q = encodeURIComponent("hotel room");
+
+  await test("room-search: countryCode+cityName limit=50",
+    `/data/hotels/room-search?query=${q}&countryCode=${cc}&cityName=${encodeURIComponent(city)}&limit=50`);
+
+  await test("room-search: countryCode+cityName limit=100",
+    `/data/hotels/room-search?query=${q}&countryCode=${cc}&cityName=${encodeURIComponent(city)}&limit=100`);
+
+  if (coords) {
+    await test("room-search: lat/lng radius=30 limit=50",
+      `/data/hotels/room-search?query=${q}&latitude=${coords[0]}&longitude=${coords[1]}&radius=30&limit=50`);
+    await test("room-search: lat/lng radius=50 limit=100",
+      `/data/hotels/room-search?query=${q}&latitude=${coords[0]}&longitude=${coords[1]}&radius=50&limit=100`);
+  }
+
+  await test("room-search: city param only limit=50",
+    `/data/hotels/room-search?query=${q}&city=${encodeURIComponent(city)}&limit=50`);
+
+  await test("room-search: no geo limit=100",
+    `/data/hotels/room-search?query=${q}&limit=100`);
+
+  // ── Summary ───────────────────────────────────────────────────────────────
+  const roomSearchMax = Math.max(...report.tests
+    .filter(t => t.label.includes("room-search"))
+    .map(t => typeof t.count === "number" ? t.count : 0));
+  const hotelCatalogMax = Math.max(...report.tests
+    .filter(t => t.label.includes("hotels:"))
+    .map(t => typeof t.count === "number" ? t.count : 0));
+
+  report.summary = {
+    hotelCatalogMax,
+    roomSearchIndexMax: roomSearchMax,
+    gap: `${roomSearchMax} room-search vs ${hotelCatalogMax} full catalog`,
+    conclusion: roomSearchMax < hotelCatalogMax * 0.1
+      ? "Room-search index is VERY sparse for this city (<10% of catalog)"
+      : roomSearchMax < hotelCatalogMax * 0.5
+      ? "Room-search index is PARTIAL for this city (<50% of catalog)"
+      : "Room-search index covers most of the catalog"
+  };
+
+  res.json(report);
+});
+
 // ── City autocomplete via Geoapify (free tier: 3000 req/day, no card needed) ──
 // Get a free key at: https://myprojects.geoapify.com
 const GEOAPIFY_KEY = process.env.GEOAPIFY_KEY || "";
@@ -481,7 +564,7 @@ app.get("/api/room-search", async (req, res) => {
 // ── CLIP search via HuggingFace + LiteAPI full catalog ────────────────────────
 // Streams results via SSE so hotels appear progressively as they score
 const HF_KEY = process.env.HUGGINGFACE_KEY || "";
-const CLIP_MODEL = "openai/clip-vit-large-patch14";
+const VLM_MODEL = "meta-llama/Llama-3.2-11B-Vision-Instruct";
 
 const COUNTRY_CODES_CLIP = {
   "paris":"FR","nice":"FR","lyon":"FR","marseille":"FR","bordeaux":"FR",
@@ -549,18 +632,11 @@ async function clipScore(imageUrl, textQuery) {
   try {
     await hfThrottle();
 
-    // Fetch image as base64
-    const imgRes = await fetch(imageUrl, {
-      headers: { "User-Agent": "Mozilla/5.0" },
-      signal: AbortSignal.timeout(8000),
-    });
-    if (!imgRes.ok) return 0;
-    const b64      = Buffer.from(await imgRes.arrayBuffer()).toString("base64");
-    const mimeType = imgRes.headers.get("content-type")?.split(";")[0] || "image/jpeg";
+    // Use Llama Vision via HuggingFace router — ask it to rate how well the image matches
+    const prompt = `Rate how well this hotel room photo matches the description: "${textQuery}". Reply with ONLY a number from 0 to 100, where 100 is a perfect match and 0 is no match. Consider visual features like room style, bathroom features, furniture, lighting. Reply with just the number.`;
 
-    // Use new router.huggingface.co endpoint
     const r = await fetch(
-      `https://router.huggingface.co/hf-inference/models/${CLIP_MODEL}`,
+      `https://router.huggingface.co/hf-inference/models/${VLM_MODEL}`,
       {
         method: "POST",
         headers: {
@@ -568,19 +644,32 @@ async function clipScore(imageUrl, textQuery) {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          inputs: `data:${mimeType};base64,${b64}`,
-          parameters: { candidate_labels: [textQuery, "hotel lobby", "building exterior", "swimming pool"] }
+          messages: [
+            {
+              role: "user",
+              content: [
+                { type: "image_url", image_url: { url: imageUrl } },
+                { type: "text", text: prompt }
+              ]
+            }
+          ],
+          max_tokens: 10,
+          temperature: 0,
         }),
         signal: AbortSignal.timeout(20000),
       }
     );
-    const raw = await r.json();
+
     if (!r.ok) {
-      console.warn(`[clip] HF error ${r.status}:`, JSON.stringify(raw).slice(0, 150));
+      const err = await r.text();
+      console.warn(`[clip] HF error ${r.status}: ${err.slice(0, 100)}`);
       return 0;
     }
-    const match = Array.isArray(raw) ? raw.find(d => d.label === textQuery) : null;
-    return match ? match.score : 0;
+
+    const data = await r.json();
+    const text = data?.choices?.[0]?.message?.content?.trim() || "0";
+    const score = Math.min(100, Math.max(0, parseInt(text.replace(/[^0-9]/g, "")) || 0));
+    return score / 100; // normalise to 0-1
   } catch (e) {
     console.warn(`[clip] error:`, e.message);
     return 0;
@@ -650,7 +739,7 @@ app.get("/api/clip-search", async (req, res) => {
       for (const rt of roomTypeMap.values()) {
         console.log(`[clip]   "${rt.name}" — ${rt.photos.length} photos`);
         const photoScores = await Promise.all(
-          rt.photos.slice(0, 2).map(url => clipScore(url, query))
+          rt.photos.slice(0, 1).map(url => clipScore(url, query))
         );
         rt.scores = photoScores;
         console.log(`[clip]   scores: ${photoScores.map(s => s.toFixed(3)).join(", ")}`);
