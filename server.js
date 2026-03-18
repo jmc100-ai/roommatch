@@ -366,8 +366,18 @@ app.get("/api/room-search", async (req, res) => {
     };
   });
 
-  console.log(`[search] done — ${hotels.length} hotels, room types: ${hotels.map(h => h.roomTypes.length).join(",")}`);
-  res.json({ hotels, query, city });
+  // Re-sort hotels by their best room score (highest first) after enrichment
+  // Room-search order can drift once we merge detail data
+  const sortedHotels = hotels
+    .map(h => ({
+      ...h,
+      _bestScore: h.roomTypes.find(rt => rt.score !== null)?.score ?? 0,
+    }))
+    .sort((a, b) => b._bestScore - a._bestScore)
+    .map(({ _bestScore, ...h }) => h);
+
+  console.log(`[search] done — ${sortedHotels.length} hotels sorted by score: ${sortedHotels.map(h => h.roomTypes.find(rt=>rt.score)?.score ?? 0).join(",")}`);
+  res.json({ hotels: sortedHotels, query, city });
 });
 
 app.get("*", (req, res) => {
