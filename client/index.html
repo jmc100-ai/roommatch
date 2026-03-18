@@ -250,6 +250,81 @@
       /* Room type header wraps naturally on small screens */
       .room-type-header { flex-wrap: nowrap; }
     }
+    /* ── Mode toggle ─────────────────────────────────────────────────────── */
+    .mode-toggle {
+      display: inline-flex;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 100px;
+      padding: 4px;
+      gap: 2px;
+      margin-bottom: 28px;
+    }
+    .mode-btn {
+      padding: 9px 20px;
+      border-radius: 100px;
+      border: none;
+      font-family: 'DM Sans', sans-serif;
+      font-size: 12px;
+      font-weight: 400;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      cursor: pointer;
+      transition: all 0.2s;
+      background: transparent;
+      color: var(--muted);
+      position: relative;
+    }
+    .mode-btn.active {
+      background: var(--accent);
+      color: #0c0c0e;
+      font-weight: 600;
+      box-shadow: 0 2px 8px rgba(201,169,110,0.35);
+    }
+    .mode-btn:not(.active):hover {
+      color: var(--text);
+      background: rgba(255,255,255,0.05);
+    }
+    .mode-badge {
+      display: inline-block;
+      font-size: 9px;
+      padding: 1px 5px;
+      border-radius: 100px;
+      background: rgba(109,186,138,0.2);
+      color: var(--green);
+      border: 1px solid rgba(109,186,138,0.3);
+      margin-left: 5px;
+      vertical-align: middle;
+      letter-spacing: 0.04em;
+      font-weight: 500;
+    }
+    .mode-btn.active .mode-badge {
+      background: rgba(0,0,0,0.15);
+      color: rgba(12,12,14,0.7);
+      border-color: rgba(0,0,0,0.1);
+    }
+    .clip-score-badge {
+      font-size: 10px;
+      padding: 2px 8px;
+      border-radius: 100px;
+      background: rgba(109,186,138,0.12);
+      border: 1px solid rgba(109,186,138,0.3);
+      color: var(--green);
+      font-weight: 500;
+      white-space: nowrap;
+    }
+    .clip-progress {
+      height: 3px;
+      background: var(--border);
+      margin: 0 56px;
+    }
+    .clip-progress-fill {
+      height: 100%;
+      background: linear-gradient(90deg, var(--green), #a8e6c0);
+      border-radius: 2px;
+      transition: width 0.4s ease;
+      width: 0%;
+    }
   </style>
 </head>
 <body>
