@@ -257,6 +257,8 @@ app.get("/api/room-search", async (req, res) => {
 
   async function trySearch(extraParams) {
     const p = new URLSearchParams({ query, limit: 50, ...extraParams });
+    // Remove empty values
+    for (const [k, v] of [...p.entries()]) { if (v === "" || v === undefined) p.delete(k); }
     console.log(`[search] trying: ${p.toString()}`);
     const r = await liteGet(`/data/hotels/room-search?${p}`);
     const count = r.data?.data?.length ?? 0;
@@ -264,25 +266,73 @@ app.get("/api/room-search", async (req, res) => {
     return r.ok ? (r.data?.data || []) : [];
   }
 
-  // Attempt 1: lat/lng with radius
-  let searchData = coords
-    ? await trySearch({ latitude: coords[0], longitude: coords[1], radius: 30 })
+  // Look up country code for the city
+  const COUNTRY_CODES = {
+    // Europe
+    "paris": "FR", "nice": "FR", "lyon": "FR", "marseille": "FR", "bordeaux": "FR",
+    "london": "GB", "edinburgh": "GB", "manchester": "GB", "liverpool": "GB",
+    "barcelona": "ES", "madrid": "ES", "seville": "ES", "valencia": "ES", "ibiza": "ES",
+    "rome": "IT", "milan": "IT", "florence": "IT", "venice": "IT", "naples": "IT",
+    "amsterdam": "NL", "berlin": "DE", "munich": "DE", "hamburg": "DE", "frankfurt": "DE",
+    "vienna": "AT", "zurich": "CH", "geneva": "CH", "brussels": "BE",
+    "prague": "CZ", "budapest": "HU", "warsaw": "PL", "krakow": "PL",
+    "athens": "GR", "lisbon": "PT", "porto": "PT", "oslo": "NO",
+    "stockholm": "SE", "copenhagen": "DK", "helsinki": "FI", "dublin": "IE",
+    "istanbul": "TR", "reykjavik": "IS",
+    // Americas
+    "new york city": "US", "new york": "US", "nyc": "US", "los angeles": "US",
+    "chicago": "US", "miami": "US", "san francisco": "US", "las vegas": "US",
+    "seattle": "US", "boston": "US", "washington dc": "US", "austin": "US",
+    "denver": "US", "nashville": "US", "atlanta": "US", "dallas": "US",
+    "houston": "US", "portland": "US", "new orleans": "US", "tacoma": "US",
+    "toronto": "CA", "vancouver": "CA", "montreal": "CA",
+    "mexico city": "MX", "cancun": "MX",
+    "rio de janeiro": "BR", "sao paulo": "BR", "buenos aires": "AR",
+    "bogota": "CO", "lima": "PE", "santiago": "CL",
+    // Asia
+    "tokyo": "JP", "osaka": "JP", "kyoto": "JP",
+    "seoul": "KR", "beijing": "CN", "shanghai": "CN",
+    "hong kong": "HK", "singapore": "SG",
+    "bangkok": "TH", "phuket": "TH", "chiang mai": "TH",
+    "bali": "ID", "jakarta": "ID", "kuala lumpur": "MY",
+    "mumbai": "IN", "delhi": "IN", "goa": "IN",
+    "dubai": "AE", "abu dhabi": "AE", "doha": "QA",
+    // Africa & Middle East
+    "cairo": "EG", "marrakech": "MA", "cape town": "ZA",
+    "nairobi": "KE", "tel aviv": "IL",
+    // Oceania
+    "sydney": "AU", "melbourne": "AU", "auckland": "NZ",
+  };
+  const countryCode = COUNTRY_CODES[city.trim().toLowerCase()] || "";
+
+  // Attempt 1: countryCode + cityName (recommended by LiteAPI support)
+  let searchData = countryCode
+    ? await trySearch({ countryCode, cityName: city })
     : [];
 
-  // Attempt 2: city name if lat/lng gave < 15
-  if (searchData.length < 15) {
-    const r2 = await trySearch({ city });
+  // Attempt 2: lat/lng with radius
+  if (searchData.length < 15 && coords) {
+    const r2 = await trySearch({ latitude: coords[0], longitude: coords[1], radius: 30 });
     if (r2.length > searchData.length) {
       searchData = r2;
+      console.log(`[search] lat/lng attempt better, using it`);
+    }
+  }
+
+  // Attempt 3: city name only
+  if (searchData.length < 15) {
+    const r3 = await trySearch({ city });
+    if (r3.length > searchData.length) {
+      searchData = r3;
       console.log(`[search] city-name attempt better, using it`);
     }
   }
 
-  // Attempt 3: no geo filter if still sparse
+  // Attempt 4: no geo filter
   if (searchData.length < 15) {
-    const r3 = await trySearch({});
-    if (r3.length > searchData.length) {
-      searchData = r3;
+    const r4 = await trySearch({});
+    if (r4.length > searchData.length) {
+      searchData = r4;
       console.log(`[search] no-geo attempt better, using it`);
     }
   }
