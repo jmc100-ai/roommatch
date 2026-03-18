@@ -9,7 +9,9 @@ const path    = require("path");
 require("dotenv").config();
 
 const app         = express();
-const LITEAPI_KEY = process.env.LITEAPI_KEY || "";
+// Use production key if set, fall back to sandbox
+const LITEAPI_KEY = process.env.LITEAPI_PROD_KEY || process.env.LITEAPI_KEY || "";
+const IS_PROD     = !!process.env.LITEAPI_PROD_KEY;
 const PORT        = process.env.PORT || 3000;
 
 const CITY_COORDS = {
@@ -388,6 +390,7 @@ app.get("*", (req, res) => {
 });
 
 app.listen(PORT, () => {
+  console.log(`[config] Using ${IS_PROD ? "PRODUCTION" : "SANDBOX"} LiteAPI key`);
   console.log(`RoomMatch on port ${PORT}`);
 
   // ── Keepalive: ping self every 10 min to prevent Render free tier spin-down
