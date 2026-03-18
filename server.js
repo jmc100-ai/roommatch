@@ -527,43 +527,62 @@ const COUNTRY_CODES_CLIP = {
   "maldives":"MV","bora bora":"PF","fiji":"FJ",
 };
 
+// ── HuggingFace CLIP scoring ──────────────────────────────────────────────────
+// Rate limit: free tier = 200 req / 5 min → throttle to max 30 req/min to be safe
+let _hfReqCount = 0;
+let _hfWindowStart = Date.now();
+
+async function hfThrottle() {
+  const now = Date.now();
+  if (now - _hfWindowStart > 60000) { _hfReqCount = 0; _hfWindowStart = now; }
+  if (_hfReqCount >= 30) {
+    const wait = 60000 - (now - _hfWindowStart) + 100;
+    console.log(`[clip] rate limit pause ${wait}ms`);
+    await new Promise(r => setTimeout(r, wait));
+    _hfReqCount = 0; _hfWindowStart = Date.now();
+  }
+  _hfReqCount++;
+}
+
 async function clipScore(imageUrl, textQuery) {
   if (!HF_KEY) return 0;
   try {
-    // HuggingFace zero-shot image classification needs base64 image data
+    await hfThrottle();
+
+    // Fetch image as base64
     const imgRes = await fetch(imageUrl, {
       headers: { "User-Agent": "Mozilla/5.0" },
       signal: AbortSignal.timeout(8000),
     });
-    if (!imgRes.ok) { console.warn(`[clip] image fetch failed: ${imgRes.status} ${imageUrl}`); return 0; }
-    const imgBuf    = await imgRes.arrayBuffer();
-    const b64       = Buffer.from(imgBuf).toString("base64");
-    const mimeType  = imgRes.headers.get("content-type")?.split(";")[0] || "image/jpeg";
-    const dataUrl   = `data:${mimeType};base64,${b64}`;
+    if (!imgRes.ok) return 0;
+    const b64      = Buffer.from(await imgRes.arrayBuffer()).toString("base64");
+    const mimeType = imgRes.headers.get("content-type")?.split(";")[0] || "image/jpeg";
 
+    // Use new router.huggingface.co endpoint
     const r = await fetch(
-      `https://api-inference.huggingface.co/models/${CLIP_MODEL}`,
+      `https://router.huggingface.co/hf-inference/models/${CLIP_MODEL}`,
       {
         method: "POST",
-        headers: { "Authorization": `Bearer ${HF_KEY}`, "Content-Type": "application/json" },
+        headers: {
+          "Authorization": `Bearer ${HF_KEY}`,
+          "Content-Type": "application/json",
+        },
         body: JSON.stringify({
-          inputs: dataUrl,
-          parameters: { candidate_labels: [textQuery, "hotel lobby", "building exterior", "pool or gym"] }
+          inputs: `data:${mimeType};base64,${b64}`,
+          parameters: { candidate_labels: [textQuery, "hotel lobby", "building exterior", "swimming pool"] }
         }),
-        signal: AbortSignal.timeout(15000),
+        signal: AbortSignal.timeout(20000),
       }
     );
     const raw = await r.json();
     if (!r.ok) {
-      console.warn(`[clip] HF error ${r.status}:`, JSON.stringify(raw).slice(0, 200));
+      console.warn(`[clip] HF error ${r.status}:`, JSON.stringify(raw).slice(0, 150));
       return 0;
     }
-    // Returns [{label, score}] sorted by score desc
     const match = Array.isArray(raw) ? raw.find(d => d.label === textQuery) : null;
-    const score = match ? match.score : 0;
-    return score;
+    return match ? match.score : 0;
   } catch (e) {
-    console.warn(`[clip] error scoring ${imageUrl.slice(0,60)}:`, e.message);
+    console.warn(`[clip] error:`, e.message);
     return 0;
   }
 }
@@ -631,7 +650,7 @@ app.get("/api/clip-search", async (req, res) => {
       for (const rt of roomTypeMap.values()) {
         console.log(`[clip]   "${rt.name}" — ${rt.photos.length} photos`);
         const photoScores = await Promise.all(
-          rt.photos.slice(0, 5).map(url => clipScore(url, query))
+          rt.photos.slice(0, 2).map(url => clipScore(url, query))
         );
         rt.scores = photoScores;
         console.log(`[clip]   scores: ${photoScores.map(s => s.toFixed(3)).join(", ")}`);
