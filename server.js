@@ -251,12 +251,12 @@ app.get("/api/room-search", async (req, res) => {
   if (!LITEAPI_KEY)    return res.status(500).json({ error: "LITEAPI_KEY not configured" });
 
   // ── Step 1: room-search → ranked hotels + best matching room per hotel ──────
-  const params = new URLSearchParams({ query, limit: 20 });
+  const params = new URLSearchParams({ query, limit: 50 });
   const coords = resolveCoords(city);
   if (coords) {
     params.set("latitude", coords[0]);
     params.set("longitude", coords[1]);
-    params.set("radius", 15);
+    params.set("radius", 30);
   } else {
     params.set("city", city);
   }
@@ -290,12 +290,14 @@ app.get("/api/room-search", async (req, res) => {
   });
 
   // ── Step 2: parallel-fetch hotel details for full room inventory ─────────────
+  // Only enrich top 20 — avoids unnecessary API calls for low-ranked hotels
+  const top20 = searchData.slice(0, 20);
   const detailResults = await Promise.all(
-    searchData.map(h => liteGet(`/data/hotel?hotelId=${h.id}`).catch(() => null))
+    top20.map(h => liteGet(`/data/hotel?hotelId=${h.id}`).catch(() => null))
   );
 
   // ── Step 3: build structured hotel + room-type response ──────────────────────
-  const hotels = searchData.map((h, i) => {
+  const hotels = top20.map((h, i) => {
     const detail  = detailResults[i]?.data?.data || null;
     const best    = bestMatchMap[h.id];
 
@@ -368,6 +370,7 @@ app.get("/api/room-search", async (req, res) => {
 
   // Re-sort hotels by their best room score (highest first) after enrichment
   // Room-search order can drift once we merge detail data
+  // Cap display at 20 best matches even if API returned more
   const sortedHotels = hotels
     .map(h => ({
       ...h,
