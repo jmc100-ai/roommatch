@@ -530,24 +530,42 @@ const COUNTRY_CODES_CLIP = {
 async function clipScore(imageUrl, textQuery) {
   if (!HF_KEY) return 0;
   try {
+    // HuggingFace zero-shot image classification needs base64 image data
+    const imgRes = await fetch(imageUrl, {
+      headers: { "User-Agent": "Mozilla/5.0" },
+      signal: AbortSignal.timeout(8000),
+    });
+    if (!imgRes.ok) { console.warn(`[clip] image fetch failed: ${imgRes.status} ${imageUrl}`); return 0; }
+    const imgBuf    = await imgRes.arrayBuffer();
+    const b64       = Buffer.from(imgBuf).toString("base64");
+    const mimeType  = imgRes.headers.get("content-type")?.split(";")[0] || "image/jpeg";
+    const dataUrl   = `data:${mimeType};base64,${b64}`;
+
     const r = await fetch(
       `https://api-inference.huggingface.co/models/${CLIP_MODEL}`,
       {
         method: "POST",
         headers: { "Authorization": `Bearer ${HF_KEY}`, "Content-Type": "application/json" },
         body: JSON.stringify({
-          inputs: { image: imageUrl },
-          parameters: { candidate_labels: [textQuery, "hotel lobby", "exterior building"] }
+          inputs: dataUrl,
+          parameters: { candidate_labels: [textQuery, "hotel lobby", "building exterior", "pool or gym"] }
         }),
-        signal: AbortSignal.timeout(10000),
+        signal: AbortSignal.timeout(15000),
       }
     );
-    if (!r.ok) return 0;
-    const data = await r.json();
-    // Returns [{label, score}] sorted by score desc — first entry matching our query
-    const match = data.find(d => d.label === textQuery);
-    return match ? match.score : (data[0]?.score || 0);
-  } catch { return 0; }
+    const raw = await r.json();
+    if (!r.ok) {
+      console.warn(`[clip] HF error ${r.status}:`, JSON.stringify(raw).slice(0, 200));
+      return 0;
+    }
+    // Returns [{label, score}] sorted by score desc
+    const match = Array.isArray(raw) ? raw.find(d => d.label === textQuery) : null;
+    const score = match ? match.score : 0;
+    return score;
+  } catch (e) {
+    console.warn(`[clip] error scoring ${imageUrl.slice(0,60)}:`, e.message);
+    return 0;
+  }
 }
 
 app.get("/api/clip-search", async (req, res) => {
@@ -609,11 +627,14 @@ app.get("/api/clip-search", async (req, res) => {
       }
 
       // Score all photos for each room type with CLIP
+      console.log(`[clip] hotel "${h.name}" has ${roomTypeMap.size} room types`);
       for (const rt of roomTypeMap.values()) {
+        console.log(`[clip]   "${rt.name}" — ${rt.photos.length} photos`);
         const photoScores = await Promise.all(
           rt.photos.slice(0, 5).map(url => clipScore(url, query))
         );
         rt.scores = photoScores;
+        console.log(`[clip]   scores: ${photoScores.map(s => s.toFixed(3)).join(", ")}`);
       }
 
       // Build room types sorted by best photo score
