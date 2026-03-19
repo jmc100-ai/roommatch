@@ -1028,15 +1028,16 @@ app.get("/api/vsearch", async (req, res) => {
       .sort((a,b) => b.topScore - a.topScore)
       .slice(0, 20);
 
-    // 5. Enrich top 10 with hotel detail from cache then LiteAPI
-    const top10 = rankedHotels.slice(0, 10);
+    // 5. Enrich ALL ranked hotels with names from cache first
+    const allHotelIds = rankedHotels.map(h => h.hotelId);
     const { data: cached } = await supabase
       .from("hotels_cache")
       .select("*")
-      .in("hotel_id", top10.map(h => h.hotelId));
+      .in("hotel_id", allHotelIds);
     const cacheMap = new Map((cached || []).map(h => [h.hotel_id, h]));
 
-    // Fetch detail for hotels not in cache
+    // Fetch detail from LiteAPI for any hotels missing from cache (top 10 only)
+    const top10 = rankedHotels.slice(0, 10);
     const needDetail = top10.filter(h => !cacheMap.has(h.hotelId));
     await Promise.all(needDetail.map(async ({ hotelId }) => {
       const r = await liteGet(`/data/hotel?hotelId=${hotelId}`);
@@ -1049,38 +1050,67 @@ app.get("/api/vsearch", async (req, res) => {
       }
     }));
 
-    // 6. Build response in same format as room-search endpoint
-    const hotels = rankedHotels.map(({ hotelId, topScore, photos }) => {
-      const meta = cacheMap.get(hotelId) || {};
+    // 6. Fetch all photos for each hotel from DB (not just the 100 search results)
+    const { data: allPhotos } = await supabase
+      .from("room_embeddings")
+      .select("hotel_id, hotel_name, room_name, photo_url, photo_type, caption")
+      .in("hotel_id", allHotelIds)
+      .eq("city", city);
+
+    // Build a map of hotelId → all their photos
+    const hotelPhotosMap = new Map();
+    for (const p of (allPhotos || [])) {
+      if (!hotelPhotosMap.has(p.hotel_id)) hotelPhotosMap.set(p.hotel_id, []);
+      hotelPhotosMap.get(p.hotel_id).push(p);
+    }
+
+    // 7. Build response — group photos by room_name for each hotel
+    const hotels = rankedHotels.map(({ hotelId, topScore, photos: matchedPhotos }) => {
+      const meta  = cacheMap.get(hotelId) || {};
       const score = Math.round(topScore * 100);
 
-      // Group photos by room name
+      // Use all stored photos for this hotel, ordered by match score
+      // Matched photos (from vector search) come first
+      const matchedUrls = new Set(matchedPhotos.map(p => p.url));
+      const allHotelPhotos = hotelPhotosMap.get(hotelId) || [];
+
+      // Group by room_name
       const roomMap = new Map();
-      for (const p of photos) {
-        const key = "Best Matching Rooms";
-        if (!roomMap.has(key)) roomMap.set(key, []);
-        roomMap.get(key).push(p.url);
+      // First add matched photos in score order
+      for (const p of matchedPhotos) {
+        const rName = p.caption ? (allHotelPhotos.find(ap => ap.photo_url === p.url)?.room_name || "Matching Rooms") : "Matching Rooms";
+        if (!roomMap.has(rName)) roomMap.set(rName, []);
+        if (roomMap.get(rName).length < 8) roomMap.get(rName).push(p.url);
+      }
+      // Then add remaining photos not already included
+      for (const p of allHotelPhotos) {
+        if (matchedUrls.has(p.photo_url)) continue;
+        const rName = p.room_name || "Other Rooms";
+        if (!roomMap.has(rName)) roomMap.set(rName, []);
+        if (roomMap.get(rName).length < 8) roomMap.get(rName).push(p.photo_url);
       }
 
       const roomTypes = [...roomMap.entries()].map(([name, photoUrls]) => ({
         name,
         photos:    photoUrls,
-        score,
+        score:     name === [...roomMap.keys()][0] ? score : null,
         size:      "",
         beds:      "",
         amenities: [],
       }));
 
+      // Use hotel_name from room_embeddings as fallback if cache miss
+      const fallbackName = allHotelPhotos[0]?.hotel_name || null;
       return {
-        id:         hotelId,
-        name:       meta.name || hotelId,
-        address:    meta.address || "",
+        id:          hotelId,
+        name:        meta.name || fallbackName || hotelId,
+        address:     meta.address || "",
         city,
-        country:    "",
-        starRating: meta.star_rating || 0,
-        rating:     meta.guest_rating || 0,
-        roomTypes,
-        isMatched:  true,
+        country:     "",
+        starRating:  meta.star_rating || 0,
+        rating:      meta.guest_rating || 0,
+        roomTypes:   roomTypes.slice(0, 6),
+        isMatched:   true,
         vectorScore: score,
       };
     });
