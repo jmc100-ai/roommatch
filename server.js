@@ -920,6 +920,13 @@ app.get("/api/vsearch", async (req, res) => {
   if (!query || !city) return res.status(400).json({ error: "query and city required" });
   if (!supabase)       return res.status(500).json({ error: "Supabase not configured" });
 
+  const CC_MAP = {
+    "paris":"FR","london":"GB","new york city":"US","new york":"US","nyc":"US",
+    "tokyo":"JP","sydney":"AU","dubai":"AE","barcelona":"ES","rome":"IT",
+    "amsterdam":"NL","berlin":"DE","madrid":"ES","vienna":"AT","prague":"CZ",
+    "bangkok":"TH","singapore":"SG","hong kong":"HK","seoul":"KR","milan":"IT",
+  };
+
   try {
     // 1. Check if city is indexed
     const { data: cityRow } = await supabase
@@ -945,11 +952,19 @@ app.get("/api/vsearch", async (req, res) => {
     if (status === "none" || !cityRow) {
       console.log(`[vsearch] ${city} not indexed — triggering background index`);
       if (supabaseAdmin) {
-        supabaseAdmin.from("indexed_cities").upsert({
-          city, status: "indexing", updated_at: new Date().toISOString()
-        }, { onConflict: "city" }).then(() => {
+        // Atomic insert — only succeeds if city doesn't already exist
+        // Prevents duplicate runs if two requests come in simultaneously
+        const { error: insertErr } = await supabaseAdmin
+          .from("indexed_cities")
+          .insert({ city, country_code: CC_MAP[city.toLowerCase()] || "", status: "indexing",
+                    started_at: new Date().toISOString(), updated_at: new Date().toISOString() });
+
+        if (!insertErr) {
+          // We won the race — start indexing
           indexCity(city, 200).catch(e => console.error("[indexer]", e.message));
-        });
+        } else {
+          console.log(`[vsearch] ${city} indexing already started by another request`);
+        }
       }
       return res.json({
         hotels: [], query, city,
