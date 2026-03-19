@@ -96,7 +96,7 @@ async function liteGet(path) {
   return { ok: r.ok, status: r.status, data: await r.json() };
 }
 
-async function geminiCaption(imageUrl, retries = 3) {
+async function geminiCaption(imageUrl, photoContext = {}, retries = 3) {
   try {
     await geminiThrottle();
     const imgRes = await fetch(imageUrl, {
@@ -107,13 +107,14 @@ async function geminiCaption(imageUrl, retries = 3) {
     const b64  = Buffer.from(await imgRes.arrayBuffer()).toString("base64");
     const mime = imgRes.headers.get("content-type")?.split(";")[0] || "image/jpeg";
 
-    const photoTypeLabel = photo.type === "bathroom" ? "bathroom"
-      : photo.type === "bedroom" ? "bedroom"
-      : photo.type === "living"  ? "living area"
-      : photo.type === "view"    ? "view/balcony"
+    const { type: photoType = "other", roomName = "hotel room" } = photoContext;
+    const photoTypeLabel = photoType === "bathroom" ? "bathroom"
+      : photoType === "bedroom" ? "bedroom"
+      : photoType === "living"  ? "living area"
+      : photoType === "view"    ? "view/balcony"
       : "hotel room area";
 
-    const prompt = `You are analyzing a ${photoTypeLabel} photo of a "${photo.roomName}" hotel room for a search index. Answer each item based ONLY on what you can clearly and confidently see in the photo. If you cannot clearly see something, write "unknown". Do not guess or infer.
+    const prompt = `You are analyzing a ${photoTypeLabel} photo of a "${roomName}" hotel room for a search index. Answer each item based ONLY on what you can clearly and confidently see in the photo. If you cannot clearly see something, write "unknown". Do not guess or infer.
 
 BATHROOM:
 SINKS: (no sink visible / one sink / two sinks / three or more sinks)
@@ -183,7 +184,7 @@ Reply with ONLY the filled-in list above. No extra commentary.`;
         const wait = (4 - retries) * 2000;
         console.warn(`  [gemini] 503 — retrying in ${wait/1000}s (${retries} left)`);
         await new Promise(r => setTimeout(r, wait));
-        return geminiCaption(imageUrl, retries - 1);
+        return geminiCaption(imageUrl, photoContext, retries - 1);
       }
       console.warn(`  [gemini] caption ${gr.status}: ${rawText.slice(0,200)}`);
       return null;
@@ -367,7 +368,7 @@ async function indexCity(city, limit = 200) {
       let embedded = 0;
       for (const photo of fresh) {
         // Step 1: Caption
-        const caption = await geminiCaption(photo.url);
+        const caption = await geminiCaption(photo.url, { type: photo.type, roomName: photo.roomName });
         if (!caption) { console.warn(`  [pipeline] caption FAILED for ${photo.url.slice(-40)}`); continue; }
         console.log(`  [pipeline] caption OK (${caption.length} chars): ${caption.slice(0,60)}...`);
 
@@ -381,7 +382,7 @@ async function indexCity(city, limit = 200) {
           m.amenities?.length ? `Amenities: ${m.amenities.join(', ')}` : null,
         ].filter(Boolean).join('. ');
 
-        const photoTypeStr = `PHOTO TYPE: ${photo.type || 'unknown'}`;
+        const photoTypeStr = `PHOTO TYPE: ${photo.type || 'unknown'} | ROOM: ${photo.roomName || 'unknown'}`;
         const hybridText = metaParts
           ? `${photoTypeStr}
 ${caption}
