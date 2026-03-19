@@ -7,6 +7,15 @@ const express = require("express");
 const cors    = require("cors");
 const path    = require("path");
 require("dotenv").config();
+const { createClient } = require("@supabase/supabase-js");
+const { indexCity }    = require("./scripts/index-city");
+
+const supabase = (process.env.SUPABASE_URL && process.env.SUPABASE_ANON_KEY)
+  ? createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY)
+  : null;
+const supabaseAdmin = (process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_KEY)
+  ? createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_KEY)
+  : null;
 
 const app         = express();
 // Use production key if set, fall back to sandbox
@@ -812,6 +821,185 @@ app.get("/api/clip-search", async (req, res) => {
   }
 
   res.end();
+});
+
+// ── Vector search endpoint ────────────────────────────────────────────────────
+app.get("/api/vsearch", async (req, res) => {
+  const { query, city } = req.query;
+  if (!query || !city) return res.status(400).json({ error: "query and city required" });
+  if (!supabase)       return res.status(500).json({ error: "Supabase not configured" });
+
+  try {
+    // 1. Check if city is indexed
+    const { data: cityRow } = await supabase
+      .from("indexed_cities")
+      .select("status, hotel_count, photo_count")
+      .eq("city", city)
+      .single();
+
+    const status = cityRow?.status || "none";
+
+    // Not indexed at all — trigger background indexing and fall back
+    if (status === "none" || !cityRow) {
+      console.log(`[vsearch] ${city} not indexed — triggering background index`);
+      // Fire and forget — don't await
+      if (supabaseAdmin) {
+        supabaseAdmin.from("indexed_cities").upsert({
+          city, status: "pending", updated_at: new Date().toISOString()
+        }, { onConflict: "city" }).then(() => {
+          indexCity(city, 200).catch(e => console.error("[indexer]", e.message));
+        });
+      }
+      return res.json({
+        hotels: [], query, city,
+        indexing: true,
+        indexStatus: "started",
+        message: `Building visual index for ${city}. Check back in 2-3 minutes.`
+      });
+    }
+
+    // Indexing in progress — return partial results + status
+    const indexing = status === "indexing";
+
+    // 2. Embed the query with Gemini
+    const embedRes = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/text-embedding-004:embedContent?key=${process.env.GEMINI_KEY}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ content: { parts: [{ text: query }] } }),
+        signal: AbortSignal.timeout(8000),
+      }
+    );
+    if (!embedRes.ok) throw new Error("Gemini embedding failed");
+    const embedData = await embedRes.json();
+    const queryEmbedding = embedData?.embedding?.values;
+    if (!queryEmbedding) throw new Error("No embedding returned");
+
+    // 3. Vector similarity search via Supabase function
+    const { data: matches, error: searchErr } = await supabase
+      .rpc("search_rooms", {
+        query_embedding: queryEmbedding,
+        search_city:     city,
+        match_count:     100,
+      });
+
+    if (searchErr) throw new Error(searchErr.message);
+    if (!matches?.length) {
+      return res.json({ hotels: [], query, city, indexing, indexStatus: status });
+    }
+
+    // 4. Aggregate by hotel — score = average of top 3 photo scores
+    const hotelMap = new Map();
+    for (const m of matches) {
+      if (!hotelMap.has(m.hotel_id)) {
+        hotelMap.set(m.hotel_id, { photos: [], scores: [] });
+      }
+      const h = hotelMap.get(m.hotel_id);
+      h.photos.push({ url: m.photo_url, type: m.photo_type, caption: m.caption, score: m.similarity });
+      h.scores.push(m.similarity);
+    }
+
+    // Sort hotels by average of top 3 scores
+    const rankedHotels = [...hotelMap.entries()]
+      .map(([hotelId, data]) => {
+        data.scores.sort((a,b) => b-a);
+        const topScore = data.scores.slice(0,3).reduce((s,x) => s+x, 0) / Math.min(3, data.scores.length);
+        return { hotelId, topScore, photos: data.photos };
+      })
+      .sort((a,b) => b.topScore - a.topScore)
+      .slice(0, 20);
+
+    // 5. Enrich top 10 with hotel detail from cache then LiteAPI
+    const top10 = rankedHotels.slice(0, 10);
+    const { data: cached } = await supabase
+      .from("hotels_cache")
+      .select("*")
+      .in("hotel_id", top10.map(h => h.hotelId));
+    const cacheMap = new Map((cached || []).map(h => [h.hotel_id, h]));
+
+    // Fetch detail for hotels not in cache
+    const needDetail = top10.filter(h => !cacheMap.has(h.hotelId));
+    await Promise.all(needDetail.map(async ({ hotelId }) => {
+      const r = await liteGet(`/data/hotel?hotelId=${hotelId}`);
+      if (r.ok && r.data?.data) {
+        const d = r.data.data;
+        cacheMap.set(hotelId, {
+          hotel_id: hotelId, name: d.name, address: d.address,
+          star_rating: d.starRating || 0, guest_rating: d.rating || 0,
+        });
+      }
+    }));
+
+    // 6. Build response in same format as room-search endpoint
+    const hotels = rankedHotels.map(({ hotelId, topScore, photos }) => {
+      const meta = cacheMap.get(hotelId) || {};
+      const score = Math.round(topScore * 100);
+
+      // Group photos by room name
+      const roomMap = new Map();
+      for (const p of photos) {
+        const key = "Best Matching Rooms";
+        if (!roomMap.has(key)) roomMap.set(key, []);
+        roomMap.get(key).push(p.url);
+      }
+
+      const roomTypes = [...roomMap.entries()].map(([name, photoUrls]) => ({
+        name,
+        photos:    photoUrls,
+        score,
+        size:      "",
+        beds:      "",
+        amenities: [],
+      }));
+
+      return {
+        id:         hotelId,
+        name:       meta.name || hotelId,
+        address:    meta.address || "",
+        city,
+        country:    "",
+        starRating: meta.star_rating || 0,
+        rating:     meta.guest_rating || 0,
+        roomTypes,
+        isMatched:  true,
+        vectorScore: score,
+      };
+    });
+
+    console.log(`[vsearch] ${city}: ${hotels.length} hotels, top score ${rankedHotels[0]?.topScore?.toFixed(3)}`);
+    res.json({ hotels, query, city, indexing, indexStatus: status,
+      stats: { indexed: cityRow?.photo_count || 0 } });
+
+  } catch(err) {
+    console.error("[vsearch]", err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── Index status endpoint ──────────────────────────────────────────────────────
+app.get("/api/index-status", async (req, res) => {
+  const { city } = req.query;
+  if (!city || !supabase) return res.json({ status: "unknown" });
+  const { data } = await supabase
+    .from("indexed_cities")
+    .select("status, hotel_count, photo_count, started_at, completed_at")
+    .eq("city", city)
+    .single();
+  res.json(data || { status: "none" });
+});
+
+// ── Manual trigger endpoint (protected) ───────────────────────────────────────
+app.post("/api/index-city", async (req, res) => {
+  const { city, limit, secret } = req.body || {};
+  if (secret !== (process.env.INDEX_SECRET || "roommatch-index")) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
+  if (!city) return res.status(400).json({ error: "city required" });
+  // Fire and forget
+  indexCity(city, limit || 200)
+    .catch(e => console.error("[indexer]", e.message));
+  res.json({ message: `Indexing ${city} started`, city, limit: limit || 200 });
 });
 
 app.get("*", (req, res) => {
