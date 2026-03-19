@@ -213,10 +213,11 @@ async function indexCity(city, limit = 200) {
   const cc = COUNTRY_CODES[city.toLowerCase()] || "";
   console.log(`\n[indexer] Starting: ${city} (${cc}) — limit ${limit}`);
 
-  // Mark as indexing
+  // Mark as indexing — reset stop_requested flag
   await supabase.from("indexed_cities").upsert({
     city, country_code: cc, status: "indexing",
     hotel_count: 0, photo_count: 0,
+    stop_requested: false,
     started_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
   }, { onConflict: "city" });
@@ -306,13 +307,18 @@ async function indexCity(city, limit = 200) {
       // Caption + embed + store each photo sequentially
       let embedded = 0;
       for (const photo of fresh) {
+        // Step 1: Caption
         const caption = await geminiCaption(photo.url);
-        if (!caption) continue;
+        if (!caption) { console.warn(`  [pipeline] caption FAILED for ${photo.url.slice(-40)}`); continue; }
+        console.log(`  [pipeline] caption OK (${caption.length} chars): ${caption.slice(0,60)}...`);
 
+        // Step 2: Embed
         const embedding = await geminiEmbed(caption);
-        if (!embedding) continue;
+        if (!embedding) { console.warn(`  [pipeline] embed FAILED`); continue; }
+        console.log(`  [pipeline] embed OK (${embedding.length} dims)`);
 
-        const { error } = await supabase.from("room_embeddings").upsert({
+        // Step 3: Store
+        const { error, data } = await supabase.from("room_embeddings").upsert({
           hotel_id: hotelId, city, country_code: cc,
           room_name: photo.roomName, photo_url: photo.url,
           photo_type: photo.type, caption, embedding,
@@ -321,8 +327,9 @@ async function indexCity(city, limit = 200) {
 
         if (!error) {
           embedded++; totalEmbeds++;
+          console.log(`  [pipeline] stored OK — total: ${totalEmbeds}`);
         } else {
-          console.warn(`  [db] insert error: ${error.message}`);
+          console.warn(`  [db] insert error: ${error.message}`, error.details, error.hint);
         }
       }
 
@@ -335,6 +342,22 @@ async function indexCity(city, limit = 200) {
       hotel_count: hotelsDone, photo_count: totalEmbeds,
       updated_at: new Date().toISOString(),
     }).eq("city", city);
+
+    // Check for cancellation request between batches
+    const { data: cityCheck } = await supabase
+      .from("indexed_cities")
+      .select("stop_requested")
+      .eq("city", city)
+      .single();
+    if (cityCheck?.stop_requested) {
+      console.log(`[indexer] ⛔ Stop requested for ${city} — exiting after ${hotelsDone} hotels`);
+      await supabase.from("indexed_cities").update({
+        status:     "cancelled",
+        last_error: `Cancelled after ${hotelsDone} hotels, ${totalEmbeds} embeddings`,
+        updated_at: new Date().toISOString(),
+      }).eq("city", city);
+      return { hotelsDone, totalEmbeds, cancelled: true };
+    }
   }
 
   // Mark complete
