@@ -107,7 +107,13 @@ async function geminiCaption(imageUrl, retries = 3) {
     const b64  = Buffer.from(await imgRes.arrayBuffer()).toString("base64");
     const mime = imgRes.headers.get("content-type")?.split(";")[0] || "image/jpeg";
 
-    const prompt = `You are analyzing a hotel room photo for a search index. Answer each item based ONLY on what you can clearly and confidently see in the photo. If you cannot clearly see something, write "unknown". Do not guess or infer.
+    const photoTypeLabel = photo.type === "bathroom" ? "bathroom"
+      : photo.type === "bedroom" ? "bedroom"
+      : photo.type === "living"  ? "living area"
+      : photo.type === "view"    ? "view/balcony"
+      : "hotel room area";
+
+    const prompt = `You are analyzing a ${photoTypeLabel} photo of a "${photo.roomName}" hotel room for a search index. Answer each item based ONLY on what you can clearly and confidently see in the photo. If you cannot clearly see something, write "unknown". Do not guess or infer.
 
 BATHROOM:
 SINKS: (no sink visible / one sink / two sinks / three or more sinks)
@@ -165,7 +171,7 @@ Reply with ONLY the filled-in list above. No extra commentary.`;
             { inline_data: { mime_type: mime, data: b64 } },
             { text: prompt }
           ]}],
-          generationConfig: { maxOutputTokens: 150, temperature: 0.1 }
+          generationConfig: { maxOutputTokens: 400, temperature: 0.1 }
         }),
         signal: AbortSignal.timeout(25000),
       }
@@ -375,8 +381,13 @@ async function indexCity(city, limit = 200) {
           m.amenities?.length ? `Amenities: ${m.amenities.join(', ')}` : null,
         ].filter(Boolean).join('. ');
 
-        const hybridText = metaParts ? `${caption}
-${metaParts}` : caption;
+        const photoTypeStr = `PHOTO TYPE: ${photo.type || 'unknown'}`;
+        const hybridText = metaParts
+          ? `${photoTypeStr}
+${caption}
+${metaParts}`
+          : `${photoTypeStr}
+${caption}`;
 
         // Step 2: Embed the hybrid text
         const embedding = await geminiEmbed(hybridText);
