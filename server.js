@@ -227,8 +227,9 @@ app.get("/api/debug-gemini", async (req, res) => {
     "gemini-1.5-flash-8b",
   ];
 
-  // Tiny test image (1x1 white pixel JPEG in base64)
-  const testB64 = "/9j/4AAQSkZJRgABAQEASABIAAD/2wBDAAgGBgcGBQgHBwcJCQgKDBQNDAsLDBkSEw8UHRofHh0aHBwgJC4nICIsIxwcKDcpLDAxNDQ0Hyc5PTgyPC4zNDL/2wBDAQkJCQwLDBgNDRgyIRwhMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjL/wAARCAABAAEDASIAAhEBAxEB/8QAFgABAQEAAAAAAAAAAAAAAAAABgUEA/8QAIRAAAQMEAgMAAAAAAAAAAAAAAQIDBAAFERIhMUH/xAAUAQEAAAAAAAAAAAAAAAAAAAAA/8QAFBEBAAAAAAAAAAAAAAAAAAAAAP/aAAwDAQACEQMRAD8Amk2la5F2jNTXGW3GUrUhtDiikkdyST2HvVFFAf/Z";
+  // Tiny valid 2x2 red PNG in base64
+  const testB64 = "iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAD91JpzAAAAEElEQVR4nGP4z8AARAwQCgAf7gP9i18U1AAAAABJRU5ErkJggg==";
+  const testMime = "image/png";
 
   const results = [];
 
@@ -241,7 +242,7 @@ app.get("/api/debug-gemini", async (req, res) => {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             contents: [{ parts: [
-              { inline_data: { mime_type: "image/jpeg", data: testB64 } },
+              { inline_data: { mime_type: testMime, data: testB64 } },
               { text: "What colour is this image? One word answer." }
             ]}],
             generationConfig: { maxOutputTokens: 10 }
