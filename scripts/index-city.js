@@ -118,19 +118,38 @@ Max 80 words. No preamble, just the description.`;
         signal: AbortSignal.timeout(25000),
       }
     );
+
+    const rawText = await gr.text();
     if (!gr.ok) {
-      const err = await gr.text();
       if (gr.status === 503 && retries > 0) {
-        const wait = (4 - retries) * 2000; // 2s, 4s, 6s backoff
+        const wait = (4 - retries) * 2000;
         console.warn(`  [gemini] 503 — retrying in ${wait/1000}s (${retries} left)`);
         await new Promise(r => setTimeout(r, wait));
         return geminiCaption(imageUrl, retries - 1);
       }
-      console.warn(`  [gemini] caption ${gr.status}: ${err.slice(0,80)}`);
+      console.warn(`  [gemini] caption ${gr.status}: ${rawText.slice(0,200)}`);
       return null;
     }
-    const gd = await gr.json();
-    return gd?.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || null;
+
+    let gd;
+    try { gd = JSON.parse(rawText); }
+    catch(e) { console.warn(`  [gemini] JSON parse failed: ${rawText.slice(0,100)}`); return null; }
+
+    // Log full response structure on first call to diagnose issues
+    if (!geminiCaption._logged) {
+      geminiCaption._logged = true;
+      console.log(`  [gemini] sample response keys: ${Object.keys(gd).join(', ')}`);
+      console.log(`  [gemini] candidates[0] keys: ${Object.keys(gd?.candidates?.[0] || {}).join(', ')}`);
+      console.log(`  [gemini] finish reason: ${gd?.candidates?.[0]?.finishReason}`);
+      console.log(`  [gemini] parts: ${JSON.stringify(gd?.candidates?.[0]?.content?.parts?.map(p => Object.keys(p)))}`);
+    }
+
+    const caption = gd?.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
+    if (!caption) {
+      const reason = gd?.candidates?.[0]?.finishReason || 'unknown';
+      console.warn(`  [gemini] empty caption, finishReason: ${reason}`);
+    }
+    return caption || null;
   } catch(e) {
     console.warn(`  [gemini] caption error: ${e.message}`);
     return null;
@@ -241,6 +260,7 @@ async function indexCity(city, limit = 200) {
       }
 
       // Select up to MAX_PHOTOS per room type (bathrooms first)
+      if (!roomMap.size) { console.log(`  [hotel] ${hotelName.slice(0,30)}: no rooms found`); hotelsDone++; return; }
       const toProcess = [];
       for (const [rName, buckets] of roomMap) {
         const selected = [
@@ -259,6 +279,7 @@ async function indexCity(city, limit = 200) {
       const seen = new Set((existing || []).map(e => e.photo_url));
       const fresh = toProcess.filter(p => !seen.has(p.url));
 
+      console.log(`  [hotel] ${hotelName.slice(0,30)}: ${toProcess.length} photos selected, ${fresh.length} new to process`);
       if (!fresh.length) { hotelsDone++; return; }
 
       // Caption + embed + store each photo sequentially
