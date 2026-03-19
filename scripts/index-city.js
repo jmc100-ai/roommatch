@@ -107,14 +107,13 @@ async function geminiCaption(imageUrl, photoContext = {}, retries = 3) {
     const b64  = Buffer.from(await imgRes.arrayBuffer()).toString("base64");
     const mime = imgRes.headers.get("content-type")?.split(";")[0] || "image/jpeg";
 
-    const { type: photoType = "other", roomName = "hotel room" } = photoContext;
-    const photoTypeLabel = photoType === "bathroom" ? "bathroom"
-      : photoType === "bedroom" ? "bedroom"
-      : photoType === "living"  ? "living area"
-      : photoType === "view"    ? "view/balcony"
-      : "hotel room area";
+    const { roomName = "hotel room" } = photoContext;
 
-    const prompt = `You are analyzing a ${photoTypeLabel} photo of a "${roomName}" hotel room for a search index. Answer each item based ONLY on what you can clearly and confidently see in the photo. If you cannot clearly see something, write "unknown". Do not guess or infer.
+    const prompt = `You are analyzing a hotel room photo for a search index. The photo is from a room called "${roomName}".
+
+First identify what type of photo this is, then answer ALL items below based ONLY on what you can clearly see. Write "unknown" if you cannot clearly see something. Do not guess.
+
+PHOTO TYPE: (bedroom / bathroom / living area / view / other)
 
 BATHROOM:
 SINKS: (no sink visible / one sink / two sinks / three or more sinks)
@@ -158,7 +157,7 @@ FIREPLACE: (yes / no)
 COFFEE MACHINE: (yes / no)
 TV: (yes / no)
 IN-ROOM HOT TUB OR JACUZZI: (yes / no)
-DISTINCTIVE FEATURES: list any other notable details visible (e.g. gold fixtures, vaulted ceiling, statement artwork, exposed brick) or write "none"
+DISTINCTIVE FEATURES: list any other notable details visible or write "none"
 
 Reply with ONLY the filled-in list above. No extra commentary.`;
 
@@ -395,7 +394,9 @@ async function indexCity(city, limit = 200) {
           m.amenities?.length ? `Amenities: ${m.amenities.join(', ')}` : null,
         ].filter(Boolean).join('. ');
 
-        const photoTypeStr = `PHOTO TYPE: ${photo.type || 'unknown'} | ROOM: ${photo.roomName || 'unknown'}`;
+        // Extract PHOTO TYPE from Gemini's structured response for the hybrid text
+        const detectedType = (caption.match(/PHOTO TYPE:\s*(\w[\w\s]*)/i)?.[1] || "unknown").trim().toLowerCase();
+        const photoTypeStr = `PHOTO TYPE: ${detectedType} | ROOM: ${photo.roomName || "unknown"}`;
         const hybridText = metaParts
           ? `${photoTypeStr}
 ${caption}
@@ -413,8 +414,8 @@ ${caption}`;
           hotel_id: hotelId, city, country_code: cc,
           hotel_name: hotelName,
           room_name: photo.roomName, photo_url: photo.url,
-          photo_type: photo.type,
-          caption: hybridText,   // store full hybrid text for inspection
+          photo_type: detectedType,  // use Gemini-detected type
+          caption: hybridText,
           embedding,
           star_rating: stars, guest_rating: rating,
         }, { onConflict: "hotel_id,photo_url" });
