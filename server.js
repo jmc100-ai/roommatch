@@ -262,7 +262,43 @@ app.get("/api/debug-gemini", async (req, res) => {
   }
 
   const working = results.filter(r => r.ok && r.response);
-  res.json({ results, working: working.map(r => r.model) });
+
+  // Test embedding models
+  const embedModels = [
+    "text-embedding-004",
+    "text-embedding-005",
+    "gemini-embedding-001",
+    "embedding-001",
+    "text-multilingual-embedding-002",
+  ];
+  const embedResults = [];
+  for (const model of embedModels) {
+    try {
+      const r = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/${model}:embedContent?key=${GEMINI_KEY}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ content: { parts: [{ text: "test hotel room" }] } }),
+          signal: AbortSignal.timeout(8000),
+        }
+      );
+      const data = await r.json();
+      const dims = data?.embedding?.values?.length || null;
+      const err  = data?.error?.message || null;
+      embedResults.push({ model, status: r.status, ok: r.ok, dims, error: err });
+      console.log(`[debug-gemini] embed ${model}: ${r.status} dims=${dims} ${err||""}`);
+    } catch(e) {
+      embedResults.push({ model, status: "timeout", ok: false, error: e.message });
+    }
+  }
+
+  res.json({
+    visionResults: results,
+    workingVision: working.map(r => r.model),
+    embedResults,
+    workingEmbeds: embedResults.filter(r => r.ok && r.dims).map(r => `${r.model} (${r.dims} dims)`),
+  });
 });
 
 // ── Deep debug endpoint — tests all LiteAPI params for a city ─────────────────
@@ -1052,6 +1088,26 @@ app.get("/api/index-status", async (req, res) => {
     .eq("city", city)
     .single();
   res.json(data || { status: "none" });
+});
+
+// ── Cancel indexing endpoint ──────────────────────────────────────────────────
+app.post("/api/index-cancel", async (req, res) => {
+  const { city, secret } = req.body || {};
+  if (secret !== (process.env.INDEX_SECRET || "roommatch-index")) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
+  if (!city) return res.status(400).json({ error: "city required" });
+  if (!supabaseAdmin) return res.status(500).json({ error: "Supabase not configured" });
+
+  const { error } = await supabaseAdmin
+    .from("indexed_cities")
+    .update({ stop_requested: true, updated_at: new Date().toISOString() })
+    .eq("city", city);
+
+  if (error) return res.status(500).json({ error: error.message });
+
+  console.log(`[indexer] Cancel requested for ${city}`);
+  res.json({ message: `Cancel requested for ${city} — will stop after current batch` });
 });
 
 // ── Manual trigger endpoint (protected) ───────────────────────────────────────
