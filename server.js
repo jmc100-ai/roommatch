@@ -999,7 +999,7 @@ app.get("/api/vsearch", async (req, res) => {
       .rpc("search_rooms", {
         query_embedding: queryEmbedding,
         search_city:     city,
-        match_count:     100,
+        match_count:     500,
       });
 
     if (searchErr) throw new Error(searchErr.message);
@@ -1080,14 +1080,14 @@ app.get("/api/vsearch", async (req, res) => {
       for (const p of matchedPhotos) {
         const rName = p.caption ? (allHotelPhotos.find(ap => ap.photo_url === p.url)?.room_name || "Matching Rooms") : "Matching Rooms";
         if (!roomMap.has(rName)) roomMap.set(rName, []);
-        if (roomMap.get(rName).length < 8) roomMap.get(rName).push(p.url);
+        if (roomMap.get(rName).length < 10) roomMap.get(rName).push(p.url);
       }
       // Then add remaining photos not already included
       for (const p of allHotelPhotos) {
         if (matchedUrls.has(p.photo_url)) continue;
         const rName = p.room_name || "Other Rooms";
         if (!roomMap.has(rName)) roomMap.set(rName, []);
-        if (roomMap.get(rName).length < 8) roomMap.get(rName).push(p.photo_url);
+        if (roomMap.get(rName).length < 10) roomMap.get(rName).push(p.photo_url);
       }
 
       const roomTypes = [...roomMap.entries()].map(([name, photoUrls]) => ({
@@ -1109,7 +1109,7 @@ app.get("/api/vsearch", async (req, res) => {
         country:     "",
         starRating:  meta.star_rating || 0,
         rating:      meta.guest_rating || 0,
-        roomTypes:   roomTypes.slice(0, 6),
+        roomTypes:   roomTypes.slice(0, 8),
         isMatched:   true,
         vectorScore: score,
       };
