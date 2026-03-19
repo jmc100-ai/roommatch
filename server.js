@@ -210,6 +210,60 @@ app.use(express.static(path.join(__dirname, "client")));
 
 app.get("/api/health", (_, res) => res.json({ status: "ok" }));
 
+// ── Gemini model debug endpoint ───────────────────────────────────────────────
+app.get("/api/debug-gemini", async (req, res) => {
+  const GEMINI_KEY = process.env.GEMINI_KEY || "";
+  if (!GEMINI_KEY) return res.status(500).json({ error: "GEMINI_KEY not set" });
+
+  const models = [
+    "gemini-2.5-flash-lite",
+    "gemini-2.5-flash-lite-preview-06-17",
+    "gemini-2.5-flash-lite-001",
+    "gemini-2.5-flash",
+    "gemini-2.5-flash-preview-05-20",
+    "gemini-2.0-flash-lite",
+    "gemini-2.0-flash",
+    "gemini-1.5-flash",
+    "gemini-1.5-flash-8b",
+  ];
+
+  // Tiny test image (1x1 white pixel JPEG in base64)
+  const testB64 = "/9j/4AAQSkZJRgABAQEASABIAAD/2wBDAAgGBgcGBQgHBwcJCQgKDBQNDAsLDBkSEw8UHRofHh0aHBwgJC4nICIsIxwcKDcpLDAxNDQ0Hyc5PTgyPC4zNDL/2wBDAQkJCQwLDBgNDRgyIRwhMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjL/wAARCAABAAEDASIAAhEBAxEB/8QAFgABAQEAAAAAAAAAAAAAAAAABgUEA/8QAIRAAAQMEAgMAAAAAAAAAAAAAAQIDBAAFERIhMUH/xAAUAQEAAAAAAAAAAAAAAAAAAAAA/8QAFBEBAAAAAAAAAAAAAAAAAAAAAP/aAAwDAQACEQMRAD8Amk2la5F2jNTXGW3GUrUhtDiikkdyST2HvVFFAf/Z";
+
+  const results = [];
+
+  for (const model of models) {
+    try {
+      const r = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${GEMINI_KEY}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            contents: [{ parts: [
+              { inline_data: { mime_type: "image/jpeg", data: testB64 } },
+              { text: "What colour is this image? One word answer." }
+            ]}],
+            generationConfig: { maxOutputTokens: 10 }
+          }),
+          signal: AbortSignal.timeout(15000),
+        }
+      );
+      const data = await r.json();
+      const text = data?.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || null;
+      const err  = data?.error?.message || null;
+      results.push({ model, status: r.status, ok: r.ok, response: text, error: err });
+      console.log(`[debug-gemini] ${model}: ${r.status} ${text || err || ""}`);
+    } catch(e) {
+      results.push({ model, status: "timeout", ok: false, error: e.message });
+      console.log(`[debug-gemini] ${model}: ERROR ${e.message}`);
+    }
+  }
+
+  const working = results.filter(r => r.ok && r.response);
+  res.json({ results, working: working.map(r => r.model) });
+});
+
 // ── Deep debug endpoint — tests all LiteAPI params for a city ─────────────────
 app.get("/api/debug-city", async (req, res) => {
   const city = (req.query.city || "Paris").trim();
