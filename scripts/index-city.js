@@ -15,7 +15,7 @@ const GEMINI_KEY   = process.env.GEMINI_KEY  || "";
 const SUPABASE_URL = process.env.SUPABASE_URL || "";
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY || "";
 const MAX_PHOTOS   = 5; // per room type
-const BATCH_SIZE   = 20; // concurrent hotel detail fetches
+const BATCH_SIZE   = 5;  // concurrent hotel detail fetches (photos processed sequentially within each)
 
 if (!LITEAPI_KEY || !GEMINI_KEY || !SUPABASE_URL || !SUPABASE_KEY) {
   console.error("[indexer] Missing required env vars");
@@ -56,20 +56,37 @@ const COUNTRY_CODES = {
   "sydney":"AU","melbourne":"AU","auckland":"NZ","queenstown":"NZ",
 };
 
-// ── Rate limiter — 800 req/min on paid Gemini tier (leave headroom) ───────────
-let _geminiCount = 0;
-let _geminiWindow = Date.now();
-async function geminiThrottle() {
+// ── Rate limiters ─────────────────────────────────────────────────────────────
+// Caption (vision): 500 req/min ceiling to leave headroom
+let _capCount = 0, _capWindow = Date.now();
+async function captionThrottle() {
   const now = Date.now();
-  if (now - _geminiWindow > 60000) { _geminiCount = 0; _geminiWindow = now; }
-  if (_geminiCount >= 700) {
-    const wait = 62000 - (now - _geminiWindow);
-    console.log(`  [rate] pausing ${Math.round(wait/1000)}s for Gemini rate limit...`);
+  if (now - _capWindow > 60000) { _capCount = 0; _capWindow = now; }
+  if (_capCount >= 500) {
+    const wait = 62000 - (now - _capWindow);
+    console.log(`  [rate] caption limit, pausing ${Math.round(wait/1000)}s...`);
     await new Promise(r => setTimeout(r, wait));
-    _geminiCount = 0; _geminiWindow = Date.now();
+    _capCount = 0; _capWindow = Date.now();
   }
-  _geminiCount++;
+  _capCount++;
 }
+
+// Embed: 1000 req/min ceiling
+let _embedCount = 0, _embedWindow = Date.now();
+async function embedThrottle() {
+  const now = Date.now();
+  if (now - _embedWindow > 60000) { _embedCount = 0; _embedWindow = now; }
+  if (_embedCount >= 1000) {
+    const wait = 62000 - (now - _embedWindow);
+    console.log(`  [rate] embed limit, pausing ${Math.round(wait/1000)}s...`);
+    await new Promise(r => setTimeout(r, wait));
+    _embedCount = 0; _embedWindow = Date.now();
+  }
+  _embedCount++;
+}
+
+// Keep geminiThrottle as alias for caption (used in geminiCaption)
+const geminiThrottle = captionThrottle;
 
 async function liteGet(path) {
   const r = await fetch(`https://api.liteapi.travel/v3.0${path}`, {
@@ -158,7 +175,7 @@ Max 80 words. No preamble, just the description.`;
 
 async function geminiEmbed(text) {
   try {
-    await geminiThrottle();
+    await embedThrottle();
     const r = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/text-embedding-004:embedContent?key=${GEMINI_KEY}`,
       {
@@ -259,15 +276,19 @@ async function indexCity(city, limit = 200) {
         }
       }
 
-      // Select up to MAX_PHOTOS per room type (bathrooms first)
+      // Select up to MAX_PHOTOS per room type (bathrooms first), hard cap 20 per hotel
       if (!roomMap.size) { console.log(`  [hotel] ${hotelName.slice(0,30)}: no rooms found`); hotelsDone++; return; }
       const toProcess = [];
       for (const [rName, buckets] of roomMap) {
+        if (toProcess.length >= 20) break;   // hard cap: max 20 photos per hotel
         const selected = [
-          ...buckets.bathroom.slice(0, 3),  // up to 3 bathroom photos
-          ...buckets.other.slice(0, 2),     // up to 2 other photos
+          ...buckets.bathroom.slice(0, 3),   // up to 3 bathroom photos
+          ...buckets.other.slice(0, 2),      // up to 2 other photos
         ].slice(0, MAX_PHOTOS);
-        for (const p of selected) toProcess.push({ roomName: rName, ...p });
+        for (const p of selected) {
+          if (toProcess.length >= 20) break;
+          toProcess.push({ roomName: rName, ...p });
+        }
       }
 
       // Skip already-indexed photos
@@ -298,8 +319,11 @@ async function indexCity(city, limit = 200) {
           star_rating: stars, guest_rating: rating,
         }, { onConflict: "hotel_id,photo_url" });
 
-        if (!error) { embedded++; totalEmbeds++; }
-        else console.warn(`  [db] ${error.message}`);
+        if (!error) {
+          embedded++; totalEmbeds++;
+        } else {
+          console.warn(`  [db] insert error: ${error.message}`);
+        }
       }
 
       hotelsDone++;

@@ -894,13 +894,23 @@ app.get("/api/vsearch", async (req, res) => {
 
     const status = cityRow?.status || "none";
 
+    // Already indexing — don't trigger again, just return status
+    if (status === "indexing") {
+      console.log(`[vsearch] ${city} already indexing — skipping trigger`);
+      return res.json({
+        hotels: [], query, city,
+        indexing: true,
+        indexStatus: "indexing",
+        message: `Visual index for ${city} is being built. Check back in a few minutes.`
+      });
+    }
+
     // Not indexed at all — trigger background indexing and fall back
     if (status === "none" || !cityRow) {
       console.log(`[vsearch] ${city} not indexed — triggering background index`);
-      // Fire and forget — don't await
       if (supabaseAdmin) {
         supabaseAdmin.from("indexed_cities").upsert({
-          city, status: "pending", updated_at: new Date().toISOString()
+          city, status: "indexing", updated_at: new Date().toISOString()
         }, { onConflict: "city" }).then(() => {
           indexCity(city, 200).catch(e => console.error("[indexer]", e.message));
         });
@@ -909,12 +919,12 @@ app.get("/api/vsearch", async (req, res) => {
         hotels: [], query, city,
         indexing: true,
         indexStatus: "started",
-        message: `Building visual index for ${city}. Check back in 2-3 minutes.`
+        message: `Building visual index for ${city}. Check back in a few minutes.`
       });
     }
 
-    // Indexing in progress — return partial results + status
-    const indexing = status === "indexing";
+    // Indexing complete — proceed with vector search
+    const indexing = false;
 
     // 2. Embed the query with Gemini
     const embedRes = await fetch(
