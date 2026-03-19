@@ -964,7 +964,7 @@ app.get("/api/vsearch", async (req, res) => {
 
     // 2. Embed the query with Gemini
     const embedRes = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/text-embedding-004:embedContent?key=${process.env.GEMINI_KEY}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-embedding-001:embedContent?key=${process.env.GEMINI_KEY}`,
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -974,8 +974,10 @@ app.get("/api/vsearch", async (req, res) => {
     );
     if (!embedRes.ok) throw new Error("Gemini embedding failed");
     const embedData = await embedRes.json();
-    const queryEmbedding = embedData?.embedding?.values;
-    if (!queryEmbedding) throw new Error("No embedding returned");
+    const rawEmbedding = embedData?.embedding?.values;
+    if (!rawEmbedding) throw new Error("No embedding returned");
+    // Truncate to 768 dims to match stored embeddings
+    const queryEmbedding = rawEmbedding.slice(0, 768);
 
     // 3. Vector similarity search via Supabase function
     const { data: matches, error: searchErr } = await supabase

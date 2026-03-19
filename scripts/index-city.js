@@ -177,7 +177,7 @@ async function geminiEmbed(text) {
   try {
     await embedThrottle();
     const r = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/text-embedding-004:embedContent?key=${GEMINI_KEY}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-embedding-001:embedContent?key=${GEMINI_KEY}`,
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -200,7 +200,8 @@ async function geminiEmbed(text) {
       console.warn(`  [embed] no values in response, keys: ${Object.keys(d).join(', ')}`);
       return null;
     }
-    return values;
+    // Truncate to 768 dims — pgvector indexes cap at 2000, Matryoshka truncation is valid
+    return values.slice(0, 768);
   } catch(e) {
     console.warn(`  [embed] exception: ${e.message}`);
     return null;
