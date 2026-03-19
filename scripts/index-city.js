@@ -79,7 +79,7 @@ async function liteGet(path) {
   return { ok: r.ok, status: r.status, data: await r.json() };
 }
 
-async function geminiCaption(imageUrl) {
+async function geminiCaption(imageUrl, retries = 3) {
   try {
     await geminiThrottle();
     const imgRes = await fetch(imageUrl, {
@@ -120,6 +120,12 @@ Max 80 words. No preamble, just the description.`;
     );
     if (!gr.ok) {
       const err = await gr.text();
+      if (gr.status === 503 && retries > 0) {
+        const wait = (4 - retries) * 2000; // 2s, 4s, 6s backoff
+        console.warn(`  [gemini] 503 — retrying in ${wait/1000}s (${retries} left)`);
+        await new Promise(r => setTimeout(r, wait));
+        return geminiCaption(imageUrl, retries - 1);
+      }
       console.warn(`  [gemini] caption ${gr.status}: ${err.slice(0,80)}`);
       return null;
     }
