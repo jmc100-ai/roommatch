@@ -107,18 +107,53 @@ async function geminiCaption(imageUrl, retries = 3) {
     const b64  = Buffer.from(await imgRes.arrayBuffer()).toString("base64");
     const mime = imgRes.headers.get("content-type")?.split(";")[0] || "image/jpeg";
 
-    const prompt = `Describe this hotel room photo for a search index. Be specific. Mention:
-- Sinks: how many, type (vessel, undermount, pedestal)
-- Bathtub: type (soaking, freestanding, jetted, clawfoot) or none
-- Shower: type (walk-in, rainfall, glass enclosure, over-bath) or none
-- Flooring: material and colour (marble, hardwood, tile, carpet)
-- Lighting: style (warm, bright, natural light, dim, pendant)
-- Windows: size (floor-to-ceiling, large, small, none visible)
-- Bed: type if visible (king, queen, twin, bunk)
-- Furniture: notable pieces (desk, armchair, chaise, sofa, ottoman)
-- Style: (modern, classic, minimalist, luxury, boutique, rustic)
-- Anything distinctive: (city view, Eiffel Tower view, yellow walls, exposed brick)
-Max 80 words. No preamble, just the description.`;
+    const prompt = `You are analyzing a hotel room photo for a search index. Answer each item based ONLY on what you can clearly and confidently see in the photo. If you cannot clearly see something, write "unknown". Do not guess or infer.
+
+BATHROOM:
+SINKS: (no sink visible / one sink / two sinks / three or more sinks)
+COUNTER SPACE: (no counter / small counter / large counter / very large counter)
+BATHTUB: (no bathtub / soaking tub / freestanding tub / clawfoot tub / built-in tub / hot tub / jacuzzi)
+SHOWER: (no shower / walk-in shower / rainfall shower / steam shower / shower over bath)
+BIDET: (yes / no)
+SEPARATE TOILET ROOM: (yes / no)
+
+BEDROOM:
+BED: (king bed / queen bed / twin beds / bunk beds / four-poster bed / canopy bed / no bed visible)
+WALK-IN CLOSET: (yes / no)
+
+VIEWS & LIGHT:
+NATURAL LIGHT: (bright natural light / moderate light / dark room)
+WINDOWS: (floor-to-ceiling windows / large windows / small windows / no windows visible)
+VIEW: (city view / ocean view / garden view / pool view / mountain view / no view visible / or specific e.g. Eiffel Tower view)
+BALCONY OR TERRACE: (yes / no)
+
+SPACE & LAYOUT:
+SIZE IMPRESSION: (very spacious / spacious / standard / small / cosy)
+CEILING HEIGHT: (very high ceilings / high ceilings / standard ceiling)
+SEPARATE LIVING AREA: (yes / no)
+
+FLOORING & DECOR:
+FLOORING: describe material and colour (e.g. white marble / dark hardwood / light hardwood / beige carpet / grey tile)
+WALL COLOUR: (white / cream / grey / dark / navy / green / exposed brick / or describe)
+STYLE 1: (Modern / Contemporary / Classic / Traditional / Luxury / Opulent / Minimalist / Boutique / Eclectic / Art Deco / Mid-Century Modern / Scandinavian / Nordic / Industrial / Rustic / Farmhouse / Mediterranean / Asian / Zen / Baroque / Ornate)
+STYLE 2: (same options / none)
+COLOR MOOD: (light and airy / warm and cosy / dark and moody / bright and colorful)
+
+FURNITURE:
+SOFA: (yes / no)
+ARMCHAIR: (yes / no)
+CHAISE LOUNGE: (yes / no)
+DESK: (no desk / small desk / large desk)
+DINING TABLE: (yes / no)
+
+NOTABLE FEATURES:
+FIREPLACE: (yes / no)
+COFFEE MACHINE: (yes / no)
+TV: (yes / no)
+IN-ROOM HOT TUB OR JACUZZI: (yes / no)
+DISTINCTIVE FEATURES: list any other notable details visible (e.g. gold fixtures, vaulted ceiling, statement artwork, exposed brick) or write "none"
+
+Reply with ONLY the filled-in list above. No extra commentary.`;
 
     const gr = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=${GEMINI_KEY}`,
@@ -280,7 +315,11 @@ async function indexCity(city, limit = 200) {
       const roomMap = new Map();
       for (const room of (detail.rooms || [])) {
         const rName = room.roomName || room.name || "Room";
-        if (!roomMap.has(rName)) roomMap.set(rName, { bathroom: [], other: [] });
+        if (!roomMap.has(rName)) roomMap.set(rName, { bathroom: [], other: [], meta: {
+          size:      room.roomSizeSquare ? `${room.roomSizeSquare}${room.roomSizeUnit||'sqm'}` : null,
+          beds:      (room.bedTypes||[]).map(b=>`${b.quantity}x ${b.bedType}`).join(', ') || null,
+          amenities: (room.roomAmenities||[]).slice(0,10).map(a=>a.name).filter(Boolean),
+        }});
         const bucket = roomMap.get(rName);
         for (const photo of (room.photos || [])) {
           const url = photo.url || photo.hd_url || "";
@@ -302,7 +341,7 @@ async function indexCity(city, limit = 200) {
         ].slice(0, MAX_PHOTOS);
         for (const p of selected) {
           if (toProcess.length >= 60) break;
-          toProcess.push({ roomName: rName, ...p });
+          toProcess.push({ roomName: rName, meta: buckets.meta, ...p });
         }
       }
 
@@ -326,8 +365,21 @@ async function indexCity(city, limit = 200) {
         if (!caption) { console.warn(`  [pipeline] caption FAILED for ${photo.url.slice(-40)}`); continue; }
         console.log(`  [pipeline] caption OK (${caption.length} chars): ${caption.slice(0,60)}...`);
 
-        // Step 2: Embed
-        const embedding = await geminiEmbed(caption);
+        // Build hybrid text: structured caption + room metadata
+        // This anchors the embedding with reliable metadata alongside the visual description
+        const m = photo.meta || {};
+        const metaParts = [
+          `Room type: ${photo.roomName}`,
+          m.size      ? `Size: ${m.size}` : null,
+          m.beds      ? `Beds: ${m.beds}` : null,
+          m.amenities?.length ? `Amenities: ${m.amenities.join(', ')}` : null,
+        ].filter(Boolean).join('. ');
+
+        const hybridText = metaParts ? `${caption}
+${metaParts}` : caption;
+
+        // Step 2: Embed the hybrid text
+        const embedding = await geminiEmbed(hybridText);
         if (!embedding) { console.warn(`  [pipeline] embed FAILED`); continue; }
         console.log(`  [pipeline] embed OK (${embedding.length} dims)`);
 
@@ -336,7 +388,9 @@ async function indexCity(city, limit = 200) {
           hotel_id: hotelId, city, country_code: cc,
           hotel_name: hotelName,
           room_name: photo.roomName, photo_url: photo.url,
-          photo_type: photo.type, caption, embedding,
+          photo_type: photo.type,
+          caption: hybridText,   // store full hybrid text for inspection
+          embedding,
           star_rating: stars, guest_rating: rating,
         }, { onConflict: "hotel_id,photo_url" });
 
