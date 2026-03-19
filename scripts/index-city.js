@@ -185,11 +185,24 @@ async function geminiEmbed(text) {
         signal: AbortSignal.timeout(10000),
       }
     );
-    if (!r.ok) return null;
-    const d = await r.json();
-    return d?.embedding?.values || null;
+    const raw = await r.text();
+    if (!r.ok) {
+      console.warn(`  [embed] HTTP ${r.status}: ${raw.slice(0, 200)}`);
+      return null;
+    }
+    let d;
+    try { d = JSON.parse(raw); } catch(e) {
+      console.warn(`  [embed] JSON parse failed: ${raw.slice(0, 100)}`);
+      return null;
+    }
+    const values = d?.embedding?.values;
+    if (!values) {
+      console.warn(`  [embed] no values in response, keys: ${Object.keys(d).join(', ')}`);
+      return null;
+    }
+    return values;
   } catch(e) {
-    console.warn(`  [gemini] embed error: ${e.message}`);
+    console.warn(`  [embed] exception: ${e.message}`);
     return null;
   }
 }
