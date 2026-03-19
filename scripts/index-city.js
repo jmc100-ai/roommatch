@@ -334,6 +334,7 @@ async function indexCity(city, limit = 200) {
         // Step 3: Store
         const { error, data } = await supabase.from("room_embeddings").upsert({
           hotel_id: hotelId, city, country_code: cc,
+          hotel_name: hotelName,
           room_name: photo.roomName, photo_url: photo.url,
           photo_type: photo.type, caption, embedding,
           star_rating: stars, guest_rating: rating,
