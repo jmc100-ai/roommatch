@@ -210,6 +210,25 @@ app.use(express.static(path.join(__dirname, "client")));
 
 app.get("/api/health", (_, res) => res.json({ status: "ok" }));
 
+// ── Photo fields debug — shows raw LiteAPI photo object structure ─────────────
+app.get("/api/debug-photos", async (req, res) => {
+  const hotelId = req.query.hotelId;
+  if (!hotelId) return res.status(400).json({ error: "hotelId required" });
+  const r = await liteGet(`/data/hotel?hotelId=${hotelId}`);
+  if (!r.ok) return res.status(500).json({ error: "LiteAPI failed", status: r.status });
+  const rooms = r.data?.data?.rooms || [];
+  const sample = rooms.slice(0, 3).map(room => ({
+    roomName: room.roomName || room.name,
+    photoCount: (room.photos||[]).length,
+    firstPhotoFields: room.photos?.[0] ? Object.keys(room.photos[0]) : [],
+    samplePhotos: (room.photos||[]).slice(0, 3).map(p => ({
+      url: (p.url||p.hd_url||"").slice(-40),
+      ...Object.fromEntries(Object.entries(p).filter(([k]) => k !== 'url' && k !== 'hd_url')),
+    })),
+  }));
+  res.json({ hotelId, roomCount: rooms.length, sample });
+});
+
 // ── Gemini model debug endpoint ───────────────────────────────────────────────
 app.get("/api/debug-gemini", async (req, res) => {
   const GEMINI_KEY = process.env.GEMINI_KEY || "";

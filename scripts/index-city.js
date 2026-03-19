@@ -250,17 +250,30 @@ async function geminiEmbed(text) {
   }
 }
 
-function classifyPhoto(photo, roomName) {
+function classifyPhoto(photo, roomName, photoIndex = 0) {
+  // Check all available LiteAPI metadata fields
   const desc = [
     photo.imageDescription || "",
-    photo.imageClass1 || "",
-    photo.imageClass2 || "",
-    roomName || "",
+    photo.imageClass1      || "",
+    photo.imageClass2      || "",
+    photo.tag              || "",
+    photo.category         || "",
+    photo.caption          || "",
+    photo.type             || "",
+    photo.label            || "",
+    roomName               || "",
   ].join(" ").toLowerCase();
-  if (/bath|shower|sink|toilet|vanity|wc|spa/.test(desc))    return "bathroom";
-  if (/bed|sleep|pillow|duvet|headboard/.test(desc))          return "bedroom";
-  if (/living|lounge|sofa|sitting|couch/.test(desc))          return "living";
-  if (/view|balcony|terrace|panoram/.test(desc))              return "view";
+
+  // Strong keyword matches first
+  if (/bath|shower|sink|toilet|vanity|wc|jacuzzi|tub|sauna/.test(desc)) return "bathroom";
+  if (/bed|sleep|pillow|duvet|headboard|bedroom/.test(desc))              return "bedroom";
+  if (/living|lounge|sofa|sitting|couch/.test(desc))                      return "living";
+  if (/view|balcony|terrace|panoram/.test(desc))                          return "view";
+
+  // Fallback: use photo index position within a room type
+  // LiteAPI typically orders: main room first, bathroom later
+  // Photos at index 0-1 are usually bedroom/main, 2+ may be bathroom
+  // We intentionally return "other" so both bedroom + bathroom get selected
   return "other";
 }
 
