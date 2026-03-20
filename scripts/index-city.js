@@ -172,7 +172,7 @@ Reply with ONLY the filled-in list above. No extra commentary.`;
             { inline_data: { mime_type: mime, data: b64 } },
             { text: prompt }
           ]}],
-          generationConfig: { maxOutputTokens: 400, temperature: 0.1 }
+          generationConfig: { maxOutputTokens: 300, temperature: 0.1 }
         }),
         signal: AbortSignal.timeout(25000),
       }
