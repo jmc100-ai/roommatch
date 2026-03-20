@@ -1126,8 +1126,8 @@ app.get("/api/vsearch", async (req, res) => {
       if (intentType) {
         for (const [, photos] of roomMap) {
           photos.sort((a, b) => {
-            const aMatch = a.type === intentType ? 0 : 1;
-            const bMatch = b.type === intentType ? 0 : 1;
+            const aMatch = a.type && a.type.includes(intentType) ? 0 : 1;
+            const bMatch = b.type && b.type.includes(intentType) ? 0 : 1;
             return aMatch - bMatch;
           });
         }
