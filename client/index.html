@@ -356,8 +356,8 @@
   <p class="hero-sub">Describe your ideal room. We'll show every room type at each matching hotel.</p>
 
   <div class="mode-toggle">
-    <button class="mode-btn active" id="modeA" onclick="setMode('liteapi')">LiteAPI Room Search</button>
-    <button class="mode-btn" id="modeB" onclick="setMode('vector')">Vector Search <span class="mode-badge">NEW</span></button>
+    <button class="mode-btn" id="modeA" onclick="setMode('liteapi')">LiteAPI Room Search</button>
+    <button class="mode-btn active" id="modeB" onclick="setMode('vector')">Vector Search <span class="mode-badge">NEW</span></button>
   </div>
 
   <form class="search-form" onsubmit="handleSearch(event)">
@@ -405,7 +405,7 @@
   const BACKEND = (location.hostname === 'localhost' || location.hostname === '127.0.0.1')
     ? 'http://localhost:3000' : '';
 
-  let currentMode = 'liteapi';
+  let currentMode = 'vector';
   let clipES = null;
   let clipDone = 0, clipTotal = 10;
 
