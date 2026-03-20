@@ -17,6 +17,21 @@ const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY || "";
 const MAX_PHOTOS         = 10; // per room type
 const BATCH_SIZE         = 20; // concurrent hotel detail fetches
 const PHOTO_CONCURRENCY  = 5;  // concurrent Gemini calls per hotel
+const DB_CONCURRENCY     = 3;  // max concurrent DB upserts — keeps connection pool safe
+
+// Simple semaphore to cap concurrent DB writes
+let dbSlots = DB_CONCURRENCY;
+const dbQueue = [];
+function acquireDb() {
+  return new Promise(resolve => {
+    if (dbSlots > 0) { dbSlots--; resolve(); }
+    else dbQueue.push(resolve);
+  });
+}
+function releaseDb() {
+  if (dbQueue.length > 0) { dbQueue.shift()(); }
+  else dbSlots++;
+}
 
 if (!LITEAPI_KEY || !GEMINI_KEY || !SUPABASE_URL || !SUPABASE_KEY) {
   console.error("[indexer] Missing required env vars");
@@ -412,16 +427,22 @@ ${caption}`;
         const embedding = await geminiEmbed(hybridText);
         if (!embedding) { console.warn(`  [pipeline] embed FAILED`); return; }
 
-        // Step 3: Store
-        const { error } = await supabase.from("room_embeddings").upsert({
-          hotel_id: hotelId, city, country_code: cc,
-          hotel_name: hotelName,
-          room_name: photo.roomName, photo_url: photo.url,
-          photo_type: detectedType,  // use Gemini-detected type
-          caption: hybridText,
-          embedding,
-          star_rating: stars, guest_rating: rating,
-        }, { onConflict: "hotel_id,photo_url" });
+        // Step 3: Store — acquire semaphore to cap concurrent DB writes
+        await acquireDb();
+        let error;
+        try {
+          ({ error } = await supabase.from("room_embeddings").upsert({
+            hotel_id: hotelId, city, country_code: cc,
+            hotel_name: hotelName,
+            room_name: photo.roomName, photo_url: photo.url,
+            photo_type: detectedType,  // use Gemini-detected type
+            caption: hybridText,
+            embedding,
+            star_rating: stars, guest_rating: rating,
+          }, { onConflict: "hotel_id,photo_url" }));
+        } finally {
+          releaseDb();
+        }
 
         if (!error) {
           embedded++; totalEmbeds++;

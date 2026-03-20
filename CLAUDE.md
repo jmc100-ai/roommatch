@@ -269,13 +269,17 @@ GRANT ALL ON SEQUENCE indexed_cities_id_seq  TO anon, service_role, authenticate
 
 ## Known Issues & Next Steps
 
-1. ~~**Paris needs re-indexing with structured prompt**~~ — Done. Clean photo_type data, fixed regex, 6,400+ embeddings.
+1. ~~**Paris needs re-indexing with structured prompt**~~ — Done. 4,699 photos, 140 hotels.
 
-2. **Validate Paris search quality** — test "double sinks", "soaking tub", "hardwood floors", "Art Deco", "large tub" etc. Verify bathroom photos show first for bathroom queries.
+2. **SUPABASE STUCK IN PAUSING STATE** — Project dmgxrcmdihgsffvqllms got stuck PAUSING on 2026-03-20 due to connection pool exhaustion from concurrent indexing runs. Filed support ticket. Once restored, searches will work immediately (service role key fix already deployed). Do NOT re-index Paris until DB is confirmed healthy.
 
-3. **Index London and NYC** after Paris validated.
+3. **DB write semaphore fix ready to push** — `scripts/index-city.js` has a `DB_CONCURRENCY=3` semaphore added (not yet pushed — waiting for DB to come back). This prevents the connection exhaustion that caused the lock.
 
-4. **Consider Supabase logging table** to avoid copy-pasting Render logs for debugging.
+4. **Validate Paris search quality** — test "double sinks", "soaking tub", "hardwood floors", "Art Deco", "large tub" etc. Verify bathroom photos show first for bathroom queries.
+
+5. **Index London and NYC** after Paris validated.
+
+6. **Consider Supabase logging table** to avoid copy-pasting Render logs for debugging.
 
 ---
 
