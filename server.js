@@ -1016,7 +1016,9 @@ app.get("/api/vsearch", async (req, res) => {
     const queryEmbedding = rawEmbedding.slice(0, 768);
 
     // 3. Vector similarity search via Supabase function
-    const { data: matches, error: searchErr } = await supabase
+    // Use supabaseAdmin (service role) — anon key has 8s statement_timeout which can be hit on cold index
+    const searchClient = supabaseAdmin || supabase;
+    const { data: matches, error: searchErr } = await searchClient
       .rpc("search_rooms", {
         query_embedding: queryEmbedding,
         search_city:     city,
