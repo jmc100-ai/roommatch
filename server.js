@@ -1119,7 +1119,8 @@ app.get("/api/vsearch", async (req, res) => {
     const [{ data: allPhotos }, { data: cached }] = await Promise.all([
       supabase.from("room_embeddings")
         .select("hotel_id, hotel_name, room_name, photo_url, photo_type, caption")
-        .eq("city", city),
+        .eq("city", city)
+        .limit(10000),  // Supabase default cap is 1000; Paris has ~5k photos
       supabase.from("hotels_cache")
         .select("*")
         .eq("city", city),
