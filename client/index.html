@@ -45,6 +45,16 @@
     .logo-dot { color: var(--accent); }
     .tagline { font-size: 11px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--muted); font-weight: 300; }
 
+    /* ── Logo compact (sticky bar only) ── */
+    .logo-compact {
+      display: none;
+      font-family: 'Cormorant Garamond', serif;
+      font-size: 20px; font-weight: 300; letter-spacing: 0.14em;
+      color: var(--accent2); text-transform: uppercase;
+      flex-shrink: 0; white-space: nowrap; line-height: 1;
+    }
+    .logo-compact .logo-dot { color: var(--accent); }
+
     /* ── Hero ───────────────────── */
     .hero { padding: 48px 56px 36px; max-width: 900px; }
     .hero-heading { font-family: 'Cormorant Garamond', serif; font-size: clamp(34px, 4vw, 54px); font-weight: 300; line-height: 1.1; margin-bottom: 8px; }
@@ -53,9 +63,9 @@
 
     /* ── Form ───────────────────── */
     .search-form { display: flex; flex-direction: column; gap: 12px; max-width: 800px; }
-    .input-row { display: grid; grid-template-columns: 1fr 200px; gap: 12px; }
+    .input-row { display: grid; grid-template-columns: 2fr 1fr 1fr auto; gap: 10px; align-items: end; }
     .field-label { display: block; font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); margin-bottom: 6px; }
-    input[type="text"], textarea {
+    input[type="text"], input[type="date"], textarea {
       width: 100%; background: var(--surface); border: 1px solid var(--border);
       border-radius: var(--radius); color: var(--text); font-family: 'DM Sans', sans-serif;
       font-size: 14px; font-weight: 300; padding: 13px 16px; outline: none;
@@ -64,12 +74,14 @@
     input:focus, textarea:focus { border-color: rgba(201,169,110,0.4); box-shadow: 0 0 0 3px rgba(201,169,110,0.07); }
     textarea { min-height: 72px; line-height: 1.6; }
     ::placeholder { color: var(--muted); font-style: italic; }
+    input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(0.55); cursor: pointer; }
+    input[type="date"] { color-scheme: dark; }
 
     .chips { display: flex; flex-wrap: wrap; gap: 7px; }
     .chip { font-size: 11px; padding: 5px 12px; border-radius: 100px; border: 1px solid var(--border); color: var(--muted); cursor: pointer; transition: all 0.15s; background: transparent; font-family: 'DM Sans', sans-serif; white-space: nowrap; }
     .chip:hover { border-color: var(--accent); color: var(--accent); background: rgba(201,169,110,0.07); }
 
-    .search-btn { align-self: flex-end; background: var(--accent); color: #0c0c0e; border: none; border-radius: var(--radius); font-family: 'DM Sans', sans-serif; font-size: 12px; font-weight: 500; letter-spacing: 0.08em; padding: 13px 28px; cursor: pointer; transition: background 0.2s, transform 0.1s; text-transform: uppercase; }
+    .search-btn { background: var(--accent); color: #0c0c0e; border: none; border-radius: var(--radius); font-family: 'DM Sans', sans-serif; font-size: 12px; font-weight: 500; letter-spacing: 0.08em; padding: 13px 24px; cursor: pointer; transition: background 0.2s, transform 0.1s; text-transform: uppercase; white-space: nowrap; }
     .search-btn:hover { background: var(--accent2); }
     .search-btn:active { transform: scale(0.98); }
     .search-btn:disabled { opacity: 0.5; cursor: not-allowed; }
@@ -99,9 +111,41 @@
     .city-loading { padding: 12px 16px; font-size: 12px; color: var(--muted); font-style: italic; }
 
     /* ── Status ─────────────────── */
-    #status { padding: 16px 56px; font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); min-height: 48px; display: flex; align-items: center; gap: 10px; }
+    #status { padding: 12px 56px; font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); min-height: 44px; display: flex; align-items: center; gap: 10px; }
     .spinner { width: 13px; height: 13px; border: 1.5px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.7s linear infinite; flex-shrink: 0; }
     @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── Sort bar ────────────────── */
+    .sort-bar {
+      display: none;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 56px;
+      border-bottom: 1px solid var(--border);
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+    .sort-group { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
+    .sort-label {
+      font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase;
+      color: var(--muted); margin-right: 8px; font-weight: 400;
+    }
+    .sort-btn {
+      font-family: 'DM Sans', sans-serif;
+      font-size: 11px; padding: 5px 14px;
+      border-radius: 100px;
+      border: 1px solid var(--border);
+      background: transparent; color: var(--muted);
+      cursor: pointer; transition: all 0.15s;
+      letter-spacing: 0.03em;
+    }
+    .sort-btn:hover { color: var(--text); border-color: rgba(255,255,255,0.15); }
+    .sort-btn.active {
+      background: var(--surface);
+      border-color: rgba(201,169,110,0.35);
+      color: var(--accent);
+    }
+    .result-count { font-size: 11px; color: var(--muted); letter-spacing: 0.04em; }
 
     /* ── Results ────────────────── */
     #results { padding: 0 56px 80px; display: flex; flex-direction: column; gap: 28px; }
@@ -129,8 +173,9 @@
     /* ── Hotel header ───────────── */
     .hotel-header {
       padding: 20px 24px 16px; border-bottom: 1px solid var(--border);
+      display: flex; align-items: flex-start; justify-content: space-between; gap: 16px;
     }
-    .hotel-header-left { min-width: 0; display: flex; flex-direction: column; gap: 5px; }
+    .hotel-header-left { min-width: 0; display: flex; flex-direction: column; gap: 5px; flex: 1; }
     .hotel-name-row { display: flex; align-items: center; gap: 14px; min-width: 0; flex-wrap: wrap; }
     .hotel-name { font-family: 'Cormorant Garamond', serif; font-size: 22px; font-weight: 400; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
     .hotel-meta { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
@@ -141,18 +186,28 @@
     .book-btn { flex-shrink: 0; display: inline-block; padding: 9px 18px; border-radius: 8px; border: 1px solid rgba(201,169,110,0.3); color: var(--accent); font-family: 'DM Sans', sans-serif; font-size: 11px; font-weight: 500; letter-spacing: 0.1em; text-transform: uppercase; text-decoration: none; transition: all 0.2s; white-space: nowrap; }
     .book-btn:hover { background: rgba(201,169,110,0.08); border-color: var(--accent); }
 
-    /* ── Room type row ──────────── */
-    .room-type-row {
-      border-bottom: 1px solid var(--border);
+    /* ── Hotel price placeholder ── */
+    .hotel-price {
+      flex-shrink: 0; text-align: right;
+      display: flex; flex-direction: column; align-items: flex-end; gap: 4px;
+      padding-top: 2px;
     }
+    .price-value {
+      font-family: 'Cormorant Garamond', serif;
+      font-size: 22px; font-weight: 300; color: var(--text);
+      letter-spacing: 0.02em; line-height: 1;
+    }
+    .price-per { font-size: 11px; color: var(--muted); font-family: 'DM Sans', sans-serif; font-weight: 300; }
+    .price-note { font-size: 10px; color: var(--muted); font-style: italic; letter-spacing: 0.04em; }
+
+    /* ── Room type row ──────────── */
+    .room-type-row { border-bottom: 1px solid var(--border); }
     .room-type-row:last-child { border-bottom: none; }
 
     .room-type-header {
       display: flex; align-items: center; justify-content: space-between;
       padding: 12px 24px; gap: 16px;
-      background: var(--row);
-      cursor: pointer;
-      user-select: none;
+      background: var(--row); cursor: pointer; user-select: none;
     }
     .room-type-header:hover { background: rgba(255,255,255,0.02); }
 
@@ -160,50 +215,38 @@
 
     .room-type-name {
       font-size: 13px; font-weight: 400; color: var(--text);
-      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-      flex-shrink: 0;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex-shrink: 0;
     }
 
-    /* Separator dot between name and meta */
     .room-meta-sep { color: var(--muted); font-size: 10px; flex-shrink: 0; }
-
     .room-type-meta { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 
     .room-size { font-size: 11px; color: #b8b2ac; white-space: nowrap; }
     .room-beds { font-size: 11px; color: #b8b2ac; white-space: nowrap; }
 
-    /* Score pill — hidden on desktop header, shown in photo overlay instead */
     .score-pill { display: none; }
     .score-dot  { display: none; }
 
-    /* Expand chevron */
     .chevron { font-size: 10px; color: var(--muted); transition: transform 0.2s; flex-shrink: 0; }
     .room-type-row.open .chevron { transform: rotate(180deg); }
 
     /* ── Photo strip ─────────────── */
-    .photo-strip-wrap {
-      overflow: hidden;
-      max-height: 0;
-      transition: max-height 0.3s ease;
-    }
+    .photo-strip-wrap { overflow: hidden; max-height: 0; transition: max-height 0.3s ease; }
     .room-type-row.open .photo-strip-wrap { max-height: 240px; }
 
     .photo-strip {
       display: flex; gap: 3px; padding: 3px 0 0;
-      overflow-x: auto;
-      scrollbar-width: thin;
+      overflow-x: auto; scrollbar-width: thin;
       scrollbar-color: rgba(201,169,110,0.2) transparent;
     }
     .photo-strip::-webkit-scrollbar { height: 3px; }
     .photo-strip::-webkit-scrollbar-thumb { background: rgba(201,169,110,0.2); border-radius: 2px; }
 
     .room-photo-cell { flex: 0 0 240px; height: 180px; overflow: hidden; position: relative; background: var(--surface); }
-    .room-photo-cell:first-child { border-radius: 0 0 0 0; }
     .room-photo-cell img { width: 100%; height: 100%; object-fit: cover; display: block; transition: transform 0.3s; }
     .room-photo-cell:hover img { transform: scale(1.04); }
     .room-photo-cell .no-photo { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; font-size: 28px; color: var(--muted); }
 
-    /* Photo overlay badge — combines best match label + score */
     .best-badge {
       position: absolute; bottom: 8px; left: 8px;
       background: rgba(12,12,14,0.85); backdrop-filter: blur(6px);
@@ -216,7 +259,7 @@
     .amenity-tags { display: flex; flex-wrap: wrap; gap: 4px; padding: 8px 24px 10px; }
     .amenity-tag { font-size: 10px; padding: 2px 8px; border-radius: 100px; border: 1px solid var(--border); color: var(--muted); letter-spacing: 0.04em; }
 
-    /* ── Section divider ────────────────────────────────────────────────── */
+    /* ── Section divider ─────────── */
     .section-divider {
       display: flex; align-items: center; justify-content: space-between;
       padding: 10px 4px; flex-wrap: wrap; gap: 4px;
@@ -238,110 +281,97 @@
     .footer-text { font-size: 11px; color: var(--muted); }
     .footer-text a { color: var(--accent); text-decoration: none; }
 
-    @media (max-width: 640px) {
-      header, .hero { padding-left: 20px; padding-right: 20px; }
-      .divider, #status, #results, footer { padding-left: 20px; padding-right: 20px; }
-      .input-row { grid-template-columns: 1fr; }
-      .hotel-header { flex-wrap: wrap; }
-      .room-photo-cell { flex: 0 0 200px; height: 150px; }
-      /* Book btn drops to its own line on mobile */
-      .hotel-name-row { flex-direction: column; align-items: flex-start; gap: 8px; }
-      .book-btn { align-self: flex-start; }
-      /* Room type header wraps naturally on small screens */
-      .room-type-header { flex-wrap: nowrap; }
-    }
-    /* ── Mode toggle ─────────────────────────────────────────────────────── */
+    /* ── Mode toggle ─────────────── */
     .mode-toggle {
-      display: inline-flex;
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 100px;
-      padding: 4px;
-      gap: 2px;
-      margin-bottom: 28px;
+      display: inline-flex; background: var(--surface);
+      border: 1px solid var(--border); border-radius: 100px;
+      padding: 4px; gap: 2px; margin-bottom: 28px;
     }
     .mode-btn {
-      padding: 9px 20px;
-      border-radius: 100px;
-      border: none;
-      font-family: 'DM Sans', sans-serif;
-      font-size: 12px;
-      font-weight: 400;
-      letter-spacing: 0.06em;
-      text-transform: uppercase;
-      cursor: pointer;
-      transition: all 0.2s;
-      background: transparent;
-      color: var(--muted);
-      position: relative;
+      padding: 9px 20px; border-radius: 100px; border: none;
+      font-family: 'DM Sans', sans-serif; font-size: 12px; font-weight: 400;
+      letter-spacing: 0.06em; text-transform: uppercase; cursor: pointer;
+      transition: all 0.2s; background: transparent; color: var(--muted); position: relative;
     }
-    .mode-btn.active {
-      background: var(--accent);
-      color: #0c0c0e;
-      font-weight: 600;
-      box-shadow: 0 2px 8px rgba(201,169,110,0.35);
-    }
-    .mode-btn:not(.active):hover {
-      color: var(--text);
-      background: rgba(255,255,255,0.05);
-    }
+    .mode-btn.active { background: var(--accent); color: #0c0c0e; font-weight: 600; box-shadow: 0 2px 8px rgba(201,169,110,0.35); }
+    .mode-btn:not(.active):hover { color: var(--text); background: rgba(255,255,255,0.05); }
     .mode-badge {
-      display: inline-block;
-      font-size: 9px;
-      padding: 1px 5px;
-      border-radius: 100px;
-      background: rgba(109,186,138,0.2);
-      color: var(--green);
-      border: 1px solid rgba(109,186,138,0.3);
-      margin-left: 5px;
-      vertical-align: middle;
-      letter-spacing: 0.04em;
-      font-weight: 500;
+      display: inline-block; font-size: 9px; padding: 1px 5px; border-radius: 100px;
+      background: rgba(109,186,138,0.2); color: var(--green); border: 1px solid rgba(109,186,138,0.3);
+      margin-left: 5px; vertical-align: middle; letter-spacing: 0.04em; font-weight: 500;
     }
-    .mode-btn.active .mode-badge {
-      background: rgba(0,0,0,0.15);
-      color: rgba(12,12,14,0.7);
-      border-color: rgba(0,0,0,0.1);
-    }
+    .mode-btn.active .mode-badge { background: rgba(0,0,0,0.15); color: rgba(12,12,14,0.7); border-color: rgba(0,0,0,0.1); }
+
     .clip-score-badge {
-      font-size: 10px;
-      padding: 2px 8px;
-      border-radius: 100px;
-      background: rgba(109,186,138,0.12);
-      border: 1px solid rgba(109,186,138,0.3);
-      color: var(--green);
-      font-weight: 500;
-      white-space: nowrap;
+      font-size: 10px; padding: 2px 8px; border-radius: 100px;
+      background: rgba(109,186,138,0.12); border: 1px solid rgba(109,186,138,0.3);
+      color: var(--green); font-weight: 500; white-space: nowrap;
     }
-    .clip-progress {
-      height: 3px;
-      background: var(--border);
-      margin: 0 56px;
-    }
-    .clip-progress-fill {
-      height: 100%;
-      background: linear-gradient(90deg, var(--green), #a8e6c0);
-      border-radius: 2px;
-      transition: width 0.4s ease;
-      width: 0%;
-    }
-  
-    /* ── Indexing banner ─────────────────────────────────────────────────── */
+    .clip-progress { height: 3px; background: var(--border); margin: 0 56px; }
+    .clip-progress-fill { height: 100%; background: linear-gradient(90deg, var(--green), #a8e6c0); border-radius: 2px; transition: width 0.4s ease; width: 0%; }
+
+    /* ── Indexing banner ─────────── */
     .index-banner {
-      margin: 0 56px 20px;
-      padding: 12px 20px;
-      border-radius: 10px;
-      background: rgba(201,169,110,0.08);
-      border: 1px solid rgba(201,169,110,0.25);
-      font-size: 12px;
-      color: var(--accent);
-      display: flex;
-      align-items: center;
-      gap: 10px;
+      margin: 0 56px 20px; padding: 12px 20px; border-radius: 10px;
+      background: rgba(201,169,110,0.08); border: 1px solid rgba(201,169,110,0.25);
+      font-size: 12px; color: var(--accent); display: flex; align-items: center; gap: 10px;
     }
     .index-banner .spinner { width: 12px; height: 12px; flex-shrink: 0; }
-    @media (max-width: 600px) { .index-banner { margin: 0 20px 16px; } }
 
+    /* ── Has-results: compact sticky search bar ──────────────────────────── */
+    body.has-results header { display: none; }
+
+    body.has-results .hero {
+      position: sticky; top: 0; z-index: 50;
+      max-width: none; width: 100%;
+      padding: 10px 56px;
+      background: rgba(12,12,14,0.97);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; gap: 16px;
+    }
+    body.has-results .logo-compact { display: block; }
+    body.has-results .hero-heading,
+    body.has-results .hero-sub,
+    body.has-results .chips,
+    body.has-results .mode-toggle { display: none; }
+
+    body.has-results .search-form {
+      flex-direction: row; align-items: center;
+      gap: 8px; max-width: none; flex: 1;
+    }
+    body.has-results .query-field { flex: 2; min-width: 0; }
+    body.has-results .field-label { display: none; }
+    body.has-results textarea {
+      min-height: 0; height: 42px;
+      overflow-y: hidden; padding-top: 11px; padding-bottom: 11px; line-height: 20px;
+    }
+    body.has-results .input-row { display: contents; }
+    body.has-results .city-field { flex: 1.2; min-width: 0; }
+    body.has-results .date-field { flex: 0 0 128px; }
+    body.has-results .date-field input { height: 42px; padding-top: 0; padding-bottom: 0; }
+    body.has-results .search-btn { height: 42px; padding: 0 22px; align-self: auto; }
+    body.has-results .sort-bar { display: flex; }
+
+    /* ── Mobile ──────────────────── */
+    @media (max-width: 640px) {
+      header, .hero { padding-left: 20px; padding-right: 20px; }
+      .divider, #status, #results, footer, .sort-bar { padding-left: 20px; padding-right: 20px; }
+      .input-row { grid-template-columns: 1fr 1fr; }
+      .city-field { grid-column: 1 / -1; }
+      .search-btn { grid-column: 1 / -1; width: 100%; }
+      .hotel-header { flex-wrap: wrap; }
+      .hotel-price { flex-direction: row; align-items: baseline; gap: 6px; width: 100%; }
+      .room-photo-cell { flex: 0 0 200px; height: 150px; }
+      .hotel-name-row { flex-direction: column; align-items: flex-start; gap: 8px; }
+      .book-btn { align-self: flex-start; }
+      .room-type-header { flex-wrap: nowrap; }
+      .index-banner { margin: 0 20px 16px; }
+      body.has-results .hero { padding: 10px 20px; }
+      body.has-results .date-field { display: none; }
+      body.has-results .city-field { flex: 1; }
+    }
   </style>
 </head>
 <body>
@@ -352,6 +382,8 @@
 </header>
 
 <section class="hero">
+  <span class="logo-compact">Room<span class="logo-dot">·</span>Match</span>
+
   <h1 class="hero-heading">Find rooms that<br><em>look</em> the way you want</h1>
   <p class="hero-sub">Describe your ideal room. We'll show every room type at each matching hotel.</p>
 
@@ -361,7 +393,7 @@
   </div>
 
   <form class="search-form" onsubmit="handleSearch(event)">
-    <div>
+    <div class="query-field">
       <label class="field-label" for="queryInput">Describe your ideal room</label>
       <textarea id="queryInput" rows="3"
         placeholder="e.g. minimalist bathroom with double sinks and a soaking tub, warm lighting…"></textarea>
@@ -377,13 +409,21 @@
     </div>
 
     <div class="input-row">
-      <div>
+      <div class="city-field">
         <label class="field-label" for="cityInput">City</label>
         <div class="city-wrap">
           <input type="text" id="cityInput" placeholder="e.g. Paris, New York, Tokyo…"
                  autocomplete="off" oninput="onCityInput(this.value)" onblur="hideCitySuggestions()" />
           <div class="city-dropdown" id="cityDropdown"></div>
         </div>
+      </div>
+      <div class="date-field">
+        <label class="field-label" for="checkinInput">Check-in</label>
+        <input type="date" id="checkinInput" />
+      </div>
+      <div class="date-field">
+        <label class="field-label" for="checkoutInput">Check-out</label>
+        <input type="date" id="checkoutInput" />
       </div>
       <button type="submit" class="search-btn" id="searchBtn">Search rooms</button>
     </div>
@@ -394,6 +434,17 @@
 <div class="clip-progress" id="clipProgress" style="display:none"><div class="clip-progress-fill" id="clipProgressFill"></div></div>
 <div id="status"></div>
 <div id="indexBanner" style="display:none" class="index-banner"></div>
+
+<div class="sort-bar" id="sortBar">
+  <div class="sort-group">
+    <span class="sort-label">Sort</span>
+    <button class="sort-btn active" data-sort="match" onclick="setSortBy('match')">Best Match</button>
+    <button class="sort-btn" data-sort="rating" onclick="setSortBy('rating')">Guest Rating</button>
+    <button class="sort-btn" data-sort="stars" onclick="setSortBy('stars')">Stars</button>
+  </div>
+  <span id="resultCount" class="result-count"></span>
+</div>
+
 <div id="results"></div>
 
 <footer>
@@ -408,12 +459,29 @@
   let currentMode = 'vector';
   let clipES = null;
   let clipDone = 0, clipTotal = 10;
+  let _lastHotels = [];
+  let _currentSort = 'match';
+
+  // Pre-fill dates: tomorrow + tomorrow+2
+  (function initDates() {
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    const checkout = new Date(tomorrow);
+    checkout.setDate(checkout.getDate() + 2);
+    const fmt = d => d.toISOString().slice(0, 10);
+    document.getElementById('checkinInput').value  = fmt(tomorrow);
+    document.getElementById('checkoutInput').value = fmt(checkout);
+  })();
 
   function setMode(mode) {
     currentMode = mode;
     document.getElementById('modeA').classList.toggle('active', mode === 'liteapi');
     document.getElementById('modeB').classList.toggle('active', mode === 'vector');
     document.getElementById('results').innerHTML = '';
+    document.getElementById('sortBar').style.display = 'none';
+    document.getElementById('resultCount').textContent = '';
+    document.body.classList.remove('has-results');
+    _lastHotels = [];
     hideBanner();
     setStatus('');
   }
@@ -473,10 +541,8 @@
       const data = await resp.json();
       if (!resp.ok) throw new Error(data.error || 'Vector search failed');
 
-      // Show indexing banner if city is being processed
       if (data.indexing) {
         showBanner(data.message || `Building visual index for ${city}…`, true);
-        // Poll for completion every 15s
         setTimeout(() => pollIndexStatus(query, city), 15000);
       }
 
@@ -484,8 +550,7 @@
       if (!hotels.length && !data.indexing) {
         setStatus(''); renderEmpty(query, city);
       } else if (hotels.length) {
-        const totalTypes = hotels.reduce((n, h) => n + (h.roomTypes?.length || 0), 0);
-        setStatus(`${hotels.length} hotels · ${totalTypes} room types · ranked by visual similarity`);
+        setStatus('');
         render(hotels);
       } else {
         setStatus(`Index building for ${city} — results will appear shortly`, false);
@@ -500,7 +565,6 @@
       const d = await r.json();
       if (d.status === 'complete') {
         hideBanner();
-        // Auto re-run search now that index is ready
         const btn = document.getElementById('searchBtn');
         btn.disabled = true; btn.textContent = 'Searching…';
         startVectorSearch(query, city, btn);
@@ -563,19 +627,57 @@
     };
   }
 
+  // ── Render + sort ──────────────────────────────────────────────────────────
+
   function render(hotels) {
-    const matched   = hotels.filter(h => h.isMatched);
-    const unmatched = hotels.filter(h => !h.isMatched);
-    let html = matched.map(hotelHTML).join('');
-    if (unmatched.length > 0) {
-      const cityName = unmatched[0]?.city || '';
-      html += `<div class="section-divider">
-        <span>More hotels in ${cityName}</span>
-        <span class="section-divider-sub">Browse rooms — no visual match score</span>
-      </div>`;
-      html += unmatched.map(hotelHTML).join('');
+    _lastHotels = hotels;
+    _currentSort = 'match';
+    document.body.classList.add('has-results');
+    document.querySelectorAll('.sort-btn').forEach(b => {
+      b.classList.toggle('active', b.dataset.sort === 'match');
+    });
+    updateResultCount(hotels);
+    renderSorted();
+  }
+
+  function updateResultCount(hotels) {
+    const total = hotels.length;
+    const totalTypes = hotels.reduce((n, h) => n + (h.roomTypes?.length || 0), 0);
+    document.getElementById('resultCount').textContent =
+      `${total} hotel${total !== 1 ? 's' : ''} · ${totalTypes} room type${totalTypes !== 1 ? 's' : ''}`;
+  }
+
+  function setSortBy(sort) {
+    _currentSort = sort;
+    document.querySelectorAll('.sort-btn').forEach(b => {
+      b.classList.toggle('active', b.dataset.sort === sort);
+    });
+    renderSorted();
+  }
+
+  function renderSorted() {
+    const hotels = [..._lastHotels];
+    if (_currentSort === 'rating') {
+      hotels.sort((a, b) => (b.rating || 0) - (a.rating || 0));
+      document.getElementById('results').innerHTML = hotels.map(hotelHTML).join('');
+    } else if (_currentSort === 'stars') {
+      hotels.sort((a, b) => (b.starRating || 0) - (a.starRating || 0));
+      document.getElementById('results').innerHTML = hotels.map(hotelHTML).join('');
+    } else {
+      // Best match: matched (scored) hotels first, then unmatched
+      const matched   = hotels.filter(h => h.isMatched);
+      const unmatched = hotels.filter(h => !h.isMatched);
+      let html = matched.map(hotelHTML).join('');
+      if (unmatched.length > 0) {
+        const cityName = unmatched[0]?.city || '';
+        html += `<div class="section-divider">
+          <span>More hotels in ${cityName}</span>
+          <span class="section-divider-sub">Browse rooms — no visual match score</span>
+        </div>`;
+        html += unmatched.map(hotelHTML).join('');
+      }
+      document.getElementById('results').innerHTML = html;
     }
-    document.getElementById('results').innerHTML = html;
   }
 
   function hotelHTML(h) {
@@ -584,7 +686,6 @@
     const rating   = h.rating > 0 ? `<span class="hotel-guest-score"><strong>${parseFloat(h.rating).toFixed(1)}</strong> guest score</span>` : '';
     const bookUrl  = `https://www.google.com/search?q=${encodeURIComponent(h.name + ' ' + (h.city||'') + ' hotel booking')}`;
     const clipBadge = h.clipScore > 0 ? `<span class="clip-score-badge">&#9889; ${h.clipScore}% CLIP</span>` : '';
-
     const roomRows = (h.roomTypes || []).map((rt, ri) => roomTypeHTML(rt, ri === 0 && rt.score !== null)).join('');
 
     return `
@@ -601,20 +702,18 @@
               ${rating}${clipBadge}
             </div>
           </div>
+          <div class="hotel-price">
+            <span class="price-value">--<span class="price-per">/night</span></span>
+            <span class="price-note">Add dates for rates</span>
+          </div>
         </div>
         ${roomRows}
       </div>`;
   }
 
   function roomTypeHTML(rt, isTopMatch) {
-    const scoreHTML = rt.score !== null
-      ? `<span class="score-pill ${isTopMatch ? 'top' : ''}">
-           <span class="score-dot"></span>${rt.score}% match
-         </span>`
-      : '';
-
-    const sizeHTML = rt.size   ? `<span class="room-size">${rt.size}</span>` : '';
-    const bedsHTML = rt.beds   ? `<span class="room-beds">${rt.beds}</span>` : '';
+    const sizeHTML = rt.size ? `<span class="room-size">${rt.size}</span>` : '';
+    const bedsHTML = rt.beds ? `<span class="room-beds">${rt.beds}</span>` : '';
 
     const photos = rt.photos || [];
     const photoHTML = photos.length
@@ -630,7 +729,6 @@
       ? `<div class="amenity-tags">${rt.amenities.map(a => `<span class="amenity-tag">${a}</span>`).join('')}</div>`
       : '';
 
-    // Auto-open the best-match room type
     const openClass = isTopMatch ? ' open' : '';
 
     return `
@@ -651,6 +749,7 @@
   }
 
   function renderEmpty(query, city) {
+    document.body.classList.add('has-results');
     document.getElementById('results').innerHTML = `
       <div class="empty-state">
         <div class="empty-icon">🔍</div>
@@ -660,6 +759,7 @@
   }
 
   function renderError(msg) {
+    document.body.classList.add('has-results');
     document.getElementById('results').innerHTML = `
       <div class="empty-state">
         <div class="empty-icon">⚠️</div>
@@ -691,10 +791,10 @@
           return;
         }
         dd.innerHTML = places.map((p, i) => {
-          const label   = p.name;
+          const label    = p.name;
           const subParts = [p.state, p.country].filter(Boolean);
           const sub      = subParts.join(', ');
-          const safeLabel = label.replace(/'/g, "\'");
+          const safeLabel = label.replace(/'/g, "\\'");
           return `
             <div class="city-option" data-name="${label}" data-idx="${i}"
                  onmousedown="selectCity('${safeLabel}')">
@@ -715,7 +815,6 @@
   }
 
   function hideCitySuggestions() {
-    // Small delay so mousedown on option fires first
     setTimeout(() => {
       document.getElementById('cityDropdown').classList.remove('visible');
     }, 150);
