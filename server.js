@@ -1216,6 +1216,49 @@ app.get("*", (req, res) => {
   res.sendFile(path.join(__dirname, "client", "index.html"));
 });
 
+// ── Graceful shutdown: fix any cities stuck at "indexing" when Render deploys ──
+async function gracefulShutdown(signal) {
+  console.log(`[shutdown] ${signal} received — cleaning up stuck indexing jobs`);
+  if (!supabaseAdmin) { process.exit(0); return; }
+  try {
+    // Find any cities still marked as indexing
+    const { data: stuck } = await supabaseAdmin
+      .from("indexed_cities")
+      .select("city")
+      .eq("status", "indexing");
+
+    for (const row of (stuck || [])) {
+      // Update to "complete" with actual counts from room_embeddings
+      const { data: counts } = await supabaseAdmin
+        .from("room_embeddings")
+        .select("hotel_id", { count: "exact" })
+        .eq("city", row.city);
+
+      const { count: photoCount } = await supabaseAdmin
+        .from("room_embeddings")
+        .select("*", { count: "exact", head: true })
+        .eq("city", row.city);
+
+      const hotelIds = new Set((counts || []).map(r => r.hotel_id));
+
+      await supabaseAdmin.from("indexed_cities").update({
+        status:      photoCount > 0 ? "complete" : "failed",
+        hotel_count: hotelIds.size,
+        photo_count: photoCount || 0,
+        completed_at: new Date().toISOString(),
+      }).eq("city", row.city);
+
+      console.log(`[shutdown] ${row.city}: marked ${photoCount > 0 ? "complete" : "failed"} (${hotelIds.size} hotels, ${photoCount} photos)`);
+    }
+  } catch (e) {
+    console.warn("[shutdown] cleanup error:", e.message);
+  }
+  process.exit(0);
+}
+
+process.on("SIGTERM", () => gracefulShutdown("SIGTERM"));
+process.on("SIGINT",  () => gracefulShutdown("SIGINT"));
+
 app.listen(PORT, () => {
   console.log(`[config] Using ${IS_PROD ? "PRODUCTION" : "SANDBOX"} LiteAPI key`);
   console.log(`RoomMatch on port ${PORT}`);
