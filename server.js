@@ -1028,6 +1028,30 @@ app.get("/api/vsearch", async (req, res) => {
       return res.json({ hotels: [], query, city, indexing, indexStatus: status });
     }
 
+    // Detect query intent + caption filters — defined here so available for aggregation below
+    const queryLower = query.toLowerCase();
+
+    // Caption content filters — reject photos whose structured caption contradicts the query
+    const captionFilters = [];
+    if (/double sink|two sink|dual sink|his.and.hers/i.test(query)) {
+      captionFilters.push(c => !/SINKS: one sink/i.test(c));
+    }
+    if (/no tub|no bathtub/i.test(query)) {
+      captionFilters.push(c => !/BATHTUB: (soaking|freestanding|clawfoot|built-in|hot tub|jacuzzi)/i.test(c));
+    }
+    if (/soaking tub|freestanding tub|clawfoot|bathtub|deep tub/i.test(query)) {
+      captionFilters.push(c => !/BATHTUB: no bathtub/i.test(c));
+    }
+    if (/walk.in shower|rain.* shower|rainfall/i.test(query)) {
+      captionFilters.push(c => !/SHOWER: no shower/i.test(c));
+    }
+    if (/balcony|terrace/i.test(query)) {
+      captionFilters.push(c => !/BALCONY OR TERRACE: no/i.test(c));
+    }
+    if (/fireplace/i.test(query)) {
+      captionFilters.push(c => !/FIREPLACE: no/i.test(c));
+    }
+
     // 4. Aggregate by hotel — score = average of top 3 photo scores
     // Apply caption filters to skip photos that structurally contradict the query
     const hotelMap = new Map();
@@ -1088,30 +1112,6 @@ app.get("/api/vsearch", async (req, res) => {
       hotelPhotosMap.get(p.hotel_id).push(p);
     }
 
-    // Detect query intent → preferred photo type to show first
-    const queryLower = query.toLowerCase();
-
-    // Caption content filters — reject photos whose structured caption contradicts the query
-    // e.g. "double sinks" should not match rooms where caption says "SINKS: one sink"
-    const captionFilters = [];
-    if (/double sink|two sink|dual sink|his.and.hers/i.test(query)) {
-      captionFilters.push(c => !/SINKS: one sink/i.test(c));
-    }
-    if (/no tub|no bathtub/i.test(query)) {
-      captionFilters.push(c => !/BATHTUB: (soaking|freestanding|clawfoot|built-in|hot tub|jacuzzi)/i.test(c));
-    }
-    if (/soaking tub|freestanding tub|clawfoot|bathtub|deep tub/i.test(query)) {
-      captionFilters.push(c => !/BATHTUB: no bathtub/i.test(c));
-    }
-    if (/walk.in shower|rain.* shower|rainfall/i.test(query)) {
-      captionFilters.push(c => !/SHOWER: no shower/i.test(c));
-    }
-    if (/balcony|terrace/i.test(query)) {
-      captionFilters.push(c => !/BALCONY OR TERRACE: no/i.test(c));
-    }
-    if (/fireplace/i.test(query)) {
-      captionFilters.push(c => !/FIREPLACE: no/i.test(c));
-    }
     const intentType = (() => {
       if (/\b(bath|tub|shower|sink|toilet|bidet|bathroom|soaking|jacuzzi|spa)\b/.test(queryLower)) return "bathroom";
       if (/\b(bed|bedroom|sleep|pillow|king|queen|twin|mattress)\b/.test(queryLower)) return "bedroom";
