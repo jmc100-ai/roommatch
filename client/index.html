@@ -287,13 +287,23 @@
     .lb-nav:hover { background: rgba(255,255,255,0.14); color: #fff; }
     #lb-prev { left: 14px; }
     #lb-next { right: 14px; }
-    .lb-footer {
-      position: fixed; bottom: 0; left: 0; right: 0;
-      padding: 14px 20px; display: flex; align-items: center; justify-content: center;
-      flex-direction: column; gap: 4px; pointer-events: none; z-index: 9001;
+    .lb-header {
+      position: fixed; top: 0; left: 0; right: 0;
+      padding: 16px 72px 14px;
+      display: flex; align-items: center; gap: 10px;
+      background: linear-gradient(to bottom, rgba(6,6,8,0.85) 0%, transparent 100%);
+      pointer-events: none; z-index: 9001;
     }
-    #lb-room-name { color: rgba(255,255,255,0.55); font-size: 12px; letter-spacing: 0.06em; text-transform: uppercase; }
-    #lb-counter { color: rgba(255,255,255,0.32); font-size: 11px; }
+    #lb-room-name { color: rgba(255,255,255,0.82); font-size: 13px; letter-spacing: 0.04em; }
+    #lb-match-badge {
+      padding: 2px 9px; border-radius: 100px;
+      background: rgba(12,12,14,0.75); border: 1px solid rgba(109,186,138,0.45);
+      color: var(--green); font-size: 10px; font-weight: 500; letter-spacing: 0.06em;
+    }
+    #lb-counter {
+      position: fixed; bottom: 58px; left: 50%; transform: translateX(-50%);
+      color: rgba(255,255,255,0.3); font-size: 11px; pointer-events: none; z-index: 9001;
+    }
     .lb-thumbs {
       position: fixed; bottom: 14px; left: 50%; transform: translateX(-50%);
       display: flex; gap: 4px; max-width: 90vw; overflow-x: auto;
@@ -795,7 +805,7 @@
 
     const photos = rt.photos || [];
     const regKey = _lbRegistry.length;
-    _lbRegistry.push({ photos, name: rt.name });
+    _lbRegistry.push({ photos, name: rt.name, score: rt.score });
     const photoHTML = photos.length
       ? photos.slice(0, 10).map((url, pi) => {
           let badge = '';
@@ -975,6 +985,13 @@
     if (!entry) return;
     document.getElementById('lb-img').src = entry.photos[_lbIdx];
     document.getElementById('lb-room-name').textContent = entry.name;
+    const badge = document.getElementById('lb-match-badge');
+    if (entry.score !== null && entry.score > 0) {
+      badge.textContent = `${entry.score}% match`;
+      badge.style.display = '';
+    } else {
+      badge.style.display = 'none';
+    }
     document.getElementById('lb-counter').textContent = `${_lbIdx + 1} / ${entry.photos.length}`;
     document.querySelectorAll('.lb-thumb').forEach((t, i) => {
       t.classList.toggle('active', i === _lbIdx);
@@ -1000,10 +1017,11 @@
   <button class="lb-nav" id="lb-prev" onclick="lbNav(-1)">&#8249;</button>
   <img id="lb-img" src="" alt="" ondragstart="return false">
   <button class="lb-nav" id="lb-next" onclick="lbNav(1)">&#8250;</button>
-  <div class="lb-footer">
+  <div class="lb-header">
     <div id="lb-room-name"></div>
-    <div id="lb-counter"></div>
+    <div id="lb-match-badge"></div>
   </div>
+  <div id="lb-counter"></div>
   <div class="lb-thumbs" id="lb-thumbs"></div>
 </div>
 </body>
