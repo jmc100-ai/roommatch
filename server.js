@@ -1136,7 +1136,7 @@ app.get("/api/vsearch", async (req, res) => {
       for (const p of hotelPhotos) {
         const rName = p.room_name || "Room";
         if (!roomMap.has(rName)) roomMap.set(rName, []);
-        if (roomMap.get(rName).length < 10) roomMap.get(rName).push({ url: p.photo_url, type: p.photo_type, similarity: p.similarity, caption: p.caption });
+        if (roomMap.get(rName).length < 12) roomMap.get(rName).push({ url: p.photo_url, type: p.photo_type, similarity: p.similarity, caption: p.caption });
       }
 
       let roomEntries = [...roomMap.entries()];
