@@ -1130,23 +1130,36 @@ app.get("/api/vsearch", async (req, res) => {
       const hotelPhotos    = hotelPhotosMap.get(hotelId) || [];  // already sorted by similarity DESC
       const fallbackName   = hotelPhotos[0]?.hotel_name || null;
 
-      // Group photos by room_name; store similarity so rooms can be sorted by best match.
+      // Group photos by room_name; store caption+similarity so we can pin confirming rooms first.
       // hotelPhotos is already sorted similarity DESC so first photo per room is the best.
       const roomMap = new Map();
       for (const p of hotelPhotos) {
         const rName = p.room_name || "Room";
         if (!roomMap.has(rName)) roomMap.set(rName, []);
-        if (roomMap.get(rName).length < 10) roomMap.get(rName).push({ url: p.photo_url, type: p.photo_type, similarity: p.similarity });
+        if (roomMap.get(rName).length < 10) roomMap.get(rName).push({ url: p.photo_url, type: p.photo_type, similarity: p.similarity, caption: p.caption });
       }
 
-      // Sort rooms by their best (highest) similarity photo so the room that
-      // proves the match is always shown first, regardless of photo type.
       let roomEntries = [...roomMap.entries()];
-      roomEntries.sort((a, b) => {
-        const aBest = a[1][0]?.similarity ?? 0;  // first photo is already the best
-        const bBest = b[1][0]?.similarity ?? 0;
-        return bBest - aBest;
-      });
+
+      // If structural features are detected, pin the room whose caption actually confirms
+      // the most features to the top. This prevents false positives from room names that
+      // happen to contain query words (e.g. "Two Adjacent Double Rooms" scoring high for
+      // "double sinks" just because "double" appears in the room name).
+      if (detectedFeatures.length > 0) {
+        roomEntries.sort((a, b) => {
+          const countConfirmed = (photos) =>
+            detectedFeatures.filter(f => photos.some(p => p.caption && f.confirm.test(p.caption))).length;
+          const aDiff = countConfirmed(a[1]);
+          const bDiff = countConfirmed(b[1]);
+          if (bDiff !== aDiff) return bDiff - aDiff;           // most confirmed features first
+          const aBest = a[1][0]?.similarity ?? 0;
+          const bBest = b[1][0]?.similarity ?? 0;
+          return bBest - aBest;                                  // tiebreak by similarity
+        });
+      } else {
+        // No structural features: sort by best similarity photo
+        roomEntries.sort((a, b) => (b[1][0]?.similarity ?? 0) - (a[1][0]?.similarity ?? 0));
+      }
 
       const firstRoom = roomEntries[0]?.[0];
       const roomTypes = roomEntries.map(([name, photoEntries]) => ({
