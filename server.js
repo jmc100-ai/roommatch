@@ -1015,14 +1015,48 @@ app.get("/api/vsearch", async (req, res) => {
     // Truncate to 768 dims to match stored embeddings
     const queryEmbedding = rawEmbedding.slice(0, 768);
 
-    // 3. Vector similarity search via Supabase function
+    // 3. Detect intent early so we can tune match_count before the vector search
+    const queryLowerPre = query.toLowerCase();
+    const intentTypePre = (() => {
+      if (/\b(baths?|tubs?|showers?|sinks?|toilets?|bidet|bathroom|soaking|jacuzzi|spa)\b/.test(queryLowerPre)) return "bathroom";
+      if (/\b(beds?|bedroom|sleep|pillow|king|queen|twin|mattress)\b/.test(queryLowerPre)) return "bedroom";
+      if (/\b(views?|balcon(y|ies)|terrace|window|skyline|ocean|sea|city view)\b/.test(queryLowerPre)) return "view";
+      if (/\b(living|sofa|lounge|sitting|couch|armchair)\b/.test(queryLowerPre)) return "living area";
+      return null;
+    })();
+
+    // Pre-compute structural feature qualifiers against the full DB (not just top-N matches)
+    // This lets us filter hotels accurately even when their feature photo falls outside the top-N
+    const structuralQualifiers = new Map(); // featureName → Set<hotelId>
+    if (/double sink|two sink|dual sink|his.and.hers/i.test(query)) {
+      const { data: rows } = await supabase.from("room_embeddings")
+        .select("hotel_id").eq("city", city)
+        .or("caption.ilike.%SINKS: two sinks%,caption.ilike.%SINKS: three or more sinks%");
+      structuralQualifiers.set("doubleSinks", new Set((rows || []).map(r => r.hotel_id)));
+    }
+    if (/soaking tub|freestanding tub|clawfoot tub/i.test(query)) {
+      const { data: rows } = await supabase.from("room_embeddings")
+        .select("hotel_id").eq("city", city)
+        .or("caption.ilike.%BATHTUB: soaking tub%,caption.ilike.%BATHTUB: freestanding tub%,caption.ilike.%BATHTUB: clawfoot tub%");
+      structuralQualifiers.set("soakingTub", new Set((rows || []).map(r => r.hotel_id)));
+    }
+    if (/\bfireplace\b/i.test(query)) {
+      const { data: rows } = await supabase.from("room_embeddings")
+        .select("hotel_id").eq("city", city)
+        .ilike("caption", "%FIREPLACE: yes%");
+      structuralQualifiers.set("fireplace", new Set((rows || []).map(r => r.hotel_id)));
+    }
+
+    // Vector similarity search via Supabase function
     // Use supabaseAdmin (service role) — anon key has 8s statement_timeout which can be hit on cold index
+    // Cast a wider net for feature-specific queries so more candidate hotels enter the pool
+    const matchCount = intentTypePre === 'bathroom' ? 1500 : 500;
     const searchClient = supabaseAdmin || supabase;
     const { data: matches, error: searchErr } = await searchClient
       .rpc("search_rooms", {
         query_embedding: queryEmbedding,
         search_city:     city,
-        match_count:     500,
+        match_count:     matchCount,
       });
 
     if (searchErr) throw new Error(searchErr.message);
@@ -1030,17 +1064,9 @@ app.get("/api/vsearch", async (req, res) => {
       return res.json({ hotels: [], query, city, indexing, indexStatus: status });
     }
 
-    // Detect query intent + caption filters — defined here so available for aggregation below
-    const queryLower = query.toLowerCase();
-
-    // Detect intent type first — used both for scoring and display ordering
-    const intentType = (() => {
-      if (/\b(baths?|tubs?|showers?|sinks?|toilets?|bidet|bathroom|soaking|jacuzzi|spa)\b/.test(queryLower)) return "bathroom";
-      if (/\b(beds?|bedroom|sleep|pillow|king|queen|twin|mattress)\b/.test(queryLower)) return "bedroom";
-      if (/\b(views?|balcon(y|ies)|terrace|window|skyline|ocean|sea|city view)\b/.test(queryLower)) return "view";
-      if (/\b(living|sofa|lounge|sitting|couch|armchair)\b/.test(queryLower)) return "living area";
-      return null;
-    })();
+    // Reuse intent and queryLower from the pre-search detection above
+    const queryLower = queryLowerPre;
+    const intentType = intentTypePre;
 
     // Caption content filters — reject photos whose structured caption contradicts the query
     const captionFilters = [];
@@ -1084,27 +1110,6 @@ app.get("/api/vsearch", async (req, res) => {
       }
     }
 
-    // Hotel-level positive requirement filters
-    // If query asks for a specific feature, only keep hotels confirmed to have it in their photos
-    if (/double sink|two sink|dual sink|his.and.hers/i.test(query)) {
-      for (const [hotelId, data] of hotelMap) {
-        const confirmed = data.photos.some(p => /SINKS: (two sinks|three or more sinks)/i.test(p.caption || ''));
-        if (!confirmed) hotelMap.delete(hotelId);
-      }
-    }
-    if (/soaking tub|freestanding tub|clawfoot tub/i.test(query)) {
-      for (const [hotelId, data] of hotelMap) {
-        const confirmed = data.photos.some(p => /BATHTUB: (soaking tub|freestanding tub|clawfoot tub)/i.test(p.caption || ''));
-        if (!confirmed) hotelMap.delete(hotelId);
-      }
-    }
-    if (/\bfireplace\b/i.test(query)) {
-      for (const [hotelId, data] of hotelMap) {
-        const confirmed = data.photos.some(p => /FIREPLACE: yes/i.test(p.caption || ''));
-        if (!confirmed) hotelMap.delete(hotelId);
-      }
-    }
-
     // Sort hotels by average of top 3 intent-matching scores (fall back to all scores if no intent matches)
     const rankedHotels = [...hotelMap.entries()]
       .map(([hotelId, data]) => {
@@ -1128,7 +1133,11 @@ app.get("/api/vsearch", async (req, res) => {
         return { hotelId, topScore, photos: data.photos };
       })
       // Only keep hotels that have at least one intent-matching photo when intentType is set
+      // AND pass all structural qualifiers (verified against full DB)
       .filter(({ hotelId }) => {
+        for (const qualifiedSet of structuralQualifiers.values()) {
+          if (!qualifiedSet.has(hotelId)) return false;
+        }
         if (!intentType) return true;
         return hotelMap.get(hotelId).intentScores.length > 0;
       })
