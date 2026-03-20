@@ -15,17 +15,15 @@ Supabase project ID: **dmgxrcmdihgsffvqllms**
 ```
 FRONTEND (client/index.html)
   → Express backend (server.js) on Render
-  → Two search modes:
-      1. LiteAPI Room Search (broken beta endpoint, ~9 results globally)
-      2. Vector Search (our own index, works well)
+  → Vector Search (main and only working mode)
 
 VECTOR SEARCH PIPELINE:
   LiteAPI /data/hotels (up to 7,221 Paris hotels)
   → /data/hotel (room photos per hotel)
   → Gemini 2.5 Flash Lite (structured photo captions)
   → gemini-embedding-001 (768-dim truncated embeddings)
-  → Supabase pgvector (cosine similarity search)
-  → Live search: embed query → search_rooms() → rank hotels
+  → Supabase pgvector (full city scan via score_city_photos RPC)
+  → Live search: embed query → score ALL city photos → rank + filter → return all hotels
 ```
 
 ---
@@ -101,14 +99,30 @@ roommatch/
 - embedding vector(768), star_rating, guest_rating, created_at
 - UNIQUE(hotel_id, photo_url)
 
-### Key SQL function
+### Key SQL functions
+
+**`score_city_photos(query_embedding vector(768), search_city TEXT)`** — primary search function
 ```sql
-search_rooms(query_embedding vector(768), search_city TEXT, match_count INT)
--- returns: hotel_id, room_name, photo_url, photo_type, caption, similarity
+-- Full scan of ALL photos in a city, returns every photo with similarity score.
+-- No match_count cap — every hotel gets a real score.
+-- Returns: hotel_id, hotel_name, room_name, photo_url, photo_type, caption, similarity
+-- Ordered by similarity DESC.
+-- Uses service role (no statement_timeout) to avoid 3s anon timeout.
 ```
 
+**`get_city_photos(search_city TEXT)`** — legacy, no longer used (superseded by score_city_photos)
+
+**`search_rooms(query_embedding, search_city, match_count)`** — legacy, no longer used
+
+### PostgREST row limit fix (required — do not revert)
+```sql
+ALTER ROLE authenticator SET pgrst.db_max_rows = '10000';
+NOTIFY pgrst, 'reload config';
+```
+Default was 1000, which silently capped all queries. Paris has 4,699 photos — without this fix, only 1,000 were returned.
+
 ### Current Index Status
-- Paris: 200 hotels, 7,036 embeddings — NEEDS RE-INDEXING (old caption format)
+- **Paris: 140 hotels, 4,699 photos** (re-indexed 2026-03-20 with structured caption format)
 
 ---
 
@@ -116,11 +130,10 @@ search_rooms(query_embedding vector(768), search_city TEXT, match_count INT)
 
 | Endpoint | Description |
 |---|---|
-| GET /api/room-search?query&city | LiteAPI room-search (broken, ~9 results) |
 | GET /api/vsearch?query&city | Vector search (main mode) |
 | GET /api/index-status?city | Check indexing status |
 | POST /api/index-city | Trigger indexing (requires INDEX_SECRET in body) |
-| GET /api/clip-search?query&city | HuggingFace CLIP (deprecated, broken) |
+| GET /api/room-search?query&city | LiteAPI room-search (broken, ~9 results globally) |
 | GET /api/debug-city?city | LiteAPI coverage analysis |
 | GET /api/debug-gemini | Test available Gemini model names |
 | GET /api/debug-photos?hotelId | Show raw LiteAPI photo fields |
@@ -138,6 +151,7 @@ Triggered via: POST /api/index-city {"city":"Paris","limit":200,"secret":"..."}
 3. Per photo: caption → embed → upsert to Supabase
 4. Rate limits: 500 caption/min, 1000 embed/min (paid Gemini tier)
 5. Idempotent: UNIQUE(hotel_id, photo_url) prevents duplicates
+6. DB_CONCURRENCY=3 semaphore prevents connection pool exhaustion
 
 **CRITICAL: geminiCaption signature:**
 ```javascript
@@ -163,6 +177,70 @@ PHOTO TYPE: bathroom | ROOM: Junior Suite
 Room type: Junior Suite. Size: 45sqm. Beds: 1x King. Amenities: minibar, soaking tub...
 ```
 
+**IMPORTANT: Room name is embedded in every caption header.** This means room names containing common words (e.g. "Two Adjacent Double Rooms") can create spurious embedding similarity to queries containing those words (e.g. "double sinks"). The structural feature penalty system (see below) is the mitigation for this.
+
+---
+
+## Search Design (current — /api/vsearch)
+
+### Overview
+Returns ALL hotels in the city index, sorted by match score. Every hotel is scored. No hard filtering — low-scoring hotels appear at the bottom with their score.
+
+### Scoring pipeline
+1. Embed the user's query with `gemini-embedding-001`, truncate to 768 dims
+2. Call `score_city_photos` RPC — full scan of all ~4,699 Paris photos, returns similarity scores for every photo
+3. Group photos by hotel. For each hotel, compute `topScore` = average of top-3 intent-matching photo similarities
+   - `intentType` detection: if query mentions bathrooms/sinks → use only bathroom photos for topScore; bedrooms → bedroom only; etc.
+   - Falls back to all photos if no intent type or no matching photos
+4. **Structural feature penalty**: for each detected structural feature in the query, apply `topScore × 0.45` if no caption in the hotel confirms the feature. Multiple missing features stack multiplicatively (e.g. two missing = ×0.45² ≈ ×0.20).
+5. **Score rescaling**: raw cosine similarity [0.40–0.80] → display percentage [0–100%]. A raw 0.73 displays as ~83%.
+6. Sort all hotels by adjusted topScore descending
+
+### Structural feature detection (in server.js `STRUCTURAL_FEATURES`)
+These query patterns trigger caption-based confirmation checks:
+- **double sinks**: query `/\bdouble sinks?\b|two sinks?\b.../` → confirm `/\b(two|double|dual|twin|2)\s*sinks?\b.../`
+- **soaking tub**: confirm `/\b(soaking|freestanding|clawfoot)\s*(tub|bath)\b.../`
+- **balcony**: confirm `/\bbalcon(y|ies)\b/`
+- **fireplace**: confirm `/\bfireplace\b/`
+- **large windows**: confirm `/\b(large|floor.to.ceiling|panoramic|huge|oversized|expansive)\s*windows?\b.../`
+
+Penalty is `0.45×` per unconfirmed feature. A hotel passes if ANY of its photo captions confirms the feature.
+
+### Room type ordering
+Within each hotel, rooms are ordered by **how many detected structural features their captions confirm** (descending), with similarity as tiebreaker. This ensures the room that actually has the queried features (e.g. the room with two stone sinks) appears first — not a room whose name happens to contain a matching word.
+
+For non-feature queries, rooms are sorted by best photo similarity descending.
+
+### Client-side
+- 10 hotels rendered initially; `IntersectionObserver` on sentinel div triggers +10 more on scroll
+- Match % badge on first photo of first room type per hotel
+- Client-side sort: by match % (default), star rating, or guest rating
+
+---
+
+## Frontend Features (client/index.html)
+
+### Search bar
+- Hero state (large, centered) before first search
+- Compact sticky state after search
+- City autocomplete via Geoapify
+- Date pickers (UI only — no live pricing yet)
+- Sort controls: Match %, Stars, Guest Score
+
+### Hotel cards
+- Hotel name, stars, location, guest score, "Find & Book" link (Google search)
+- Room type rows — collapsible, first room open by default
+- Horizontal photo strip per room, scrollable, up to 10 photos
+- Match % badge on first photo of best-matching room
+
+### Lightbox gallery
+- Click any photo → fullscreen dark overlay
+- Room name + match % badge at the top
+- ← → navigation buttons; keyboard arrow keys; Escape to close
+- Thumbnail strip at the bottom; click any thumbnail to jump; active thumbnail highlighted in gold
+- Photo counter (e.g. "3 / 5") above thumbnails
+- Click dark background to close
+
 ---
 
 ## Key Decisions & Why
@@ -183,7 +261,7 @@ Three blockers: api-inference.huggingface.co deprecated (410), router.huggingfac
 text-embedding-004 returns 404 on this account (not available on v1beta). gemini-embedding-001 works, returns 3072 dims.
 
 **Why 768 dims not 3072?**
-pgvector ivfflat AND hnsw both cap at 2000 dims. Truncating 3072→768 is valid (Matryoshka). Both caption embeddings and query embeddings use .slice(0, 768).
+pgvector ivfflat AND hnsw both cap at 2000 dims. Truncating 3072→768 is valid (Matryoshka). Both caption embeddings and query embeddings use `.slice(0, 768)`.
 
 **Why structured caption not free-form?**
 Free-form caused hallucination — model invented "double undermount sink" in a photo without one. Also generated "not visible" negative descriptions polluting embeddings. Structured format with "unknown" is reliable.
@@ -197,6 +275,15 @@ Visual captions miss amenity details visible in metadata but not photos. Room na
 **Why atomic INSERT for indexing trigger?**
 vsearch triggers indexing on first search of unindexed city. Race condition: two simultaneous searches both saw status=none and both triggered indexers. Atomic INSERT (not upsert) only succeeds once — second attempt fails silently, no duplicate run.
 
+**Why score_city_photos instead of search_rooms?**
+search_rooms used a match_count cap (top 500 photos globally), so hotels outside the top 500 got no score and appeared as "browse" entries. score_city_photos does a full scan — every hotel gets a real similarity score, enabling a single ranked list with percentages for all 140 hotels.
+
+**Why structural feature penalty instead of hard filtering?**
+Hard filtering removes hotels from results entirely, which is surprising for users. A penalty (×0.45 per missing feature) sinks non-matching hotels toward the bottom while keeping them visible. Multiple penalties stack — a hotel missing both "double sinks" and "large windows" gets ×0.20 of its original score.
+
+**Why sort rooms by feature confirmation, not by similarity?**
+Pure similarity ordering causes a false-positive: "Two Adjacent Double Rooms" (a room name) contains the word "double", which creates high embedding similarity to "double sinks" queries. Sorting by caption confirmation count ensures the room that genuinely has the features (e.g. "Junior Suite (Exception)" with two stone sinks) appears first.
+
 ---
 
 ## Debugging History — What Failed & Why
@@ -206,7 +293,6 @@ vsearch triggers indexing on first search of unindexed city. Race condition: two
 - Geo filtering completely non-functional — Paris search returns hotels in Minsk, Prague, Japan
 - Confirmed via /api/debug-city: 7,221 full catalog vs 9 room-search
 - limit=200 on room-search → 500 error
-- OR queries ("room OR suite") make no difference
 - LiteAPI docs say it's a similarity index not inventory endpoint — confirmed broken in practice
 
 ### HuggingFace CLIP Debugging
@@ -244,6 +330,14 @@ GRANT ALL ON SEQUENCE room_embeddings_id_seq TO anon, service_role, authenticate
 GRANT ALL ON SEQUENCE indexed_cities_id_seq  TO anon, service_role, authenticated;
 ```
 
+### Supabase 1000-row cap (PostgREST)
+- Symptom: `allPhotos: 1000` in logs even though Paris has 4,699 photos. Hotels 11+ had no photos.
+- Root cause 1: PostgREST default `max_rows=1000` applies server-side; `.limit(10000)` in client code is overridden.
+- Root cause 2: anon role has `statement_timeout=3s`; full city scan took >3s.
+- Fix 1: Created `score_city_photos` as a SQL function (RPCs bypass row limit + run with SECURITY DEFINER, no timeout).
+- Fix 2: `ALTER ROLE authenticator SET pgrst.db_max_rows = '10000'; NOTIFY pgrst, 'reload config';`
+- Fix 3: Use `supabaseAdmin` (service role key) for all vsearch queries, not `supabase` (anon key).
+
 ### pgvector Dimension Issues
 - vector(768) → fine
 - vector(3072) + ivfflat → "column cannot have more than 2000 dimensions for ivfflat index"
@@ -259,40 +353,32 @@ GRANT ALL ON SEQUENCE indexed_cities_id_seq  TO anon, service_role, authenticate
 6. **Caption hallucination** — free-form prompt invented features. Fix: structured prompt with "unknown".
 7. **Photo type always "other"** — LiteAPI metadata all empty. Fix: Gemini self-classifies.
 8. **503 errors on gemini-2.5-flash-lite** — transient overload on first use. Fix: retry with 2s/4s/6s backoff, model works fine.
+9. **Connection pool exhaustion** — concurrent indexer runs + unthrottled DB writes caused Supabase to get stuck in PAUSING state (2026-03-20). Fix: DB_CONCURRENCY=3 semaphore in index-city.js. Do NOT re-index without this fix in place.
 
 ### Search Result Issues Fixed
-1. **Only 1-2 photos showing** — match_count=100 shared across all hotels, most got 1-2. Fix: increase to 500, fetch all hotel photos from DB separately.
+1. **Only 1-2 photos per hotel** — match_count=100 shared across all hotels, most got 1-2. Fix: increase to 500, fetch all hotel photos from DB separately.
 2. **Hotel IDs as names** — cache only fetched for top 10 but response had 20. Fix: fetch all, use hotel_name from room_embeddings as fallback.
 3. **Wrong top match** — hallucinated caption matched query. Fix: structured prompt eliminates this.
+4. **Hotels 11+ had no photos** — PostgREST 1000-row cap. Fix: score_city_photos RPC + pgrst.db_max_rows=10000.
+5. **Hotels 11+ had no match badge** — badge only rendered when `rt.score !== null`. Fix: all hotels get a score from full scan; "browse" badge for hotels with score=0.
+6. **"Hidden Hotel" ranking #1 for "double sinks" despite having them** — the room with two stone sinks ("Junior Suite Exception") was buried behind other rooms because "Two Adjacent Double Rooms" had "double" in its name, inflating embedding similarity. Fix: sort rooms by caption confirmation count of detected features, not by similarity.
+7. **Wrong first photo shown in hotel card** — intentType sorting put bathroom rooms first even when the confirming photo was a bedroom type. Fix: rooms sorted by feature confirmation count → the room that proves the match is always shown first.
 
 ---
 
 ## Known Issues & Next Steps
 
-1. ~~**Paris needs re-indexing with structured prompt**~~ — Done. 4,699 photos, 140 hotels.
-
-2. ~~**SUPABASE STUCK IN PAUSING STATE**~~ — Resolved 2026-03-20. Back to ACTIVE_HEALTHY.
-
-3. ~~**DB write semaphore fix**~~ — Deployed. DB_CONCURRENCY=3 in scripts/index-city.js.
-
-4. **Expand Paris index** — Currently only top-200 hotels by star rating indexed (140 with photos). LiteAPI has 7,221 Paris hotels total. Planned expansion:
+1. **Expand Paris index** — Currently top-200 hotels by star rating indexed (140 with photos). LiteAPI has 7,221 Paris hotels total.
    - Next: limit=1000 (~700 hotels, ~$2.50 Gemini cost, ~10 min)
    - Full: limit=7221 (~5,000 hotels, ~$17, ~60-70 min)
-   - Trigger: POST /api/index-city {"city":"Paris","limit":1000,"secret":"..."}
+   - Trigger: `POST /api/index-city {"city":"Paris","limit":1000,"secret":"..."}`
    - Indexer is idempotent — skips already-indexed photos
 
-5. **Index London and NYC** after Paris expanded and validated.
+2. **Index London and NYC** after Paris expanded and validated.
 
-6. **Consider Supabase logging table** to avoid copy-pasting Render logs for debugging.
+3. **Live pricing** — date inputs are UI-only; connect to LiteAPI rates endpoint to show real nightly prices.
 
-## Search Design (current)
-
-- Returns ALL hotels in city index, sorted by visual match score (best first)
-- Unscored hotels (photos didn't appear in top-500 vector results) shown at bottom sorted by guest rating
-- Client renders 10 hotels initially, infinite scroll reveals 10 more at a time
-- Match % badge shown on first photo of best-matching room type for every scored hotel
-- Single unified list — no "matched/unmatched" divider
-- Structural caption filters still applied to scoring (e.g. one-sink photos don't boost score for double-sink queries), but hotels are never hard-filtered out
+4. **Consider Supabase logging table** to avoid copy-pasting Render logs for debugging.
 
 ---
 
@@ -331,12 +417,8 @@ SELECT city, status, hotel_count, photo_count FROM indexed_cities;
 SELECT COUNT(*), COUNT(DISTINCT hotel_id) FROM room_embeddings WHERE city = 'Paris';
 ```
 
-**View Render logs (Cursor terminal):**
-```bash
-npm install -g @render-cli/render
-render login
-render logs --service roommatch-1fg5 --tail
-```
+**View Render logs via MCP:**
+Use `list_logs` tool with `resource: ["srv-d6s27b75r7bs738737fg"]` (Render MCP connected in Cursor).
 
 **Debug endpoints:**
 - /api/debug-gemini — test which Gemini models work
@@ -348,13 +430,12 @@ render logs --service roommatch-1fg5 --tail
 ## Recommended Dev Setup
 
 - **IDE:** Cursor (edits files directly, reads terminal, built-in git)
-- **Logs:** render logs --tail in Cursor terminal (AI reads directly)
-- **DB:** Supabase MCP in Claude.ai, or Supabase CLI in Cursor terminal
+- **Logs:** Render MCP `list_logs` tool in Cursor (faster than CLI)
+- **DB:** Supabase MCP `execute_sql` tool in Cursor
 - **Deploy:** git push in Cursor → Render auto-deploys in ~2min
-- **Render MCP:** Add via /mcp add in Claude Code: https://mcp.render.com/sse
 
 ---
 
 ## MCP Connections
-- **Supabase MCP** — connected in Claude.ai, project ID dmgxrcmdihgsffvqllms
-- **Render MCP** — use in Claude Code/Cursor: https://mcp.render.com/sse
+- **Supabase MCP** — `user-supabase`, project ID dmgxrcmdihgsffvqllms
+- **Render MCP** — `user-render`, service ID srv-d6s27b75r7bs738737fg
