@@ -1091,7 +1091,7 @@ app.get("/api/vsearch", async (req, res) => {
       if (/\b(bath|tub|shower|sink|toilet|bidet|bathroom|soaking|jacuzzi|spa)\b/.test(queryLower)) return "bathroom";
       if (/\b(bed|bedroom|sleep|pillow|king|queen|twin|mattress)\b/.test(queryLower)) return "bedroom";
       if (/\b(view|balcony|terrace|window|skyline|ocean|sea|city view)\b/.test(queryLower)) return "view";
-      if (/\b(living|sofa|lounge|sitting|couch|armchair)\b/.test(queryLower)) return "living";
+      if (/\b(living|sofa|lounge|sitting|couch|armchair)\b/.test(queryLower)) return "living area";
       return null;
     })();
 
@@ -1126,8 +1126,8 @@ app.get("/api/vsearch", async (req, res) => {
       if (intentType) {
         for (const [, photos] of roomMap) {
           photos.sort((a, b) => {
-            const aMatch = a.type && a.type.includes(intentType) ? 0 : 1;
-            const bMatch = b.type && b.type.includes(intentType) ? 0 : 1;
+            const aMatch = a.type === intentType ? 0 : 1;
+            const bMatch = b.type === intentType ? 0 : 1;
             return aMatch - bMatch;
           });
         }

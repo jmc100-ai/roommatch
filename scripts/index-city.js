@@ -397,7 +397,7 @@ async function indexCity(city, limit = 200) {
         ].filter(Boolean).join('. ');
 
         // Extract PHOTO TYPE from Gemini's structured response for the hybrid text
-        const detectedType = (caption.match(/PHOTO TYPE:\s*(\w[\w\s]*)/i)?.[1] || "unknown").trim().toLowerCase();
+        const detectedType = (caption.match(/PHOTO TYPE:\s*([^\n\r|]+)/i)?.[1] || "unknown").trim().toLowerCase();
         const photoTypeStr = `PHOTO TYPE: ${detectedType} | ROOM: ${photo.roomName || "unknown"}`;
         const hybridText = metaParts
           ? `${photoTypeStr}
