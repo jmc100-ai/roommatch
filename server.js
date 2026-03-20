@@ -1027,6 +1027,41 @@ app.get("/api/vsearch", async (req, res) => {
       return null;
     })();
 
+    // Structural features: if the query specifically requests a feature, hotels whose
+    // captions never confirm that feature get penalised (topScore × 0.45).
+    // This prevents a hotel excellent at ONE query term from outranking one that has both.
+    const STRUCTURAL_FEATURES = [
+      {
+        label: "double sinks",
+        queryMatch: /\bdouble sinks?\b|\btwo sinks?\b|\bdual sinks?\b|\btwin sinks?\b/i,
+        confirm: /\b(two|double|dual|twin|2)\s*sinks?\b|\bsinks?[:\s]+(two|double|2)/i,
+      },
+      {
+        label: "soaking tub",
+        queryMatch: /\b(soaking|freestanding|clawfoot)\s*tub\b/i,
+        confirm: /\b(soaking|freestanding|clawfoot|japanese)\s*(tub|bath)\b|\bbathtub[:\s]+(soaking|freestanding|clawfoot)/i,
+      },
+      {
+        label: "balcony",
+        queryMatch: /\bbalcon(y|ies)\b/i,
+        confirm: /\bbalcon(y|ies)\b/i,
+      },
+      {
+        label: "fireplace",
+        queryMatch: /\bfireplace\b/i,
+        confirm: /\bfireplace\b/i,
+      },
+      {
+        label: "large windows",
+        queryMatch: /\b(large|floor.to.ceiling|panoramic|huge|big)\s*windows?\b/i,
+        confirm: /\b(large|floor.to.ceiling|panoramic|huge|oversized|expansive)\s*windows?\b|\bwindows?[:\s]+(large|floor|panoramic|huge)/i,
+      },
+    ];
+    const detectedFeatures = STRUCTURAL_FEATURES.filter(f => f.queryMatch.test(queryLower));
+    if (detectedFeatures.length) {
+      console.log(`[vsearch] structural features detected: ${detectedFeatures.map(f => f.label).join(", ")}`);
+    }
+
     const fetchClient = supabaseAdmin || supabase;
     const [photosResult, cachedResult] = await Promise.all([
       fetchClient.rpc("score_city_photos", { query_embedding: queryEmbedding, search_city: city }),
@@ -1047,24 +1082,37 @@ app.get("/api/vsearch", async (req, res) => {
     //    and compute per-hotel aggregate score (avg of top-3 intent-matching similarities).
     const cacheMap       = new Map((cached || []).map(h => [h.hotel_id, h]));
     const hotelPhotosMap = new Map();  // hotel_id → [{url, type, similarity}]
-    const hotelScoreMap  = new Map();  // hotel_id → {scores[], intentScores[]}
+    const hotelScoreMap  = new Map();  // hotel_id → {scores[], intentScores[], captions[]}
 
     for (const p of scoredPhotos) {
       if (!hotelPhotosMap.has(p.hotel_id)) hotelPhotosMap.set(p.hotel_id, []);
       hotelPhotosMap.get(p.hotel_id).push(p);
 
-      if (!hotelScoreMap.has(p.hotel_id)) hotelScoreMap.set(p.hotel_id, { scores: [], intentScores: [] });
+      if (!hotelScoreMap.has(p.hotel_id)) hotelScoreMap.set(p.hotel_id, { scores: [], intentScores: [], captions: [] });
       const hs = hotelScoreMap.get(p.hotel_id);
       hs.scores.push(p.similarity);
       if (!intentType || p.photo_type === intentType) hs.intentScores.push(p.similarity);
+      if (p.caption) hs.captions.push(p.caption);
     }
 
-    // 5. Compute topScore per hotel and sort all hotels
+    // 5. Compute topScore per hotel and sort all hotels.
+    //    Apply structural feature penalty (×0.45) for each detected feature that has
+    //    no confirming caption in this hotel's photos.
+    const FEATURE_PENALTY = 0.45;
     const allHotels = [...hotelPhotosMap.keys()].map(hotelId => {
       const hs        = hotelScoreMap.get(hotelId);
       const arr       = hs.intentScores.length > 0 ? hs.intentScores : hs.scores;
       arr.sort((a, b) => b - a);
-      const topScore  = arr.slice(0, 3).reduce((s, x) => s + x, 0) / Math.min(3, arr.length);
+      let topScore    = arr.slice(0, 3).reduce((s, x) => s + x, 0) / Math.min(3, arr.length);
+
+      for (const feat of detectedFeatures) {
+        const confirmed = hs.captions.some(c => feat.confirm.test(c));
+        if (!confirmed) {
+          topScore *= FEATURE_PENALTY;
+          console.log(`[vsearch] penalty: ${hotelId} missing "${feat.label}"`);
+        }
+      }
+
       return { hotelId, topScore };
     }).sort((a, b) => b.topScore - a.topScore);
 
