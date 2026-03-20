@@ -1111,134 +1111,103 @@ app.get("/api/vsearch", async (req, res) => {
         if (!intentType) return true;
         return hotelMap.get(hotelId).intentScores.length > 0;
       })
-      .sort((a,b) => b.topScore - a.topScore)
-      .slice(0, 20);
+      .sort((a,b) => b.topScore - a.topScore);
+    // No slice — return all scored hotels
 
-    // 5. Enrich ALL ranked hotels with names from cache first
-    const allHotelIds = rankedHotels.map(h => h.hotelId);
-    const { data: cached } = await supabase
-      .from("hotels_cache")
-      .select("*")
-      .in("hotel_id", allHotelIds);
-    const cacheMap = new Map((cached || []).map(h => [h.hotel_id, h]));
+    // 5. Fetch ALL city photos and ALL city hotel metadata in parallel
+    const scoredHotelIds = new Set(rankedHotels.map(h => h.hotelId));
+    const [{ data: allPhotos }, { data: cached }] = await Promise.all([
+      supabase.from("room_embeddings")
+        .select("hotel_id, hotel_name, room_name, photo_url, photo_type, caption")
+        .eq("city", city),
+      supabase.from("hotels_cache")
+        .select("*")
+        .eq("city", city),
+    ]);
 
-    // Fetch detail from LiteAPI for any hotels missing from cache (top 10 only)
-    const top10 = rankedHotels.slice(0, 10);
-    const needDetail = top10.filter(h => !cacheMap.has(h.hotelId));
-    await Promise.all(needDetail.map(async ({ hotelId }) => {
-      const r = await liteGet(`/data/hotel?hotelId=${hotelId}`);
-      if (r.ok && r.data?.data) {
-        const d = r.data.data;
-        cacheMap.set(hotelId, {
-          hotel_id: hotelId, name: d.name, address: d.address,
-          star_rating: d.starRating || 0, guest_rating: d.rating || 0,
-        });
-      }
-    }));
-
-    // 6. Fetch all photos for each hotel from DB (not just the 100 search results)
-    const { data: allPhotos } = await supabase
-      .from("room_embeddings")
-      .select("hotel_id, hotel_name, room_name, photo_url, photo_type, caption")
-      .in("hotel_id", allHotelIds)
-      .eq("city", city);
-
-    // Build a map of hotelId → all their photos
+    const cacheMap      = new Map((cached || []).map(h => [h.hotel_id, h]));
     const hotelPhotosMap = new Map();
     for (const p of (allPhotos || [])) {
       if (!hotelPhotosMap.has(p.hotel_id)) hotelPhotosMap.set(p.hotel_id, []);
       hotelPhotosMap.get(p.hotel_id).push(p);
     }
 
-    // 7. Structural feature filter — checked against the FULL photo set for each hotel
-    // (allPhotos already contains every stored photo for every ranked hotel, so no extra query needed)
-    // This is more accurate than checking only the top-500 vector matches.
-    const structurallyQualified = new Set(allHotelIds); // start with all, remove failing hotels
-    if (/double sink|two sink|dual sink|his.and.hers/i.test(query)) {
-      for (const hotelId of structurallyQualified) {
-        const photos = hotelPhotosMap.get(hotelId) || [];
-        if (!photos.some(p => /SINKS: (two sinks|three or more sinks)/i.test(p.caption || '')))
-          structurallyQualified.delete(hotelId);
-      }
-    }
-    if (/soaking tub|freestanding tub|clawfoot tub/i.test(query)) {
-      for (const hotelId of structurallyQualified) {
-        const photos = hotelPhotosMap.get(hotelId) || [];
-        if (!photos.some(p => /BATHTUB: (soaking tub|freestanding tub|clawfoot tub)/i.test(p.caption || '')))
-          structurallyQualified.delete(hotelId);
-      }
-    }
-    if (/\bfireplace\b/i.test(query)) {
-      for (const hotelId of structurallyQualified) {
-        const photos = hotelPhotosMap.get(hotelId) || [];
-        if (!photos.some(p => /FIREPLACE: yes/i.test(p.caption || '')))
-          structurallyQualified.delete(hotelId);
-      }
-    }
-    const hadStructuralFilter = structurallyQualified.size < allHotelIds.length;
+    // 6. Build scored hotel entries + append unscored hotels (not in vector results)
+    // Unscored hotels still appear — sorted to the bottom by guest rating
+    const unscoredHotels = [...hotelPhotosMap.keys()]
+      .filter(id => !scoredHotelIds.has(id))
+      .map(hotelId => ({ hotelId, topScore: 0, photos: [] }))
+      .sort((a, b) => (cacheMap.get(b.hotelId)?.guest_rating || 0) - (cacheMap.get(a.hotelId)?.guest_rating || 0));
 
-    // 8. Build response — group photos by room_name for each hotel
-    const hotels = rankedHotels
-      .filter(({ hotelId }) => structurallyQualified.has(hotelId))
-      .map(({ hotelId, topScore, photos: matchedPhotos }) => {
-      const meta  = cacheMap.get(hotelId) || {};
-      const score = Math.round(topScore * 100);
+    const allHotels = [...rankedHotels, ...unscoredHotels];
 
-      // Use all stored photos for this hotel, ordered by match score
-      // Matched photos (from vector search) come first
-      const matchedUrls = new Set(matchedPhotos.map(p => p.url));
+    // Helper to build the room type list for a hotel
+    function buildRoomTypes(matchedPhotos, hotelId, score) {
       const allHotelPhotos = hotelPhotosMap.get(hotelId) || [];
+      const matchedUrls    = new Set(matchedPhotos.map(p => p.url));
+      const roomMap        = new Map();
 
-      // Group by room_name, tracking photo type alongside URL
-      const roomMap = new Map();
-      // First add matched photos in score order
+      // Matched photos first (in score order from vector search)
       for (const p of matchedPhotos) {
-        const rName = p.caption ? (allHotelPhotos.find(ap => ap.photo_url === p.url)?.room_name || "Matching Rooms") : "Matching Rooms";
+        const rName = allHotelPhotos.find(ap => ap.photo_url === p.url)?.room_name || "Room";
         if (!roomMap.has(rName)) roomMap.set(rName, []);
         if (roomMap.get(rName).length < 10) roomMap.get(rName).push({ url: p.url, type: p.type });
       }
-      // Then add remaining photos not already included
+      // Then remaining photos
       for (const p of allHotelPhotos) {
         if (matchedUrls.has(p.photo_url)) continue;
-        const rName = p.room_name || "Other Rooms";
+        const rName = p.room_name || "Room";
         if (!roomMap.has(rName)) roomMap.set(rName, []);
         if (roomMap.get(rName).length < 10) roomMap.get(rName).push({ url: p.photo_url, type: p.photo_type });
       }
 
-      // If query has a clear intent, sort photos within each room AND sort rooms
-      // so rooms containing the intent type appear before rooms that don't
-      if (intentType) {
-        for (const [, photos] of roomMap) {
-          photos.sort((a, b) => {
-            const aMatch = a.type === intentType ? 0 : 1;
-            const bMatch = b.type === intentType ? 0 : 1;
-            return aMatch - bMatch;
-          });
-        }
-      }
-
-      // Build room list — if intent type, rooms with a matching photo float to the top
-      let roomEntries = [...roomMap.entries()];
-      if (intentType) {
-        roomEntries.sort((a, b) => {
-          const aHasType = a[1].some(p => p.type === intentType) ? 0 : 1;
-          const bHasType = b[1].some(p => p.type === intentType) ? 0 : 1;
-          return aHasType - bHasType;
+      // Sort photos within rooms: intent type first; then detail shots last
+      for (const [, photos] of roomMap) {
+        photos.sort((a, b) => {
+          const aIntent = intentType && a.type === intentType ? 0 : 1;
+          const bIntent = intentType && b.type === intentType ? 0 : 1;
+          if (aIntent !== bIntent) return aIntent - bIntent;
+          // Detail shot (bathroom with nothing visible) goes last
+          const isDetail = p => {
+            const c = p.caption || '';
+            return p.type === 'bathroom' &&
+              /SINKS: (unknown|no sink visible)/i.test(c) &&
+              /BATHTUB: no bathtub/i.test(c) &&
+              /SHOWER: (no shower|unknown)/i.test(c);
+          };
+          return (isDetail(a) ? 1 : 0) - (isDetail(b) ? 1 : 0);
         });
       }
 
-      const firstRoomName = roomEntries[0]?.[0];
-      const roomTypes = roomEntries.map(([name, photoEntries]) => ({
+      // Sort rooms: intent-type rooms first
+      let roomEntries = [...roomMap.entries()];
+      if (intentType) {
+        roomEntries.sort((a, b) => {
+          const aHas = a[1].some(p => p.type === intentType) ? 0 : 1;
+          const bHas = b[1].some(p => p.type === intentType) ? 0 : 1;
+          return aHas - bHas;
+        });
+      }
+
+      const firstRoom = roomEntries[0]?.[0];
+      return roomEntries.map(([name, photoEntries]) => ({
         name,
         photos:    photoEntries.map(p => p.url),
-        score:     name === firstRoomName ? score : null,
+        score:     name === firstRoom && score > 0 ? score : null,
         size:      "",
         beds:      "",
         amenities: [],
       }));
+    }
 
-      // Use hotel_name from room_embeddings as fallback if cache miss
-      const fallbackName = allHotelPhotos[0]?.hotel_name || null;
+    // 7. Build response for all hotels
+    const hotels = allHotels.map(({ hotelId, topScore, photos: matchedPhotos }) => {
+      const meta        = cacheMap.get(hotelId) || {};
+      const score       = Math.round(topScore * 100);
+      const allHotelPhotos = hotelPhotosMap.get(hotelId) || [];
+      const fallbackName   = allHotelPhotos[0]?.hotel_name || null;
+      const roomTypes      = buildRoomTypes(matchedPhotos, hotelId, score);
+
       return {
         id:          hotelId,
         name:        meta.name || fallbackName || hotelId,
@@ -1248,12 +1217,12 @@ app.get("/api/vsearch", async (req, res) => {
         starRating:  meta.star_rating || 0,
         rating:      meta.guest_rating || 0,
         roomTypes:   roomTypes.slice(0, 8),
-        isMatched:   true,
+        isMatched:   score > 0,
         vectorScore: score,
       };
     });
 
-    console.log(`[vsearch] ${city}: ${hotels.length} hotels, top score ${rankedHotels[0]?.topScore?.toFixed(3)}`);
+    console.log(`[vsearch] ${city}: ${hotels.length} total hotels (${rankedHotels.length} scored), top score ${rankedHotels[0]?.topScore?.toFixed(3)}`);
     res.json({ hotels, query, city, indexing, indexStatus: status,
       stats: { indexed: cityRow?.photo_count || 0 } });
 

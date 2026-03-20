@@ -271,15 +271,28 @@ GRANT ALL ON SEQUENCE indexed_cities_id_seq  TO anon, service_role, authenticate
 
 1. ~~**Paris needs re-indexing with structured prompt**~~ — Done. 4,699 photos, 140 hotels.
 
-2. **SUPABASE STUCK IN PAUSING STATE** — Project dmgxrcmdihgsffvqllms got stuck PAUSING on 2026-03-20 due to connection pool exhaustion from concurrent indexing runs. Filed support ticket. Once restored, searches will work immediately (service role key fix already deployed). Do NOT re-index Paris until DB is confirmed healthy.
+2. ~~**SUPABASE STUCK IN PAUSING STATE**~~ — Resolved 2026-03-20. Back to ACTIVE_HEALTHY.
 
-3. **DB write semaphore fix ready to push** — `scripts/index-city.js` has a `DB_CONCURRENCY=3` semaphore added (not yet pushed — waiting for DB to come back). This prevents the connection exhaustion that caused the lock.
+3. ~~**DB write semaphore fix**~~ — Deployed. DB_CONCURRENCY=3 in scripts/index-city.js.
 
-4. **Validate Paris search quality** — test "double sinks", "soaking tub", "hardwood floors", "Art Deco", "large tub" etc. Verify bathroom photos show first for bathroom queries.
+4. **Expand Paris index** — Currently only top-200 hotels by star rating indexed (140 with photos). LiteAPI has 7,221 Paris hotels total. Planned expansion:
+   - Next: limit=1000 (~700 hotels, ~$2.50 Gemini cost, ~10 min)
+   - Full: limit=7221 (~5,000 hotels, ~$17, ~60-70 min)
+   - Trigger: POST /api/index-city {"city":"Paris","limit":1000,"secret":"..."}
+   - Indexer is idempotent — skips already-indexed photos
 
-5. **Index London and NYC** after Paris validated.
+5. **Index London and NYC** after Paris expanded and validated.
 
 6. **Consider Supabase logging table** to avoid copy-pasting Render logs for debugging.
+
+## Search Design (current)
+
+- Returns ALL hotels in city index, sorted by visual match score (best first)
+- Unscored hotels (photos didn't appear in top-500 vector results) shown at bottom sorted by guest rating
+- Client renders 10 hotels initially, infinite scroll reveals 10 more at a time
+- Match % badge shown on first photo of best-matching room type for every scored hotel
+- Single unified list — no "matched/unmatched" divider
+- Structural caption filters still applied to scoring (e.g. one-sink photos don't boost score for double-sink queries), but hotels are never hard-filtered out
 
 ---
 

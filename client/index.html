@@ -459,8 +459,9 @@
   let currentMode = 'vector';
   let clipES = null;
   let clipDone = 0, clipTotal = 10;
-  let _lastHotels = [];
-  let _currentSort = 'match';
+  let _lastHotels     = [];
+  let _currentSort    = 'match';
+  let _displayedCount = 10;
 
   // Pre-fill dates: tomorrow + tomorrow+2
   (function initDates() {
@@ -481,7 +482,8 @@
     document.getElementById('sortBar').style.display = 'none';
     document.getElementById('resultCount').textContent = '';
     document.body.classList.remove('has-results');
-    _lastHotels = [];
+    _lastHotels     = [];
+    _displayedCount = 10;
     hideBanner();
     setStatus('');
   }
@@ -630,25 +632,19 @@
   // ── Render + sort ──────────────────────────────────────────────────────────
 
   function render(hotels) {
-    _lastHotels = hotels;
-    _currentSort = 'match';
+    _lastHotels     = hotels;
+    _currentSort    = 'match';
+    _displayedCount = 10;
     document.body.classList.add('has-results');
     document.querySelectorAll('.sort-btn').forEach(b => {
       b.classList.toggle('active', b.dataset.sort === 'match');
     });
-    updateResultCount(hotels);
     renderSorted();
   }
 
-  function updateResultCount(hotels) {
-    const total = hotels.length;
-    const totalTypes = hotels.reduce((n, h) => n + (h.roomTypes?.length || 0), 0);
-    document.getElementById('resultCount').textContent =
-      `${total} hotel${total !== 1 ? 's' : ''} · ${totalTypes} room type${totalTypes !== 1 ? 's' : ''}`;
-  }
-
   function setSortBy(sort) {
-    _currentSort = sort;
+    _currentSort    = sort;
+    _displayedCount = 10;
     document.querySelectorAll('.sort-btn').forEach(b => {
       b.classList.toggle('active', b.dataset.sort === sort);
     });
@@ -659,24 +655,42 @@
     const hotels = [..._lastHotels];
     if (_currentSort === 'rating') {
       hotels.sort((a, b) => (b.rating || 0) - (a.rating || 0));
-      document.getElementById('results').innerHTML = hotels.map(hotelHTML).join('');
     } else if (_currentSort === 'stars') {
       hotels.sort((a, b) => (b.starRating || 0) - (a.starRating || 0));
-      document.getElementById('results').innerHTML = hotels.map(hotelHTML).join('');
-    } else {
-      // Best match: matched (scored) hotels first, then unmatched
-      const matched   = hotels.filter(h => h.isMatched);
-      const unmatched = hotels.filter(h => !h.isMatched);
-      let html = matched.map(hotelHTML).join('');
-      if (unmatched.length > 0) {
-        const cityName = unmatched[0]?.city || '';
-        html += `<div class="section-divider">
-          <span>More hotels in ${cityName}</span>
-          <span class="section-divider-sub">Browse rooms — no visual match score</span>
-        </div>`;
-        html += unmatched.map(hotelHTML).join('');
-      }
-      document.getElementById('results').innerHTML = html;
+    }
+    // 'match' order is already correct from the server (scored desc, then unscored by rating)
+
+    const toShow    = hotels.slice(0, _displayedCount);
+    const remaining = hotels.length - _displayedCount;
+    const total     = hotels.length;
+
+    // Update result count in sort bar
+    const showing = toShow.length;
+    document.getElementById('resultCount').textContent =
+      remaining > 0 ? `Showing ${showing} of ${total} hotels` : `${total} hotel${total !== 1 ? 's' : ''}`;
+
+    let html = toShow.map(hotelHTML).join('');
+
+    // Sentinel triggers loading more
+    if (remaining > 0) {
+      const nextBatch = Math.min(remaining, 10);
+      html += `<div id="scroll-sentinel" style="height:48px;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:13px">
+        Loading ${nextBatch} more…
+      </div>`;
+    }
+
+    document.getElementById('results').innerHTML = html;
+
+    if (remaining > 0) {
+      const sentinel = document.getElementById('scroll-sentinel');
+      const obs = new IntersectionObserver(entries => {
+        if (entries[0].isIntersecting) {
+          obs.disconnect();
+          _displayedCount += 10;
+          renderSorted();
+        }
+      }, { rootMargin: '300px' });
+      obs.observe(sentinel);
     }
   }
 
@@ -721,7 +735,7 @@
           <div class="room-photo-cell">
             <img src="${url}" alt="${rt.name}" loading="lazy"
                  onerror="this.parentElement.innerHTML='<div class=no-photo>🛏</div>'">
-            ${pi === 0 && isTopMatch && rt.score !== null ? `<div class="best-badge"><span>★</span> Best match · ${rt.score}%</div>` : ''}
+            ${pi === 0 && isTopMatch && rt.score !== null ? `<div class="best-badge">${rt.score}% match</div>` : ''}
           </div>`).join('')
       : `<div class="room-photo-cell"><div class="no-photo">🛏</div></div>`;
 
