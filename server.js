@@ -1031,6 +1031,15 @@ app.get("/api/vsearch", async (req, res) => {
     // Detect query intent + caption filters — defined here so available for aggregation below
     const queryLower = query.toLowerCase();
 
+    // Detect intent type first — used both for scoring and display ordering
+    const intentType = (() => {
+      if (/\b(bath|tub|shower|sink|toilet|bidet|bathroom|soaking|jacuzzi|spa)\b/.test(queryLower)) return "bathroom";
+      if (/\b(bed|bedroom|sleep|pillow|king|queen|twin|mattress)\b/.test(queryLower)) return "bedroom";
+      if (/\b(view|balcony|terrace|window|skyline|ocean|sea|city view)\b/.test(queryLower)) return "view";
+      if (/\b(living|sofa|lounge|sitting|couch|armchair)\b/.test(queryLower)) return "living area";
+      return null;
+    })();
+
     // Caption content filters — reject photos whose structured caption contradicts the query
     const captionFilters = [];
     if (/double sink|two sink|dual sink|his.and.hers/i.test(query)) {
@@ -1054,24 +1063,35 @@ app.get("/api/vsearch", async (req, res) => {
 
     // 4. Aggregate by hotel — score = average of top 3 photo scores
     // Apply caption filters to skip photos that structurally contradict the query
+    // When intentType is set, only photos matching that type count toward the hotel's score
+    // (non-matching photos are still stored for display but don't drive ranking)
     const hotelMap = new Map();
     for (const m of matches) {
       const passesFilters = captionFilters.every(fn => fn(m.caption || ""));
       if (!passesFilters) continue;
       if (!hotelMap.has(m.hotel_id)) {
-        hotelMap.set(m.hotel_id, { photos: [], scores: [] });
+        hotelMap.set(m.hotel_id, { photos: [], scores: [], intentScores: [] });
       }
       const h = hotelMap.get(m.hotel_id);
       h.photos.push({ url: m.photo_url, type: m.photo_type, caption: m.caption, score: m.similarity });
       h.scores.push(m.similarity);
+      if (!intentType || m.photo_type === intentType) {
+        h.intentScores.push(m.similarity);
+      }
     }
 
-    // Sort hotels by average of top 3 scores
+    // Sort hotels by average of top 3 intent-matching scores (fall back to all scores if no intent matches)
     const rankedHotels = [...hotelMap.entries()]
       .map(([hotelId, data]) => {
-        data.scores.sort((a,b) => b-a);
-        const topScore = data.scores.slice(0,3).reduce((s,x) => s+x, 0) / Math.min(3, data.scores.length);
+        const scoringArr = data.intentScores.length > 0 ? data.intentScores : data.scores;
+        scoringArr.sort((a,b) => b-a);
+        const topScore = scoringArr.slice(0,3).reduce((s,x) => s+x, 0) / Math.min(3, scoringArr.length);
         return { hotelId, topScore, photos: data.photos };
+      })
+      // Only keep hotels that have at least one intent-matching photo when intentType is set
+      .filter(({ hotelId }) => {
+        if (!intentType) return true;
+        return hotelMap.get(hotelId).intentScores.length > 0;
       })
       .sort((a,b) => b.topScore - a.topScore)
       .slice(0, 20);
@@ -1111,14 +1131,6 @@ app.get("/api/vsearch", async (req, res) => {
       if (!hotelPhotosMap.has(p.hotel_id)) hotelPhotosMap.set(p.hotel_id, []);
       hotelPhotosMap.get(p.hotel_id).push(p);
     }
-
-    const intentType = (() => {
-      if (/\b(bath|tub|shower|sink|toilet|bidet|bathroom|soaking|jacuzzi|spa)\b/.test(queryLower)) return "bathroom";
-      if (/\b(bed|bedroom|sleep|pillow|king|queen|twin|mattress)\b/.test(queryLower)) return "bedroom";
-      if (/\b(view|balcony|terrace|window|skyline|ocean|sea|city view)\b/.test(queryLower)) return "view";
-      if (/\b(living|sofa|lounge|sitting|couch|armchair)\b/.test(queryLower)) return "living area";
-      return null;
-    })();
 
     // 7. Build response — group photos by room_name for each hotel
     const hotels = rankedHotels.map(({ hotelId, topScore, photos: matchedPhotos }) => {
