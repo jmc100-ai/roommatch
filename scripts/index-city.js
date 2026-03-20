@@ -14,8 +14,9 @@ const LITEAPI_KEY  = process.env.LITEAPI_PROD_KEY || process.env.LITEAPI_KEY || 
 const GEMINI_KEY   = process.env.GEMINI_KEY  || "";
 const SUPABASE_URL = process.env.SUPABASE_URL || "";
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY || "";
-const MAX_PHOTOS   = 10; // per room type
-const BATCH_SIZE   = 5;  // concurrent hotel detail fetches (photos processed sequentially within each)
+const MAX_PHOTOS         = 10; // per room type
+const BATCH_SIZE         = 20; // concurrent hotel detail fetches
+const PHOTO_CONCURRENCY  = 5;  // concurrent Gemini calls per hotel
 
 if (!LITEAPI_KEY || !GEMINI_KEY || !SUPABASE_URL || !SUPABASE_KEY) {
   console.error("[indexer] Missing required env vars");
@@ -179,9 +180,9 @@ Reply with ONLY the filled-in list above. No extra commentary.`;
 
     const rawText = await gr.text();
     if (!gr.ok) {
-      if (gr.status === 503 && retries > 0) {
-        const wait = (4 - retries) * 2000;
-        console.warn(`  [gemini] 503 — retrying in ${wait/1000}s (${retries} left)`);
+      if ((gr.status === 503 || gr.status === 429) && retries > 0) {
+        const wait = Math.pow(2, 4 - retries) * 2000; // 4s, 8s, 16s exponential
+        console.warn(`  [gemini] ${gr.status} — retrying in ${wait/1000}s (${retries} left)`);
         await new Promise(r => setTimeout(r, wait));
         return geminiCaption(imageUrl, photoContext, retries - 1);
       }
@@ -376,13 +377,14 @@ async function indexCity(city, limit = 200) {
       console.log(`  [hotel] ${hotelName.slice(0,30)}: ${toProcess.length} photos selected, ${fresh.length} new to process`);
       if (!fresh.length) { hotelsDone++; return; }
 
-      // Caption + embed + store each photo sequentially
+      // Caption + embed + store photos concurrently in chunks of PHOTO_CONCURRENCY
       let embedded = 0;
-      for (const photo of fresh) {
+      for (let pi = 0; pi < fresh.length; pi += PHOTO_CONCURRENCY) {
+        const photoChunk = fresh.slice(pi, pi + PHOTO_CONCURRENCY);
+        await Promise.all(photoChunk.map(async (photo) => {
         // Step 1: Caption
         const caption = await geminiCaption(photo.url, { type: photo.type, roomName: photo.roomName });
-        if (!caption) { console.warn(`  [pipeline] caption FAILED for ${photo.url.slice(-40)}`); continue; }
-        console.log(`  [pipeline] caption OK (${caption.length} chars): ${caption.slice(0,60)}...`);
+        if (!caption) { console.warn(`  [pipeline] caption FAILED for ${photo.url.slice(-40)}`); return; }
 
         // Build hybrid text: structured caption + room metadata
         // This anchors the embedding with reliable metadata alongside the visual description
@@ -406,11 +408,10 @@ ${caption}`;
 
         // Step 2: Embed the hybrid text
         const embedding = await geminiEmbed(hybridText);
-        if (!embedding) { console.warn(`  [pipeline] embed FAILED`); continue; }
-        console.log(`  [pipeline] embed OK (${embedding.length} dims)`);
+        if (!embedding) { console.warn(`  [pipeline] embed FAILED`); return; }
 
         // Step 3: Store
-        const { error, data } = await supabase.from("room_embeddings").upsert({
+        const { error } = await supabase.from("room_embeddings").upsert({
           hotel_id: hotelId, city, country_code: cc,
           hotel_name: hotelName,
           room_name: photo.roomName, photo_url: photo.url,
@@ -422,11 +423,11 @@ ${caption}`;
 
         if (!error) {
           embedded++; totalEmbeds++;
-          console.log(`  [pipeline] stored OK — total: ${totalEmbeds}`);
         } else {
           console.warn(`  [db] insert error: ${error.message}`, error.details, error.hint);
         }
-      }
+        })); // end Promise.all photo chunk
+      } // end photo chunk loop
 
       hotelsDone++;
       console.log(`[indexer] [${hotelsDone}/${hotels.length}] ${hotelName.slice(0,35)} — ${embedded} embeddings`);
