@@ -1043,7 +1043,14 @@ app.get("/api/vsearch", async (req, res) => {
     // Caption content filters — reject photos whose structured caption contradicts the query
     const captionFilters = [];
     if (/double sink|two sink|dual sink|his.and.hers/i.test(query)) {
-      captionFilters.push(c => !/SINKS: one sink/i.test(c));
+      // Require positive evidence: bathroom photos must show more than one sink
+      // "unknown" is not enough — hotels with only one-sink or unknown bathrooms are excluded
+      captionFilters.push(c => {
+        if (/^PHOTO TYPE: bathroom/i.test(c)) {
+          return !/SINKS: one sink/i.test(c) && !/SINKS: unknown/i.test(c);
+        }
+        return true; // non-bathroom photos pass (they won't affect intentScores anyway)
+      });
     }
     if (/no tub|no bathtub/i.test(query)) {
       captionFilters.push(c => !/BATHTUB: (soaking|freestanding|clawfoot|built-in|hot tub|jacuzzi)/i.test(c));
