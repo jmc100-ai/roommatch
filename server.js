@@ -1130,23 +1130,23 @@ app.get("/api/vsearch", async (req, res) => {
       const hotelPhotos    = hotelPhotosMap.get(hotelId) || [];  // already sorted by similarity DESC
       const fallbackName   = hotelPhotos[0]?.hotel_name || null;
 
-      // Group photos by room_name, preserving similarity order within each room
+      // Group photos by room_name; store similarity so rooms can be sorted by best match.
+      // hotelPhotos is already sorted similarity DESC so first photo per room is the best.
       const roomMap = new Map();
       for (const p of hotelPhotos) {
         const rName = p.room_name || "Room";
         if (!roomMap.has(rName)) roomMap.set(rName, []);
-        if (roomMap.get(rName).length < 10) roomMap.get(rName).push({ url: p.photo_url, type: p.photo_type });
+        if (roomMap.get(rName).length < 10) roomMap.get(rName).push({ url: p.photo_url, type: p.photo_type, similarity: p.similarity });
       }
 
-      // Sort rooms: intent-type rooms first (they have at least one matching photo)
+      // Sort rooms by their best (highest) similarity photo so the room that
+      // proves the match is always shown first, regardless of photo type.
       let roomEntries = [...roomMap.entries()];
-      if (intentType) {
-        roomEntries.sort((a, b) => {
-          const aHas = a[1].some(p => p.type === intentType) ? 0 : 1;
-          const bHas = b[1].some(p => p.type === intentType) ? 0 : 1;
-          return aHas - bHas;
-        });
-      }
+      roomEntries.sort((a, b) => {
+        const aBest = a[1][0]?.similarity ?? 0;  // first photo is already the best
+        const bBest = b[1][0]?.similarity ?? 0;
+        return bBest - aBest;
+      });
 
       const firstRoom = roomEntries[0]?.[0];
       const roomTypes = roomEntries.map(([name, photoEntries]) => ({
