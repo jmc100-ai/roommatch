@@ -1114,13 +1114,12 @@ app.get("/api/vsearch", async (req, res) => {
       .sort((a,b) => b.topScore - a.topScore);
     // No slice — return all scored hotels
 
-    // 5. Fetch ALL city photos and ALL city hotel metadata in parallel
+    // 5. Fetch ALL city photos (via RPC — bypasses PostgREST 1000-row cap)
+    // and city hotel metadata, in parallel.
+    // get_city_photos() omits the caption column (large text, not needed for display).
     const scoredHotelIds = new Set(rankedHotels.map(h => h.hotelId));
     const [{ data: allPhotos }, { data: cached }] = await Promise.all([
-      supabase.from("room_embeddings")
-        .select("hotel_id, hotel_name, room_name, photo_url, photo_type, caption")
-        .eq("city", city)
-        .limit(10000),  // Supabase default cap is 1000; Paris has ~5k photos
+      supabase.rpc("get_city_photos", { search_city: city }),
       supabase.from("hotels_cache")
         .select("*")
         .eq("city", city),
@@ -1162,22 +1161,15 @@ app.get("/api/vsearch", async (req, res) => {
         if (roomMap.get(rName).length < 10) roomMap.get(rName).push({ url: p.photo_url, type: p.photo_type });
       }
 
-      // Sort photos within rooms: intent type first; then detail shots last
-      for (const [, photos] of roomMap) {
-        photos.sort((a, b) => {
-          const aIntent = intentType && a.type === intentType ? 0 : 1;
-          const bIntent = intentType && b.type === intentType ? 0 : 1;
-          if (aIntent !== bIntent) return aIntent - bIntent;
-          // Detail shot (bathroom with nothing visible) goes last
-          const isDetail = p => {
-            const c = p.caption || '';
-            return p.type === 'bathroom' &&
-              /SINKS: (unknown|no sink visible)/i.test(c) &&
-              /BATHTUB: no bathtub/i.test(c) &&
-              /SHOWER: (no shower|unknown)/i.test(c);
-          };
-          return (isDetail(a) ? 1 : 0) - (isDetail(b) ? 1 : 0);
-        });
+      // Sort photos within rooms: intent type first
+      if (intentType) {
+        for (const [, photos] of roomMap) {
+          photos.sort((a, b) => {
+            const aIntent = a.type === intentType ? 0 : 1;
+            const bIntent = b.type === intentType ? 0 : 1;
+            return aIntent - bIntent;
+          });
+        }
       }
 
       // Sort rooms: intent-type rooms first
