@@ -1121,7 +1121,8 @@ app.get("/api/vsearch", async (req, res) => {
         if (roomMap.get(rName).length < 10) roomMap.get(rName).push({ url: p.photo_url, type: p.photo_type });
       }
 
-      // If query has a clear intent, sort each room's photos so matching type appears first
+      // If query has a clear intent, sort photos within each room AND sort rooms
+      // so rooms containing the intent type appear before rooms that don't
       if (intentType) {
         for (const [, photos] of roomMap) {
           photos.sort((a, b) => {
@@ -1132,10 +1133,21 @@ app.get("/api/vsearch", async (req, res) => {
         }
       }
 
-      const roomTypes = [...roomMap.entries()].map(([name, photoEntries]) => ({
+      // Build room list — if intent type, rooms with a matching photo float to the top
+      let roomEntries = [...roomMap.entries()];
+      if (intentType) {
+        roomEntries.sort((a, b) => {
+          const aHasType = a[1].some(p => p.type === intentType) ? 0 : 1;
+          const bHasType = b[1].some(p => p.type === intentType) ? 0 : 1;
+          return aHasType - bHasType;
+        });
+      }
+
+      const firstRoomName = roomEntries[0]?.[0];
+      const roomTypes = roomEntries.map(([name, photoEntries]) => ({
         name,
         photos:    photoEntries.map(p => p.url),
-        score:     name === [...roomMap.keys()][0] ? score : null,
+        score:     name === firstRoomName ? score : null,
         size:      "",
         beds:      "",
         amenities: [],
