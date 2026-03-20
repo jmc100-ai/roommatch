@@ -269,19 +269,33 @@ GRANT ALL ON SEQUENCE indexed_cities_id_seq  TO anon, service_role, authenticate
 
 ## Known Issues & Next Steps
 
-1. **Paris needs re-indexing with structured prompt:**
-```sql
-DELETE FROM room_embeddings WHERE city = 'Paris';
-DELETE FROM indexed_cities WHERE city = 'Paris';
-DELETE FROM hotels_cache WHERE city = 'Paris';
-```
-Then: POST /api/index-city {"city":"Paris","limit":200,"secret":"YOUR_SECRET"}
+1. ~~**Paris needs re-indexing with structured prompt**~~ — Done. Clean photo_type data, fixed regex, 6,400+ embeddings.
 
-2. **Validate search quality** after re-indexing — test "double sinks", "soaking tub", "hardwood floors", "Art Deco" etc.
+2. **Validate Paris search quality** — test "double sinks", "soaking tub", "hardwood floors", "Art Deco", "large tub" etc. Verify bathroom photos show first for bathroom queries.
 
 3. **Index London and NYC** after Paris validated.
 
 4. **Consider Supabase logging table** to avoid copy-pasting Render logs for debugging.
+
+---
+
+## Roadmap
+
+### Neighborhood / Borough Search (post-Paris testing)
+Currently city input is matched exactly against the index. "Brooklyn" would trigger a new index instead of reusing "New York City".
+
+**Planned approach (how Expedia/Booking.com handle it):**
+- Store `lat` and `lng` per hotel in `hotels_cache` (LiteAPI returns coordinates)
+- Geoapify autocomplete already returns bounding boxes for any place (city, borough, neighborhood)
+- When user searches "Brooklyn": resolve to bounding box via Geoapify, use "New York City" for index lookup, filter results to hotels within the bounding box
+- Index stays city-level forever — neighborhood precision comes from geo filtering at search time
+
+**What needs building:**
+1. Add `lat FLOAT, lng FLOAT` columns to `hotels_cache` in Supabase
+2. Store coordinates during indexing (LiteAPI `/data/hotel` returns `location.latitude/longitude`)
+3. Update `/api/places` autocomplete to return bounding boxes alongside city name
+4. Update `/api/vsearch` to accept optional `bbox` param and filter `hotels_cache` by coordinates
+5. Frontend: when user selects a neighborhood from autocomplete, send canonical city + bbox
 
 ---
 
