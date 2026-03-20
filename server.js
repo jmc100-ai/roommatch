@@ -1085,6 +1085,16 @@ app.get("/api/vsearch", async (req, res) => {
       hotelPhotosMap.get(p.hotel_id).push(p);
     }
 
+    // Detect query intent → preferred photo type to show first
+    const queryLower = query.toLowerCase();
+    const intentType = (() => {
+      if (/\b(bath|tub|shower|sink|toilet|bidet|bathroom|soaking|jacuzzi|spa)\b/.test(queryLower)) return "bathroom";
+      if (/\b(bed|bedroom|sleep|pillow|king|queen|twin|mattress)\b/.test(queryLower)) return "bedroom";
+      if (/\b(view|balcony|terrace|window|skyline|ocean|sea|city view)\b/.test(queryLower)) return "view";
+      if (/\b(living|sofa|lounge|sitting|couch|armchair)\b/.test(queryLower)) return "living";
+      return null;
+    })();
+
     // 7. Build response — group photos by room_name for each hotel
     const hotels = rankedHotels.map(({ hotelId, topScore, photos: matchedPhotos }) => {
       const meta  = cacheMap.get(hotelId) || {};
@@ -1094,26 +1104,38 @@ app.get("/api/vsearch", async (req, res) => {
       // Matched photos (from vector search) come first
       const matchedUrls = new Set(matchedPhotos.map(p => p.url));
       const allHotelPhotos = hotelPhotosMap.get(hotelId) || [];
+      const photoTypeMap = new Map(allHotelPhotos.map(p => [p.photo_url, p.photo_type]));
 
-      // Group by room_name
+      // Group by room_name, tracking photo type alongside URL
       const roomMap = new Map();
       // First add matched photos in score order
       for (const p of matchedPhotos) {
         const rName = p.caption ? (allHotelPhotos.find(ap => ap.photo_url === p.url)?.room_name || "Matching Rooms") : "Matching Rooms";
         if (!roomMap.has(rName)) roomMap.set(rName, []);
-        if (roomMap.get(rName).length < 10) roomMap.get(rName).push(p.url);
+        if (roomMap.get(rName).length < 10) roomMap.get(rName).push({ url: p.url, type: p.type });
       }
       // Then add remaining photos not already included
       for (const p of allHotelPhotos) {
         if (matchedUrls.has(p.photo_url)) continue;
         const rName = p.room_name || "Other Rooms";
         if (!roomMap.has(rName)) roomMap.set(rName, []);
-        if (roomMap.get(rName).length < 10) roomMap.get(rName).push(p.photo_url);
+        if (roomMap.get(rName).length < 10) roomMap.get(rName).push({ url: p.photo_url, type: p.photo_type });
       }
 
-      const roomTypes = [...roomMap.entries()].map(([name, photoUrls]) => ({
+      // If query has a clear intent, sort each room's photos so matching type appears first
+      if (intentType) {
+        for (const [, photos] of roomMap) {
+          photos.sort((a, b) => {
+            const aMatch = a.type === intentType ? 0 : 1;
+            const bMatch = b.type === intentType ? 0 : 1;
+            return aMatch - bMatch;
+          });
+        }
+      }
+
+      const roomTypes = [...roomMap.entries()].map(([name, photoEntries]) => ({
         name,
-        photos:    photoUrls,
+        photos:    photoEntries.map(p => p.url),
         score:     name === [...roomMap.keys()][0] ? score : null,
         size:      "",
         beds:      "",
