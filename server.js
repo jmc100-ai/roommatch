@@ -935,7 +935,9 @@ app.get("/api/clip-search", async (req, res) => {
 
 // ── Vector search endpoint ────────────────────────────────────────────────────
 app.get("/api/vsearch", async (req, res) => {
-  const { query, city } = req.query;
+  const { query } = req.query;
+  // Normalize city to Title Case so "paris" and "Paris" resolve the same
+  const city = (req.query.city || "").trim().replace(/\w\S*/g, w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase());
   if (!query || !city) return res.status(400).json({ error: "query and city required" });
   if (!supabase)       return res.status(500).json({ error: "Supabase not configured" });
 
