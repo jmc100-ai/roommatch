@@ -1033,9 +1033,9 @@ app.get("/api/vsearch", async (req, res) => {
 
     // Detect intent type first — used both for scoring and display ordering
     const intentType = (() => {
-      if (/\b(bath|tub|shower|sink|toilet|bidet|bathroom|soaking|jacuzzi|spa)\b/.test(queryLower)) return "bathroom";
-      if (/\b(bed|bedroom|sleep|pillow|king|queen|twin|mattress)\b/.test(queryLower)) return "bedroom";
-      if (/\b(view|balcony|terrace|window|skyline|ocean|sea|city view)\b/.test(queryLower)) return "view";
+      if (/\b(baths?|tubs?|showers?|sinks?|toilets?|bidet|bathroom|soaking|jacuzzi|spa)\b/.test(queryLower)) return "bathroom";
+      if (/\b(beds?|bedroom|sleep|pillow|king|queen|twin|mattress)\b/.test(queryLower)) return "bedroom";
+      if (/\b(views?|balcon(y|ies)|terrace|window|skyline|ocean|sea|city view)\b/.test(queryLower)) return "view";
       if (/\b(living|sofa|lounge|sitting|couch|armchair)\b/.test(queryLower)) return "living area";
       return null;
     })();
