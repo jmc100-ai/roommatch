@@ -1045,9 +1045,9 @@ app.get("/api/vsearch", async (req, res) => {
     // Caption content filters — reject photos whose structured caption contradicts the query
     const captionFilters = [];
     if (/double sink|two sink|dual sink|his.and.hers/i.test(query)) {
-      // Filter out bathroom photos that explicitly show only one sink
-      // "unknown" is fine — Gemini may not have been able to see the sinks clearly
+      // Filter out bathroom photos that explicitly show only one sink or no sinks
       captionFilters.push(c => !/SINKS: one sink/i.test(c));
+      captionFilters.push(c => !/SINKS: no sink visible/i.test(c));
     }
     if (/no tub|no bathtub/i.test(query)) {
       captionFilters.push(c => !/BATHTUB: (soaking|freestanding|clawfoot|built-in|hot tub|jacuzzi)/i.test(c));
@@ -1084,9 +1084,44 @@ app.get("/api/vsearch", async (req, res) => {
       }
     }
 
+    // Hotel-level positive requirement filters
+    // If query asks for a specific feature, only keep hotels confirmed to have it in their photos
+    if (/double sink|two sink|dual sink|his.and.hers/i.test(query)) {
+      for (const [hotelId, data] of hotelMap) {
+        const confirmed = data.photos.some(p => /SINKS: (two sinks|three or more sinks)/i.test(p.caption || ''));
+        if (!confirmed) hotelMap.delete(hotelId);
+      }
+    }
+    if (/soaking tub|freestanding tub|clawfoot tub/i.test(query)) {
+      for (const [hotelId, data] of hotelMap) {
+        const confirmed = data.photos.some(p => /BATHTUB: (soaking tub|freestanding tub|clawfoot tub)/i.test(p.caption || ''));
+        if (!confirmed) hotelMap.delete(hotelId);
+      }
+    }
+    if (/\bfireplace\b/i.test(query)) {
+      for (const [hotelId, data] of hotelMap) {
+        const confirmed = data.photos.some(p => /FIREPLACE: yes/i.test(p.caption || ''));
+        if (!confirmed) hotelMap.delete(hotelId);
+      }
+    }
+
     // Sort hotels by average of top 3 intent-matching scores (fall back to all scores if no intent matches)
     const rankedHotels = [...hotelMap.entries()]
       .map(([hotelId, data]) => {
+        // Deprioritise "detail shot" bathroom photos within each hotel's matched set.
+        // A detail shot is a bathroom photo where no overall bathroom features are visible
+        // (e.g. a close-up of soap dispensers, a towel rail, a mirror).
+        const isDetailShot = (p) => {
+          const c = p.caption || '';
+          if (p.type !== 'bathroom') return false;
+          return /SINKS: (unknown|no sink visible)/i.test(c) &&
+                 /BATHTUB: no bathtub/i.test(c) &&
+                 /SHOWER: (no shower|unknown)/i.test(c);
+        };
+        data.photos = [
+          ...data.photos.filter(p => !isDetailShot(p)),
+          ...data.photos.filter(p =>  isDetailShot(p)),
+        ];
         const scoringArr = data.intentScores.length > 0 ? data.intentScores : data.scores;
         scoringArr.sort((a,b) => b-a);
         const topScore = scoringArr.slice(0,3).reduce((s,x) => s+x, 0) / Math.min(3, scoringArr.length);
