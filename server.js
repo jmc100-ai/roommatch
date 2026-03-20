@@ -1071,7 +1071,14 @@ app.get("/api/vsearch", async (req, res) => {
     // 6. Build response for all hotels
     const hotels = allHotels.map(({ hotelId, topScore }) => {
       const meta           = cacheMap.get(hotelId) || {};
-      const score          = Math.round(topScore * 100);
+      // Rescale from raw cosine similarity range [0.40, 0.80] → [0, 100%]
+      // Raw scores cluster between 0.40 (noise) and 0.78 (near-perfect), so
+      // a raw 0.73 reads as 73% to users but is actually the top match.
+      // Rescaling makes top matches read as ~80-95%, which feels accurate.
+      const SIM_MIN = 0.40, SIM_MAX = 0.80;
+      const score = Math.round(Math.max(0, Math.min(100,
+        (topScore - SIM_MIN) / (SIM_MAX - SIM_MIN) * 100
+      )));
       const hotelPhotos    = hotelPhotosMap.get(hotelId) || [];  // already sorted by similarity DESC
       const fallbackName   = hotelPhotos[0]?.hotel_name || null;
 
