@@ -1117,13 +1117,18 @@ app.get("/api/vsearch", async (req, res) => {
     // 5. Fetch ALL city photos (via RPC — bypasses PostgREST 1000-row cap)
     // and city hotel metadata, in parallel.
     // get_city_photos() omits the caption column (large text, not needed for display).
+    // Use supabaseAdmin (service_role has no statement_timeout; anon has 3s which is risky).
     const scoredHotelIds = new Set(rankedHotels.map(h => h.hotelId));
-    const [{ data: allPhotos }, { data: cached }] = await Promise.all([
-      supabase.rpc("get_city_photos", { search_city: city }),
-      supabase.from("hotels_cache")
-        .select("*")
-        .eq("city", city),
+    const fetchClient = supabaseAdmin || supabase;
+    const [photosResult, cachedResult] = await Promise.all([
+      fetchClient.rpc("get_city_photos", { search_city: city }),
+      fetchClient.from("hotels_cache").select("*").eq("city", city),
     ]);
+    if (photosResult.error) console.error("[vsearch] get_city_photos error:", photosResult.error.message);
+    if (cachedResult.error) console.error("[vsearch] hotels_cache error:", cachedResult.error.message);
+    const allPhotos = photosResult.data;
+    const cached    = cachedResult.data;
+    console.log(`[vsearch] allPhotos: ${allPhotos?.length ?? 'null'}, cached: ${cached?.length ?? 'null'}`);
 
     const cacheMap      = new Map((cached || []).map(h => [h.hotel_id, h]));
     const hotelPhotosMap = new Map();
