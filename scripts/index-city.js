@@ -396,8 +396,10 @@ async function indexCity(city, limit = 200) {
           m.amenities?.length ? `Amenities: ${m.amenities.join(', ')}` : null,
         ].filter(Boolean).join('. ');
 
-        // Extract PHOTO TYPE from Gemini's structured response for the hybrid text
-        const detectedType = (caption.match(/PHOTO TYPE:\s*([^\n\r|]+)/i)?.[1] || "unknown").trim().toLowerCase();
+        // Extract first valid type — handles "bathroom / bedroom" multi-answers by taking first match
+        const rawTypeStr = (caption.match(/PHOTO TYPE:\s*([^\n\r]+)/i)?.[1] || "").trim().toLowerCase();
+        const validTypes = ["bathroom", "living area", "bedroom", "view", "other"];
+        const detectedType = validTypes.find(t => rawTypeStr.includes(t)) || "other";
         const photoTypeStr = `PHOTO TYPE: ${detectedType} | ROOM: ${photo.roomName || "unknown"}`;
         const hybridText = metaParts
           ? `${photoTypeStr}

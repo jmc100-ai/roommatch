@@ -1104,7 +1104,6 @@ app.get("/api/vsearch", async (req, res) => {
       // Matched photos (from vector search) come first
       const matchedUrls = new Set(matchedPhotos.map(p => p.url));
       const allHotelPhotos = hotelPhotosMap.get(hotelId) || [];
-      const photoTypeMap = new Map(allHotelPhotos.map(p => [p.photo_url, p.photo_type]));
 
       // Group by room_name, tracking photo type alongside URL
       const roomMap = new Map();
