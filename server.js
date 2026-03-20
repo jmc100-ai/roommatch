@@ -1015,25 +1015,10 @@ app.get("/api/vsearch", async (req, res) => {
     // Truncate to 768 dims to match stored embeddings
     const queryEmbedding = rawEmbedding.slice(0, 768);
 
-    // 3. Vector similarity search via Supabase function
-    // Use supabaseAdmin (service role) — anon key has 8s statement_timeout which can be hit on cold index
-    const searchClient = supabaseAdmin || supabase;
-    const { data: matches, error: searchErr } = await searchClient
-      .rpc("search_rooms", {
-        query_embedding: queryEmbedding,
-        search_city:     city,
-        match_count:     500,
-      });
-
-    if (searchErr) throw new Error(searchErr.message);
-    if (!matches?.length) {
-      return res.json({ hotels: [], query, city, indexing, indexStatus: status });
-    }
-
-    // Detect query intent + caption filters — defined here so available for aggregation below
+    // 3. Score ALL city photos against the query in one RPC call.
+    // score_city_photos() does a full scan (no match_count cap) so every hotel gets a real score.
+    // Run in parallel with the hotel metadata fetch.
     const queryLower = query.toLowerCase();
-
-    // Detect intent type — used for scoring and display ordering
     const intentType = (() => {
       if (/\b(baths?|tubs?|showers?|sinks?|toilets?|bidet|bathroom|soaking|jacuzzi|spa)\b/.test(queryLower)) return "bathroom";
       if (/\b(beds?|bedroom|sleep|pillow|king|queen|twin|mattress)\b/.test(queryLower)) return "bedroom";
@@ -1042,142 +1027,63 @@ app.get("/api/vsearch", async (req, res) => {
       return null;
     })();
 
-    // Caption content filters — reject photos whose structured caption contradicts the query
-    const captionFilters = [];
-    if (/double sink|two sink|dual sink|his.and.hers/i.test(query)) {
-      // Filter out bathroom photos that explicitly show only one sink or no sinks
-      captionFilters.push(c => !/SINKS: one sink/i.test(c));
-      captionFilters.push(c => !/SINKS: no sink visible/i.test(c));
-    }
-    if (/no tub|no bathtub/i.test(query)) {
-      captionFilters.push(c => !/BATHTUB: (soaking|freestanding|clawfoot|built-in|hot tub|jacuzzi)/i.test(c));
-    }
-    if (/soaking tub|freestanding tub|clawfoot|bathtub|deep tub/i.test(query)) {
-      captionFilters.push(c => !/BATHTUB: no bathtub/i.test(c));
-    }
-    if (/walk.in shower|rain.* shower|rainfall/i.test(query)) {
-      captionFilters.push(c => !/SHOWER: no shower/i.test(c));
-    }
-    if (/balcony|terrace/i.test(query)) {
-      captionFilters.push(c => !/BALCONY OR TERRACE: no/i.test(c));
-    }
-    if (/fireplace/i.test(query)) {
-      captionFilters.push(c => !/FIREPLACE: no/i.test(c));
-    }
-
-    // 4. Aggregate by hotel — score = average of top 3 photo scores
-    // Apply caption filters to skip photos that structurally contradict the query
-    // When intentType is set, only photos matching that type count toward the hotel's score
-    // (non-matching photos are still stored for display but don't drive ranking)
-    const hotelMap = new Map();
-    for (const m of matches) {
-      const passesFilters = captionFilters.every(fn => fn(m.caption || ""));
-      if (!passesFilters) continue;
-      if (!hotelMap.has(m.hotel_id)) {
-        hotelMap.set(m.hotel_id, { photos: [], scores: [], intentScores: [] });
-      }
-      const h = hotelMap.get(m.hotel_id);
-      h.photos.push({ url: m.photo_url, type: m.photo_type, caption: m.caption, score: m.similarity });
-      h.scores.push(m.similarity);
-      if (!intentType || m.photo_type === intentType) {
-        h.intentScores.push(m.similarity);
-      }
-    }
-
-    // Sort hotels by average of top 3 intent-matching scores (fall back to all scores if no intent matches)
-    const rankedHotels = [...hotelMap.entries()]
-      .map(([hotelId, data]) => {
-        // Deprioritise "detail shot" bathroom photos within each hotel's matched set.
-        // A detail shot is a bathroom photo where no overall bathroom features are visible
-        // (e.g. a close-up of soap dispensers, a towel rail, a mirror).
-        const isDetailShot = (p) => {
-          const c = p.caption || '';
-          if (p.type !== 'bathroom') return false;
-          return /SINKS: (unknown|no sink visible)/i.test(c) &&
-                 /BATHTUB: no bathtub/i.test(c) &&
-                 /SHOWER: (no shower|unknown)/i.test(c);
-        };
-        data.photos = [
-          ...data.photos.filter(p => !isDetailShot(p)),
-          ...data.photos.filter(p =>  isDetailShot(p)),
-        ];
-        const scoringArr = data.intentScores.length > 0 ? data.intentScores : data.scores;
-        scoringArr.sort((a,b) => b-a);
-        const topScore = scoringArr.slice(0,3).reduce((s,x) => s+x, 0) / Math.min(3, scoringArr.length);
-        return { hotelId, topScore, photos: data.photos };
-      })
-      // Only keep hotels that have at least one intent-matching photo when intentType is set
-      .filter(({ hotelId }) => {
-        if (!intentType) return true;
-        return hotelMap.get(hotelId).intentScores.length > 0;
-      })
-      .sort((a,b) => b.topScore - a.topScore);
-    // No slice — return all scored hotels
-
-    // 5. Fetch ALL city photos (via RPC — bypasses PostgREST 1000-row cap)
-    // and city hotel metadata, in parallel.
-    // get_city_photos() omits the caption column (large text, not needed for display).
-    // Use supabaseAdmin (service_role has no statement_timeout; anon has 3s which is risky).
-    const scoredHotelIds = new Set(rankedHotels.map(h => h.hotelId));
     const fetchClient = supabaseAdmin || supabase;
     const [photosResult, cachedResult] = await Promise.all([
-      fetchClient.rpc("get_city_photos", { search_city: city }),
+      fetchClient.rpc("score_city_photos", { query_embedding: queryEmbedding, search_city: city }),
       fetchClient.from("hotels_cache").select("*").eq("city", city),
     ]);
-    if (photosResult.error) console.error("[vsearch] get_city_photos error:", photosResult.error.message);
+    if (photosResult.error) throw new Error("score_city_photos: " + photosResult.error.message);
     if (cachedResult.error) console.error("[vsearch] hotels_cache error:", cachedResult.error.message);
-    const allPhotos = photosResult.data;
-    const cached    = cachedResult.data;
-    console.log(`[vsearch] allPhotos: ${allPhotos?.length ?? 'null'}, cached: ${cached?.length ?? 'null'}`);
 
-    const cacheMap      = new Map((cached || []).map(h => [h.hotel_id, h]));
-    const hotelPhotosMap = new Map();
-    for (const p of (allPhotos || [])) {
-      if (!hotelPhotosMap.has(p.hotel_id)) hotelPhotosMap.set(p.hotel_id, []);
-      hotelPhotosMap.get(p.hotel_id).push(p);
+    const scoredPhotos = photosResult.data || [];
+    const cached       = cachedResult.data;
+    console.log(`[vsearch] scored photos: ${scoredPhotos.length}, cached hotels: ${cached?.length ?? 0}`);
+
+    if (!scoredPhotos.length) {
+      return res.json({ hotels: [], query, city, indexing, indexStatus: status });
     }
 
-    // 6. Build scored hotel entries + append unscored hotels (not in vector results)
-    // Unscored hotels still appear — sorted to the bottom by guest rating
-    const unscoredHotels = [...hotelPhotosMap.keys()]
-      .filter(id => !scoredHotelIds.has(id))
-      .map(hotelId => ({ hotelId, topScore: 0, photos: [] }))
-      .sort((a, b) => (cacheMap.get(b.hotelId)?.guest_rating || 0) - (cacheMap.get(a.hotelId)?.guest_rating || 0));
+    // 4. Build hotelPhotosMap (photos ordered by similarity DESC — already sorted by the RPC)
+    //    and compute per-hotel aggregate score (avg of top-3 intent-matching similarities).
+    const cacheMap       = new Map((cached || []).map(h => [h.hotel_id, h]));
+    const hotelPhotosMap = new Map();  // hotel_id → [{url, type, similarity}]
+    const hotelScoreMap  = new Map();  // hotel_id → {scores[], intentScores[]}
 
-    const allHotels = [...rankedHotels, ...unscoredHotels];
+    for (const p of scoredPhotos) {
+      if (!hotelPhotosMap.has(p.hotel_id)) hotelPhotosMap.set(p.hotel_id, []);
+      hotelPhotosMap.get(p.hotel_id).push(p);
 
-    // Helper to build the room type list for a hotel
-    function buildRoomTypes(matchedPhotos, hotelId, score) {
-      const allHotelPhotos = hotelPhotosMap.get(hotelId) || [];
-      const matchedUrls    = new Set(matchedPhotos.map(p => p.url));
-      const roomMap        = new Map();
+      if (!hotelScoreMap.has(p.hotel_id)) hotelScoreMap.set(p.hotel_id, { scores: [], intentScores: [] });
+      const hs = hotelScoreMap.get(p.hotel_id);
+      hs.scores.push(p.similarity);
+      if (!intentType || p.photo_type === intentType) hs.intentScores.push(p.similarity);
+    }
 
-      // Matched photos first (in score order from vector search)
-      for (const p of matchedPhotos) {
-        const rName = allHotelPhotos.find(ap => ap.photo_url === p.url)?.room_name || "Room";
-        if (!roomMap.has(rName)) roomMap.set(rName, []);
-        if (roomMap.get(rName).length < 10) roomMap.get(rName).push({ url: p.url, type: p.type });
-      }
-      // Then remaining photos
-      for (const p of allHotelPhotos) {
-        if (matchedUrls.has(p.photo_url)) continue;
+    // 5. Compute topScore per hotel and sort all hotels
+    const allHotels = [...hotelPhotosMap.keys()].map(hotelId => {
+      const hs        = hotelScoreMap.get(hotelId);
+      const arr       = hs.intentScores.length > 0 ? hs.intentScores : hs.scores;
+      arr.sort((a, b) => b - a);
+      const topScore  = arr.slice(0, 3).reduce((s, x) => s + x, 0) / Math.min(3, arr.length);
+      return { hotelId, topScore };
+    }).sort((a, b) => b.topScore - a.topScore);
+
+    // 6. Build response for all hotels
+    const hotels = allHotels.map(({ hotelId, topScore }) => {
+      const meta           = cacheMap.get(hotelId) || {};
+      const score          = Math.round(topScore * 100);
+      const hotelPhotos    = hotelPhotosMap.get(hotelId) || [];  // already sorted by similarity DESC
+      const fallbackName   = hotelPhotos[0]?.hotel_name || null;
+
+      // Group photos by room_name, preserving similarity order within each room
+      const roomMap = new Map();
+      for (const p of hotelPhotos) {
         const rName = p.room_name || "Room";
         if (!roomMap.has(rName)) roomMap.set(rName, []);
         if (roomMap.get(rName).length < 10) roomMap.get(rName).push({ url: p.photo_url, type: p.photo_type });
       }
 
-      // Sort photos within rooms: intent type first
-      if (intentType) {
-        for (const [, photos] of roomMap) {
-          photos.sort((a, b) => {
-            const aIntent = a.type === intentType ? 0 : 1;
-            const bIntent = b.type === intentType ? 0 : 1;
-            return aIntent - bIntent;
-          });
-        }
-      }
-
-      // Sort rooms: intent-type rooms first
+      // Sort rooms: intent-type rooms first (they have at least one matching photo)
       let roomEntries = [...roomMap.entries()];
       if (intentType) {
         roomEntries.sort((a, b) => {
@@ -1188,23 +1094,14 @@ app.get("/api/vsearch", async (req, res) => {
       }
 
       const firstRoom = roomEntries[0]?.[0];
-      return roomEntries.map(([name, photoEntries]) => ({
+      const roomTypes = roomEntries.map(([name, photoEntries]) => ({
         name,
         photos:    photoEntries.map(p => p.url),
-        score:     name === firstRoom && score > 0 ? score : null,
+        score:     name === firstRoom ? score : null,
         size:      "",
         beds:      "",
         amenities: [],
       }));
-    }
-
-    // 7. Build response for all hotels
-    const hotels = allHotels.map(({ hotelId, topScore, photos: matchedPhotos }) => {
-      const meta        = cacheMap.get(hotelId) || {};
-      const score       = Math.round(topScore * 100);
-      const allHotelPhotos = hotelPhotosMap.get(hotelId) || [];
-      const fallbackName   = allHotelPhotos[0]?.hotel_name || null;
-      const roomTypes      = buildRoomTypes(matchedPhotos, hotelId, score);
 
       return {
         id:          hotelId,
@@ -1220,7 +1117,7 @@ app.get("/api/vsearch", async (req, res) => {
       };
     });
 
-    console.log(`[vsearch] ${city}: ${hotels.length} total hotels (${rankedHotels.length} scored), top score ${rankedHotels[0]?.topScore?.toFixed(3)}`);
+    console.log(`[vsearch] ${city}: ${hotels.length} hotels, top score ${allHotels[0]?.topScore?.toFixed(3)}`);
     res.json({ hotels, query, city, indexing, indexStatus: status,
       stats: { indexed: cityRow?.photo_count || 0 } });
 
