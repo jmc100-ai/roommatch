@@ -1281,6 +1281,7 @@ app.get("/api/rates", async (req, res) => {
         guestNationality: "US",
         occupancies: [{ adults: 2 }],
         maxRatesPerHotel: 10,
+        roomMapping: true,
         timeout: 10,
       }),
     });
@@ -1307,8 +1308,8 @@ app.get("/api/rates", async (req, res) => {
     const sampleHotel = ratesList.find(h => (h.roomTypes||[]).length > 0);
     if (sampleHotel) {
       const srt = sampleHotel.roomTypes[0];
-      console.log(`[rates] sample rt keys: ${Object.keys(srt||{}).join(", ")}`);
-      console.log(`[rates] sample rt (truncated): ${JSON.stringify(srt||{}).slice(0, 300)}`);
+      const srate = srt?.rates?.[0];
+      console.log(`[rates] sample rate name: "${srate?.name}", mappedRoomId: ${srate?.mappedRoomId}`);
     }
 
     for (const hotel of ratesList) {
@@ -1323,11 +1324,11 @@ app.get("/api/rates", async (req, res) => {
           prices[hotelId] = perNight;
         }
 
-        // Per-room price keyed by normalised room name
-        // Try every plausible field name the LiteAPI rates response might use
-        const rawName = rt.name || rt.roomName || rt.roomTypeName || rt.type ||
-                        rt.description || rt.roomDescription || rt.title || "";
+        // name is inside rates[0].name (not at the roomType level)
+        // mappedRoomId (from roomMapping:true) links back to /data/hotel integer room IDs
+        const rawName = rt.rates?.[0]?.name || "";
         const rtName = normName(rawName);
+        const mappedRoomId = rt.rates?.[0]?.mappedRoomId || null;
         if (rtName) {
           if (!roomPrices[hotelId]) roomPrices[hotelId] = {};
           if (!roomPrices[hotelId][rtName] || perNight < roomPrices[hotelId][rtName]) {

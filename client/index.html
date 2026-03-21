@@ -983,6 +983,7 @@
             ${(bedsHTML || sizeHTML) ? '<span class="room-meta-sep">·</span>' : ''}
             <div class="room-type-meta">${bedsHTML}${sizeHTML}</div>
           </div>
+          ${(function(){ const k=(rt.name||'').toLowerCase().trim().replace(/\s+/g,' '); const p=hotelRoomPrices?.[k]; return p!=null?`<span class="room-rate">€${p.toLocaleString()}<span class="room-rate-per">/night</span></span>`:''; })()}
           <span class="chevron">▼</span>
         </div>
         <div class="photo-strip-wrap">
