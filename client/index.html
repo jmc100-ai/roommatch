@@ -979,11 +979,11 @@
         <div class="room-type-header" onclick="toggleRoom(this.parentElement)">
           <div class="room-type-left">
             <span class="room-type-name">${rt.name}</span>
+            ${rt.roomTypeId && hotelRoomPrices?.[rt.roomTypeId] != null ? `<span class="room-rate">€${hotelRoomPrices[rt.roomTypeId].toLocaleString()}<span class="room-rate-per">/night</span></span>` : ''}
             ${rt.score > 0 ? `<span class="room-score-badge${rt.score < 20 ? ' room-score-badge--low' : ''}">${rt.score}% match</span>` : ''}
             ${(bedsHTML || sizeHTML) ? '<span class="room-meta-sep">·</span>' : ''}
             <div class="room-type-meta">${bedsHTML}${sizeHTML}</div>
           </div>
-          ${rt.roomTypeId && hotelRoomPrices?.[rt.roomTypeId] != null ? `<span class="room-rate">€${hotelRoomPrices[rt.roomTypeId].toLocaleString()}<span class="room-rate-per">/night</span></span>` : ''}
           <span class="chevron">▼</span>
         </div>
         <div class="photo-strip-wrap">
