@@ -1034,12 +1034,14 @@ app.get("/api/vsearch", async (req, res) => {
       {
         label: "double sinks",
         queryMatch: /\bdouble sinks?\b|\btwo sinks?\b|\bdual sinks?\b|\btwin sinks?\b/i,
-        confirm: /\b(two|double|dual|twin|2)\s*sinks?\b|\bsinks?[:\s]+(two|double|2)/i,
+        // Matches: "two sinks", "double sinks", "2 sinks", "sinks: 2", "sinks count: 2"
+        confirm: /\b(two|double|dual|twin|2)\s*sinks?\b|\bsinks?\s*(?:count)?[:\s]+([2-9]|two|double|twin|dual)/i,
       },
       {
         label: "soaking tub",
         queryMatch: /\b(soaking|freestanding|clawfoot)\s*tub\b/i,
-        confirm: /\b(soaking|freestanding|clawfoot|japanese)\s*(tub|bath)\b|\bbathtub[:\s]+(soaking|freestanding|clawfoot)/i,
+        // Matches: "soaking tub", "bathtub: soaking", "bathtub type: soaking"
+        confirm: /\b(soaking|freestanding|clawfoot|japanese)\s*(tub|bath)\b|\bbathtub\s*(?:type)?[:\s]+(soaking|freestanding|clawfoot)/i,
       },
       {
         label: "balcony",
@@ -1054,7 +1056,8 @@ app.get("/api/vsearch", async (req, res) => {
       {
         label: "large windows",
         queryMatch: /\b(large|floor.to.ceiling|panoramic|huge|big)\s*windows?\b/i,
-        confirm: /\b(large|floor.to.ceiling|panoramic|huge|oversized|expansive)\s*windows?\b|\bwindows?[:\s]+(large|floor|panoramic|huge)/i,
+        // Matches: "large windows", "floor-to-ceiling windows", "windows: large", "windows: floor-to-ceiling"
+        confirm: /\b(large|floor.to.ceiling|panoramic|huge|oversized|expansive)\s*windows?\b|\bwindows?\s*(?:type)?[:\s]+(large|floor|panoramic|huge|yes|multiple|floor-to-ceiling)/i,
       },
     ];
     const detectedFeatures = STRUCTURAL_FEATURES.filter(f => f.queryMatch.test(queryLower));
@@ -1096,37 +1099,38 @@ app.get("/api/vsearch", async (req, res) => {
     }
 
     // 5. Compute topScore per hotel and sort all hotels.
-    //    Apply structural feature penalty (×0.45) for each detected feature that has
-    //    no confirming caption in this hotel's photos.
+    //    Rescale raw similarity [0.40, 0.80] → [0, 100], then apply structural
+    //    feature penalty (×0.45 on the 0-100 scale) for each missing feature.
+    //    Applying penalty after rescaling prevents hotels from flooring to 0%
+    //    just because their penalised raw score dips below SIM_MIN.
+    const SIM_MIN = 0.40, SIM_MAX = 0.80;
     const FEATURE_PENALTY = 0.45;
     const allHotels = [...hotelPhotosMap.keys()].map(hotelId => {
       const hs        = hotelScoreMap.get(hotelId);
       const arr       = hs.intentScores.length > 0 ? hs.intentScores : hs.scores;
       arr.sort((a, b) => b - a);
-      let topScore    = arr.slice(0, 3).reduce((s, x) => s + x, 0) / Math.min(3, arr.length);
+      const rawScore  = arr.slice(0, 3).reduce((s, x) => s + x, 0) / Math.min(3, arr.length);
 
+      // Rescale to 0-100 first
+      let score = Math.max(0, Math.min(100, (rawScore - SIM_MIN) / (SIM_MAX - SIM_MIN) * 100));
+
+      // Then apply penalty on the rescaled score so penalised hotels remain visible
       for (const feat of detectedFeatures) {
         const confirmed = hs.captions.some(c => feat.confirm.test(c));
         if (!confirmed) {
-          topScore *= FEATURE_PENALTY;
-          console.log(`[vsearch] penalty: ${hotelId} missing "${feat.label}"`);
+          score *= FEATURE_PENALTY;
+          console.log(`[vsearch] penalty: ${hotelId} missing "${feat.label}" → score now ${score.toFixed(1)}`);
         }
       }
 
-      return { hotelId, topScore };
+      return { hotelId, topScore: score };
     }).sort((a, b) => b.topScore - a.topScore);
 
     // 6. Build response for all hotels
     const hotels = allHotels.map(({ hotelId, topScore }) => {
       const meta           = cacheMap.get(hotelId) || {};
-      // Rescale from raw cosine similarity range [0.40, 0.80] → [0, 100%]
-      // Raw scores cluster between 0.40 (noise) and 0.78 (near-perfect), so
-      // a raw 0.73 reads as 73% to users but is actually the top match.
-      // Rescaling makes top matches read as ~80-95%, which feels accurate.
-      const SIM_MIN = 0.40, SIM_MAX = 0.80;
-      const score = Math.round(Math.max(0, Math.min(100,
-        (topScore - SIM_MIN) / (SIM_MAX - SIM_MIN) * 100
-      )));
+      // topScore is already rescaled 0-100 with penalties applied
+      const score = Math.round(topScore);
       const hotelPhotos    = hotelPhotosMap.get(hotelId) || [];  // already sorted by similarity DESC
       const fallbackName   = hotelPhotos[0]?.hotel_name || null;
 
