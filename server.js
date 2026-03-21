@@ -1300,24 +1300,24 @@ app.get("/api/rates", async (req, res) => {
     const prices     = {};  // hotel_id → cheapest $/night (hotel-level display)
     const roomPrices = {};  // hotel_id → { room_type_id → $/night }
 
+    // Normalize room name for matching: lowercase, trim, collapse whitespace
+    const normName = s => (s || "").toLowerCase().trim().replace(/\s+/g, " ");
+
     for (const hotel of ratesList) {
       const hotelId = hotel.hotelId;
       for (const rt of (hotel.roomTypes || [])) {
-        const rtId  = String(rt.roomTypeId || rt.id || "");
-        const total = rt.rates?.[0]?.retailRate?.total?.[0]?.amount;
-        if (!total || total <= 0) continue;
+        // /hotels/rates uses encoded IDs incompatible with /data/hotel integer IDs.
+        // Key by normalised room name instead — both endpoints use the same names.
+        const rtName = normName(rt.name || rt.roomName || rt.description || "");
+        const total  = rt.rates?.[0]?.retailRate?.total?.[0]?.amount;
+        if (!total || total <= 0 || !rtName) continue;
         const perNight = Math.round(total / nights);
 
-        // Per-room price keyed by roomTypeId
-        if (rtId) {
-          if (!roomPrices[hotelId]) roomPrices[hotelId] = {};
-          // Keep the cheapest rate per room type
-          if (!roomPrices[hotelId][rtId] || perNight < roomPrices[hotelId][rtId]) {
-            roomPrices[hotelId][rtId] = perNight;
-          }
+        if (!roomPrices[hotelId]) roomPrices[hotelId] = {};
+        if (!roomPrices[hotelId][rtName] || perNight < roomPrices[hotelId][rtName]) {
+          roomPrices[hotelId][rtName] = perNight;
         }
 
-        // Hotel-level cheapest
         if (!prices[hotelId] || perNight < prices[hotelId]) {
           prices[hotelId] = perNight;
         }
@@ -1326,10 +1326,13 @@ app.get("/api/rates", async (req, res) => {
 
     const pricedCount = Object.keys(prices).length;
     const roomPricedCount = Object.values(roomPrices).reduce((s, rm) => s + Object.keys(rm).length, 0);
-    console.log(`[rates] ${city}: ${pricedCount}/${hotelIds.length} hotels priced, ${roomPricedCount} room rates`);
-    // Log a sample so we can verify room_type_id format
+    // Log a sample to verify name matching
     const sampleHotel = ratesList.find(h => (h.roomTypes||[]).length > 0);
-    if (sampleHotel) console.log(`[rates] sample roomTypeId: ${JSON.stringify(sampleHotel.roomTypes[0]?.roomTypeId)} (type: ${typeof sampleHotel.roomTypes[0]?.roomTypeId})`);
+    if (sampleHotel) {
+      const srt = sampleHotel.roomTypes[0];
+      console.log(`[rates] sample room name: "${srt?.name || srt?.roomName}" → key: "${normName(srt?.name || srt?.roomName || "")}"`);
+    }
+    console.log(`[rates] ${city}: ${pricedCount}/${hotelIds.length} hotels priced, ${roomPricedCount} room type rates`);
     res.json({ prices, roomPrices, currency: "EUR", nights, pricedCount });
 
   } catch (err) {
