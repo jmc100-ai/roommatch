@@ -139,13 +139,20 @@
       cursor: pointer; transition: all 0.15s;
       letter-spacing: 0.03em;
     }
-    .sort-btn:hover { color: var(--text); border-color: rgba(255,255,255,0.15); }
+    .sort-btn:hover:not(:disabled) { color: var(--text); border-color: rgba(255,255,255,0.15); }
     .sort-btn.active {
       background: var(--surface);
       border-color: rgba(201,169,110,0.35);
       color: var(--accent);
     }
+    .sort-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+    .sort-btn.loading { opacity: 0.5; cursor: wait; }
     .result-count { font-size: 11px; color: var(--muted); letter-spacing: 0.04em; }
+    .price-loading { animation: priceShimmer 1.4s ease-in-out infinite; }
+    @keyframes priceShimmer {
+      0%, 100% { opacity: 0.4; }
+      50%       { opacity: 0.9; }
+    }
 
     /* ── Results ────────────────── */
     #results { padding: 0 56px 80px; display: flex; flex-direction: column; gap: 28px; }
@@ -526,6 +533,8 @@
   <div class="sort-group">
     <span class="sort-label">Sort</span>
     <button class="sort-btn active" data-sort="match" onclick="setSortBy('match')">Best Match</button>
+    <button class="sort-btn loading" data-sort="match+price" onclick="setSortBy('match+price')" disabled>Match + Price</button>
+    <button class="sort-btn loading" data-sort="price" onclick="setSortBy('price')" disabled>Best Price</button>
     <button class="sort-btn" data-sort="rating" onclick="setSortBy('rating')">Guest Rating</button>
     <button class="sort-btn" data-sort="stars" onclick="setSortBy('stars')">Stars</button>
   </div>
@@ -549,6 +558,8 @@
   let _lastHotels     = [];
   let _currentSort    = 'match';
   let _displayedCount = 10;
+  let _ratesReqId     = 0;   // incremented per search to discard stale rate responses
+  let _pricesLoaded   = false;
 
   // Pre-fill dates: tomorrow + tomorrow+2
   (function initDates() {
@@ -625,6 +636,18 @@
   async function startVectorSearch(query, city, btn) {
     setStatus(`Searching vector index for "${query}" in ${city}…`, true);
     hideBanner();
+
+    // Increment race ID — any in-flight rates response with an older ID will be discarded
+    const reqId = ++_ratesReqId;
+
+    // Fire rates fetch in parallel if dates are set
+    const checkin  = document.getElementById('checkinInput').value;
+    const checkout = document.getElementById('checkoutInput').value;
+    const hasDates = checkin && checkout && checkin < checkout;
+    if (hasDates) {
+      fetchPrices(city, checkin, checkout, reqId);
+    }
+
     try {
       const resp = await fetch(`${BACKEND}/api/vsearch?` + new URLSearchParams({ query, city }));
       const data = await resp.json();
@@ -723,14 +746,72 @@
     _lastHotels     = hotels;
     _currentSort    = 'match';
     _displayedCount = 10;
+    _pricesLoaded   = false;
     document.body.classList.add('has-results');
     document.querySelectorAll('.sort-btn').forEach(b => {
       b.classList.toggle('active', b.dataset.sort === 'match');
     });
+    _setPriceBtnsState(false);
     renderSorted();
   }
 
+  function _setPriceBtnsState(loaded) {
+    document.querySelectorAll('[data-sort="match+price"],[data-sort="price"]').forEach(b => {
+      b.disabled = !loaded;
+      b.classList.toggle('loading', !loaded);
+    });
+  }
+
+  // Fires parallel to vsearch. reqId lets us discard stale responses if user re-searches.
+  async function fetchPrices(city, checkin, checkout, reqId) {
+    try {
+      const resp = await fetch(`${BACKEND}/api/rates?` + new URLSearchParams({ city, checkin, checkout }));
+      if (reqId !== _ratesReqId) return;  // stale — a new search was started
+      if (!resp.ok) return;
+      const data = await resp.json();
+      if (reqId !== _ratesReqId) return;
+      applyPrices(data.prices || {}, data.currency || 'EUR', data.pricedCount || 0);
+    } catch (e) {
+      console.warn('[prices]', e.message);
+    }
+  }
+
+  function applyPrices(priceMap, currency, pricedCount) {
+    const sym = currency === 'EUR' ? '€' : '$';
+
+    // Merge prices onto hotel objects so re-renders (infinite scroll, sort change) keep prices
+    for (const hotel of _lastHotels) {
+      if (priceMap[hotel.id] !== undefined) hotel.price = priceMap[hotel.id];
+    }
+    _pricesLoaded = true;
+    _setPriceBtnsState(true);
+
+    // If a price-dependent sort is already active, do a full re-render
+    if (_currentSort === 'match+price' || _currentSort === 'price') {
+      renderSorted();
+      return;
+    }
+
+    // Otherwise update price elements in-place (no full re-render needed)
+    for (const hotel of _lastHotels) {
+      if (hotel.price == null) continue;
+      const el = document.getElementById(`hotel-price-${hotel.id}`);
+      if (el) el.innerHTML = `${sym}${hotel.price.toLocaleString()}<span class="price-per">/night</span>`;
+    }
+
+    // Update the result count to show pricing coverage
+    const total = _lastHotels.length;
+    const showing = Math.min(_displayedCount, total);
+    const remaining = total - _displayedCount;
+    const countEl = document.getElementById('resultCount');
+    const pricedNote = pricedCount > 0 ? ` · ${pricedCount} priced` : '';
+    if (countEl) countEl.textContent = remaining > 0
+      ? `Showing ${showing} of ${total} hotels${pricedNote}`
+      : `${total} hotel${total !== 1 ? 's' : ''}${pricedNote}`;
+  }
+
   function setSortBy(sort) {
+    if ((sort === 'match+price' || sort === 'price') && !_pricesLoaded) return;
     _currentSort    = sort;
     _displayedCount = 10;
     document.querySelectorAll('.sort-btn').forEach(b => {
@@ -745,6 +826,22 @@
       hotels.sort((a, b) => (b.rating || 0) - (a.rating || 0));
     } else if (_currentSort === 'stars') {
       hotels.sort((a, b) => (b.starRating || 0) - (a.starRating || 0));
+    } else if (_currentSort === 'price') {
+      // No-price hotels go to the bottom
+      hotels.sort((a, b) => (a.price ?? Infinity) - (b.price ?? Infinity));
+    } else if (_currentSort === 'match+price') {
+      // Two tiers: vectorScore>0 sorted by score DESC then price ASC; score=0 by price ASC
+      hotels.sort((a, b) => {
+        const aScored = (a.vectorScore || 0) > 0;
+        const bScored = (b.vectorScore || 0) > 0;
+        if (aScored !== bScored) return bScored ? 1 : -1;  // scored hotels first
+        if (aScored) {
+          // Both scored: match DESC, then price ASC as tiebreaker
+          const scoreDiff = (b.vectorScore || 0) - (a.vectorScore || 0);
+          if (scoreDiff !== 0) return scoreDiff;
+        }
+        return (a.price ?? Infinity) - (b.price ?? Infinity);
+      });
     }
     // 'match' order is already correct from the server (scored desc, then unscored by rating)
 
@@ -805,8 +902,10 @@
             </div>
           </div>
           <div class="hotel-price">
-            <span class="price-value">--<span class="price-per">/night</span></span>
-            <span class="price-note">Add dates for rates</span>
+            <span class="price-value${!h.price && _pricesLoaded === false ? ' price-loading' : ''}" id="hotel-price-${h.id}">
+              ${h.price != null ? `€${h.price.toLocaleString()}<span class="price-per">/night</span>` : `--<span class="price-per">/night</span>`}
+            </span>
+            <span class="price-note">${h.price != null ? 'Lowest available' : (_pricesLoaded ? 'No rates found' : 'Add dates for rates')}</span>
           </div>
         </div>
         ${roomRows}

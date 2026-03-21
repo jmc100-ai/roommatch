@@ -1227,6 +1227,74 @@ app.post("/api/index-cancel", async (req, res) => {
   res.json({ message: `Cancel requested for ${city} — will stop after current batch` });
 });
 
+// ── Live pricing endpoint ──────────────────────────────────────────────────────
+// Fetches cheapest available rate per hotel for a given city + date range.
+// Fires a single batched POST to LiteAPI /hotels/rates with all hotel IDs.
+// Returns { prices: { hotel_id: $/night }, currency, nights, pricedCount }
+app.get("/api/rates", async (req, res) => {
+  const { city, checkin, checkout } = req.query;
+  if (!city || !checkin || !checkout) {
+    return res.status(400).json({ error: "city, checkin and checkout required" });
+  }
+  const nights = Math.round((new Date(checkout) - new Date(checkin)) / 86400000);
+  if (nights < 1 || nights > 30) {
+    return res.status(400).json({ error: "Invalid date range" });
+  }
+
+  try {
+    const fc = supabaseAdmin || supabase;
+    const { data: hotelRows, error: dbErr } = await fc
+      .from("hotels_cache").select("hotel_id").eq("city", city);
+    if (dbErr) throw new Error("DB: " + dbErr.message);
+    if (!hotelRows?.length) return res.json({ prices: {}, currency: "EUR", nights, pricedCount: 0 });
+
+    const hotelIds = hotelRows.map(h => h.hotel_id);
+    console.log(`[rates] ${city}: fetching rates for ${hotelIds.length} hotels, ${checkin}→${checkout}`);
+
+    const liteRes = await fetch("https://api.liteapi.travel/v3.0/hotels/rates", {
+      method: "POST",
+      headers: { "X-API-Key": LITEAPI_KEY, "Content-Type": "application/json", "accept": "application/json" },
+      body: JSON.stringify({
+        hotelIds,
+        checkin,
+        checkout,
+        currency: "EUR",
+        guestNationality: "US",
+        occupancies: [{ adults: 2 }],
+        maxRatesPerHotel: 1,
+        timeout: 10,
+      }),
+    });
+
+    if (liteRes.status === 429) {
+      console.warn("[rates] LiteAPI rate limited");
+      return res.json({ prices: {}, currency: "EUR", nights, pricedCount: 0, rateLimited: true });
+    }
+    if (!liteRes.ok) {
+      console.error("[rates] LiteAPI error", liteRes.status);
+      return res.json({ prices: {}, currency: "EUR", nights, pricedCount: 0 });
+    }
+
+    const json = await liteRes.json();
+    // LiteAPI v3 wraps in { data: { rates: [...] } } or { data: [...] } — handle both
+    const ratesList = json?.data?.rates ?? json?.data ?? json?.rates ?? [];
+    const prices = {};
+    for (const hotel of ratesList) {
+      const total = hotel.roomTypes?.[0]?.rates?.[0]?.retailRate?.total?.[0]?.amount;
+      if (total && total > 0) {
+        prices[hotel.hotelId] = Math.round(total / nights);
+      }
+    }
+    const pricedCount = Object.keys(prices).length;
+    console.log(`[rates] ${city}: ${pricedCount}/${hotelIds.length} hotels priced`);
+    res.json({ prices, currency: "EUR", nights, pricedCount });
+
+  } catch (err) {
+    console.error("[rates]", err.message);
+    res.json({ prices: {}, currency: "EUR", nights: nights || 1, pricedCount: 0 });
+  }
+});
+
 // ── Manual trigger endpoint (protected) ───────────────────────────────────────
 app.post("/api/index-city", async (req, res) => {
   const { city, limit, secret } = req.body || {};
