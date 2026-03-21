@@ -830,16 +830,24 @@
       // No-price hotels go to the bottom
       hotels.sort((a, b) => (a.price ?? Infinity) - (b.price ?? Infinity));
     } else if (_currentSort === 'match+price') {
-      // Two tiers: vectorScore>0 sorted by score DESC then price ASC; score=0 by price ASC
+      // "Match + Price" only promotes hotels that have BOTH a score and a price.
+      // Unpriced hotels always go to the bottom regardless of match score.
       hotels.sort((a, b) => {
+        const aHasPrice = a.price != null;
+        const bHasPrice = b.price != null;
+        // Priced hotels always above unpriced
+        if (aHasPrice !== bHasPrice) return bHasPrice ? 1 : -1;
+        if (!aHasPrice) {
+          // Both unpriced: fall back to match score
+          return (b.vectorScore || 0) - (a.vectorScore || 0);
+        }
+        // Both priced: scored (>0) before unscored
         const aScored = (a.vectorScore || 0) > 0;
         const bScored = (b.vectorScore || 0) > 0;
-        if (aScored !== bScored) return bScored ? 1 : -1;  // scored hotels first
-        if (aScored) {
-          // Both scored: match DESC, then price ASC as tiebreaker
-          const scoreDiff = (b.vectorScore || 0) - (a.vectorScore || 0);
-          if (scoreDiff !== 0) return scoreDiff;
-        }
+        if (aScored !== bScored) return bScored ? 1 : -1;
+        // Both priced and scored: match DESC, then price ASC as tiebreaker
+        const scoreDiff = (b.vectorScore || 0) - (a.vectorScore || 0);
+        if (scoreDiff !== 0) return scoreDiff;
         return (a.price ?? Infinity) - (b.price ?? Infinity);
       });
     }
