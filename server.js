@@ -1324,15 +1324,14 @@ app.get("/api/rates", async (req, res) => {
           prices[hotelId] = perNight;
         }
 
-        // name is inside rates[0].name (not at the roomType level)
-        // mappedRoomId (from roomMapping:true) links back to /data/hotel integer room IDs
-        const rawName = rt.rates?.[0]?.name || "";
-        const rtName = normName(rawName);
-        const mappedRoomId = rt.rates?.[0]?.mappedRoomId || null;
-        if (rtName) {
+        // mappedRoomId links back to /data/hotel integer room IDs (stored as room_type_id in DB)
+        // This is the reliable match — supplier rate names differ from catalog room names
+        const mappedRoomId = rt.rates?.[0]?.mappedRoomId;
+        if (mappedRoomId) {
+          const key = String(mappedRoomId);
           if (!roomPrices[hotelId]) roomPrices[hotelId] = {};
-          if (!roomPrices[hotelId][rtName] || perNight < roomPrices[hotelId][rtName]) {
-            roomPrices[hotelId][rtName] = perNight;
+          if (!roomPrices[hotelId][key] || perNight < roomPrices[hotelId][key]) {
+            roomPrices[hotelId][key] = perNight;
           }
         }
       }
