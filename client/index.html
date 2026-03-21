@@ -932,7 +932,7 @@
           if (pi === 0 && isTopMatch) {
             if (rt.score !== null && rt.score > 0) {
               badge = `<div class="best-badge">${rt.score}% match</div>`;
-            } else if (hotelScore === 0) {
+            } else if (hotelScore === 0 && _currentSort === 'match') {
               badge = `<div class="best-badge best-badge--browse">browse</div>`;
             }
           }
