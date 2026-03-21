@@ -1334,6 +1334,78 @@ app.get("/api/rates", async (req, res) => {
   }
 });
 
+// ── Backfill room_type_id for existing rows (protected) ───────────────────────
+app.post("/api/backfill-room-ids", async (req, res) => {
+  const { city, secret, dryRun } = req.body || {};
+  if (secret !== (process.env.INDEX_SECRET || "roommatch-index")) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
+  if (!city) return res.status(400).json({ error: "city required" });
+
+  // Run async, stream progress to logs
+  res.json({ message: `Backfill started for ${city}`, dryRun: !!dryRun });
+
+  (async () => {
+    const norm = s => (s||"").toLowerCase().replace(/[^a-z0-9 ]/g,"").replace(/\s+/g," ").trim();
+    const matchScore = (a, b) => {
+      const na = norm(a), nb = norm(b);
+      if (na === nb) return 3;
+      if (na.includes(nb) || nb.includes(na)) return 2;
+      const wa = new Set(na.split(" ")), wb = new Set(nb.split(" "));
+      return [...wa].filter(w => wb.has(w) && w.length > 2).length >= 2 ? 1 : 0;
+    };
+
+    const fc = supabaseAdmin || supabase;
+    const { data: rows, error } = await fc
+      .from("room_embeddings").select("hotel_id, room_name")
+      .eq("city", city).is("room_type_id", null);
+    if (error) { console.error("[backfill]", error.message); return; }
+    if (!rows?.length) { console.log("[backfill] Nothing to backfill"); return; }
+
+    const byHotel = new Map();
+    for (const r of rows) {
+      if (!byHotel.has(r.hotel_id)) byHotel.set(r.hotel_id, new Set());
+      byHotel.get(r.hotel_id).add(r.room_name);
+    }
+    console.log(`[backfill] ${rows.length} rows across ${byHotel.size} hotels`);
+
+    let updated = 0, failed = 0;
+    for (const [hotelId, roomNames] of byHotel) {
+      try {
+        const r = await fetch(`https://api.liteapi.travel/v3.0/data/hotel?hotelId=${hotelId}`, {
+          headers: { "X-API-Key": LITEAPI_KEY, "accept": "application/json" },
+          signal: AbortSignal.timeout(15000),
+        });
+        if (!r.ok) { console.warn(`[backfill] ${hotelId}: LiteAPI ${r.status}`); failed += roomNames.size; continue; }
+        const detail = (await r.json())?.data || {};
+        const liteRooms = (detail.rooms || []).map(rm => ({
+          id: rm.id || rm.roomId || rm.roomTypeId || null,
+          name: rm.roomName || rm.name || "",
+        })).filter(rm => rm.id);
+
+        for (const dbName of roomNames) {
+          let best = null, bestScore = 0;
+          for (const lr of liteRooms) {
+            const s = matchScore(dbName, lr.name);
+            if (s > bestScore) { bestScore = s; best = lr; }
+          }
+          if (!best || bestScore === 0) { console.warn(`[backfill] ${hotelId}: no match for "${dbName}"`); failed++; continue; }
+          console.log(`[backfill] ${hotelId}: "${dbName}" → ${best.id} (score ${bestScore})`);
+          if (!dryRun) {
+            const { error: upErr } = await fc.from("room_embeddings")
+              .update({ room_type_id: best.id })
+              .eq("hotel_id", hotelId).eq("room_name", dbName).is("room_type_id", null);
+            if (upErr) { console.error(`[backfill] update error:`, upErr.message); failed++; }
+            else updated++;
+          } else { updated++; }
+        }
+        await new Promise(r => setTimeout(r, 150)); // gentle LiteAPI pacing
+      } catch(e) { console.warn(`[backfill] ${hotelId}: ${e.message}`); failed += roomNames.size; }
+    }
+    console.log(`[backfill] Done — ${updated} updated, ${failed} unmatched`);
+  })();
+});
+
 // ── Manual trigger endpoint (protected) ───────────────────────────────────────
 app.post("/api/index-city", async (req, res) => {
   const { city, limit, secret } = req.body || {};
