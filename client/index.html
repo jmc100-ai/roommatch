@@ -530,8 +530,8 @@
   <div class="sort-group">
     <span class="sort-label">Sort</span>
     <button class="sort-btn active" data-sort="match" onclick="setSortBy('match')">Best Match</button>
-    <button class="sort-btn loading" data-sort="match+price" onclick="setSortBy('match+price')" disabled>Match + Price</button>
-    <button class="sort-btn loading" data-sort="price" onclick="setSortBy('price')" disabled>Best Price</button>
+    <button class="sort-btn" data-sort="match+price" onclick="setSortBy('match+price')">Match + Price</button>
+    <button class="sort-btn" data-sort="price" onclick="setSortBy('price')">Best Price</button>
     <button class="sort-btn" data-sort="rating" onclick="setSortBy('rating')">Guest Rating</button>
     <button class="sort-btn" data-sort="stars" onclick="setSortBy('stars')">Stars</button>
   </div>
@@ -643,6 +643,10 @@
     const hasDates = checkin && checkout && checkin < checkout;
     if (hasDates) {
       fetchPrices(city, checkin, checkout, reqId);
+    } else {
+      // No dates — enable price buttons immediately (they'll show -- for prices)
+      _setPriceBtnsState(true);
+      _pricesLoaded = true;
     }
 
     try {
@@ -747,8 +751,9 @@
     document.body.classList.add('has-results');
     document.querySelectorAll('.sort-btn').forEach(b => {
       b.classList.toggle('active', b.dataset.sort === 'match');
+      b.disabled = false;
+      b.classList.remove('loading');
     });
-    _setPriceBtnsState(false);
     renderSorted();
   }
 
@@ -761,15 +766,17 @@
 
   // Fires parallel to vsearch. reqId lets us discard stale responses if user re-searches.
   async function fetchPrices(city, checkin, checkout, reqId) {
+    _setPriceBtnsState(false);  // show spinner only while fetch is in flight
     try {
       const resp = await fetch(`${BACKEND}/api/rates?` + new URLSearchParams({ city, checkin, checkout }));
       if (reqId !== _ratesReqId) return;  // stale — a new search was started
-      if (!resp.ok) return;
+      if (!resp.ok) { _setPriceBtnsState(true); return; }
       const data = await resp.json();
       if (reqId !== _ratesReqId) return;
       applyPrices(data.prices || {}, data.currency || 'EUR', data.pricedCount || 0);
     } catch (e) {
       console.warn('[prices]', e.message);
+      if (reqId === _ratesReqId) _setPriceBtnsState(true);  // unlock on error
     }
   }
 
