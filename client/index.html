@@ -637,17 +637,10 @@
     // Increment race ID — any in-flight rates response with an older ID will be discarded
     const reqId = ++_ratesReqId;
 
-    // Fire rates fetch in parallel if dates are set
+    // Determine dates before vsearch so we know whether to fetch prices
     const checkin  = document.getElementById('checkinInput').value;
     const checkout = document.getElementById('checkoutInput').value;
     const hasDates = checkin && checkout && checkin < checkout;
-    if (hasDates) {
-      fetchPrices(city, checkin, checkout, reqId);
-    } else {
-      // No dates — enable price buttons immediately (they'll show -- for prices)
-      _setPriceBtnsState(true);
-      _pricesLoaded = true;
-    }
 
     try {
       const resp = await fetch(`${BACKEND}/api/vsearch?` + new URLSearchParams({ query, city }));
@@ -664,7 +657,15 @@
         setStatus(''); renderEmpty(query, city);
       } else if (hotels.length) {
         setStatus('');
-        render(hotels);
+        render(hotels);  // resets _pricesLoaded = false
+        if (hasDates) {
+          // Start spinner on price buttons then fetch — spinner set inside fetchPrices
+          fetchPrices(city, checkin, checkout, reqId);
+        } else {
+          // No dates — unlock price sort buttons immediately (prices will show --)
+          _pricesLoaded = true;
+          _setPriceBtnsState(true);
+        }
       } else {
         setStatus(`Index building for ${city} — results will appear shortly`, false);
       }
