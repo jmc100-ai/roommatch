@@ -1303,7 +1303,7 @@ app.get("/api/rates", async (req, res) => {
     for (const hotel of ratesList) {
       const hotelId = hotel.hotelId;
       for (const rt of (hotel.roomTypes || [])) {
-        const rtId  = rt.roomTypeId || rt.id;
+        const rtId  = String(rt.roomTypeId || rt.id || "");
         const total = rt.rates?.[0]?.retailRate?.total?.[0]?.amount;
         if (!total || total <= 0) continue;
         const perNight = Math.round(total / nights);
@@ -1325,7 +1325,11 @@ app.get("/api/rates", async (req, res) => {
     }
 
     const pricedCount = Object.keys(prices).length;
-    console.log(`[rates] ${city}: ${pricedCount}/${hotelIds.length} hotels priced`);
+    const roomPricedCount = Object.values(roomPrices).reduce((s, rm) => s + Object.keys(rm).length, 0);
+    console.log(`[rates] ${city}: ${pricedCount}/${hotelIds.length} hotels priced, ${roomPricedCount} room rates`);
+    // Log a sample so we can verify room_type_id format
+    const sampleHotel = ratesList.find(h => (h.roomTypes||[]).length > 0);
+    if (sampleHotel) console.log(`[rates] sample roomTypeId: ${JSON.stringify(sampleHotel.roomTypes[0]?.roomTypeId)} (type: ${typeof sampleHotel.roomTypes[0]?.roomTypeId})`);
     res.json({ prices, roomPrices, currency: "EUR", nights, pricedCount });
 
   } catch (err) {
