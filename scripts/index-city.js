@@ -346,11 +346,12 @@ async function indexCity(city, limit = 200) {
         cached_at: new Date().toISOString(),
       }, { onConflict: "hotel_id" });
 
-      // Collect photos per room type
+      // Collect photos per room type, capturing the LiteAPI room type ID for exact rate matching
       const roomMap = new Map();
       for (const room of (detail.rooms || [])) {
-        const rName = room.roomName || room.name || "Room";
-        if (!roomMap.has(rName)) roomMap.set(rName, { bathroom: [], other: [], meta: {
+        const rName  = room.roomName || room.name || "Room";
+        const rId    = room.id || room.roomId || room.roomTypeId || null;
+        if (!roomMap.has(rName)) roomMap.set(rName, { bathroom: [], other: [], roomTypeId: rId, meta: {
           size:      room.roomSizeSquare ? `${room.roomSizeSquare}${room.roomSizeUnit||'sqm'}` : null,
           beds:      (room.bedTypes||[]).map(b=>`${b.quantity}x ${b.bedType}`).join(', ') || null,
           amenities: (room.roomAmenities||[]).slice(0,10).map(a=>a.name).filter(Boolean),
@@ -376,7 +377,7 @@ async function indexCity(city, limit = 200) {
         ].slice(0, MAX_PHOTOS);
         for (const p of selected) {
           if (toProcess.length >= 60) break;
-          toProcess.push({ roomName: rName, meta: buckets.meta, ...p });
+          toProcess.push({ roomName: rName, roomTypeId: buckets.roomTypeId, meta: buckets.meta, ...p });
         }
       }
 
@@ -434,7 +435,9 @@ ${caption}`;
           ({ error } = await supabase.from("room_embeddings").upsert({
             hotel_id: hotelId, city, country_code: cc,
             hotel_name: hotelName,
-            room_name: photo.roomName, photo_url: photo.url,
+            room_name: photo.roomName,
+            room_type_id: photo.roomTypeId || null,
+            photo_url: photo.url,
             photo_type: detectedType,  // use Gemini-detected type
             caption: hybridText,
             embedding,

@@ -235,6 +235,11 @@
     .room-score-badge--low {
       background: rgba(255,255,255,0.05); color: var(--muted); border-color: rgba(255,255,255,0.1);
     }
+    .room-rate {
+      font-size: 12px; font-weight: 300; color: var(--text); white-space: nowrap; flex-shrink: 0;
+      font-family: 'Cormorant Garamond', serif; letter-spacing: 0.02em;
+    }
+    .room-rate-per { font-size: 10px; color: var(--muted); font-family: 'DM Sans', sans-serif; }
 
     .room-size { font-size: 11px; color: #b8b2ac; white-space: nowrap; }
     .room-beds { font-size: 11px; color: #b8b2ac; white-space: nowrap; }
@@ -782,19 +787,20 @@
       if (!resp.ok) { _setPriceBtnsState(true); return; }
       const data = await resp.json();
       if (reqId !== _ratesReqId) return;
-      applyPrices(data.prices || {}, data.currency || 'EUR', data.pricedCount || 0);
+      applyPrices(data.prices || {}, data.roomPrices || {}, data.currency || 'EUR', data.pricedCount || 0);
     } catch (e) {
       console.warn('[prices]', e.message);
       if (reqId === _ratesReqId) _setPriceBtnsState(true);  // unlock on error
     }
   }
 
-  function applyPrices(priceMap, currency, pricedCount) {
+  function applyPrices(priceMap, roomPriceMap, currency, pricedCount) {
     const sym = currency === 'EUR' ? '€' : '$';
 
-    // Merge prices onto hotel objects so re-renders (infinite scroll, sort change) keep prices
+    // Merge hotel-level and per-room prices onto hotel objects for re-render persistence
     for (const hotel of _lastHotels) {
       if (priceMap[hotel.id] !== undefined) hotel.price = priceMap[hotel.id];
+      if (roomPriceMap[hotel.id])           hotel.roomPrices = roomPriceMap[hotel.id];
     }
     _pricesLoaded = true;
     _setPriceBtnsState(true);
@@ -904,7 +910,7 @@
     const rating   = h.rating > 0 ? `<span class="hotel-guest-score"><strong>${parseFloat(h.rating).toFixed(1)}</strong> guest score</span>` : '';
     const bookUrl  = `https://www.google.com/search?q=${encodeURIComponent(h.name + ' ' + (h.city||'') + ' hotel booking')}`;
     const clipBadge = h.clipScore > 0 ? `<span class="clip-score-badge">&#9889; ${h.clipScore}% CLIP</span>` : '';
-    const roomRows = (h.roomTypes || []).map((rt, ri) => roomTypeHTML(rt, ri === 0, h.vectorScore)).join('');
+    const roomRows = (h.roomTypes || []).map((rt, ri) => roomTypeHTML(rt, ri === 0, h.vectorScore, h.roomPrices)).join('');
 
     return `
       <div class="hotel-card">
@@ -933,7 +939,7 @@
       </div>`;
   }
 
-  function roomTypeHTML(rt, isTopMatch, hotelScore) {
+  function roomTypeHTML(rt, isTopMatch, hotelScore, hotelRoomPrices) {
     const sizeHTML = rt.size ? `<span class="room-size">${rt.size}</span>` : '';
     const bedsHTML = rt.beds ? `<span class="room-beds">${rt.beds}</span>` : '';
 
@@ -977,6 +983,9 @@
             ${(bedsHTML || sizeHTML) ? '<span class="room-meta-sep">·</span>' : ''}
             <div class="room-type-meta">${bedsHTML}${sizeHTML}</div>
           </div>
+          ${rt.roomTypeId && hotelRoomPrices?.[rt.roomTypeId] != null
+            ? `<span class="room-rate">€${hotelRoomPrices[rt.roomTypeId].toLocaleString()}<span class="room-rate-per">/night</span></span>`
+            : ''}
           <span class="chevron">▼</span>
         </div>
         <div class="photo-strip-wrap">

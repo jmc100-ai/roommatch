@@ -1138,11 +1138,13 @@ app.get("/api/vsearch", async (req, res) => {
 
       // Group photos by room_name; store caption+similarity so we can pin confirming rooms first.
       // hotelPhotos is already sorted similarity DESC so first photo per room is the best.
+      // room_type_id comes from LiteAPI (stored at index time) — may be null for older rows.
       const roomMap = new Map();
       for (const p of hotelPhotos) {
         const rName = p.room_name || "Room";
-        if (!roomMap.has(rName)) roomMap.set(rName, []);
-        if (roomMap.get(rName).length < 12) roomMap.get(rName).push({ url: p.photo_url, type: p.photo_type, similarity: p.similarity, caption: p.caption });
+        if (!roomMap.has(rName)) roomMap.set(rName, { photos: [], roomTypeId: p.room_type_id || null });
+        const entry = roomMap.get(rName);
+        if (entry.photos.length < 12) entry.photos.push({ url: p.photo_url, type: p.photo_type, similarity: p.similarity, caption: p.caption });
       }
 
       let roomEntries = [...roomMap.entries()];
@@ -1153,21 +1155,21 @@ app.get("/api/vsearch", async (req, res) => {
       // "double sinks" just because "double" appears in the room name).
       if (detectedFeatures.length > 0) {
         roomEntries.sort((a, b) => {
-          const countConfirmed = (photos) =>
-            detectedFeatures.filter(f => photos.some(p => p.caption && f.confirm.test(p.caption))).length;
+          const countConfirmed = (entry) =>
+            detectedFeatures.filter(f => entry.photos.some(p => p.caption && f.confirm.test(p.caption))).length;
           const aDiff = countConfirmed(a[1]);
           const bDiff = countConfirmed(b[1]);
-          if (bDiff !== aDiff) return bDiff - aDiff;           // most confirmed features first
-          const aBest = a[1][0]?.similarity ?? 0;
-          const bBest = b[1][0]?.similarity ?? 0;
-          return bBest - aBest;                                  // tiebreak by similarity
+          if (bDiff !== aDiff) return bDiff - aDiff;
+          const aBest = a[1].photos[0]?.similarity ?? 0;
+          const bBest = b[1].photos[0]?.similarity ?? 0;
+          return bBest - aBest;
         });
       } else {
-        // No structural features: sort by best similarity photo
-        roomEntries.sort((a, b) => (b[1][0]?.similarity ?? 0) - (a[1][0]?.similarity ?? 0));
+        roomEntries.sort((a, b) => (b[1].photos[0]?.similarity ?? 0) - (a[1].photos[0]?.similarity ?? 0));
       }
 
-      const roomTypes = roomEntries.map(([name, photoEntries]) => {
+      const roomTypes = roomEntries.map(([name, entry]) => {
+        const photoEntries = entry.photos;
         // Per-room score: avg of top-3 photo similarities for this room, rescaled,
         // then penalised only if THIS room's captions don't confirm the queried feature.
         const sims = photoEntries.map(p => p.similarity).sort((a, b) => b - a);
@@ -1179,11 +1181,12 @@ app.get("/api/vsearch", async (req, res) => {
         }
         return {
           name,
-          photos:    photoEntries.map(p => p.url),
-          score:     Math.round(roomScore),
-          size:      "",
-          beds:      "",
-          amenities: [],
+          roomTypeId: entry.roomTypeId,
+          photos:     photoEntries.map(p => p.url),
+          score:      Math.round(roomScore),
+          size:       "",
+          beds:       "",
+          amenities:  [],
         };
       });
 
@@ -1277,33 +1280,53 @@ app.get("/api/rates", async (req, res) => {
         currency: "EUR",
         guestNationality: "US",
         occupancies: [{ adults: 2 }],
-        maxRatesPerHotel: 1,
+        maxRatesPerHotel: 10,
         timeout: 10,
       }),
     });
 
     if (liteRes.status === 429) {
       console.warn("[rates] LiteAPI rate limited");
-      return res.json({ prices: {}, currency: "EUR", nights, pricedCount: 0, rateLimited: true });
+      return res.json({ prices: {}, roomPrices: {}, currency: "EUR", nights, pricedCount: 0, rateLimited: true });
     }
     if (!liteRes.ok) {
       console.error("[rates] LiteAPI error", liteRes.status);
-      return res.json({ prices: {}, currency: "EUR", nights, pricedCount: 0 });
+      return res.json({ prices: {}, roomPrices: {}, currency: "EUR", nights, pricedCount: 0 });
     }
 
     const json = await liteRes.json();
     // LiteAPI v3 wraps in { data: { rates: [...] } } or { data: [...] } — handle both
     const ratesList = json?.data?.rates ?? json?.data ?? json?.rates ?? [];
-    const prices = {};
+    const prices     = {};  // hotel_id → cheapest $/night (hotel-level display)
+    const roomPrices = {};  // hotel_id → { room_type_id → $/night }
+
     for (const hotel of ratesList) {
-      const total = hotel.roomTypes?.[0]?.rates?.[0]?.retailRate?.total?.[0]?.amount;
-      if (total && total > 0) {
-        prices[hotel.hotelId] = Math.round(total / nights);
+      const hotelId = hotel.hotelId;
+      for (const rt of (hotel.roomTypes || [])) {
+        const rtId  = rt.roomTypeId || rt.id;
+        const total = rt.rates?.[0]?.retailRate?.total?.[0]?.amount;
+        if (!total || total <= 0) continue;
+        const perNight = Math.round(total / nights);
+
+        // Per-room price keyed by roomTypeId
+        if (rtId) {
+          if (!roomPrices[hotelId]) roomPrices[hotelId] = {};
+          // Keep the cheapest rate per room type
+          if (!roomPrices[hotelId][rtId] || perNight < roomPrices[hotelId][rtId]) {
+            roomPrices[hotelId][rtId] = perNight;
+          }
+        }
+
+        // Hotel-level cheapest
+        if (!prices[hotelId] || perNight < prices[hotelId]) {
+          prices[hotelId] = perNight;
+        }
       }
     }
+
     const pricedCount = Object.keys(prices).length;
     console.log(`[rates] ${city}: ${pricedCount}/${hotelIds.length} hotels priced`);
-    res.json({ prices, currency: "EUR", nights, pricedCount });
+    res.json({ prices, roomPrices, currency: "EUR", nights, pricedCount });
 
   } catch (err) {
     console.error("[rates]", err.message);
