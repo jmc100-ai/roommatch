@@ -1132,13 +1132,10 @@
     else if (e.key === 'Escape') closeLightbox();
   });
 
-  document.getElementById('lightbox').addEventListener('click', e => {
-    if (e.target.id === 'lightbox') closeLightbox();
-  });
 </script>
 
 <!-- Lightbox overlay -->
-<div id="lightbox">
+<div id="lightbox" onclick="if(event.target.id==='lightbox')closeLightbox()">
   <div class="lb-panel">
     <div class="lb-header">
       <div id="lb-room-name"></div>
