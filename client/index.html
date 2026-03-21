@@ -180,12 +180,8 @@
     /* ── Hotel header ───────────── */
     .hotel-header {
       padding: 20px 24px 16px; border-bottom: 1px solid var(--border);
-      display: flex; align-items: flex-start; gap: 16px;
     }
-    .hotel-header-left { min-width: 0; display: flex; flex-direction: column; gap: 5px; flex: 1; }
-    .hotel-header-right {
-      flex-shrink: 0; display: flex; flex-direction: column; align-items: flex-end; gap: 6px;
-    }
+    .hotel-header-left { min-width: 0; display: flex; flex-direction: column; gap: 6px; }
     .hotel-name-row { display: flex; align-items: center; gap: 14px; min-width: 0; flex-wrap: wrap; }
     .hotel-name { font-family: 'Cormorant Garamond', serif; font-size: 22px; font-weight: 400; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
     .hotel-meta { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
@@ -196,14 +192,16 @@
     .book-btn { flex-shrink: 0; display: inline-block; padding: 9px 18px; border-radius: 8px; border: 1px solid rgba(201,169,110,0.3); color: var(--accent); font-family: 'DM Sans', sans-serif; font-size: 11px; font-weight: 500; letter-spacing: 0.1em; text-transform: uppercase; text-decoration: none; transition: all 0.2s; white-space: nowrap; }
     .book-btn:hover { background: rgba(201,169,110,0.08); border-color: var(--accent); }
 
-    /* ── Hotel price placeholder ── */
+    /* ── Book + price row ── */
+    .hotel-actions {
+      display: flex; align-items: center; gap: 20px; flex-wrap: wrap; padding-top: 4px;
+    }
     .hotel-price {
-      text-align: right;
-      display: flex; flex-direction: column; align-items: flex-end; gap: 3px;
+      display: flex; align-items: baseline; gap: 6px;
     }
     .price-value {
       font-family: 'Cormorant Garamond', serif;
-      font-size: 22px; font-weight: 300; color: var(--text);
+      font-size: 20px; font-weight: 300; color: var(--text);
       letter-spacing: 0.02em; line-height: 1;
     }
     .price-per { font-size: 11px; color: var(--muted); font-family: 'DM Sans', sans-serif; font-weight: 300; }
@@ -457,12 +455,8 @@
       .input-row { grid-template-columns: 1fr 1fr; }
       .city-field { grid-column: 1 / -1; }
       .search-btn { grid-column: 1 / -1; width: 100%; }
-      .hotel-header { flex-wrap: wrap; }
-      .hotel-header-right { flex-direction: row; align-items: center; gap: 12px; width: 100%; }
-      .hotel-price { flex-direction: row; align-items: baseline; gap: 6px; }
       .room-photo-cell { flex: 0 0 200px; height: 150px; }
       .hotel-name-row { flex-direction: column; align-items: flex-start; gap: 8px; }
-      .book-btn { align-self: flex-start; }
       .room-type-header { flex-wrap: nowrap; }
       .index-banner { margin: 0 20px 16px; }
       body.has-results .hero { padding: 10px 20px; }
@@ -910,14 +904,14 @@
               ${location ? `<span class="hotel-location">${location}</span>` : ''}
               ${rating}${clipBadge}
             </div>
-          </div>
-          <div class="hotel-header-right">
-            <a class="book-btn" href="${bookUrl}" target="_blank" rel="noopener">Find &amp; Book →</a>
-            <div class="hotel-price">
-              <span class="price-value${!h.price && _pricesLoaded === false ? ' price-loading' : ''}" id="hotel-price-${h.id}">
-                ${h.price != null ? `€${h.price.toLocaleString()}<span class="price-per">/night</span>` : `--<span class="price-per">/night</span>`}
-              </span>
-              <span class="price-note">${h.price != null ? 'Lowest available' : (_pricesLoaded ? 'No rates found' : 'Add dates for rates')}</span>
+            <div class="hotel-actions">
+              <a class="book-btn" href="${bookUrl}" target="_blank" rel="noopener">Find &amp; Book →</a>
+              <div class="hotel-price">
+                <span class="price-value${!h.price && _pricesLoaded === false ? ' price-loading' : ''}" id="hotel-price-${h.id}">
+                  ${h.price != null ? `€${h.price.toLocaleString()}<span class="price-per">/night</span>` : `--<span class="price-per">/night</span>`}
+                </span>
+                <span class="price-note">${h.price != null ? 'Lowest available' : (_pricesLoaded ? 'No rates found' : 'Add dates for rates')}</span>
+              </div>
             </div>
           </div>
         </div>
