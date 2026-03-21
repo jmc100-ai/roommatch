@@ -1103,7 +1103,7 @@ app.get("/api/vsearch", async (req, res) => {
     //    feature penalty (×0.45 on the 0-100 scale) for each missing feature.
     //    Applying penalty after rescaling prevents hotels from flooring to 0%
     //    just because their penalised raw score dips below SIM_MIN.
-    const SIM_MIN = 0.40, SIM_MAX = 0.80;
+    const SIM_MIN = 0.40, SIM_MAX = 0.72;
     const FEATURE_PENALTY = 0.45;
     const allHotels = [...hotelPhotosMap.keys()].map(hotelId => {
       const hs        = hotelScoreMap.get(hotelId);
@@ -1111,7 +1111,9 @@ app.get("/api/vsearch", async (req, res) => {
       arr.sort((a, b) => b - a);
       const rawScore  = arr.slice(0, 3).reduce((s, x) => s + x, 0) / Math.min(3, arr.length);
 
-      // Rescale to 0-100 first
+      // Rescale to 0-100. SIM_MAX=0.72 reflects the realistic ceiling of cosine
+      // similarity in this embedding space — top matches land at 0.65-0.72, not 0.80.
+      // Using the practical ceiling means top matches read as 75-100% instead of 55-75%.
       let score = Math.max(0, Math.min(100, (rawScore - SIM_MIN) / (SIM_MAX - SIM_MIN) * 100));
 
       // Then apply penalty on the rescaled score so penalised hotels remain visible
