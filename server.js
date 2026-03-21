@@ -1167,15 +1167,25 @@ app.get("/api/vsearch", async (req, res) => {
         roomEntries.sort((a, b) => (b[1][0]?.similarity ?? 0) - (a[1][0]?.similarity ?? 0));
       }
 
-      const firstRoom = roomEntries[0]?.[0];
-      const roomTypes = roomEntries.map(([name, photoEntries]) => ({
-        name,
-        photos:    photoEntries.map(p => p.url),
-        score:     name === firstRoom ? score : null,
-        size:      "",
-        beds:      "",
-        amenities: [],
-      }));
+      const roomTypes = roomEntries.map(([name, photoEntries]) => {
+        // Per-room score: avg of top-3 photo similarities for this room, rescaled,
+        // then penalised only if THIS room's captions don't confirm the queried feature.
+        const sims = photoEntries.map(p => p.similarity).sort((a, b) => b - a);
+        const rawRoom = sims.slice(0, 3).reduce((s, x) => s + x, 0) / Math.min(3, sims.length);
+        let roomScore = Math.max(0, Math.min(100, (rawRoom - SIM_MIN) / (SIM_MAX - SIM_MIN) * 100));
+        for (const feat of detectedFeatures) {
+          const confirmed = photoEntries.some(p => p.caption && feat.confirm.test(p.caption));
+          if (!confirmed) roomScore *= FEATURE_PENALTY;
+        }
+        return {
+          name,
+          photos:    photoEntries.map(p => p.url),
+          score:     Math.round(roomScore),
+          size:      "",
+          beds:      "",
+          amenities: [],
+        };
+      });
 
       return {
         id:          hotelId,

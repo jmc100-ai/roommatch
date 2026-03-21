@@ -935,10 +935,12 @@
     const photoHTML = photos.length
       ? photos.slice(0, 10).map((url, pi) => {
           let badge = '';
-          if (pi === 0 && isTopMatch) {
+          if (pi === 0) {
             if (rt.score !== null && rt.score > 0) {
+              // Show per-room match % on every room that has a score
               badge = `<div class="best-badge">${rt.score}% match</div>`;
-            } else if (hotelScore === 0 && _currentSort === 'match') {
+            } else if (isTopMatch && hotelScore === 0 && _currentSort === 'match') {
+              // "browse" only on first room of unscored hotels in match sort
               badge = `<div class="best-badge best-badge--browse">browse</div>`;
             }
           }
