@@ -189,6 +189,15 @@
     .hotel-location { font-size: 12px; color: var(--muted); font-weight: 300; }
     .hotel-guest-score { font-size: 11px; color: var(--muted); padding: 2px 8px; border-radius: 100px; border: 1px solid var(--border); }
     .hotel-guest-score strong { color: var(--text); font-weight: 500; }
+    .hotel-match-badge {
+      font-size: 11px; font-weight: 600; letter-spacing: 0.05em; white-space: nowrap;
+      padding: 3px 9px; border-radius: 100px;
+      background: rgba(201,169,110,0.13); color: var(--accent); border: 1px solid rgba(201,169,110,0.28);
+      font-family: 'DM Sans', sans-serif;
+    }
+    .hotel-match-badge--low {
+      background: rgba(255,255,255,0.05); color: var(--muted); border-color: rgba(255,255,255,0.12);
+    }
     .book-btn { flex-shrink: 0; display: inline-block; padding: 9px 18px; border-radius: 8px; border: 1px solid rgba(201,169,110,0.3); color: var(--accent); font-family: 'DM Sans', sans-serif; font-size: 11px; font-weight: 500; letter-spacing: 0.1em; text-transform: uppercase; text-decoration: none; transition: all 0.2s; white-space: nowrap; }
     .book-btn:hover { background: rgba(201,169,110,0.08); border-color: var(--accent); }
 
@@ -864,19 +873,20 @@
       hotels.sort((a, b) => (a.price ?? Infinity) - (b.price ?? Infinity));
     } else if (_currentSort === 'match+price') {
       // Tier-based: High (40%+) → Mid (15–39%) → Low (<15%)
-      // Within each tier: match DESC is primary; price is the tiebreaker for similar scores.
-      // Unpriced hotels never beat priced hotels at the same score level.
+      // Uses effectiveScore = max(hotelScore, bestRoomScore) so sort matches the header badge.
+      // Within each tier: match DESC is primary; price breaks ties for close scores.
+      const eff  = h => Math.max(h.vectorScore || 0, ...(h.roomTypes || []).map(rt => rt.score || 0));
       const tier = s => s >= 40 ? 0 : s >= 15 ? 1 : 2;
       hotels.sort((a, b) => {
-        const aScore = a.vectorScore || 0;
-        const bScore = b.vectorScore || 0;
+        const aScore = eff(a);
+        const bScore = eff(b);
         // 1. Tier first
         const tierDiff = tier(aScore) - tier(bScore);
         if (tierDiff !== 0) return tierDiff;
         // 2. Within tier: match DESC
         const scoreDiff = bScore - aScore;
         if (Math.abs(scoreDiff) > 3) return scoreDiff;  // >3% apart → match wins
-        // 3. Scores are close (≤3%): priced before unpriced
+        // 3. Scores within 3%: priced before unpriced
         const aHasPrice = a.price != null;
         const bHasPrice = b.price != null;
         if (aHasPrice !== bHasPrice) return bHasPrice ? 1 : -1;
@@ -885,7 +895,12 @@
         return a.price - b.price;
       });
     }
-    // 'match' order is already correct from the server (scored desc, then unscored by rating)
+    // 'match' sort: server order is already score DESC; re-sort client-side using effectiveScore
+    // so that a high room score can surface its hotel even if hotel-level score is slightly lower.
+    else if (_currentSort === 'match') {
+      const eff = h => Math.max(h.vectorScore || 0, ...(h.roomTypes || []).map(rt => rt.score || 0));
+      hotels.sort((a, b) => eff(b) - eff(a));
+    }
 
     const toShow    = hotels.slice(0, _displayedCount);
     const remaining = hotels.length - _displayedCount;
@@ -927,6 +942,12 @@
     const rating   = h.rating > 0 ? `<span class="hotel-guest-score"><strong>${parseFloat(h.rating).toFixed(1)}</strong> guest score</span>` : '';
     const bookUrl  = `https://www.google.com/search?q=${encodeURIComponent(h.name + ' ' + (h.city||'') + ' hotel booking')}`;
     const clipBadge = h.clipScore > 0 ? `<span class="clip-score-badge">&#9889; ${h.clipScore}% CLIP</span>` : '';
+    // Effective score = best of hotel-level score and any room score
+    // This is the score used for sorting AND shown in the header badge so they always agree.
+    const effectiveScore = Math.max(h.vectorScore || 0, ...(h.roomTypes || []).map(rt => rt.score || 0));
+    const matchBadge = effectiveScore > 0
+      ? `<span class="hotel-match-badge${effectiveScore < 20 ? ' hotel-match-badge--low' : ''}">${effectiveScore}% match</span>`
+      : '';
     // When dates are searched and we have per-room prices, float available rooms to top
     let roomTypes = h.roomTypes || [];
     if (_hasDateSearch && h.roomPrices) {
@@ -944,6 +965,7 @@
           <div class="hotel-header-left">
             <div class="hotel-name-row">
               <div class="hotel-name">${h.name}</div>
+              ${matchBadge}
             </div>
             <div class="hotel-meta">
               ${stars ? `<span class="stars">${stars}</span>` : ''}
