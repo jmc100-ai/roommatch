@@ -924,7 +924,16 @@
     const rating   = h.rating > 0 ? `<span class="hotel-guest-score"><strong>${parseFloat(h.rating).toFixed(1)}</strong> guest score</span>` : '';
     const bookUrl  = `https://www.google.com/search?q=${encodeURIComponent(h.name + ' ' + (h.city||'') + ' hotel booking')}`;
     const clipBadge = h.clipScore > 0 ? `<span class="clip-score-badge">&#9889; ${h.clipScore}% CLIP</span>` : '';
-    const roomRows = (h.roomTypes || []).map((rt, ri) => roomTypeHTML(rt, ri === 0, h.vectorScore, h.roomPrices, _hasDateSearch)).join('');
+    // When dates are searched and we have per-room prices, float available rooms to top
+    let roomTypes = h.roomTypes || [];
+    if (_hasDateSearch && h.roomPrices) {
+      roomTypes = [...roomTypes].sort((a, b) => {
+        const aAvail = (a.roomTypeId != null && h.roomPrices[a.roomTypeId] != null) ? 0 : 1;
+        const bAvail = (b.roomTypeId != null && h.roomPrices[b.roomTypeId] != null) ? 0 : 1;
+        return aAvail - bAvail;
+      });
+    }
+    const roomRows = roomTypes.map((rt, ri) => roomTypeHTML(rt, ri === 0, h.vectorScore, h.roomPrices, _hasDateSearch)).join('');
 
     return `
       <div class="hotel-card">
