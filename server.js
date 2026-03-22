@@ -229,6 +229,33 @@ app.get("/api/debug-photos", async (req, res) => {
   res.json({ hotelId, roomCount: rooms.length, sample });
 });
 
+// ── Debug rates for a single hotel ───────────────────────────────────────────
+app.get("/api/debug-rates", async (req, res) => {
+  const { hotelId, checkin, checkout } = req.query;
+  if (!hotelId || !checkin || !checkout) return res.status(400).json({ error: "hotelId, checkin, checkout required" });
+  const nights = Math.round((new Date(checkout) - new Date(checkin)) / 86400000);
+  const liteRes = await fetch("https://api.liteapi.travel/v3.0/hotels/rates", {
+    method: "POST",
+    headers: { "X-API-Key": LITEAPI_KEY, "Content-Type": "application/json", "accept": "application/json" },
+    body: JSON.stringify({ hotelIds: [hotelId], checkin, checkout, currency: "EUR", guestNationality: "US",
+      occupancies: [{ adults: 2 }], maxRatesPerHotel: 20, roomMapping: true, timeout: 10 }),
+  });
+  const json = await liteRes.json();
+  const hotel = (json?.data?.rates ?? json?.data ?? json?.rates ?? [])[0];
+  if (!hotel) return res.json({ raw: json, roomTypes: [] });
+  const roomTypes = (hotel.roomTypes || []).map(rt => ({
+    roomTypeId: rt.roomTypeId,
+    rateCount: rt.rates?.length,
+    rates: (rt.rates || []).slice(0, 3).map(r => ({
+      name: r.name,
+      mappedRoomId: r.mappedRoomId,
+      total: r.retailRate?.total?.[0]?.amount,
+      perNight: r.retailRate?.total?.[0]?.amount ? Math.round(r.retailRate.total[0].amount / nights) : null,
+    })),
+  }));
+  res.json({ hotelId, nights, roomTypeCount: roomTypes.length, roomTypes });
+});
+
 // ── Gemini model debug endpoint ───────────────────────────────────────────────
 app.get("/api/debug-gemini", async (req, res) => {
   const GEMINI_KEY = process.env.GEMINI_KEY || "";
@@ -1304,17 +1331,25 @@ app.get("/api/rates", async (req, res) => {
     // Normalize room name for matching: lowercase, trim, collapse whitespace
     const normName = s => (s || "").toLowerCase().trim().replace(/\s+/g, " ");
 
-    // Log raw structure of first room type so we can find the name field
+    // Diagnostic: log raw structure for the first hotel with rooms
     const sampleHotel = ratesList.find(h => (h.roomTypes||[]).length > 0);
     if (sampleHotel) {
       const srt = sampleHotel.roomTypes[0];
       const srate = srt?.rates?.[0];
-      console.log(`[rates] sample rate name: "${srate?.name}", mappedRoomId: ${srate?.mappedRoomId}`);
+      console.log(`[rates] sample hotel ${sampleHotel.hotelId}: roomTypes=${sampleHotel.roomTypes.length}`);
+      console.log(`[rates] sample rate name: "${srate?.name}", mappedRoomId: ${srate?.mappedRoomId}, roomTypeId: ${srt?.roomTypeId}`);
+      // Dump all room types for first hotel to see which have mappedRoomId
+      sampleHotel.roomTypes.slice(0, 5).forEach((r, i) => {
+        const rate = r.rates?.[0];
+        console.log(`[rates]   room[${i}] mappedRoomId=${rate?.mappedRoomId} name="${rate?.name}" total=${rate?.retailRate?.total?.[0]?.amount}`);
+      });
     }
 
+    let totalRoomTypes = 0, withMappedId = 0;
     for (const hotel of ratesList) {
       const hotelId = hotel.hotelId;
       for (const rt of (hotel.roomTypes || [])) {
+        totalRoomTypes++;
         const total = rt.rates?.[0]?.retailRate?.total?.[0]?.amount;
         if (!total || total <= 0) continue;
         const perNight = Math.round(total / nights);
@@ -1325,9 +1360,9 @@ app.get("/api/rates", async (req, res) => {
         }
 
         // mappedRoomId links back to /data/hotel integer room IDs (stored as room_type_id in DB)
-        // This is the reliable match — supplier rate names differ from catalog room names
         const mappedRoomId = rt.rates?.[0]?.mappedRoomId;
         if (mappedRoomId) {
+          withMappedId++;
           const key = String(mappedRoomId);
           if (!roomPrices[hotelId]) roomPrices[hotelId] = {};
           if (!roomPrices[hotelId][key] || perNight < roomPrices[hotelId][key]) {
@@ -1336,6 +1371,7 @@ app.get("/api/rates", async (req, res) => {
         }
       }
     }
+    console.log(`[rates] roomTypes in response: ${totalRoomTypes} total, ${withMappedId} with mappedRoomId`);
 
     const pricedCount = Object.keys(prices).length;
     const roomPricedCount = Object.values(roomPrices).reduce((s, rm) => s + Object.keys(rm).length, 0);
