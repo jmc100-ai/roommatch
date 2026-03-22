@@ -33,12 +33,17 @@ function releaseDb() {
   else dbSlots++;
 }
 
-if (!LITEAPI_KEY || !GEMINI_KEY || !SUPABASE_URL || !SUPABASE_KEY) {
-  console.error("[indexer] Missing required env vars");
-  process.exit(1);
+// Supabase client created lazily — avoids killing the server if env vars
+// are momentarily missing at module load time (process.exit at module scope
+// would take down the entire Express server that require()s this file).
+let supabase = null;
+function getSupabase() {
+  if (!supabase) {
+    if (!SUPABASE_URL || !SUPABASE_KEY) throw new Error("[indexer] SUPABASE_URL / SUPABASE_SERVICE_KEY not set");
+    supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
+  }
+  return supabase;
 }
-
-const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
 const COUNTRY_CODES = {
   "paris":"FR","nice":"FR","lyon":"FR","marseille":"FR","bordeaux":"FR",
@@ -294,11 +299,15 @@ function classifyPhoto(photo, roomName, photoIndex = 0) {
 
 // ── Main export (called from server.js) and CLI entry point ───────────────────
 async function indexCity(city, limit = 200) {
+  if (!LITEAPI_KEY || !GEMINI_KEY || !SUPABASE_URL || !SUPABASE_KEY) {
+    throw new Error("[indexer] Missing required env vars: LITEAPI_KEY, GEMINI_KEY, SUPABASE_URL, SUPABASE_SERVICE_KEY");
+  }
+  const db = getSupabase();
   const cc = COUNTRY_CODES[city.toLowerCase()] || "";
   console.log(`\n[indexer] Starting: ${city} (${cc}) — limit ${limit}`);
 
   // Mark as indexing — reset stop_requested flag
-  await supabase.from("indexed_cities").upsert({
+  await db.from("indexed_cities").upsert({
     city, country_code: cc, status: "indexing",
     hotel_count: 0, photo_count: 0,
     stop_requested: false,
@@ -337,7 +346,7 @@ async function indexCity(city, limit = 200) {
       const detail = detailRes.data?.data || {};
 
       // Cache hotel
-      await supabase.from("hotels_cache").upsert({
+      await db.from("hotels_cache").upsert({
         hotel_id: hotelId, city, country_code: cc,
         name: detail.name || hotelName,
         address: detail.address || "",
@@ -382,7 +391,7 @@ async function indexCity(city, limit = 200) {
       }
 
       // Skip already-indexed photos
-      const { data: existing } = await supabase
+      const { data: existing } = await db
         .from("room_embeddings")
         .select("photo_url")
         .eq("hotel_id", hotelId)
@@ -432,7 +441,7 @@ ${caption}`;
         await acquireDb();
         let error;
         try {
-          ({ error } = await supabase.from("room_embeddings").upsert({
+          ({ error } = await db.from("room_embeddings").upsert({
             hotel_id: hotelId, city, country_code: cc,
             hotel_name: hotelName,
             room_name: photo.roomName,
@@ -460,20 +469,20 @@ ${caption}`;
     }));
 
     // Update progress
-    await supabase.from("indexed_cities").update({
+    await db.from("indexed_cities").update({
       hotel_count: hotelsDone, photo_count: totalEmbeds,
       updated_at: new Date().toISOString(),
     }).eq("city", city);
 
     // Check for cancellation request between batches
-    const { data: cityCheck } = await supabase
+    const { data: cityCheck } = await db
       .from("indexed_cities")
       .select("stop_requested")
       .eq("city", city)
       .single();
     if (cityCheck?.stop_requested) {
       console.log(`[indexer] ⛔ Stop requested for ${city} — exiting after ${hotelsDone} hotels`);
-      await supabase.from("indexed_cities").update({
+      await db.from("indexed_cities").update({
         status:     "cancelled",
         last_error: `Cancelled after ${hotelsDone} hotels, ${totalEmbeds} embeddings`,
         updated_at: new Date().toISOString(),
@@ -483,7 +492,7 @@ ${caption}`;
   }
 
   // Mark complete
-  await supabase.from("indexed_cities").update({
+  await db.from("indexed_cities").update({
     status: "complete", hotel_count: hotelsDone, photo_count: totalEmbeds,
     completed_at: new Date().toISOString(), updated_at: new Date().toISOString(),
   }).eq("city", city);

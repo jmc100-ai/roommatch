@@ -2,8 +2,9 @@ services:
   - type: web
     name: roommatch-api
     runtime: node
-    buildCommand: npm ci
+    buildCommand: npm install
     startCommand: npm start
+    healthCheckPath: /api/health
     envVars:
       - key: LITEAPI_KEY
         sync: false
