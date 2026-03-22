@@ -864,22 +864,25 @@
       hotels.sort((a, b) => (a.price ?? Infinity) - (b.price ?? Infinity));
     } else if (_currentSort === 'match+price') {
       // Tier-based: High (40%+) → Mid (15–39%) → Low (<15%)
-      // Within each tier: priced hotels cheapest-first, then unpriced by match DESC.
+      // Within each tier: match DESC is primary; price is the tiebreaker for similar scores.
+      // Unpriced hotels never beat priced hotels at the same score level.
       const tier = s => s >= 40 ? 0 : s >= 15 ? 1 : 2;
       hotels.sort((a, b) => {
         const aScore = a.vectorScore || 0;
         const bScore = b.vectorScore || 0;
+        // 1. Tier first
         const tierDiff = tier(aScore) - tier(bScore);
         if (tierDiff !== 0) return tierDiff;
-        // Same tier — priced before unpriced
+        // 2. Within tier: match DESC
+        const scoreDiff = bScore - aScore;
+        if (Math.abs(scoreDiff) > 3) return scoreDiff;  // >3% apart → match wins
+        // 3. Scores are close (≤3%): priced before unpriced
         const aHasPrice = a.price != null;
         const bHasPrice = b.price != null;
         if (aHasPrice !== bHasPrice) return bHasPrice ? 1 : -1;
-        if (!aHasPrice) return bScore - aScore;
-        // Both priced: cheapest first, match as tiebreaker
-        const priceDiff = a.price - b.price;
-        if (priceDiff !== 0) return priceDiff;
-        return bScore - aScore;
+        if (!aHasPrice) return scoreDiff;
+        // 4. Both priced and close in score: cheaper wins
+        return a.price - b.price;
       });
     }
     // 'match' order is already correct from the server (scored desc, then unscored by rating)
