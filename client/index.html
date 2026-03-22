@@ -236,10 +236,10 @@
       background: rgba(255,255,255,0.05); color: var(--muted); border-color: rgba(255,255,255,0.1);
     }
     .room-rate {
-      font-size: 12px; font-weight: 300; color: var(--text); white-space: nowrap; flex-shrink: 0;
-      font-family: 'Cormorant Garamond', serif; letter-spacing: 0.02em;
+      font-size: 14px; font-weight: 500; color: #e8e2da; white-space: nowrap; flex-shrink: 0;
+      font-family: 'DM Sans', sans-serif; letter-spacing: 0.01em;
     }
-    .room-rate-per { font-size: 10px; color: var(--muted); font-family: 'DM Sans', sans-serif; }
+    .room-rate-per { font-size: 11px; color: var(--muted); font-family: 'DM Sans', sans-serif; }
 
     .room-size { font-size: 11px; color: #b8b2ac; white-space: nowrap; }
     .room-beds { font-size: 11px; color: #b8b2ac; white-space: nowrap; }
@@ -811,12 +811,8 @@
       return;
     }
 
-    // Otherwise update price elements in-place (no full re-render needed)
-    for (const hotel of _lastHotels) {
-      if (hotel.price == null) continue;
-      const el = document.getElementById(`hotel-price-${hotel.id}`);
-      if (el) el.innerHTML = `${sym}${hotel.price.toLocaleString()}<span class="price-per">/night</span>`;
-    }
+    // Re-render so per-room prices and hotel prices all appear regardless of sort mode
+    renderSorted();
 
     // Update the result count to show pricing coverage
     const total = _lastHotels.length;
