@@ -895,12 +895,10 @@
         return a.price - b.price;
       });
     }
-    // 'match' sort: server order is already score DESC; re-sort client-side using effectiveScore
-    // so that a high room score can surface its hotel even if hotel-level score is slightly lower.
-    else if (_currentSort === 'match') {
-      const eff = h => Math.max(h.vectorScore || 0, ...(h.roomTypes || []).map(rt => rt.score || 0));
-      hotels.sort((a, b) => eff(b) - eff(a));
-    }
+    // 'match' sort: server order is authoritative (sorted by intent-filtered vectorScore DESC).
+    // Do NOT re-sort client-side — room scores are not intent-filtered so mixing them in
+    // would produce misleading reorderings (e.g. a bedroom photo boosting a hotel on a
+    // "double sinks" query). Server-side scoring is the correct signal here.
 
     const toShow    = hotels.slice(0, _displayedCount);
     const remaining = hotels.length - _displayedCount;
