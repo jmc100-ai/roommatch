@@ -1307,7 +1307,7 @@ app.get("/api/rates", async (req, res) => {
         currency: "EUR",
         guestNationality: "US",
         occupancies: [{ adults: 2 }],
-        maxRatesPerHotel: 10,
+        maxRatesPerHotel: 20,
         roomMapping: true,
         timeout: 10,
       }),

@@ -798,10 +798,15 @@
     const sym = currency === 'EUR' ? '€' : '$';
 
     // Merge hotel-level and per-room prices onto hotel objects for re-render persistence
+    let roomPricedRooms = 0;
     for (const hotel of _lastHotels) {
       if (priceMap[hotel.id] !== undefined) hotel.price = priceMap[hotel.id];
-      if (roomPriceMap[hotel.id])           hotel.roomPrices = roomPriceMap[hotel.id];
+      if (roomPriceMap[hotel.id]) {
+        hotel.roomPrices = roomPriceMap[hotel.id];
+        roomPricedRooms += Object.keys(roomPriceMap[hotel.id]).length;
+      }
     }
+    console.log(`[prices] hotel prices: ${Object.keys(priceMap).length}, room prices: ${roomPricedRooms} rooms across ${Object.keys(roomPriceMap).length} hotels`);
     _pricesLoaded = true;
     _setPriceBtnsState(true);
 
