@@ -241,7 +241,8 @@
     }
     .room-rate-per { font-size: 11px; color: var(--muted); font-family: 'DM Sans', sans-serif; }
 
-    .room-unavailable { opacity: 0.42; }
+    /* Only dim the header row text, not the photos */
+    .room-unavailable .room-type-header { opacity: 0.45; }
     .room-unavail-badge {
       font-size: 10px; font-weight: 400; color: var(--muted); white-space: nowrap; flex-shrink: 0;
       padding: 2px 7px; border-radius: 100px;
@@ -956,9 +957,11 @@
     const sizeHTML = rt.size ? `<span class="room-size">${rt.size}</span>` : '';
     const bedsHTML = rt.beds ? `<span class="room-beds">${rt.beds}</span>` : '';
 
-    // Availability state: only meaningful when dates were searched
-    const hasPrice    = rt.roomTypeId != null && hotelRoomPrices?.[rt.roomTypeId] != null;
-    const isUnavail   = hasDateSearch && rt.roomTypeId != null && !hasPrice;
+    // Availability state: only meaningful when dates were searched AND we have room-level
+    // price data for this hotel. If hotelRoomPrices is undefined the hotel returned no
+    // per-room data from LiteAPI, so we cannot say individual rooms are unavailable.
+    const hasPrice  = rt.roomTypeId != null && hotelRoomPrices?.[rt.roomTypeId] != null;
+    const isUnavail = hasDateSearch && hotelRoomPrices != null && rt.roomTypeId != null && !hasPrice;
 
     const photos = rt.photos || [];
     const regKey = _lbRegistry.length;
