@@ -241,6 +241,14 @@
     }
     .room-rate-per { font-size: 11px; color: var(--muted); font-family: 'DM Sans', sans-serif; }
 
+    .room-unavailable { opacity: 0.42; }
+    .room-unavail-badge {
+      font-size: 10px; font-weight: 400; color: var(--muted); white-space: nowrap; flex-shrink: 0;
+      padding: 2px 7px; border-radius: 100px;
+      border: 1px solid rgba(255,255,255,0.1); background: transparent;
+      font-family: 'DM Sans', sans-serif; letter-spacing: 0.04em;
+    }
+
     .room-size { font-size: 11px; color: #b8b2ac; white-space: nowrap; }
     .room-beds { font-size: 11px; color: #b8b2ac; white-space: nowrap; }
 
@@ -570,6 +578,7 @@
   let _displayedCount = 10;
   let _ratesReqId     = 0;   // incremented per search to discard stale rate responses
   let _pricesLoaded   = false;
+  let _hasDateSearch  = false;  // true after prices fetched with specific dates
 
   // Pre-fill dates: tomorrow + tomorrow+2
   (function initDates() {
@@ -670,13 +679,14 @@
         setStatus(''); renderEmpty(query, city);
       } else if (hotels.length) {
         setStatus('');
-        render(hotels);  // resets _pricesLoaded = false
+        render(hotels);  // resets _pricesLoaded = false, _hasDateSearch = false
         if (hasDates) {
           // Start spinner on price buttons then fetch — spinner set inside fetchPrices
           fetchPrices(city, checkin, checkout, reqId);
         } else {
-          // No dates — unlock price sort buttons immediately (prices will show --)
+          // No dates — unlock price sort buttons immediately, no availability state
           _pricesLoaded = true;
+          _hasDateSearch = false;
           _setPriceBtnsState(true);
         }
       } else {
@@ -762,6 +772,7 @@
     _currentSort    = 'match';
     _displayedCount = 10;
     _pricesLoaded   = false;
+    _hasDateSearch  = false;
     document.body.classList.add('has-results');
     document.querySelectorAll('.sort-btn').forEach(b => {
       b.classList.toggle('active', b.dataset.sort === 'match');
@@ -807,7 +818,8 @@
       }
     }
     console.log(`[prices] hotel prices: ${Object.keys(priceMap).length}, room prices: ${roomPricedRooms} rooms across ${Object.keys(roomPriceMap).length} hotels`);
-    _pricesLoaded = true;
+    _pricesLoaded  = true;
+    _hasDateSearch = true;
     _setPriceBtnsState(true);
 
     // If a price-dependent sort is already active, do a full re-render
@@ -911,7 +923,7 @@
     const rating   = h.rating > 0 ? `<span class="hotel-guest-score"><strong>${parseFloat(h.rating).toFixed(1)}</strong> guest score</span>` : '';
     const bookUrl  = `https://www.google.com/search?q=${encodeURIComponent(h.name + ' ' + (h.city||'') + ' hotel booking')}`;
     const clipBadge = h.clipScore > 0 ? `<span class="clip-score-badge">&#9889; ${h.clipScore}% CLIP</span>` : '';
-    const roomRows = (h.roomTypes || []).map((rt, ri) => roomTypeHTML(rt, ri === 0, h.vectorScore, h.roomPrices)).join('');
+    const roomRows = (h.roomTypes || []).map((rt, ri) => roomTypeHTML(rt, ri === 0, h.vectorScore, h.roomPrices, _hasDateSearch)).join('');
 
     return `
       <div class="hotel-card">
@@ -940,9 +952,13 @@
       </div>`;
   }
 
-  function roomTypeHTML(rt, isTopMatch, hotelScore, hotelRoomPrices) {
+  function roomTypeHTML(rt, isTopMatch, hotelScore, hotelRoomPrices, hasDateSearch) {
     const sizeHTML = rt.size ? `<span class="room-size">${rt.size}</span>` : '';
     const bedsHTML = rt.beds ? `<span class="room-beds">${rt.beds}</span>` : '';
+
+    // Availability state: only meaningful when dates were searched
+    const hasPrice    = rt.roomTypeId != null && hotelRoomPrices?.[rt.roomTypeId] != null;
+    const isUnavail   = hasDateSearch && rt.roomTypeId != null && !hasPrice;
 
     const photos = rt.photos || [];
     const regKey = _lbRegistry.length;
@@ -952,10 +968,8 @@
           let badge = '';
           if (pi === 0) {
             if (rt.score !== null && rt.score > 0) {
-              // Show per-room match % on every room that has a score
               badge = `<div class="best-badge">${rt.score}% match</div>`;
             } else if (isTopMatch && hotelScore === 0 && _currentSort === 'match') {
-              // "browse" only on first room of unscored hotels in match sort
               badge = `<div class="best-badge best-badge--browse">browse</div>`;
             }
           }
@@ -974,13 +988,21 @@
       : '';
 
     const openClass = isTopMatch ? ' open' : '';
+    const unavailClass = isUnavail ? ' room-unavailable' : '';
+
+    // Price or availability indicator
+    const priceHTML = hasPrice
+      ? `<span class="room-rate">€${hotelRoomPrices[rt.roomTypeId].toLocaleString()}<span class="room-rate-per">/night</span></span>`
+      : isUnavail
+        ? `<span class="room-unavail-badge">not available</span>`
+        : '';
 
     return `
-      <div class="room-type-row${openClass}">
+      <div class="room-type-row${openClass}${unavailClass}">
         <div class="room-type-header" onclick="toggleRoom(this.parentElement)">
           <div class="room-type-left">
             <span class="room-type-name">${rt.name}</span>
-            ${rt.roomTypeId && hotelRoomPrices?.[rt.roomTypeId] != null ? `<span class="room-rate">€${hotelRoomPrices[rt.roomTypeId].toLocaleString()}<span class="room-rate-per">/night</span></span>` : ''}
+            ${priceHTML}
             ${rt.score > 0 ? `<span class="room-score-badge${rt.score < 20 ? ' room-score-badge--low' : ''}">${rt.score}% match</span>` : ''}
             ${(bedsHTML || sizeHTML) ? '<span class="room-meta-sep">·</span>' : ''}
             <div class="room-type-meta">${bedsHTML}${sizeHTML}</div>
