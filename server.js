@@ -1206,9 +1206,14 @@ app.get("/api/vsearch", async (req, res) => {
 
       const roomTypes = roomEntries.map(([name, entry]) => {
         const photoEntries = entry.photos;
-        // Per-room score: avg of top-3 photo similarities for this room, rescaled,
-        // then penalised only if THIS room's captions don't confirm the queried feature.
-        const sims = photoEntries.map(p => p.similarity).sort((a, b) => b - a);
+        // Per-room score: use intent-filtered photos (same filter as hotel-level score)
+        // so bedroom photos don't dilute a bathroom query score and vice versa.
+        // Fall back to all photos if the room has no photos of the intent type.
+        const intentPhotos = intentType
+          ? photoEntries.filter(p => p.type === intentType)
+          : [];
+        const scoringPhotos = intentPhotos.length > 0 ? intentPhotos : photoEntries;
+        const sims = scoringPhotos.map(p => p.similarity).sort((a, b) => b - a);
         const rawRoom = sims.slice(0, 3).reduce((s, x) => s + x, 0) / Math.min(3, sims.length);
         let roomScore = Math.max(0, Math.min(100, (rawRoom - SIM_MIN) / (SIM_MAX - SIM_MIN) * 100));
         for (const feat of detectedFeatures) {
