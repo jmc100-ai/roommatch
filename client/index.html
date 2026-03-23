@@ -946,16 +946,17 @@
     const matchBadge = effectiveScore > 0
       ? `<span class="hotel-match-badge${effectiveScore < 20 ? ' hotel-match-badge--low' : ''}">${effectiveScore}% match</span>`
       : '';
-    // When dates are searched and we have per-room prices, float available rooms to top
-    let roomTypes = h.roomTypes || [];
-    if (_hasDateSearch && h.roomPrices) {
-      roomTypes = [...roomTypes].sort((a, b) => {
-        const aAvail = (a.roomTypeId != null && h.roomPrices[a.roomTypeId] != null) ? 0 : 1;
-        const bAvail = (b.roomTypeId != null && h.roomPrices[b.roomTypeId] != null) ? 0 : 1;
-        return aAvail - bAvail;
-      });
-    }
-    const roomRows = roomTypes.map((rt, ri) => roomTypeHTML(rt, ri === 0, h.vectorScore, h.roomPrices, _hasDateSearch)).join('');
+    // Rooms always sorted by match score (server order) — never reorder by availability.
+    // The open/expanded room is the first available one (has a price), falling back to
+    // the first room when no dates are entered or no pricing data exists.
+    const roomTypes = h.roomTypes || [];
+    const isAvail = rt => rt.roomTypeId != null && h.roomPrices?.[rt.roomTypeId] != null;
+    const firstAvailIdx = _hasDateSearch && h.roomPrices
+      ? roomTypes.findIndex(isAvail)
+      : -1;
+    // If no available room found, open the first room as before
+    const openIdx = firstAvailIdx >= 0 ? firstAvailIdx : 0;
+    const roomRows = roomTypes.map((rt, ri) => roomTypeHTML(rt, ri === openIdx, h.vectorScore, h.roomPrices, _hasDateSearch)).join('');
 
     return `
       <div class="hotel-card">
