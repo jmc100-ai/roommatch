@@ -58,8 +58,8 @@
     /* ── Hero ───────────────────── */
     .hero { padding: 4px 56px 36px; }
     .hero-inner {
-      display: grid; grid-template-columns: 1fr auto;
-      gap: 40px; align-items: center; margin-bottom: 36px;
+      display: grid; grid-template-columns: 3fr 2fr;
+      gap: 48px; align-items: center; margin-bottom: 36px;
     }
     .hero-left { display: flex; flex-direction: column; justify-content: center; }
     .hero-heading { font-family: 'Cormorant Garamond', serif; font-size: clamp(28px, 3.2vw, 50px); font-weight: 300; line-height: 1.12; margin-bottom: 16px; }
@@ -68,7 +68,7 @@
     .hero-photos {
       display: grid; grid-template-columns: 1fr 1fr; gap: 5px;
       border-radius: var(--radius); overflow: hidden;
-      width: 280px; flex-shrink: 0;
+      max-width: 380px; justify-self: end;
     }
     .hero-photo { width: 100%; aspect-ratio: 4/3; object-fit: cover; display: block; }
 
