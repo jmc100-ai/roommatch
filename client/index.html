@@ -895,10 +895,12 @@
         return a.price - b.price;
       });
     }
-    // 'match' sort: server order is authoritative (sorted by intent-filtered vectorScore DESC).
-    // Do NOT re-sort client-side — room scores are not intent-filtered so mixing them in
-    // would produce misleading reorderings (e.g. a bedroom photo boosting a hotel on a
-    // "double sinks" query). Server-side scoring is the correct signal here.
+    // 'match' sort: re-sort by max(room scores) so the order matches the header badge.
+    // Room scores are now intent-filtered (same signal as vectorScore) and rooms are
+    // already sorted score DESC on the server, so roomTypes[0].score = the badge value.
+    else if (_currentSort === 'match') {
+      hotels.sort((a, b) => (b.roomTypes?.[0]?.score || 0) - (a.roomTypes?.[0]?.score || 0));
+    }
 
     const toShow    = hotels.slice(0, _displayedCount);
     const remaining = hotels.length - _displayedCount;
