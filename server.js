@@ -1214,7 +1214,9 @@ app.get("/api/vsearch", async (req, res) => {
           : [];
         const scoringPhotos = intentPhotos.length > 0 ? intentPhotos : photoEntries;
         const sims = scoringPhotos.map(p => p.similarity).sort((a, b) => b - a);
-        const rawRoom = sims.slice(0, 3).reduce((s, x) => s + x, 0) / Math.min(3, sims.length);
+        const rawRoom = sims.length > 0
+          ? sims.slice(0, 3).reduce((s, x) => s + x, 0) / Math.min(3, sims.length)
+          : 0;
         let roomScore = Math.max(0, Math.min(100, (rawRoom - SIM_MIN) / (SIM_MAX - SIM_MIN) * 100));
         for (const feat of detectedFeatures) {
           const confirmed = photoEntries.some(p => p.caption && feat.confirm.test(p.caption));
@@ -1230,6 +1232,11 @@ app.get("/api/vsearch", async (req, res) => {
           amenities:  [],
         };
       });
+
+      // Re-sort rooms by score DESC now that scores are computed.
+      // The pre-sort (by confirmation count / raw similarity) was a heuristic;
+      // the final score is the authoritative ranking signal.
+      roomTypes.sort((a, b) => (b.score || 0) - (a.score || 0));
 
       return {
         id:          hotelId,

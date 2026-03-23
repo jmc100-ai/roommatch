@@ -875,7 +875,7 @@
       // Tier-based: High (40%+) → Mid (15–39%) → Low (<15%)
       // Uses effectiveScore = max(hotelScore, bestRoomScore) so sort matches the header badge.
       // Within each tier: match DESC is primary; price breaks ties for close scores.
-      const eff  = h => Math.max(h.vectorScore || 0, ...(h.roomTypes || []).map(rt => rt.score || 0));
+      const eff  = h => Math.max(0, ...(h.roomTypes || []).map(rt => rt.score || 0));
       const tier = s => s >= 40 ? 0 : s >= 15 ? 1 : 2;
       hotels.sort((a, b) => {
         const aScore = eff(a);
@@ -940,9 +940,10 @@
     const rating   = h.rating > 0 ? `<span class="hotel-guest-score"><strong>${parseFloat(h.rating).toFixed(1)}</strong> guest score</span>` : '';
     const bookUrl  = `https://www.google.com/search?q=${encodeURIComponent(h.name + ' ' + (h.city||'') + ' hotel booking')}`;
     const clipBadge = h.clipScore > 0 ? `<span class="clip-score-badge">&#9889; ${h.clipScore}% CLIP</span>` : '';
-    // Effective score = best of hotel-level score and any room score
-    // This is the score used for sorting AND shown in the header badge so they always agree.
-    const effectiveScore = Math.max(h.vectorScore || 0, ...(h.roomTypes || []).map(rt => rt.score || 0));
+    // Hotel badge = best individual room score so it's directly comparable to room badges.
+    // h.vectorScore combines photos across all rooms and can exceed any single room score,
+    // making the header number confusing. Using max(room scores) keeps everything consistent.
+    const effectiveScore = Math.max(0, ...(h.roomTypes || []).map(rt => rt.score || 0));
     const matchBadge = effectiveScore > 0
       ? `<span class="hotel-match-badge${effectiveScore < 20 ? ' hotel-match-badge--low' : ''}">${effectiveScore}% match</span>`
       : '';
