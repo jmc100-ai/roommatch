@@ -40,42 +40,70 @@
     }
 
     /* ── Header ─────────────────── */
-    header { padding: 40px 56px 0; display: flex; align-items: baseline; gap: 16px; }
-    .logo { font-family: 'Cormorant Garamond', serif; font-size: 26px; font-weight: 300; letter-spacing: 0.14em; color: var(--accent2); text-transform: uppercase; }
+    header { padding: 22px 56px; display: flex; align-items: center; gap: 14px; }
+    .hamburger { font-size: 18px; color: var(--muted); cursor: pointer; line-height: 1; flex-shrink: 0; }
+    .logo { font-family: 'DM Sans', sans-serif; font-size: 16px; font-weight: 500; letter-spacing: 0.02em; color: var(--text); }
     .logo-dot { color: var(--accent); }
-    .tagline { font-size: 11px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--muted); font-weight: 300; }
 
     /* ── Logo compact (sticky bar only) ── */
     .logo-compact {
       display: none;
-      font-family: 'Cormorant Garamond', serif;
-      font-size: 20px; font-weight: 300; letter-spacing: 0.14em;
-      color: var(--accent2); text-transform: uppercase;
+      font-family: 'DM Sans', sans-serif;
+      font-size: 15px; font-weight: 500; letter-spacing: 0.02em;
+      color: var(--text);
       flex-shrink: 0; white-space: nowrap; line-height: 1;
     }
     .logo-compact .logo-dot { color: var(--accent); }
 
     /* ── Hero ───────────────────── */
-    .hero { padding: 48px 56px 36px; max-width: 900px; }
-    .hero-heading { font-family: 'Cormorant Garamond', serif; font-size: clamp(34px, 4vw, 54px); font-weight: 300; line-height: 1.1; margin-bottom: 8px; }
-    .hero-heading em { font-style: italic; color: var(--accent); }
-    .hero-sub { font-size: 13px; color: var(--muted); font-weight: 300; margin-bottom: 32px; }
+    .hero { padding: 4px 56px 36px; }
+    .hero-inner {
+      display: grid; grid-template-columns: 1fr 1fr;
+      gap: 48px; align-items: center; margin-bottom: 36px;
+    }
+    .hero-left { display: flex; flex-direction: column; justify-content: center; }
+    .hero-heading { font-family: 'Cormorant Garamond', serif; font-size: clamp(28px, 3.2vw, 50px); font-weight: 300; line-height: 1.12; margin-bottom: 16px; }
+    .hero-heading em { font-style: italic; color: var(--accent); font-weight: 400; }
+    .hero-sub { font-size: 13px; color: var(--muted); font-weight: 300; line-height: 1.75; max-width: 400px; }
+    .hero-photos {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 6px;
+      border-radius: var(--radius); overflow: hidden;
+    }
+    .hero-photo { width: 100%; aspect-ratio: 4/3; object-fit: cover; display: block; }
 
     /* ── Form ───────────────────── */
-    .search-form { display: flex; flex-direction: column; gap: 12px; max-width: 800px; }
+    .search-form { display: flex; flex-direction: column; gap: 12px; max-width: 860px; }
     .input-row { display: grid; grid-template-columns: 2fr 1fr 1fr auto; gap: 10px; align-items: end; }
     .field-label { display: block; font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); margin-bottom: 6px; }
-    input[type="text"], input[type="date"], textarea {
+    input[type="text"], input[type="date"] {
       width: 100%; background: var(--surface); border: 1px solid var(--border);
       border-radius: var(--radius); color: var(--text); font-family: 'DM Sans', sans-serif;
       font-size: 14px; font-weight: 300; padding: 13px 16px; outline: none;
-      transition: border-color 0.2s, box-shadow 0.2s; resize: none;
+      transition: border-color 0.2s, box-shadow 0.2s;
     }
-    input:focus, textarea:focus { border-color: rgba(201,169,110,0.4); box-shadow: 0 0 0 3px rgba(201,169,110,0.07); }
-    textarea { min-height: 72px; line-height: 1.6; }
+    input:focus { border-color: rgba(201,169,110,0.4); box-shadow: 0 0 0 3px rgba(201,169,110,0.07); }
     ::placeholder { color: var(--muted); font-style: italic; }
     input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(0.55); cursor: pointer; }
     input[type="date"] { color-scheme: dark; }
+    /* Search bar pill */
+    .search-bar-wrap {
+      display: flex; align-items: center; gap: 10px;
+      background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+      padding: 6px 14px; transition: border-color 0.2s, box-shadow 0.2s;
+    }
+    .search-bar-wrap:focus-within { border-color: rgba(201,169,110,0.4); box-shadow: 0 0 0 3px rgba(201,169,110,0.07); }
+    .search-icon-left { color: var(--muted); font-size: 14px; flex-shrink: 0; }
+    .search-bar-wrap input[type="text"] {
+      background: transparent; border: none; border-radius: 0; padding: 8px 0;
+      box-shadow: none !important; flex: 1; font-size: 14px;
+    }
+    .search-bar-wrap input[type="text"]:focus { border: none; box-shadow: none !important; }
+    .sparkle-btn {
+      background: none; border: none; cursor: pointer; color: var(--accent);
+      font-size: 15px; padding: 4px 2px; opacity: 0.65; transition: opacity 0.2s, transform 0.25s;
+      flex-shrink: 0; line-height: 1;
+    }
+    .sparkle-btn:hover { opacity: 1; transform: rotate(25deg) scale(1.2); }
 
     .chips { display: flex; flex-wrap: wrap; gap: 7px; }
     .chip { font-size: 11px; padding: 5px 12px; border-radius: 100px; border: 1px solid var(--border); color: var(--muted); cursor: pointer; transition: all 0.15s; background: transparent; font-family: 'DM Sans', sans-serif; white-space: nowrap; }
@@ -406,27 +434,6 @@
     .footer-text { font-size: 11px; color: var(--muted); }
     .footer-text a { color: var(--accent); text-decoration: none; }
 
-    /* ── Mode toggle ─────────────── */
-    .mode-toggle {
-      display: inline-flex; background: var(--surface);
-      border: 1px solid var(--border); border-radius: 100px;
-      padding: 4px; gap: 2px; margin-bottom: 28px;
-    }
-    .mode-btn {
-      padding: 9px 20px; border-radius: 100px; border: none;
-      font-family: 'DM Sans', sans-serif; font-size: 12px; font-weight: 400;
-      letter-spacing: 0.06em; text-transform: uppercase; cursor: pointer;
-      transition: all 0.2s; background: transparent; color: var(--muted); position: relative;
-    }
-    .mode-btn.active { background: var(--accent); color: #0c0c0e; font-weight: 600; box-shadow: 0 2px 8px rgba(201,169,110,0.35); }
-    .mode-btn:not(.active):hover { color: var(--text); background: rgba(255,255,255,0.05); }
-    .mode-badge {
-      display: inline-block; font-size: 9px; padding: 1px 5px; border-radius: 100px;
-      background: rgba(109,186,138,0.2); color: var(--green); border: 1px solid rgba(109,186,138,0.3);
-      margin-left: 5px; vertical-align: middle; letter-spacing: 0.04em; font-weight: 500;
-    }
-    .mode-btn.active .mode-badge { background: rgba(0,0,0,0.15); color: rgba(12,12,14,0.7); border-color: rgba(0,0,0,0.1); }
-
     .clip-score-badge {
       font-size: 10px; padding: 2px 8px; border-radius: 100px;
       background: rgba(109,186,138,0.12); border: 1px solid rgba(109,186,138,0.3);
@@ -443,8 +450,51 @@
     }
     .index-banner .spinner { width: 12px; height: 12px; flex-shrink: 0; }
 
+    /* ── Trust bar ────────────────── */
+    .trust-bar {
+      padding: 14px 56px; display: flex; align-items: center; gap: 32px; flex-wrap: wrap;
+      border-top: 1px solid var(--border);
+    }
+    .trust-label { font-size: 10px; letter-spacing: 0.16em; text-transform: uppercase; color: rgba(255,255,255,0.25); font-weight: 400; flex-shrink: 0; }
+    .trust-logos { display: flex; align-items: center; gap: 28px; flex-wrap: wrap; }
+    .trust-logo { font-size: 13px; color: rgba(255,255,255,0.3); font-weight: 500; white-space: nowrap; letter-spacing: 0.01em; transition: color 0.2s; cursor: default; }
+    .trust-logo:hover { color: rgba(255,255,255,0.5); }
+
+    /* ── Landing sections (hidden when results show) ── */
+    .landing-sections { padding: 48px 56px 64px; display: flex; flex-direction: column; gap: 72px; }
+    .section-heading { font-family: 'Cormorant Garamond', serif; font-size: clamp(24px, 2.8vw, 38px); font-weight: 300; color: var(--accent); margin-bottom: 6px; line-height: 1.15; }
+    .section-sub { font-size: 13px; color: var(--muted); margin-bottom: 28px; font-weight: 300; }
+    .example-cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
+    .example-card {
+      background: var(--card); border: 1px solid var(--border); border-radius: var(--radius);
+      overflow: hidden; cursor: pointer; transition: border-color 0.2s, transform 0.2s;
+    }
+    .example-card:hover { border-color: rgba(201,169,110,0.25); transform: translateY(-3px); }
+    .example-card-photo { width: 100%; height: 180px; object-fit: cover; display: block; }
+    .example-card-body { padding: 14px 16px; }
+    .example-card-title { font-family: 'Cormorant Garamond', serif; font-size: 18px; font-weight: 400; margin-bottom: 4px; color: var(--text); }
+    .example-card-meta { font-size: 11px; color: var(--muted); display: flex; align-items: center; gap: 8px; margin-bottom: 8px; flex-wrap: wrap; }
+    .example-stars { color: var(--accent); font-size: 11px; }
+    .example-location { color: var(--muted); }
+    .example-card-desc { font-size: 12px; color: var(--muted); font-weight: 300; margin-bottom: 12px; line-height: 1.55; }
+    .example-card-footer { display: flex; align-items: center; justify-content: space-between; border-top: 1px solid var(--border); padding-top: 10px; }
+    .example-price { font-family: 'Cormorant Garamond', serif; font-size: 17px; color: var(--text); }
+    .example-price span { font-family: 'DM Sans', sans-serif; font-size: 11px; color: var(--muted); margin-left: 2px; }
+    .example-size { font-size: 11px; color: var(--muted); background: var(--row); padding: 2px 8px; border-radius: 6px; }
+    /* Discover */
+    .discover-heading { font-family: 'Cormorant Garamond', serif; font-size: clamp(22px, 2.6vw, 38px); font-weight: 300; line-height: 1.15; margin-bottom: 8px; color: var(--text); }
+    .discover-heading em { font-style: italic; color: var(--accent); }
+    .discover-sub { font-size: 13px; color: var(--muted); font-weight: 300; line-height: 1.7; margin-bottom: 36px; max-width: 520px; }
+    .features-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 32px; }
+    .feature-item { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 14px; }
+    .feature-icon { font-size: 30px; opacity: 0.8; }
+    .feature-text { font-size: 12px; color: var(--muted); line-height: 1.65; }
+    .feature-text strong { color: var(--text); font-weight: 500; }
+
     /* ── Has-results: compact sticky search bar ──────────────────────────── */
     body.has-results header { display: none; }
+    body.has-results .landing-sections,
+    body.has-results .trust-bar { display: none; }
 
     body.has-results .hero {
       position: sticky; top: 0; z-index: 50;
@@ -457,21 +507,18 @@
       display: flex; align-items: center; gap: 16px;
     }
     body.has-results .logo-compact { display: block; }
+    body.has-results .hero-inner,
     body.has-results .hero-heading,
     body.has-results .hero-sub,
-    body.has-results .chips,
-    body.has-results .mode-toggle { display: none; }
+    body.has-results .chips { display: none; }
 
     body.has-results .search-form {
       flex-direction: row; align-items: center;
       gap: 8px; max-width: none; flex: 1;
     }
-    body.has-results .query-field { flex: 2; min-width: 0; }
+    body.has-results .search-bar-wrap { flex: 2; min-width: 0; padding: 4px 12px; }
     body.has-results .field-label { display: none; }
-    body.has-results textarea {
-      min-height: 0; height: 42px;
-      overflow-y: hidden; padding-top: 11px; padding-bottom: 11px; line-height: 20px;
-    }
+    body.has-results .search-bar-wrap input[type="text"] { padding: 6px 0; }
     body.has-results .input-row { display: contents; }
     body.has-results .city-field { flex: 1.2; min-width: 0; }
     body.has-results .date-field { flex: 0 0 128px; }
@@ -480,9 +527,16 @@
     body.has-results .sort-bar { display: flex; }
 
     /* ── Mobile ──────────────────── */
+    @media (max-width: 900px) {
+      .hero-inner { grid-template-columns: 1fr; }
+      .hero-photos { display: none; }
+      .example-cards { grid-template-columns: 1fr; }
+      .features-grid { grid-template-columns: 1fr; gap: 24px; }
+    }
     @media (max-width: 640px) {
       header, .hero { padding-left: 20px; padding-right: 20px; }
       .divider, #status, #results, footer, .sort-bar { padding-left: 20px; padding-right: 20px; }
+      .trust-bar, .landing-sections { padding-left: 20px; padding-right: 20px; }
       .input-row { grid-template-columns: 1fr 1fr; }
       .city-field { grid-column: 1 / -1; }
       .search-btn { grid-column: 1 / -1; width: 100%; }
@@ -499,42 +553,46 @@
 <body>
 
 <header>
-  <span class="logo">Room<span class="logo-dot">·</span>Search</span>
-  <span class="tagline">Visual hotel room search</span>
+  <span class="hamburger">&#9776;</span>
+  <span class="logo">Room<span class="logo-dot">S</span>earch</span>
 </header>
 
 <section class="hero">
-  <span class="logo-compact">Room<span class="logo-dot">·</span>Search</span>
+  <span class="logo-compact">Room<span class="logo-dot">S</span>earch</span>
 
-  <h1 class="hero-heading">Find rooms that<br><em>look</em> the way you want</h1>
-  <p class="hero-sub">Describe your ideal room. We'll show every room type at each matching hotel.</p>
-
-  <div class="mode-toggle">
-    <button class="mode-btn" id="modeA" onclick="setMode('liteapi')">LiteAPI Room Search</button>
-    <button class="mode-btn active" id="modeB" onclick="setMode('vector')">Vector Search <span class="mode-badge">NEW</span></button>
+  <div class="hero-inner">
+    <div class="hero-left">
+      <h1 class="hero-heading">Describe your ideal hotel room&nbsp;&ndash;<br>we'll find <em>the</em> perfect match</h1>
+      <p class="hero-sub">Tell us what you want in a hotel room, and our AI will instantly show matching rooms. It's that easy.</p>
+    </div>
+    <div class="hero-photos">
+      <img class="hero-photo" src="https://images.unsplash.com/photo-1571896349842-33c89424de2d?w=480&h=340&fit=crop&q=80" alt="Overwater bungalow" loading="lazy">
+      <img class="hero-photo" src="https://images.unsplash.com/photo-1520250497591-112f2f40a3f4?w=480&h=340&fit=crop&q=80" alt="Mountain chalet suite" loading="lazy">
+      <img class="hero-photo" src="https://images.unsplash.com/photo-1596394516093-501ba68a0ba6?w=480&h=340&fit=crop&q=80" alt="City view hotel room" loading="lazy">
+      <img class="hero-photo" src="https://images.unsplash.com/photo-1616594039964-ae9021a400a0?w=480&h=340&fit=crop&q=80" alt="Luxury hotel bedroom" loading="lazy">
+    </div>
   </div>
 
   <form class="search-form" onsubmit="handleSearch(event)">
-    <div class="query-field">
-      <label class="field-label" for="queryInput">Describe your ideal room</label>
-      <textarea id="queryInput" rows="3"
-        placeholder="e.g. minimalist bathroom with double sinks and a soaking tub, warm lighting…"></textarea>
+    <div class="search-bar-wrap">
+      <span class="search-icon-left">&#128269;</span>
+      <input type="text" id="queryInput"
+        placeholder="Modern suite with balcony, soaking tub, and city view..." />
+      <button type="button" class="sparkle-btn" onclick="randomSuggestion()" title="Surprise me">&#10022;</button>
     </div>
 
     <div class="chips">
       <button type="button" class="chip" onclick="setQuery(this)">Luxury bathroom with soaking tub</button>
       <button type="button" class="chip" onclick="setQuery(this)">Modern suite with city view</button>
-      <button type="button" class="chip" onclick="setQuery(this)">Art deco room with warm lighting</button>
-      <button type="button" class="chip" onclick="setQuery(this)">Double sinks and walk-in shower</button>
-      <button type="button" class="chip" onclick="setQuery(this)">Bright minimalist room with desk</button>
       <button type="button" class="chip" onclick="setQuery(this)">Cozy suite with fireplace</button>
+      <button type="button" class="chip" onclick="setQuery(this)">Double sinks and walk-in shower</button>
     </div>
 
     <div class="input-row">
       <div class="city-field">
         <label class="field-label" for="cityInput">City</label>
         <div class="city-wrap">
-          <input type="text" id="cityInput" placeholder="e.g. Paris, New York, Tokyo…"
+          <input type="text" id="cityInput" placeholder="City"
                  autocomplete="off" oninput="onCityInput(this.value)" onblur="hideCitySuggestions()" />
           <div class="city-dropdown" id="cityDropdown"></div>
         </div>
@@ -547,10 +605,98 @@
         <label class="field-label" for="checkoutInput">Check-out</label>
         <input type="date" id="checkoutInput" />
       </div>
-      <button type="submit" class="search-btn" id="searchBtn">Search rooms</button>
+      <button type="submit" class="search-btn" id="searchBtn">Find Matching Rooms</button>
     </div>
   </form>
 </section>
+
+<div class="trust-bar">
+  <span class="trust-label">Compare across</span>
+  <div class="trust-logos">
+    <span class="trust-logo">Booking.com</span>
+    <span class="trust-logo">&#10007; Expedia</span>
+    <span class="trust-logo">&#9632; Hotels.com</span>
+    <span class="trust-logo">&#9787; Tripadvisor</span>
+  </div>
+</div>
+
+<div class="landing-sections">
+  <!-- Example Matches -->
+  <div>
+    <h2 class="section-heading">Example Matches</h2>
+    <p class="section-sub">Example results &ndash; real-time rates and availability from top providers</p>
+    <div class="example-cards">
+      <div class="example-card">
+        <img class="example-card-photo" src="https://images.unsplash.com/photo-1502602898657-3e91760cbb34?w=480&h=300&fit=crop&q=80" alt="Chic Eiffel Suite" loading="lazy">
+        <div class="example-card-body">
+          <div class="example-card-title">Chic Eiffel Suite</div>
+          <div class="example-card-meta">
+            <span class="example-stars">&#9733;4.7/5</span>
+            <span class="example-location">&#128205; Paris, France</span>
+            <span style="color:var(--muted);font-size:10px">&#9733;&#9733;&#9733;&#9733;&#9733; 2,048</span>
+          </div>
+          <div class="example-card-desc">Luxury room with soaking tub, Eiffel Tower view</div>
+          <div class="example-card-footer">
+            <div class="example-price">From &euro;510<span>/ night</span></div>
+            <div class="example-size">58 m&sup2;</div>
+          </div>
+        </div>
+      </div>
+      <div class="example-card">
+        <img class="example-card-photo" src="https://images.unsplash.com/photo-1578683010236-d716f9a3f461?w=480&h=300&fit=crop&q=80" alt="Deluxe Soaking Tub Room" loading="lazy">
+        <div class="example-card-body">
+          <div class="example-card-title">Deluxe Soaking Tub Room</div>
+          <div class="example-card-meta">
+            <span class="example-stars">&#9733;4.8/5</span>
+            <span class="example-location">&#128205; Milan, Italy</span>
+            <span style="color:var(--muted);font-size:10px">&#9733;&#9733;&#9733;&#9733;&#9733; 1,732</span>
+          </div>
+          <div class="example-card-desc">Stylish room with soaking tub, city view</div>
+          <div class="example-card-footer">
+            <div class="example-price">From &euro;280<span>/ night</span></div>
+            <div class="example-size">58 m&sup2;</div>
+          </div>
+        </div>
+      </div>
+      <div class="example-card">
+        <img class="example-card-photo" src="https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?w=480&h=300&fit=crop&q=80" alt="Alpine Chalet Suite" loading="lazy">
+        <div class="example-card-body">
+          <div class="example-card-title">Alpine Chalet Suite</div>
+          <div class="example-card-meta">
+            <span class="example-stars">&#9733;4.8/5</span>
+            <span class="example-location">&#128205; Zermatt, Switzerland</span>
+            <span style="color:var(--muted);font-size:10px">&#9733;&#9733;&#9733;&#9733;&#9733; 1,511</span>
+          </div>
+          <div class="example-card-desc">Cozy suite with fireplace, mountain view</div>
+          <div class="example-card-footer">
+            <div class="example-price">From &euro;384<span>/ night</span></div>
+            <div class="example-size">58 m&sup2;</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Discover section -->
+  <div>
+    <h2 class="discover-heading">Discover rooms by description, <em>not filters</em></h2>
+    <p class="discover-sub">RoomSearch lets you search for hotel rooms based on your preferences and style, not just standard filters. It's the easiest way to find a room you'll love.</p>
+    <div class="features-grid">
+      <div class="feature-item">
+        <div class="feature-icon">&#128221;</div>
+        <div class="feature-text">Start with your dream: a balcony in Paris, a cozy fireplace&hellip; <strong>tell us your story.</strong></div>
+      </div>
+      <div class="feature-item">
+        <div class="feature-icon">&#128269;&#10022;</div>
+        <div class="feature-text">Our AI searches thousands of hand-picked, top hotels <strong>to match your vibe.</strong></div>
+      </div>
+      <div class="feature-item">
+        <div class="feature-icon">&#128197;&#10003;</div>
+        <div class="feature-text">Direct links to real, matching rooms for <strong>instant, confident booking.</strong></div>
+      </div>
+    </div>
+  </div>
+</div>
 
 <div class="divider"></div>
 <div class="clip-progress" id="clipProgress" style="display:none"><div class="clip-progress-fill" id="clipProgressFill"></div></div>
@@ -618,6 +764,25 @@
   function setQuery(chip) {
     document.getElementById('queryInput').value = chip.textContent.trim();
     document.getElementById('queryInput').focus();
+  }
+
+  const _suggestions = [
+    'Luxury bathroom with soaking tub',
+    'Modern suite with city view',
+    'Cozy suite with fireplace',
+    'Double sinks and walk-in shower',
+    'Art deco room with warm lighting',
+    'Bright minimalist room with desk',
+    'Large bedroom with balcony and mountain view',
+    'Romantic suite with bathtub and candles',
+    'Contemporary room with floor-to-ceiling windows',
+  ];
+  function randomSuggestion() {
+    const inp = document.getElementById('queryInput');
+    const cur = inp.value.trim();
+    const pool = _suggestions.filter(s => s !== cur);
+    inp.value = pool[Math.floor(Math.random() * pool.length)];
+    inp.focus();
   }
 
   function setStatus(msg, loading = false) {
