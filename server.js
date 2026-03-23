@@ -1104,6 +1104,15 @@ app.get("/api/vsearch", async (req, res) => {
     const cached       = cachedResult.data;
     console.log(`[vsearch] scored photos: ${scoredPhotos.length}, cached hotels: ${cached?.length ?? 0}`);
 
+    // Log raw similarity distribution to calibrate SIM_MAX
+    if (scoredPhotos.length > 0) {
+      const sims = scoredPhotos.map(p => p.similarity).sort((a, b) => b - a);
+      const top5 = sims.slice(0, 5).map(s => s.toFixed(4)).join(', ');
+      const p95  = sims[Math.floor(sims.length * 0.05)]?.toFixed(4);
+      const p50  = sims[Math.floor(sims.length * 0.50)]?.toFixed(4);
+      console.log(`[vsearch] raw similarity — top5: [${top5}]  p95: ${p95}  median: ${p50}`);
+    }
+
     if (!scoredPhotos.length) {
       return res.json({ hotels: [], query, city, indexing, indexStatus: status });
     }
