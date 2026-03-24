@@ -1101,6 +1101,20 @@
     renderSorted();
   }
 
+  // Returns the hotel's effective match score for sorting and badge display.
+  // When the "available only" filter is active, uses only the scores of rooms
+  // that have confirmed availability — so a hotel with one 20% available room
+  // ranks as 20%, not as the 80% score of an unavailable room.
+  function hotelEffectiveScore(h) {
+    const allRooms = h.roomTypes || [];
+    const canFilter = _showAvailOnly && _hasDateSearch && h.roomPrices != null;
+    if (canFilter) {
+      const availRooms = allRooms.filter(rt => rt.roomTypeId != null && h.roomPrices[rt.roomTypeId] != null);
+      if (availRooms.length > 0) return Math.max(0, ...availRooms.map(rt => rt.score || 0));
+    }
+    return Math.max(0, ...allRooms.map(rt => rt.score || 0));
+  }
+
   function renderSorted() {
     const hotels = [..._lastHotels];
     if (_currentSort === 'rating') {
@@ -1108,37 +1122,26 @@
     } else if (_currentSort === 'stars') {
       hotels.sort((a, b) => (b.starRating || 0) - (a.starRating || 0));
     } else if (_currentSort === 'price') {
-      // No-price hotels go to the bottom
       hotels.sort((a, b) => (a.price ?? Infinity) - (b.price ?? Infinity));
     } else if (_currentSort === 'match+price') {
       // Tier-based: High (40%+) → Mid (15–39%) → Low (<15%)
-      // Uses effectiveScore = max(hotelScore, bestRoomScore) so sort matches the header badge.
-      // Within each tier: match DESC is primary; price breaks ties for close scores.
-      const eff  = h => Math.max(0, ...(h.roomTypes || []).map(rt => rt.score || 0));
+      // Uses hotelEffectiveScore so available-only filter is respected.
       const tier = s => s >= 40 ? 0 : s >= 15 ? 1 : 2;
       hotels.sort((a, b) => {
-        const aScore = eff(a);
-        const bScore = eff(b);
-        // 1. Tier first
+        const aScore = hotelEffectiveScore(a);
+        const bScore = hotelEffectiveScore(b);
         const tierDiff = tier(aScore) - tier(bScore);
         if (tierDiff !== 0) return tierDiff;
-        // 2. Within tier: match DESC
         const scoreDiff = bScore - aScore;
-        if (Math.abs(scoreDiff) > 3) return scoreDiff;  // >3% apart → match wins
-        // 3. Scores within 3%: priced before unpriced
+        if (Math.abs(scoreDiff) > 3) return scoreDiff;
         const aHasPrice = a.price != null;
         const bHasPrice = b.price != null;
         if (aHasPrice !== bHasPrice) return bHasPrice ? 1 : -1;
         if (!aHasPrice) return scoreDiff;
-        // 4. Both priced and close in score: cheaper wins
         return a.price - b.price;
       });
-    }
-    // 'match' sort: re-sort by max(room scores) so the order matches the header badge.
-    // Room scores are now intent-filtered (same signal as vectorScore) and rooms are
-    // already sorted score DESC on the server, so roomTypes[0].score = the badge value.
-    else if (_currentSort === 'match') {
-      hotels.sort((a, b) => (b.roomTypes?.[0]?.score || 0) - (a.roomTypes?.[0]?.score || 0));
+    } else if (_currentSort === 'match') {
+      hotels.sort((a, b) => hotelEffectiveScore(b) - hotelEffectiveScore(a));
     }
 
     const toShow    = hotels.slice(0, _displayedCount);
@@ -1181,10 +1184,9 @@
     const rating   = h.rating > 0 ? `<span class="hotel-guest-score"><strong>${parseFloat(h.rating).toFixed(1)}</strong> guest score</span>` : '';
     const bookUrl  = `https://www.google.com/search?q=${encodeURIComponent(h.name + ' ' + (h.city||'') + ' hotel booking')}`;
     const clipBadge = h.clipScore > 0 ? `<span class="clip-score-badge">&#9889; ${h.clipScore}% CLIP</span>` : '';
-    // Hotel badge = best individual room score so it's directly comparable to room badges.
-    // h.vectorScore combines photos across all rooms and can exceed any single room score,
-    // making the header number confusing. Using max(room scores) keeps everything consistent.
-    const effectiveScore = Math.max(0, ...(h.roomTypes || []).map(rt => rt.score || 0));
+    // Hotel badge uses hotelEffectiveScore so when "available only" is on it shows
+    // the best available room's score — consistent with the sort order.
+    const effectiveScore = hotelEffectiveScore(h);
     const matchBadge = effectiveScore > 0
       ? `<span class="hotel-match-badge${effectiveScore < 20 ? ' hotel-match-badge--low' : ''}">${effectiveScore}% match</span>`
       : '';
