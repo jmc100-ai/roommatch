@@ -241,6 +241,7 @@
     }
     .hotel-card:hover { border-color: rgba(201,169,110,0.18); }
     @keyframes fadeUp { from { opacity:0; transform:translateY(14px); } to { opacity:1; transform:translateY(0); } }
+    #results.no-anim .hotel-card { animation: none !important; }
     .hotel-card:nth-child(1) { animation-delay:.04s }
     .hotel-card:nth-child(2) { animation-delay:.08s }
     .hotel-card:nth-child(3) { animation-delay:.12s }
@@ -1125,14 +1126,20 @@
     _showAvailOnly = true;
     _setPriceBtnsState(true);
 
-    // Price-dependent sorts need a full re-render because the order changes.
-    // All other sorts (match, rating, stars) keep the same order — update in-place
-    // so there is no flash/full-rebuild of the results list.
-    if (_currentSort === 'match+price' || _currentSort === 'price') {
-      renderSorted();
-    } else {
-      applyPricesInPlace(sym, pricedCount);
-    }
+    // Always re-render so sort order is correct (hotelEffectiveScore changes once
+    // _pricesLoaded becomes true). renderSortedSmooth() suppresses the card entrance
+    // animation and preserves scroll position so the update is invisible to the user.
+    renderSortedSmooth();
+
+    // Update the result count to show pricing coverage
+    const total = _lastHotels.length;
+    const showing = Math.min(_displayedCount, total);
+    const remaining = total - _displayedCount;
+    const countEl = document.getElementById('resultCount');
+    const pricedNote = pricedCount > 0 ? ` · ${pricedCount} priced` : '';
+    if (countEl) countEl.textContent = remaining > 0
+      ? `Showing ${showing} of ${total} hotels${pricedNote}`
+      : `${total} hotel${total !== 1 ? 's' : ''}${pricedNote}`;
   }
 
   function setSortBy(sort) {
@@ -1166,6 +1173,17 @@
       return 0; // no available rooms → scores 0, sinks to bottom
     }
     return Math.max(0, ...allRooms.map(rt => rt.score || 0));
+  }
+
+  // Re-render while suppressing the card entrance animation and preserving scroll.
+  // Used when prices arrive so the re-sort is invisible to the user.
+  function renderSortedSmooth() {
+    const scrollY = window.scrollY;
+    const resultsEl = document.getElementById('results');
+    if (resultsEl) resultsEl.classList.add('no-anim');
+    renderSorted();
+    window.scrollTo(0, scrollY);
+    requestAnimationFrame(() => { if (resultsEl) resultsEl.classList.remove('no-anim'); });
   }
 
   function renderSorted() {
