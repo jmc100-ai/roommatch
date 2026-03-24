@@ -1143,6 +1143,13 @@
     _showAvailOnly = true;
     _setPriceBtnsState(true);
 
+    // Show availability toggle (hidden by default, only relevant once prices are loaded)
+    const availFilter = document.getElementById('availFilter');
+    if (availFilter) {
+      availFilter.style.display = 'flex';
+      document.getElementById('availOnlyCheck').checked = true;
+    }
+
     // Always re-render so sort order is correct (hotelEffectiveScore changes once
     // _pricesLoaded becomes true). renderSortedSmooth() suppresses the card entrance
     // animation and preserves scroll position so the update is invisible to the user.
