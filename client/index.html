@@ -98,26 +98,21 @@
     .search-bar-wrap {
       display: flex; align-items: center; gap: 10px;
       background: linear-gradient(180deg, rgba(24,24,28,0.98), rgba(19,19,22,0.98));
-      border: 1px solid rgba(201,169,110,0.26); border-radius: var(--radius);
+      border: 1px solid rgba(201,169,110,0.42); border-radius: var(--radius);
       padding: 7px 14px; transition: border-color 0.2s, box-shadow 0.2s, transform 0.2s;
       box-shadow:
-        0 0 0 1px rgba(201,169,110,0.05),
-        0 0 34px rgba(201,169,110,0.08),
+        0 0 0 1px rgba(201,169,110,0.14),
+        0 0 34px rgba(201,169,110,0.1),
         0 10px 28px rgba(0,0,0,0.22),
         inset 0 1px 0 rgba(255,255,255,0.03);
     }
     .search-bar-wrap:focus-within {
-      border-color: rgba(201,169,110,0.55);
-      box-shadow: 0 0 0 3px rgba(201,169,110,0.1), 0 14px 34px rgba(0,0,0,0.26);
+      border-color: rgba(201,169,110,0.78);
+      box-shadow:
+        0 0 0 1px rgba(201,169,110,0.24),
+        0 0 0 4px rgba(201,169,110,0.14),
+        0 14px 34px rgba(0,0,0,0.26);
       transform: translateY(-1px);
-    }
-    .search-prompt {
-      font-size: 11px;
-      letter-spacing: 0.12em;
-      text-transform: uppercase;
-      color: var(--accent2);
-      font-weight: 500;
-      margin-bottom: 6px;
     }
     .search-icon-left { color: var(--accent2); font-size: 15px; flex-shrink: 0; opacity: 0.9; }
     .search-bar-wrap input[type="text"] {
@@ -647,7 +642,6 @@
   </div>
 
   <form class="search-form" onsubmit="handleSearch(event)">
-    <div class="search-prompt">Start here</div>
     <div class="search-bar-wrap">
       <span class="search-icon-left">&#128269;</span>
       <input type="text" id="queryInput"
