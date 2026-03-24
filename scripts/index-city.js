@@ -134,12 +134,14 @@ async function geminiCaption(imageUrl, photoContext = {}, retries = 3) {
 
 First identify what type of photo this is, then answer ALL items below based ONLY on what you can clearly see. Write "unknown" if you cannot clearly see something. Do not guess.
 
+IMPORTANT: For search-critical fields — SINKS count, BATHTUB type, BALCONY, FIREPLACE, WINDOWS size — be conservative. Only report a specific value when you are confident. If the photo angle, framing, or lighting leaves any doubt, use "unknown". A wrong value here is worse than "unknown".
+
 PHOTO TYPE: (bedroom / bathroom / living area / view / other)
 
 BATHROOM:
-SINKS: (no sink visible / one sink / two sinks / three or more sinks)
+SINKS: (no sink visible / one sink / two sinks / three or more sinks) — only use "two sinks" or higher if you can clearly count distinct, separate sink basins; if the framing or angle makes the count uncertain, use "unknown"
 COUNTER SPACE: (no counter / small counter / large counter / very large counter)
-BATHTUB: (no bathtub / soaking tub / freestanding tub / clawfoot tub / built-in tub / hot tub / jacuzzi)
+BATHTUB: (no bathtub / soaking tub / freestanding tub / clawfoot tub / built-in tub / hot tub / jacuzzi) — only use a specific type if the bathtub shape is clearly visible
 SHOWER: (no shower / walk-in shower / rainfall shower / steam shower / shower over bath)
 BIDET: (yes / no)
 SEPARATE TOILET ROOM: (yes / no)
@@ -192,7 +194,7 @@ Reply with ONLY the filled-in list above. No extra commentary.`;
             { inline_data: { mime_type: mime, data: b64 } },
             { text: prompt }
           ]}],
-          generationConfig: { maxOutputTokens: 300, temperature: 0.1 }
+          generationConfig: { maxOutputTokens: 400, temperature: 0.1 }
         }),
         signal: AbortSignal.timeout(25000),
       }
