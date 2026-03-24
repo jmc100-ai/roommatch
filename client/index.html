@@ -56,24 +56,26 @@
     .logo-compact .logo-dot { color: var(--accent); }
 
     /* ── Hero ───────────────────── */
-    .hero { padding: 4px 56px 36px; }
+    .hero { padding: 8px 56px 32px; max-width: 1180px; margin: 0 auto; }
     .hero-inner {
-      display: grid; grid-template-columns: minmax(0, 520px) 1fr;
-      gap: 48px; align-items: start; margin-bottom: 36px;
+      display: grid; grid-template-columns: minmax(0, 560px) minmax(280px, 360px);
+      justify-content: space-between;
+      gap: 40px; align-items: start; margin-bottom: 30px;
     }
     .hero-left { display: flex; flex-direction: column; padding-top: 8px; }
     .hero-heading { font-family: 'Cormorant Garamond', serif; font-size: clamp(28px, 3.2vw, 50px); font-weight: 300; line-height: 1.12; margin-bottom: 16px; }
     .hero-heading em { font-style: italic; color: var(--accent); font-weight: 400; }
-    .hero-sub { font-size: 13px; color: var(--muted); font-weight: 300; line-height: 1.75; }
+    .hero-sub { font-size: 13px; color: var(--muted); font-weight: 300; line-height: 1.75; max-width: 430px; }
     .hero-photos {
       display: grid; grid-template-columns: 1fr 1fr; gap: 5px;
       border-radius: var(--radius); overflow: hidden;
-      max-width: 420px; justify-self: end;
+      width: min(100%, 360px);
+      justify-self: end;
     }
     .hero-photo { width: 100%; aspect-ratio: 1; object-fit: cover; display: block; }
 
     /* ── Form ───────────────────── */
-    .search-form { display: flex; flex-direction: column; gap: 12px; max-width: 860px; }
+    .search-form { display: flex; flex-direction: column; gap: 12px; max-width: 920px; }
     .input-row { display: grid; grid-template-columns: 2fr 1fr 1fr auto; gap: 10px; align-items: end; }
     .field-label { display: block; font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); margin-bottom: 6px; }
     input[type="text"], input[type="date"] {
@@ -455,6 +457,7 @@
     .trust-bar {
       padding: 14px 56px; display: flex; align-items: center; gap: 32px; flex-wrap: wrap;
       border-top: 1px solid var(--border);
+      max-width: 1180px; margin: 0 auto;
     }
     .trust-label { font-size: 10px; letter-spacing: 0.16em; text-transform: uppercase; color: rgba(255,255,255,0.25); font-weight: 400; flex-shrink: 0; }
     .trust-logos { display: flex; align-items: center; gap: 28px; flex-wrap: wrap; }
@@ -462,16 +465,20 @@
     .trust-logo:hover { color: rgba(255,255,255,0.5); }
 
     /* ── Landing sections (hidden when results show) ── */
-    .landing-sections { padding: 48px 56px 64px; display: flex; flex-direction: column; gap: 72px; }
+    .landing-sections {
+      padding: 44px 56px 64px;
+      display: flex; flex-direction: column; gap: 72px;
+      max-width: 1180px; margin: 0 auto;
+    }
     .section-heading { font-family: 'Cormorant Garamond', serif; font-size: clamp(24px, 2.8vw, 38px); font-weight: 300; color: var(--accent); margin-bottom: 6px; line-height: 1.15; }
     .section-sub { font-size: 13px; color: var(--muted); margin-bottom: 28px; font-weight: 300; }
-    .example-cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
+    .example-cards { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px; }
     .example-card {
       background: var(--card); border: 1px solid var(--border); border-radius: var(--radius);
       overflow: hidden; cursor: pointer; transition: border-color 0.2s, transform 0.2s;
     }
     .example-card:hover { border-color: rgba(201,169,110,0.25); transform: translateY(-3px); }
-    .example-card-photo { width: 100%; height: 140px; object-fit: cover; display: block; }
+    .example-card-photo { width: 100%; height: 128px; object-fit: cover; display: block; }
     .example-card-body { padding: 14px 16px; }
     .example-card-title { font-family: 'Cormorant Garamond', serif; font-size: 18px; font-weight: 400; margin-bottom: 4px; color: var(--text); }
     .example-card-meta { font-size: 11px; color: var(--muted); display: flex; align-items: center; gap: 8px; margin-bottom: 8px; flex-wrap: wrap; }
