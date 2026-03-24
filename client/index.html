@@ -42,7 +42,11 @@
     /* ── Header ─────────────────── */
     header { padding: 22px 56px; display: flex; align-items: center; gap: 14px; }
     .hamburger { font-size: 18px; color: var(--muted); cursor: pointer; line-height: 1; flex-shrink: 0; }
-    .logo { font-family: 'DM Sans', sans-serif; font-size: 16px; font-weight: 500; letter-spacing: 0.02em; color: var(--text); }
+    .logo {
+      font-family: 'DM Sans', sans-serif; font-size: 16px; font-weight: 500; letter-spacing: 0.02em;
+      color: var(--text); text-decoration: none;
+    }
+    .logo:hover { color: var(--accent2); }
     .logo-dot { color: var(--accent); }
 
     /* ── Logo compact (sticky bar only) ── */
@@ -50,9 +54,10 @@
       display: none;
       font-family: 'DM Sans', sans-serif;
       font-size: 15px; font-weight: 500; letter-spacing: 0.02em;
-      color: var(--text);
+      color: var(--text); text-decoration: none;
       flex-shrink: 0; white-space: nowrap; line-height: 1;
     }
+    .logo-compact:hover { color: var(--accent2); }
     .logo-compact .logo-dot { color: var(--accent); }
 
     /* ── Hero ───────────────────── */
@@ -562,11 +567,11 @@
 
 <header>
   <span class="hamburger">&#9776;</span>
-  <span class="logo">Room<span class="logo-dot">S</span>earch</span>
+  <a class="logo" href="/">Room<span class="logo-dot">S</span>earch</a>
 </header>
 
 <section class="hero">
-  <span class="logo-compact">Room<span class="logo-dot">S</span>earch</span>
+  <a class="logo-compact" href="/">Room<span class="logo-dot">S</span>earch</a>
 
   <div class="hero-inner">
     <div class="hero-left">
