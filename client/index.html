@@ -1107,10 +1107,13 @@
   // ranks as 20%, not as the 80% score of an unavailable room.
   function hotelEffectiveScore(h) {
     const allRooms = h.roomTypes || [];
-    const canFilter = _showAvailOnly && _hasDateSearch && h.roomPrices != null;
+    // When prices have loaded, any hotel absent from the rates response
+    // (h.roomPrices === undefined) is treated as fully unavailable → score 0.
+    const canFilter = _showAvailOnly && _hasDateSearch && _pricesLoaded;
     if (canFilter) {
-      const availRooms = allRooms.filter(rt => rt.roomTypeId != null && h.roomPrices[rt.roomTypeId] != null);
+      const availRooms = allRooms.filter(rt => rt.roomTypeId != null && h.roomPrices?.[rt.roomTypeId] != null);
       if (availRooms.length > 0) return Math.max(0, ...availRooms.map(rt => rt.score || 0));
+      return 0; // no available rooms → scores 0, sinks to bottom
     }
     return Math.max(0, ...allRooms.map(rt => rt.score || 0));
   }
@@ -1196,11 +1199,15 @@
     // showing all rooms so the hotel card is never empty.
     const allRoomTypes = h.roomTypes || [];
     const isAvail = rt => rt.roomTypeId != null && h.roomPrices?.[rt.roomTypeId] != null;
-    const canFilter = _showAvailOnly && _hasDateSearch && h.roomPrices != null;
+    // canFilter is true once prices have loaded — hotels absent from the LiteAPI
+    // rates response (h.roomPrices === undefined) are correctly treated as
+    // having no available rooms, rather than appearing bookable by accident.
+    const canFilter = _showAvailOnly && _hasDateSearch && _pricesLoaded;
+    const availRoomTypes = allRoomTypes.filter(isAvail);
     const roomTypes = canFilter
-      ? (allRoomTypes.filter(isAvail).length > 0 ? allRoomTypes.filter(isAvail) : allRoomTypes)
+      ? (availRoomTypes.length > 0 ? availRoomTypes : allRoomTypes)
       : allRoomTypes;
-    const noAvailRooms = canFilter && allRoomTypes.filter(isAvail).length === 0;
+    const noAvailRooms = canFilter && availRoomTypes.length === 0;
     // Open the first room in the filtered list
     const openIdx = 0;
     const roomRows = roomTypes.map((rt, ri) => roomTypeHTML(rt, ri === openIdx, h.vectorScore, h.roomPrices, _hasDateSearch)).join('');
