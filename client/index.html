@@ -184,6 +184,43 @@
     .sort-btn:disabled { opacity: 0.35; cursor: not-allowed; }
     .sort-btn.loading { opacity: 0.5; cursor: wait; }
     .result-count { font-size: 11px; color: var(--muted); letter-spacing: 0.04em; }
+
+    /* ── Availability filter toggle ── */
+    .avail-filter {
+      display: flex; align-items: center; gap: 8px; margin-left: 4px;
+    }
+    .avail-filter-label {
+      font-size: 11px; letter-spacing: 0.04em; color: var(--muted);
+      white-space: nowrap; user-select: none; cursor: pointer;
+    }
+    .toggle-switch { position: relative; display: inline-block; width: 34px; height: 20px; flex-shrink: 0; }
+    .toggle-switch input { opacity: 0; width: 0; height: 0; position: absolute; }
+    .toggle-track {
+      position: absolute; inset: 0; border-radius: 100px; cursor: pointer;
+      background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.12);
+      transition: background 0.2s, border-color 0.2s;
+    }
+    .toggle-track::before {
+      content: ''; position: absolute; width: 13px; height: 13px;
+      left: 3px; top: 50%; transform: translateY(-50%);
+      border-radius: 50%; background: var(--muted);
+      transition: transform 0.2s, background 0.2s;
+    }
+    .toggle-switch input:checked + .toggle-track {
+      background: rgba(201,169,110,0.25); border-color: rgba(201,169,110,0.4);
+    }
+    .toggle-switch input:checked + .toggle-track::before {
+      transform: translate(14px, -50%); background: var(--accent);
+    }
+    .no-avail-notice {
+      padding: 10px 24px; font-size: 12px; color: var(--muted);
+      border-bottom: 1px solid var(--border);
+    }
+    .no-avail-link {
+      background: none; border: none; color: var(--accent); cursor: pointer;
+      font-size: 12px; font-family: 'DM Sans', sans-serif; padding: 0; text-decoration: underline;
+    }
+    .no-avail-link:hover { color: var(--accent2); }
     .price-loading { animation: priceShimmer 1.4s ease-in-out infinite; }
     @keyframes priceShimmer {
       0%, 100% { opacity: 0.4; }
@@ -725,6 +762,13 @@
     <button class="sort-btn" data-sort="rating" onclick="setSortBy('rating')">Guest Rating</button>
     <button class="sort-btn" data-sort="stars" onclick="setSortBy('stars')">Stars</button>
   </div>
+  <div class="avail-filter" id="availFilter" style="display:none" title="Only show room types with availability for your dates">
+    <label class="avail-filter-label" for="availOnlyCheck">Available rooms only</label>
+    <label class="toggle-switch">
+      <input type="checkbox" id="availOnlyCheck" checked onchange="setAvailFilter(this.checked)">
+      <span class="toggle-track"></span>
+    </label>
+  </div>
   <span id="resultCount" class="result-count"></span>
 </div>
 
@@ -748,6 +792,7 @@
   let _ratesReqId     = 0;   // incremented per search to discard stale rate responses
   let _pricesLoaded   = false;
   let _hasDateSearch  = false;  // true after prices fetched with specific dates
+  let _showAvailOnly  = true;   // toggle: only show available rooms (default on when dates entered)
 
   // Pre-fill dates: tomorrow + tomorrow+2
   (function initDates() {
@@ -961,6 +1006,9 @@
     _displayedCount = 10;
     _pricesLoaded   = false;
     _hasDateSearch  = false;
+    _showAvailOnly  = true;
+    const availFilter = document.getElementById('availFilter');
+    if (availFilter) availFilter.style.display = 'none';
     document.body.classList.add('has-results');
     document.querySelectorAll('.sort-btn').forEach(b => {
       b.classList.toggle('active', b.dataset.sort === 'match');
@@ -1009,6 +1057,13 @@
     _pricesLoaded  = true;
     _hasDateSearch = true;
     _setPriceBtnsState(true);
+    // Show availability toggle and reset to default (on)
+    _showAvailOnly = true;
+    const availFilter = document.getElementById('availFilter');
+    if (availFilter) {
+      availFilter.style.display = 'flex';
+      document.getElementById('availOnlyCheck').checked = true;
+    }
 
     // If a price-dependent sort is already active, do a full re-render
     if (_currentSort === 'match+price' || _currentSort === 'price') {
@@ -1037,6 +1092,12 @@
     document.querySelectorAll('.sort-btn').forEach(b => {
       b.classList.toggle('active', b.dataset.sort === sort);
     });
+    renderSorted();
+  }
+
+  function setAvailFilter(availOnly) {
+    _showAvailOnly  = availOnly;
+    _displayedCount = 10;
     renderSorted();
   }
 
@@ -1127,16 +1188,19 @@
     const matchBadge = effectiveScore > 0
       ? `<span class="hotel-match-badge${effectiveScore < 20 ? ' hotel-match-badge--low' : ''}">${effectiveScore}% match</span>`
       : '';
-    // Rooms always sorted by match score (server order) — never reorder by availability.
-    // The open/expanded room is the first available one (has a price), falling back to
-    // the first room when no dates are entered or no pricing data exists.
-    const roomTypes = h.roomTypes || [];
+    // Rooms always sorted by match score (server order).
+    // When "available only" toggle is on, filter to rooms with pricing data.
+    // If no rooms survive the filter (e.g. hotel has no available rooms), fall back to
+    // showing all rooms so the hotel card is never empty.
+    const allRoomTypes = h.roomTypes || [];
     const isAvail = rt => rt.roomTypeId != null && h.roomPrices?.[rt.roomTypeId] != null;
-    const firstAvailIdx = _hasDateSearch && h.roomPrices
-      ? roomTypes.findIndex(isAvail)
-      : -1;
-    // If no available room found, open the first room as before
-    const openIdx = firstAvailIdx >= 0 ? firstAvailIdx : 0;
+    const canFilter = _showAvailOnly && _hasDateSearch && h.roomPrices != null;
+    const roomTypes = canFilter
+      ? (allRoomTypes.filter(isAvail).length > 0 ? allRoomTypes.filter(isAvail) : allRoomTypes)
+      : allRoomTypes;
+    const noAvailRooms = canFilter && allRoomTypes.filter(isAvail).length === 0;
+    // Open the first room in the filtered list
+    const openIdx = 0;
     const roomRows = roomTypes.map((rt, ri) => roomTypeHTML(rt, ri === openIdx, h.vectorScore, h.roomPrices, _hasDateSearch)).join('');
 
     return `
@@ -1163,6 +1227,7 @@
             </div>
           </div>
         </div>
+        ${noAvailRooms ? `<div class="no-avail-notice">No rooms available for these dates — <button class="no-avail-link" onclick="setAvailFilter(false);document.getElementById('availOnlyCheck').checked=false">show all room types</button></div>` : ''}
         ${roomRows}
       </div>`;
   }
