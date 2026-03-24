@@ -58,9 +58,8 @@
     /* ── Hero ───────────────────── */
     .hero { padding: 4px 56px 36px; }
     .hero-inner {
-      display: grid; grid-template-columns: 1fr 280px;
-      gap: 36px; align-items: start; margin-bottom: 36px;
-      max-width: 860px;
+      display: grid; grid-template-columns: minmax(0, 520px) 1fr;
+      gap: 48px; align-items: start; margin-bottom: 36px;
     }
     .hero-left { display: flex; flex-direction: column; padding-top: 8px; }
     .hero-heading { font-family: 'Cormorant Garamond', serif; font-size: clamp(28px, 3.2vw, 50px); font-weight: 300; line-height: 1.12; margin-bottom: 16px; }
@@ -69,7 +68,7 @@
     .hero-photos {
       display: grid; grid-template-columns: 1fr 1fr; gap: 5px;
       border-radius: var(--radius); overflow: hidden;
-      width: 280px; flex-shrink: 0;
+      max-width: 420px; justify-self: end;
     }
     .hero-photo { width: 100%; aspect-ratio: 1; object-fit: cover; display: block; }
 
@@ -472,7 +471,7 @@
       overflow: hidden; cursor: pointer; transition: border-color 0.2s, transform 0.2s;
     }
     .example-card:hover { border-color: rgba(201,169,110,0.25); transform: translateY(-3px); }
-    .example-card-photo { width: 100%; height: 180px; object-fit: cover; display: block; }
+    .example-card-photo { width: 100%; height: 140px; object-fit: cover; display: block; }
     .example-card-body { padding: 14px 16px; }
     .example-card-title { font-family: 'Cormorant Garamond', serif; font-size: 18px; font-weight: 400; margin-bottom: 4px; color: var(--text); }
     .example-card-meta { font-size: 11px; color: var(--muted); display: flex; align-items: center; gap: 8px; margin-bottom: 8px; flex-wrap: wrap; }
