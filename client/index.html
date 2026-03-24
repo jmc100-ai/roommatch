@@ -1536,6 +1536,15 @@
     else if (e.key === 'Escape') closeLightbox();
   });
 
+  // Prevent the browser from restoring mid-page scroll on the landing page.
+  // This keeps a fresh homepage load pinned to the very top.
+  if ('scrollRestoration' in history) history.scrollRestoration = 'manual';
+  window.addEventListener('pageshow', () => {
+    if (!document.body.classList.contains('has-results') && !location.hash) {
+      window.scrollTo(0, 0);
+    }
+  });
+
 </script>
 
 <!-- Lightbox overlay -->
