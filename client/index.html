@@ -91,20 +91,38 @@
       transition: border-color 0.2s, box-shadow 0.2s;
     }
     input:focus { border-color: rgba(201,169,110,0.4); box-shadow: 0 0 0 3px rgba(201,169,110,0.07); }
-    ::placeholder { color: var(--muted); font-style: italic; }
+    ::placeholder { color: rgba(232,228,220,0.72); font-style: italic; }
     input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(0.55); cursor: pointer; }
     input[type="date"] { color-scheme: dark; }
     /* Search bar pill */
     .search-bar-wrap {
       display: flex; align-items: center; gap: 10px;
-      background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
-      padding: 6px 14px; transition: border-color 0.2s, box-shadow 0.2s;
+      background: linear-gradient(180deg, rgba(24,24,28,0.98), rgba(19,19,22,0.98));
+      border: 1px solid rgba(201,169,110,0.26); border-radius: var(--radius);
+      padding: 7px 14px; transition: border-color 0.2s, box-shadow 0.2s, transform 0.2s;
+      box-shadow:
+        0 0 0 1px rgba(201,169,110,0.05),
+        0 0 34px rgba(201,169,110,0.08),
+        0 10px 28px rgba(0,0,0,0.22),
+        inset 0 1px 0 rgba(255,255,255,0.03);
     }
-    .search-bar-wrap:focus-within { border-color: rgba(201,169,110,0.4); box-shadow: 0 0 0 3px rgba(201,169,110,0.07); }
-    .search-icon-left { color: var(--muted); font-size: 14px; flex-shrink: 0; }
+    .search-bar-wrap:focus-within {
+      border-color: rgba(201,169,110,0.55);
+      box-shadow: 0 0 0 3px rgba(201,169,110,0.1), 0 14px 34px rgba(0,0,0,0.26);
+      transform: translateY(-1px);
+    }
+    .search-prompt {
+      font-size: 11px;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--accent2);
+      font-weight: 500;
+      margin-bottom: 6px;
+    }
+    .search-icon-left { color: var(--accent2); font-size: 15px; flex-shrink: 0; opacity: 0.9; }
     .search-bar-wrap input[type="text"] {
       background: transparent; border: none; border-radius: 0; padding: 8px 0;
-      box-shadow: none !important; flex: 1; font-size: 14px;
+      box-shadow: none !important; flex: 1; font-size: 15px; color: var(--text);
     }
     .search-bar-wrap input[type="text"]:focus { border: none; box-shadow: none !important; }
     .sparkle-btn {
@@ -568,7 +586,10 @@
       flex-direction: row; align-items: center;
       gap: 8px; max-width: none; flex: 1;
     }
-    body.has-results .search-bar-wrap { flex: 2; min-width: 0; padding: 4px 12px; }
+    body.has-results .search-bar-wrap {
+      flex: 2; min-width: 0; padding: 4px 12px;
+      box-shadow: 0 8px 22px rgba(0,0,0,0.18), inset 0 1px 0 rgba(255,255,255,0.03);
+    }
     body.has-results .field-label { display: none; }
     body.has-results .search-bar-wrap input[type="text"] { padding: 6px 0; }
     body.has-results .input-row { display: contents; }
@@ -626,6 +647,7 @@
   </div>
 
   <form class="search-form" onsubmit="handleSearch(event)">
+    <div class="search-prompt">Start here</div>
     <div class="search-bar-wrap">
       <span class="search-icon-left">&#128269;</span>
       <input type="text" id="queryInput"
