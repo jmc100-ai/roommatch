@@ -59,9 +59,9 @@
     .hero { padding: 4px 56px 36px; }
     .hero-inner {
       display: grid; grid-template-columns: 3fr 2fr;
-      gap: 48px; align-items: center; margin-bottom: 36px;
+      gap: 48px; align-items: start; margin-bottom: 36px;
     }
-    .hero-left { display: flex; flex-direction: column; justify-content: center; }
+    .hero-left { display: flex; flex-direction: column; padding-top: 12px; }
     .hero-heading { font-family: 'Cormorant Garamond', serif; font-size: clamp(28px, 3.2vw, 50px); font-weight: 300; line-height: 1.12; margin-bottom: 16px; }
     .hero-heading em { font-style: italic; color: var(--accent); font-weight: 400; }
     .hero-sub { font-size: 13px; color: var(--muted); font-weight: 300; line-height: 1.75; max-width: 400px; }
@@ -69,7 +69,7 @@
       display: grid; grid-template-columns: 1fr 1fr; gap: 5px;
       border-radius: var(--radius); overflow: hidden;
     }
-    .hero-photo { width: 100%; aspect-ratio: 4/3; object-fit: cover; display: block; }
+    .hero-photo { width: 100%; height: 140px; object-fit: cover; display: block; }
 
     /* ── Form ───────────────────── */
     .search-form { display: flex; flex-direction: column; gap: 12px; max-width: 860px; }
