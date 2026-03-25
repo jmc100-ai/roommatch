@@ -198,6 +198,12 @@
     .sort-btn:disabled { opacity: 0.35; cursor: not-allowed; }
     .sort-btn.loading { opacity: 0.5; cursor: wait; }
     .result-count { font-size: 11px; color: var(--muted); letter-spacing: 0.04em; }
+    .rates-status { font-size: 11px; letter-spacing: 0.03em; display: flex; align-items: center; gap: 5px; }
+    .rates-status.loading { color: var(--muted); }
+    .rates-status.loading::before { content: ''; display: inline-block; width: 8px; height: 8px; border: 1.5px solid rgba(201,169,110,0.3); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.7s linear infinite; flex-shrink: 0; }
+    .rates-status.done { color: var(--green); opacity: 1; transition: opacity 0.5s; }
+    .rates-status.done.fade { opacity: 0; }
+    @keyframes spin { to { transform: rotate(360deg); } }
 
     /* ── Availability filter toggle ── */
     .avail-filter {
@@ -783,10 +789,11 @@
   <div class="avail-filter" id="availFilter" style="display:none" title="Only show room types with availability for your dates">
     <label class="avail-filter-label" for="availOnlyCheck">Available rooms only</label>
     <label class="toggle-switch">
-      <input type="checkbox" id="availOnlyCheck" checked onchange="setAvailFilter(this.checked)">
+      <input type="checkbox" id="availOnlyCheck" onchange="setAvailFilter(this.checked)">
       <span class="toggle-track"></span>
     </label>
   </div>
+  <span id="ratesStatus" class="rates-status"></span>
   <span id="resultCount" class="result-count"></span>
 </div>
 
@@ -1025,9 +1032,10 @@
     _displayedCount = 10;
     _pricesLoaded   = false;
     _hasDateSearch  = false;
-    _showAvailOnly  = true;
+    _showAvailOnly  = false;
     const availFilter = document.getElementById('availFilter');
     if (availFilter) availFilter.style.display = 'none';
+    _setRatesStatus('', '');
     document.body.classList.add('has-results');
     document.querySelectorAll('.sort-btn').forEach(b => {
       b.classList.toggle('active', b.dataset.sort === 'match');
@@ -1044,9 +1052,22 @@
     });
   }
 
+  function _setRatesStatus(state, text) {
+    const el = document.getElementById('ratesStatus');
+    if (!el) return;
+    el.className = `rates-status${state ? ' ' + state : ''}`;
+    el.textContent = text;
+    if (state === 'done') {
+      // Fade out after 4s so it doesn't clutter the UI permanently
+      setTimeout(() => { el.classList.add('fade'); }, 4000);
+      setTimeout(() => { el.textContent = ''; el.className = 'rates-status'; }, 4600);
+    }
+  }
+
   // Fires parallel to vsearch. reqId lets us discard stale responses if user re-searches.
   async function fetchPrices(city, checkin, checkout, reqId) {
     _setPriceBtnsState(false);  // show spinner only while fetch is in flight
+    _setRatesStatus('loading', 'Checking live rates…');
     try {
       const resp = await fetch(`${BACKEND}/api/rates?` + new URLSearchParams({ city, checkin, checkout }));
       if (reqId !== _ratesReqId) return;  // stale — a new search was started
@@ -1056,14 +1077,17 @@
       applyPrices(data.prices || {}, data.roomPrices || {}, data.currency || 'EUR', data.pricedCount || 0);
     } catch (e) {
       console.warn('[prices]', e.message);
-      if (reqId === _ratesReqId) _setPriceBtnsState(true);  // unlock on error
+      if (reqId === _ratesReqId) {
+        _setPriceBtnsState(true);
+        _setRatesStatus('', '');
+      }
     }
   }
 
   // Updates hotel prices, badges, and room rows in-place without wiping #results.
   // Used when the sort order doesn't change on price arrival (match / rating / stars).
   // For price-dependent sorts (match+price, price) a full renderSorted() is still needed.
-  function applyPricesInPlace(sym, pricedCount) {
+  function applyPricesInPlace(sym) {
     for (const h of _lastHotels) {
       // --- hotel-level price ---
       const priceEl = document.getElementById(`hotel-price-${h.id}`);
@@ -1090,6 +1114,12 @@
       // --- room rows: rebuild and inject, appending to _lbRegistry ---
       const roomsEl = document.getElementById(`hotel-rooms-${h.id}`);
       if (roomsEl) {
+        // Preserve which room index the user currently has open so the rebuild
+        // doesn't collapse whatever they were reading.
+        const currentRows = roomsEl.querySelectorAll('.room-type-row');
+        const openIdx = [...currentRows].findIndex(r => r.classList.contains('open'));
+        const preservedOpen = openIdx >= 0 ? openIdx : 0;
+
         const allRoomTypes = h.roomTypes || [];
         const isAvail = rt => rt.roomTypeId != null && h.roomPrices?.[rt.roomTypeId] != null;
         const canFilter = _showAvailOnly && _hasDateSearch && _pricesLoaded;
@@ -1101,27 +1131,11 @@
         const notice = noAvailRooms
           ? `<div class="no-avail-notice">No rooms available for these dates — <button class="no-avail-link" onclick="setAvailFilter(false);document.getElementById('availOnlyCheck').checked=false">show all room types</button></div>`
           : '';
-        const rowsHtml = visibleRooms.map((rt, ri) => roomTypeHTML(rt, ri === 0, h.vectorScore, h.roomPrices, _hasDateSearch)).join('');
+        const rowsHtml = visibleRooms.map((rt, ri) => roomTypeHTML(rt, ri === preservedOpen, h.vectorScore, h.roomPrices, _hasDateSearch)).join('');
         roomsEl.innerHTML = notice + rowsHtml;
       }
     }
 
-    // Show availability toggle
-    const availFilter = document.getElementById('availFilter');
-    if (availFilter) {
-      availFilter.style.display = 'flex';
-      document.getElementById('availOnlyCheck').checked = true;
-    }
-
-    // Update result count
-    const total = _lastHotels.length;
-    const showing = Math.min(_displayedCount, total);
-    const remaining = total - _displayedCount;
-    const pricedNote = pricedCount > 0 ? ` · ${pricedCount} priced` : '';
-    const countEl = document.getElementById('resultCount');
-    if (countEl) countEl.textContent = remaining > 0
-      ? `Showing ${showing} of ${total} hotels${pricedNote}`
-      : `${total} hotel${total !== 1 ? 's' : ''}${pricedNote}`;
   }
 
   function applyPrices(priceMap, roomPriceMap, currency, pricedCount) {
@@ -1140,20 +1154,31 @@
     console.log(`[prices] hotel prices: ${Object.keys(priceMap).length}, room prices: ${roomPricedRooms} rooms across ${Object.keys(roomPriceMap).length} hotels`);
     _pricesLoaded  = true;
     _hasDateSearch = true;
-    _showAvailOnly = true;
+    // Default availability filter to OFF so the match-sorted list stays stable.
+    // User can enable it via the toggle to filter to available rooms only.
+    _showAvailOnly = false;
     _setPriceBtnsState(true);
 
-    // Show availability toggle (hidden by default, only relevant once prices are loaded)
+    // Show availability toggle (unchecked = off by default)
     const availFilter = document.getElementById('availFilter');
     if (availFilter) {
       availFilter.style.display = 'flex';
-      document.getElementById('availOnlyCheck').checked = true;
+      document.getElementById('availOnlyCheck').checked = false;
     }
 
-    // Always re-render so sort order is correct (hotelEffectiveScore changes once
-    // _pricesLoaded becomes true). renderSortedSmooth() suppresses the card entrance
-    // animation and preserves scroll position so the update is invisible to the user.
-    renderSortedSmooth();
+    // Route by sort mode:
+    //  - match / rating / stars: order doesn't change with prices → update in-place,
+    //    no re-render, no flash, list stays stable.
+    //  - match+price / price: user expects re-ranking by price → full re-sort.
+    const priceDependentSort = _currentSort === 'match+price' || _currentSort === 'price';
+    if (priceDependentSort) {
+      renderSortedSmooth();
+    } else {
+      applyPricesInPlace(sym, pricedCount);
+    }
+
+    // Show "Live rates" confirmation then fade out
+    _setRatesStatus('done', '✓ Live rates');
 
     // Update the result count to show pricing coverage
     const total = _lastHotels.length;
