@@ -1124,9 +1124,7 @@
         const isAvail = rt => rt.roomTypeId != null && h.roomPrices?.[rt.roomTypeId] != null;
         const canFilter = _showAvailOnly && _hasDateSearch && _pricesLoaded;
         const availRoomTypes = allRoomTypes.filter(isAvail);
-        const visibleRooms = canFilter
-          ? (availRoomTypes.length > 0 ? availRoomTypes : allRoomTypes)
-          : allRoomTypes;
+        const visibleRooms = canFilter ? availRoomTypes : allRoomTypes;
         const noAvailRooms = canFilter && availRoomTypes.length === 0;
         const notice = noAvailRooms
           ? `<div class="no-avail-notice">No rooms available for these dates — <button class="no-avail-link" onclick="setAvailFilter(false);document.getElementById('availOnlyCheck').checked=false">show all room types</button></div>`
@@ -1204,14 +1202,6 @@
   function setAvailFilter(availOnly) {
     _showAvailOnly  = availOnly;
     _displayedCount = 10;
-    // Debug: log filter state + first 3 hotels so we can see if data is populated
-    const canF = availOnly && _hasDateSearch && _pricesLoaded;
-    console.log(`[filter] toggle=${availOnly} pricesLoaded=${_pricesLoaded} hasDate=${_hasDateSearch} canFilter=${canF}`);
-    const sample = _lastHotels.slice(0, 3).map(h => {
-      const avail = (h.roomTypes||[]).filter(rt => rt.roomTypeId != null && h.roomPrices?.[rt.roomTypeId] != null);
-      return { name: h.name, roomPrices: h.roomPrices, rooms: (h.roomTypes||[]).map(rt=>({n:rt.name, id:rt.roomTypeId})), availCount: avail.length };
-    });
-    console.log('[filter] hotels sample:', JSON.stringify(sample, null, 2));
     renderSorted();
   }
 
@@ -1321,19 +1311,14 @@
     // Wrap in a stable container so applyPricesInPlace can update it without a full re-render
     const matchBadge = `<span id="hotel-badge-wrap-${h.id}">${matchBadgeInner}</span>`;
     // Rooms always sorted by match score (server order).
-    // When "available only" toggle is on, filter to rooms with pricing data.
-    // If no rooms survive the filter (e.g. hotel has no available rooms), fall back to
-    // showing all rooms so the hotel card is never empty.
+    // When "available only" toggle is on, show only rooms confirmed available by LiteAPI.
+    // Hotels with no available rooms (or no rates data) show a notice with no room rows.
     const allRoomTypes = h.roomTypes || [];
     const isAvail = rt => rt.roomTypeId != null && h.roomPrices?.[rt.roomTypeId] != null;
-    // canFilter is true once prices have loaded — hotels absent from the LiteAPI
-    // rates response (h.roomPrices === undefined) are correctly treated as
-    // having no available rooms, rather than appearing bookable by accident.
     const canFilter = _showAvailOnly && _hasDateSearch && _pricesLoaded;
     const availRoomTypes = allRoomTypes.filter(isAvail);
-    const roomTypes = canFilter
-      ? (availRoomTypes.length > 0 ? availRoomTypes : allRoomTypes)
-      : allRoomTypes;
+    // When filtering: show only available rooms (empty list → notice, no fallback)
+    const roomTypes = canFilter ? availRoomTypes : allRoomTypes;
     const noAvailRooms = canFilter && availRoomTypes.length === 0;
     // Open the first room in the filtered list
     const openIdx = 0;
