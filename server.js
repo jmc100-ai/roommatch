@@ -1061,12 +1061,29 @@ app.get("/api/vsearch", async (req, res) => {
     const testConfirm = (feat, caption) =>
       typeof feat.confirm === 'function' ? feat.confirm(caption) : feat.confirm.test(caption);
 
+    // Helper: confirmSet checks confirmation across a full array of captions.
+    // Falls back to single-caption confirm if no confirmSet defined.
+    const testConfirmSet = (feat, captions) => {
+      if (feat.confirmSet) return feat.confirmSet(captions);
+      return captions.some(c => testConfirm(feat, c));
+    };
+
     const STRUCTURAL_FEATURES = [
       {
         label: "double sinks",
         queryMatch: /\bdouble sinks?\b|\btwo sinks?\b|\bdual sinks?\b|\btwin sinks?\b/i,
-        // Matches: "two sinks", "double sinks", "2 sinks", "sinks: 2", "sinks count: 2"
         confirm: /\b(two|double|dual|twin|2)\s*sinks?\b|\bsinks?\s*(?:count)?[:\s]+([2-9]|two|double|twin|dual)/i,
+        // Multi-photo confirmation: a single bathroom photo saying "two sinks" is accepted
+        // (benefit of the doubt — can't cross-check). But if 2+ bathroom photos exist and
+        // only 1 confirms, it's likely a hallucination → treat as unconfirmed.
+        confirmSet: (captions) => {
+          const bathroomRe = /PHOTO TYPE: bathroom/i;
+          const confirmRe  = /\b(two|double|dual|twin|2)\s*sinks?\b|\bsinks?\s*(?:count)?[:\s]+([2-9]|two|double|twin|dual)/i;
+          const bathroomCaptions = captions.filter(c => bathroomRe.test(c));
+          const confirmCount     = bathroomCaptions.filter(c => confirmRe.test(c)).length;
+          if (bathroomCaptions.length <= 1) return confirmCount >= 1;
+          return confirmCount >= 2;
+        },
       },
       {
         label: "soaking tub",
@@ -1158,7 +1175,7 @@ app.get("/api/vsearch", async (req, res) => {
 
       // Then apply penalty on the rescaled score so penalised hotels remain visible
       for (const feat of detectedFeatures) {
-        const confirmed = hs.captions.some(c => testConfirm(feat, c));
+        const confirmed = testConfirmSet(feat, hs.captions);
         if (!confirmed) {
           score *= FEATURE_PENALTY;
           console.log(`[vsearch] penalty: ${hotelId} missing "${feat.label}" → score now ${score.toFixed(1)}`);
@@ -1196,7 +1213,7 @@ app.get("/api/vsearch", async (req, res) => {
       if (detectedFeatures.length > 0) {
         roomEntries.sort((a, b) => {
           const countConfirmed = (entry) =>
-            detectedFeatures.filter(f => entry.photos.some(p => p.caption && testConfirm(f, p.caption))).length;
+            detectedFeatures.filter(f => testConfirmSet(f, entry.photos.map(p => p.caption).filter(Boolean))).length;
           const aDiff = countConfirmed(a[1]);
           const bDiff = countConfirmed(b[1]);
           if (bDiff !== aDiff) return bDiff - aDiff;
@@ -1223,7 +1240,7 @@ app.get("/api/vsearch", async (req, res) => {
           : 0;
         let roomScore = Math.max(0, Math.min(100, (rawRoom - SIM_MIN) / (SIM_MAX - SIM_MIN) * 100));
         for (const feat of detectedFeatures) {
-          const confirmed = photoEntries.some(p => p.caption && testConfirm(feat, p.caption));
+          const confirmed = testConfirmSet(feat, photoEntries.map(p => p.caption).filter(Boolean));
           if (!confirmed) roomScore *= FEATURE_PENALTY;
         }
         return {
