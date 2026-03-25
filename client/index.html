@@ -1204,6 +1204,14 @@
   function setAvailFilter(availOnly) {
     _showAvailOnly  = availOnly;
     _displayedCount = 10;
+    // Debug: log filter state + first 3 hotels so we can see if data is populated
+    const canF = availOnly && _hasDateSearch && _pricesLoaded;
+    console.log(`[filter] toggle=${availOnly} pricesLoaded=${_pricesLoaded} hasDate=${_hasDateSearch} canFilter=${canF}`);
+    const sample = _lastHotels.slice(0, 3).map(h => {
+      const avail = (h.roomTypes||[]).filter(rt => rt.roomTypeId != null && h.roomPrices?.[rt.roomTypeId] != null);
+      return { name: h.name, roomPrices: h.roomPrices, rooms: (h.roomTypes||[]).map(rt=>({n:rt.name, id:rt.roomTypeId})), availCount: avail.length };
+    });
+    console.log('[filter] hotels sample:', JSON.stringify(sample, null, 2));
     renderSorted();
   }
 
