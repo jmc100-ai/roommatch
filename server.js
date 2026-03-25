@@ -1126,25 +1126,32 @@ app.get("/api/vsearch", async (req, res) => {
     console.log(`[vsearch] scored photos: ${scoredPhotos.length}, cached hotels: ${cached?.length ?? 0}`);
 
     // The scoring RPC returns top 5000 photos (enough to rank all hotels).
-    // Fetch ALL photos for matched hotels so galleries are fully populated.
+    // Fetch full gallery photos for the top 150 hotels by score — beyond that,
+    // hotels won't be visible until the user scrolls far down so the RPC photos suffice.
+    const GALLERY_HOTEL_LIMIT = 150;
     const scoredHotelIds = [...new Set(scoredPhotos.map(p => p.hotel_id))];
+    const galleryHotelIds = scoredHotelIds.slice(0, GALLERY_HOTEL_LIMIT);
     let allPhotos = scoredPhotos;
-    if (scoredHotelIds.length > 0) {
+    if (galleryHotelIds.length > 0) {
       const galleryRes = await fetchClient
         .from("room_embeddings")
         .select("hotel_id, hotel_name, room_name, room_type_id, photo_url, photo_type, caption, star_rating, guest_rating")
         .eq("city", city)
-        .in("hotel_id", scoredHotelIds);
+        .in("hotel_id", galleryHotelIds);
       if (galleryRes.error) {
         console.warn("[vsearch] gallery fetch error:", galleryRes.error.message);
       } else {
-        // Merge: keep similarity scores from scoredPhotos, add any missing gallery photos with similarity=0
+        // Merge: keep similarity scores from scoredPhotos, add remaining gallery photos with similarity=0
         const simMap = new Map(scoredPhotos.map(p => [`${p.hotel_id}||${p.photo_url}`, p.similarity]));
-        allPhotos = (galleryRes.data || []).map(p => ({
+        const galleryPhotos = (galleryRes.data || []).map(p => ({
           ...p,
           similarity: simMap.get(`${p.hotel_id}||${p.photo_url}`) ?? 0,
         }));
-        console.log(`[vsearch] gallery photos: ${allPhotos.length} across ${scoredHotelIds.length} hotels`);
+        // Keep scored photos for hotels beyond top 150, use full gallery for top 150
+        const gallerySet = new Set(galleryHotelIds);
+        const remainingPhotos = scoredPhotos.filter(p => !gallerySet.has(p.hotel_id));
+        allPhotos = [...galleryPhotos, ...remainingPhotos];
+        console.log(`[vsearch] gallery: ${galleryPhotos.length} photos for top ${galleryHotelIds.length} hotels, ${remainingPhotos.length} scored-only for the rest`);
       }
     }
 
