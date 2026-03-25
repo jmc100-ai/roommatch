@@ -14,7 +14,7 @@ const LITEAPI_KEY  = process.env.LITEAPI_PROD_KEY || process.env.LITEAPI_KEY || 
 const GEMINI_KEY   = process.env.GEMINI_KEY  || "";
 const SUPABASE_URL = process.env.SUPABASE_URL || "";
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY || "";
-const MAX_PHOTOS         = 10; // per room type
+const MAX_PHOTOS         = 15; // per room type (5 bathroom + 10 other)
 const BATCH_SIZE         = 20; // concurrent hotel detail fetches
 const PHOTO_CONCURRENCY  = 5;  // concurrent Gemini calls per hotel
 const DB_CONCURRENCY     = 3;  // max concurrent DB upserts — keeps connection pool safe
@@ -377,14 +377,14 @@ async function indexCity(city, limit = 200) {
         }
       }
 
-      // Select up to MAX_PHOTOS per room type (bathrooms first), hard cap 20 per hotel
+      // Select up to MAX_PHOTOS per room type, hard cap 90 per hotel
       if (!roomMap.size) { console.log(`  [hotel] ${hotelName.slice(0,30)}: no rooms found`); hotelsDone++; return; }
       const toProcess = [];
       for (const [rName, buckets] of roomMap) {
-        if (toProcess.length >= 60) break;   // hard cap: max 60 photos per hotel
+        if (toProcess.length >= 90) break;   // hard cap: max 90 photos per hotel
         const selected = [
           ...buckets.bathroom.slice(0, 5),   // up to 5 bathroom photos
-          ...buckets.other.slice(0, 5),      // up to 5 other photos
+          ...buckets.other.slice(0, 10),     // up to 10 other photos
         ].slice(0, MAX_PHOTOS);
         for (const p of selected) {
           if (toProcess.length >= 60) break;
