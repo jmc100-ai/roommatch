@@ -469,12 +469,13 @@ ${caption}`;
       hotelsDone++;
       console.log(`[indexer] [${hotelsDone}/${hotels.length}] ${hotelName.slice(0,35)} — ${embedded} embeddings`);
 
-      // Update hotels_index with averaged embedding for this hotel (best-effort, non-blocking)
+      // Keep both index tables current (best-effort, non-blocking)
       if (embedded > 0) {
         db.rpc("refresh_hotel_index_entry", { p_hotel_id: hotelId, p_city: city, p_country_code: cc || null })
-          .then(({ error: rpcErr }) => {
-            if (rpcErr) console.warn(`  [hotels_index] ${hotelId}: ${rpcErr.message}`);
-          })
+          .then(({ error: e }) => { if (e) console.warn(`  [hotels_index] ${hotelId}: ${e.message}`); })
+          .catch(() => {});
+        db.rpc("refresh_room_types_index_entry", { p_hotel_id: hotelId, p_city: city, p_country_code: cc || null })
+          .then(({ error: e }) => { if (e) console.warn(`  [room_types_index] ${hotelId}: ${e.message}`); })
           .catch(() => {});
       }
     }));

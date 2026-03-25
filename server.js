@@ -1115,10 +1115,15 @@ app.get("/api/vsearch", async (req, res) => {
 
     const fetchClient = supabaseAdmin || supabase;
 
-    // 3. Two-phase scoring:
-    //    Phase A: score_hotels scans hotels_index (~999 rows) — no timeout possible.
-    //    Phase B: score_hotel_photos scores the individual photos for the top 150 hotels
-    //             (~4 200 rows) so rooms can be ranked and galleries are complete.
+    // 3. Three-phase scoring:
+    //    Phase A1: score_hotels  — hotels_index (~999 rows), coarse ranking, ~10ms.
+    //    Phase A2: score_room_types — room_types_index for top 300 hotels (~2200 rows),
+    //              hotel score = MAX room-type similarity → precise re-ranking, ~15ms.
+    //    Phase B:  score_hotel_photos — full photo scores for top 150 hotels (~4200 rows),
+    //              used for room-level badges and gallery ordering, ~100ms.
+    const COARSE_LIMIT  = 300;   // hotels considered for room-type re-ranking
+    const GALLERY_LIMIT = 150;   // hotels that get full photo galleries
+
     const [hotelsResult, cachedResult] = await Promise.all([
       fetchClient.rpc("score_hotels", { query_embedding: queryEmbedding, search_city: city }),
       fetchClient.from("hotels_cache").select("*").eq("city", city),
@@ -1126,20 +1131,45 @@ app.get("/api/vsearch", async (req, res) => {
     if (hotelsResult.error) throw new Error("score_hotels: " + hotelsResult.error.message);
     if (cachedResult.error) console.error("[vsearch] hotels_cache error:", cachedResult.error.message);
 
-    const rankedHotels = hotelsResult.data || [];
+    const coarseRanked = hotelsResult.data || [];
     const cached       = cachedResult.data;
-    console.log(`[vsearch] ranked hotels: ${rankedHotels.length}, cached: ${cached?.length ?? 0}`);
+    console.log(`[vsearch] coarse ranked: ${coarseRanked.length} hotels, cached: ${cached?.length ?? 0}`);
 
-    if (!rankedHotels.length) {
+    if (!coarseRanked.length) {
       return res.json({ hotels: [], query, city, indexing, indexStatus: status });
     }
 
-    // Phase B: per-photo scores for top 150 hotels (the ones rendered on screen)
-    const GALLERY_LIMIT  = 150;
-    const topHotelIds    = rankedHotels.slice(0, GALLERY_LIMIT).map(h => h.hotel_id);
-    const photosResult   = await fetchClient.rpc("score_hotel_photos", {
+    // Phase A2: room-type scoring for top COARSE_LIMIT hotels only
+    const coarseTopIds    = coarseRanked.slice(0, COARSE_LIMIT).map(h => h.hotel_id);
+    const roomTypesResult = await fetchClient.rpc("score_room_types", {
       query_embedding: queryEmbedding,
-      hotel_ids: topHotelIds,
+      search_city:     city,
+      hotel_ids:       coarseTopIds,
+    });
+    if (roomTypesResult.error) throw new Error("score_room_types: " + roomTypesResult.error.message);
+
+    // Hotel score = MAX room-type similarity (best room wins, not diluted average)
+    const hotelSimMap = new Map();
+    for (const rt of (roomTypesResult.data || [])) {
+      const prev = hotelSimMap.get(rt.hotel_id) ?? 0;
+      if (rt.similarity > prev) hotelSimMap.set(rt.hotel_id, rt.similarity);
+    }
+    // Fallback: hotels outside top COARSE_LIMIT keep their hotel-level similarity
+    for (const h of coarseRanked) {
+      if (!hotelSimMap.has(h.hotel_id)) hotelSimMap.set(h.hotel_id, h.similarity);
+    }
+
+    const rankedHotels = [...hotelSimMap.entries()]
+      .map(([hotel_id, similarity]) => ({ hotel_id, similarity }))
+      .sort((a, b) => b.similarity - a.similarity);
+
+    console.log(`[vsearch] re-ranked: ${rankedHotels.length} hotels after room-type scoring`);
+
+    // Phase B: per-photo scores for top GALLERY_LIMIT hotels
+    const topHotelIds  = rankedHotels.slice(0, GALLERY_LIMIT).map(h => h.hotel_id);
+    const photosResult = await fetchClient.rpc("score_hotel_photos", {
+      query_embedding: queryEmbedding,
+      hotel_ids:       topHotelIds,
     });
     if (photosResult.error) throw new Error("score_hotel_photos: " + photosResult.error.message);
 
