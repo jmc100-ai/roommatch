@@ -139,7 +139,7 @@ IMPORTANT: For search-critical fields — SINKS count, BATHTUB type, BALCONY, FI
 PHOTO TYPE: (bedroom / bathroom / living area / view / other)
 
 BATHROOM:
-SINKS: (no sink visible / one sink / two sinks / three or more sinks) — only use "two sinks" or higher if you can clearly count distinct, separate sink basins; if the framing or angle makes the count uncertain, use "unknown". IMPORTANT: if the room size metadata shows the room is 20sqm or smaller, double sinks are physically implausible — use "one sink" unless two completely separate basins are unmistakably visible.
+SINKS: (no sink visible / one sink / two sinks / three or more sinks) — only use "two sinks" or higher if you can clearly count distinct, separate sink basins; if the framing or angle makes the count uncertain, use "unknown"
 COUNTER SPACE: (no counter / small counter / large counter / very large counter)
 BATHTUB: (no bathtub / soaking tub / freestanding tub / clawfoot tub / built-in tub / hot tub / jacuzzi) — only use a specific type if the bathtub shape is clearly visible
 SHOWER: (no shower / walk-in shower / rainfall shower / steam shower / shower over bath)

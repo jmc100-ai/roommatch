@@ -1065,15 +1065,8 @@ app.get("/api/vsearch", async (req, res) => {
       {
         label: "double sinks",
         queryMatch: /\bdouble sinks?\b|\btwo sinks?\b|\bdual sinks?\b|\btwin sinks?\b/i,
-        // Function confirm: requires text match AND room size >= 20sqm (double sinks are
-        // physically implausible in rooms < 20sqm — likely a Gemini caption hallucination).
-        confirm: (caption) => {
-          const textMatch = /\b(two|double|dual|twin|2)\s*sinks?\b|\bsinks?\s*(?:count)?[:\s]+([2-9]|two|double|twin|dual)/i.test(caption);
-          if (!textMatch) return false;
-          const sizeMatch = caption.match(/Size:\s*(\d+(?:\.\d+)?)\s*(?:sqm|m2)/i);
-          if (sizeMatch && parseFloat(sizeMatch[1]) < 20) return false;
-          return true;
-        },
+        // Matches: "two sinks", "double sinks", "2 sinks", "sinks: 2", "sinks count: 2"
+        confirm: /\b(two|double|dual|twin|2)\s*sinks?\b|\bsinks?\s*(?:count)?[:\s]+([2-9]|two|double|twin|dual)/i,
       },
       {
         label: "soaking tub",
