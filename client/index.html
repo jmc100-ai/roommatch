@@ -1223,8 +1223,13 @@
         const isAvail = rt => rt.roomTypeId != null && h.roomPrices?.[rt.roomTypeId] != null;
         const canFilter = _showAvailOnly && _hasDateSearch && _pricesLoaded;
         const availRoomTypes = allRoomTypes.filter(isAvail);
-        const visibleRooms = canFilter ? availRoomTypes : allRoomTypes;
-        const noAvailRooms = canFilter && availRoomTypes.length === 0;
+        const hasHotelAvail = h.price != null;
+        // If specific room-type IDs match rates → show only those.
+        // If hotel is priced but no room-type match → show all rooms (hotel is available, room-level unknown).
+        const visibleRooms = canFilter
+          ? (availRoomTypes.length > 0 ? availRoomTypes : (hasHotelAvail ? allRoomTypes : []))
+          : allRoomTypes;
+        const noAvailRooms = canFilter && visibleRooms.length === 0;
         const notice = noAvailRooms
           ? `<div class="no-avail-notice">No rooms available for these dates — <button class="no-avail-link" onclick="setAvailFilter(false);document.getElementById('availOnlyCheck').checked=false">show all room types</button></div>`
           : '';
@@ -1316,7 +1321,11 @@
     if (canFilter) {
       const availRooms = allRooms.filter(rt => rt.roomTypeId != null && h.roomPrices?.[rt.roomTypeId] != null);
       if (availRooms.length > 0) return Math.max(0, ...availRooms.map(rt => rt.score || 0));
-      return 0; // no available rooms → scores 0, sinks to bottom
+      // Fall back to hotel-level availability: LiteAPI returned a price → hotel is bookable.
+      // Covers stubs (beyond GALLERY_LIMIT, roomTypes=[]) and hotels where mappedRoomId
+      // doesn't match our indexed room_type_id. Use vector score so they rank with peers.
+      if (h.price != null) return h.score || 0;
+      return 0;
     }
     return Math.max(0, ...allRooms.map(rt => rt.score || 0));
   }
@@ -1416,9 +1425,13 @@
     const isAvail = rt => rt.roomTypeId != null && h.roomPrices?.[rt.roomTypeId] != null;
     const canFilter = _showAvailOnly && _hasDateSearch && _pricesLoaded;
     const availRoomTypes = allRoomTypes.filter(isAvail);
-    // When filtering: show only available rooms (empty list → notice, no fallback)
-    const roomTypes = canFilter ? availRoomTypes : allRoomTypes;
-    const noAvailRooms = canFilter && availRoomTypes.length === 0;
+    const hasHotelAvail = h.price != null;
+    // If specific room-type IDs match rates → show only those.
+    // If hotel is priced but no room-type match → show all rooms (hotel available, room-level unknown).
+    const roomTypes = canFilter
+      ? (availRoomTypes.length > 0 ? availRoomTypes : (hasHotelAvail ? allRoomTypes : []))
+      : allRoomTypes;
+    const noAvailRooms = canFilter && roomTypes.length === 0;
     // Open the first room in the filtered list
     const openIdx = 0;
     const roomRows = roomTypes.map((rt, ri) => roomTypeHTML(rt, ri === openIdx, h.vectorScore, h.roomPrices, _hasDateSearch)).join('');
