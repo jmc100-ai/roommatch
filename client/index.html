@@ -889,15 +889,35 @@
     document.getElementById('cityDropdown').classList.remove('visible');
   }
 
-  // Pre-fill dates: tomorrow + tomorrow+2
+  // Pre-fill dates: tomorrow + tomorrow+2. Clamp checkout to max 30 nights from checkin.
   (function initDates() {
+    const fmt = d => d.toISOString().slice(0, 10);
     const tomorrow = new Date();
     tomorrow.setDate(tomorrow.getDate() + 1);
     const checkout = new Date(tomorrow);
     checkout.setDate(checkout.getDate() + 2);
-    const fmt = d => d.toISOString().slice(0, 10);
     document.getElementById('checkinInput').value  = fmt(tomorrow);
     document.getElementById('checkoutInput').value = fmt(checkout);
+
+    const checkinEl  = document.getElementById('checkinInput');
+    const checkoutEl = document.getElementById('checkoutInput');
+    const MAX_NIGHTS = 30;
+
+    function clampCheckout() {
+      if (!checkinEl.value || !checkoutEl.value) return;
+      const ci = new Date(checkinEl.value);
+      const co = new Date(checkoutEl.value);
+      const nights = Math.round((co - ci) / 86400000);
+      if (nights < 1) {
+        const next = new Date(ci); next.setDate(next.getDate() + 1);
+        checkoutEl.value = fmt(next);
+      } else if (nights > MAX_NIGHTS) {
+        const capped = new Date(ci); capped.setDate(capped.getDate() + MAX_NIGHTS);
+        checkoutEl.value = fmt(capped);
+      }
+    }
+    checkinEl.addEventListener('change', clampCheckout);
+    checkoutEl.addEventListener('change', clampCheckout);
   })();
 
   function setMode(mode) {

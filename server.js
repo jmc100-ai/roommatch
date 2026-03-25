@@ -1399,13 +1399,21 @@ app.post("/api/index-cancel", async (req, res) => {
 // Fires a single batched POST to LiteAPI /hotels/rates with all hotel IDs.
 // Returns { prices: { hotel_id: $/night }, currency, nights, pricedCount }
 app.get("/api/rates", async (req, res) => {
-  const { city, checkin, checkout } = req.query;
+  const { city, checkin } = req.query;
+  let { checkout } = req.query;
   if (!city || !checkin || !checkout) {
     return res.status(400).json({ error: "city, checkin and checkout required" });
   }
-  const nights = Math.round((new Date(checkout) - new Date(checkin)) / 86400000);
-  if (nights < 1 || nights > 30) {
-    return res.status(400).json({ error: "Invalid date range" });
+  let nights = Math.round((new Date(checkout) - new Date(checkin)) / 86400000);
+  if (nights < 1) {
+    return res.status(400).json({ error: "checkout must be after checkin" });
+  }
+  // Cap at 30 nights — LiteAPI doesn't support longer stays. Clamp instead of erroring.
+  if (nights > 30) {
+    const cappedCheckout = new Date(checkin);
+    cappedCheckout.setDate(cappedCheckout.getDate() + 30);
+    checkout = cappedCheckout.toISOString().slice(0, 10);
+    nights   = 30;
   }
 
   try {
