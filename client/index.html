@@ -96,6 +96,7 @@
     input[type="date"] { color-scheme: dark; }
     /* Search bar pill */
     .search-bar-wrap {
+      position: relative;
       display: flex; align-items: center; gap: 10px;
       background: linear-gradient(180deg, rgba(24,24,28,0.98), rgba(19,19,22,0.98));
       border: 1px solid rgba(201,169,110,0.42); border-radius: var(--radius);
@@ -140,6 +141,7 @@
 
     /* ── City autocomplete ───────────────────────────────────────────────── */
     .city-wrap { position: relative; }
+    .recent-dropdown,
     .city-dropdown {
       position: absolute; top: calc(100% + 4px); left: 0; right: 0; z-index: 100;
       background: #1e1e24; border: 1px solid rgba(201,169,110,0.25);
@@ -147,17 +149,24 @@
       box-shadow: 0 8px 32px rgba(0,0,0,0.5);
       display: none;
     }
+    .recent-dropdown.visible,
     .city-dropdown.visible { display: block; }
+    .recent-option,
     .city-option {
       padding: 10px 16px; font-size: 13px; color: var(--text); cursor: pointer;
       display: flex; align-items: center; gap: 10px;
       transition: background 0.1s;
       border-bottom: 1px solid var(--border);
     }
+    .recent-option:last-child,
     .city-option:last-child { border-bottom: none; }
+    .recent-option:hover,
     .city-option:hover, .city-option.active { background: rgba(201,169,110,0.08); color: var(--accent); }
+    .recent-option-icon,
     .city-option-icon { font-size: 14px; flex-shrink: 0; opacity: 0.6; }
+    .recent-option-sub,
     .city-option-sub { font-size: 11px; color: var(--muted); margin-left: auto; }
+    .recent-empty,
     .city-loading { padding: 12px 16px; font-size: 12px; color: var(--muted); font-style: italic; }
 
     /* ── Status ─────────────────── */
@@ -653,6 +662,7 @@
       <input type="text" id="queryInput"
         placeholder="Modern suite with balcony, soaking tub, and city view..." />
       <button type="button" class="sparkle-btn" onclick="randomSuggestion()" title="Surprise me">&#10022;</button>
+      <div class="recent-dropdown" id="queryHistoryDropdown"></div>
     </div>
 
     <div class="chips">
@@ -668,6 +678,7 @@
         <div class="city-wrap">
           <input type="text" id="cityInput" placeholder="City"
                  autocomplete="off" oninput="onCityInput(this.value)" onblur="hideCitySuggestions()" />
+          <div class="recent-dropdown" id="cityHistoryDropdown"></div>
           <div class="city-dropdown" id="cityDropdown"></div>
         </div>
       </div>
@@ -819,6 +830,64 @@
   let _hasDateSearch  = false;  // true after prices fetched with specific dates
   let _showAvailOnly  = true;   // toggle: only show available rooms (default on when dates entered)
   let _priceCurrency  = 'EUR';  // currency returned by rates API
+  const QUERY_HISTORY_KEY = 'roomsearch.recentQueries';
+  const CITY_HISTORY_KEY  = 'roomsearch.recentCities';
+  const HISTORY_LIMIT     = 6;
+
+  function readHistory(key) {
+    try {
+      const raw = JSON.parse(localStorage.getItem(key) || '[]');
+      return Array.isArray(raw) ? raw.filter(v => typeof v === 'string' && v.trim()) : [];
+    } catch {
+      return [];
+    }
+  }
+
+  function writeHistory(key, value) {
+    const next = [value.trim(), ...readHistory(key).filter(v => v.toLowerCase() !== value.trim().toLowerCase())]
+      .slice(0, HISTORY_LIMIT);
+    localStorage.setItem(key, JSON.stringify(next));
+  }
+
+  function hideRecentDropdown(id) {
+    const dd = document.getElementById(id);
+    if (!dd) return;
+    dd.classList.remove('visible');
+    dd.innerHTML = '';
+  }
+
+  function showRecentDropdown({ inputId, dropdownId, storageKey, selectFn, emptyText, icon, label }) {
+    const input = document.getElementById(inputId);
+    const dd = document.getElementById(dropdownId);
+    if (!input || !dd) return;
+    const term = input.value.trim().toLowerCase();
+    const items = readHistory(storageKey).filter(v => !term || v.toLowerCase().includes(term));
+    if (!items.length) {
+      dd.innerHTML = `<div class="recent-empty">${emptyText}</div>`;
+      dd.classList.remove('visible');
+      return;
+    }
+    dd.innerHTML = items.map(value => {
+      const safe = value.replace(/'/g, "\\'");
+      return `<div class="recent-option" onmousedown="${selectFn}('${safe}')">
+        <span class="recent-option-icon">${icon}</span>
+        <span>${value}</span>
+        <span class="recent-option-sub">${label}</span>
+      </div>`;
+    }).join('');
+    dd.classList.add('visible');
+  }
+
+  function selectRecentQuery(value) {
+    document.getElementById('queryInput').value = value;
+    hideRecentDropdown('queryHistoryDropdown');
+  }
+
+  function selectRecentCity(value) {
+    document.getElementById('cityInput').value = value;
+    hideRecentDropdown('cityHistoryDropdown');
+    document.getElementById('cityDropdown').classList.remove('visible');
+  }
 
   // Pre-fill dates: tomorrow + tomorrow+2
   (function initDates() {
@@ -885,6 +954,10 @@
     const city  = document.getElementById('cityInput').value.trim();
     if (!query) { alert("Please describe the room you're looking for."); return; }
     if (!city)  { alert('Please enter a city.'); return; }
+    writeHistory(QUERY_HISTORY_KEY, query);
+    writeHistory(CITY_HISTORY_KEY, city);
+    hideRecentDropdown('queryHistoryDropdown');
+    hideRecentDropdown('cityHistoryDropdown');
     if (clipES) { clipES.close(); clipES = null; }
     const btn = document.getElementById('searchBtn');
     btn.disabled = true; btn.textContent = 'Searching…';
@@ -1448,7 +1521,22 @@
   async function onCityInput(val) {
     clearTimeout(cityTimer);
     const dd = document.getElementById('cityDropdown');
-    if (val.length < 2) { dd.classList.remove('visible'); dd.innerHTML = ''; return; }
+    if (val.length < 2) {
+      dd.classList.remove('visible');
+      dd.innerHTML = '';
+      showRecentDropdown({
+        inputId: 'cityInput',
+        dropdownId: 'cityHistoryDropdown',
+        storageKey: CITY_HISTORY_KEY,
+        selectFn: 'selectRecentCity',
+        emptyText: 'Recent cities will appear here',
+        icon: '🕘',
+        label: 'Recent'
+      });
+      return;
+    }
+
+    hideRecentDropdown('cityHistoryDropdown');
 
     dd.innerHTML = '<div class="city-loading">Searching…</div>';
     dd.classList.add('visible');
@@ -1485,16 +1573,60 @@
   function selectCity(name) {
     document.getElementById('cityInput').value = name;
     document.getElementById('cityDropdown').classList.remove('visible');
+    hideRecentDropdown('cityHistoryDropdown');
   }
 
   function hideCitySuggestions() {
     setTimeout(() => {
       document.getElementById('cityDropdown').classList.remove('visible');
+      hideRecentDropdown('cityHistoryDropdown');
     }, 150);
   }
 
   // Keyboard nav on city input
   document.addEventListener('DOMContentLoaded', () => {
+    const queryInput = document.getElementById('queryInput');
+    const cityInput  = document.getElementById('cityInput');
+
+    queryInput.addEventListener('focus', () => {
+      showRecentDropdown({
+        inputId: 'queryInput',
+        dropdownId: 'queryHistoryDropdown',
+        storageKey: QUERY_HISTORY_KEY,
+        selectFn: 'selectRecentQuery',
+        emptyText: 'Recent searches will appear here',
+        icon: '🕘',
+        label: 'Recent'
+      });
+    });
+    queryInput.addEventListener('input', () => {
+      showRecentDropdown({
+        inputId: 'queryInput',
+        dropdownId: 'queryHistoryDropdown',
+        storageKey: QUERY_HISTORY_KEY,
+        selectFn: 'selectRecentQuery',
+        emptyText: 'Recent searches will appear here',
+        icon: '🕘',
+        label: 'Recent'
+      });
+    });
+    queryInput.addEventListener('blur', () => {
+      setTimeout(() => hideRecentDropdown('queryHistoryDropdown'), 150);
+    });
+
+    cityInput.addEventListener('focus', () => {
+      if (cityInput.value.trim().length < 2) {
+        showRecentDropdown({
+          inputId: 'cityInput',
+          dropdownId: 'cityHistoryDropdown',
+          storageKey: CITY_HISTORY_KEY,
+          selectFn: 'selectRecentCity',
+          emptyText: 'Recent cities will appear here',
+          icon: '🕘',
+          label: 'Recent'
+        });
+      }
+    });
     document.getElementById('cityInput').addEventListener('keydown', e => {
       const dd = document.getElementById('cityDropdown');
       const opts = dd.querySelectorAll('.city-option');
