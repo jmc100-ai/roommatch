@@ -1057,12 +1057,23 @@ app.get("/api/vsearch", async (req, res) => {
     // Structural features: if the query specifically requests a feature, hotels whose
     // captions never confirm that feature get penalised (topScore × 0.45).
     // This prevents a hotel excellent at ONE query term from outranking one that has both.
+    // Helper: confirm can be a RegExp or a function(caption) => bool
+    const testConfirm = (feat, caption) =>
+      typeof feat.confirm === 'function' ? feat.confirm(caption) : feat.confirm.test(caption);
+
     const STRUCTURAL_FEATURES = [
       {
         label: "double sinks",
         queryMatch: /\bdouble sinks?\b|\btwo sinks?\b|\bdual sinks?\b|\btwin sinks?\b/i,
-        // Matches: "two sinks", "double sinks", "2 sinks", "sinks: 2", "sinks count: 2"
-        confirm: /\b(two|double|dual|twin|2)\s*sinks?\b|\bsinks?\s*(?:count)?[:\s]+([2-9]|two|double|twin|dual)/i,
+        // Function confirm: requires text match AND room size >= 20sqm (double sinks are
+        // physically implausible in rooms < 20sqm — likely a Gemini caption hallucination).
+        confirm: (caption) => {
+          const textMatch = /\b(two|double|dual|twin|2)\s*sinks?\b|\bsinks?\s*(?:count)?[:\s]+([2-9]|two|double|twin|dual)/i.test(caption);
+          if (!textMatch) return false;
+          const sizeMatch = caption.match(/Size:\s*(\d+(?:\.\d+)?)\s*(?:sqm|m2)/i);
+          if (sizeMatch && parseFloat(sizeMatch[1]) < 20) return false;
+          return true;
+        },
       },
       {
         label: "soaking tub",
@@ -1154,7 +1165,7 @@ app.get("/api/vsearch", async (req, res) => {
 
       // Then apply penalty on the rescaled score so penalised hotels remain visible
       for (const feat of detectedFeatures) {
-        const confirmed = hs.captions.some(c => feat.confirm.test(c));
+        const confirmed = hs.captions.some(c => testConfirm(feat, c));
         if (!confirmed) {
           score *= FEATURE_PENALTY;
           console.log(`[vsearch] penalty: ${hotelId} missing "${feat.label}" → score now ${score.toFixed(1)}`);
@@ -1192,7 +1203,7 @@ app.get("/api/vsearch", async (req, res) => {
       if (detectedFeatures.length > 0) {
         roomEntries.sort((a, b) => {
           const countConfirmed = (entry) =>
-            detectedFeatures.filter(f => entry.photos.some(p => p.caption && f.confirm.test(p.caption))).length;
+            detectedFeatures.filter(f => entry.photos.some(p => p.caption && testConfirm(f, p.caption))).length;
           const aDiff = countConfirmed(a[1]);
           const bDiff = countConfirmed(b[1]);
           if (bDiff !== aDiff) return bDiff - aDiff;
@@ -1219,7 +1230,7 @@ app.get("/api/vsearch", async (req, res) => {
           : 0;
         let roomScore = Math.max(0, Math.min(100, (rawRoom - SIM_MIN) / (SIM_MAX - SIM_MIN) * 100));
         for (const feat of detectedFeatures) {
-          const confirmed = photoEntries.some(p => p.caption && feat.confirm.test(p.caption));
+          const confirmed = photoEntries.some(p => p.caption && testConfirm(feat, p.caption));
           if (!confirmed) roomScore *= FEATURE_PENALTY;
         }
         return {
