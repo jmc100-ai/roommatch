@@ -1153,19 +1153,34 @@ app.get("/api/vsearch", async (req, res) => {
 
     console.log(`[vsearch] ranked: ${rankedHotels.length} hotels from room-type scoring`);
 
-    // ── Phase B: per-photo scores for top GALLERY_LIMIT hotels ──
-    const topHotelIds  = rankedHotels.slice(0, GALLERY_LIMIT).map(h => h.hotel_id);
-    const photosResult = await fetchClient.rpc("score_hotel_photos", {
-      query_embedding: queryEmbedding,
-      hotel_ids:       topHotelIds,
-    });
+    // ── Phase B: photo scoring + caption fetch in PARALLEL ──
+    // score_hotel_photos returns only scoring fields (no caption) → ~500KB instead of ~18MB.
+    // get_hotel_captions is called only for structural feature queries (double sinks etc.)
+    // and only for the top 30 hotels with captions truncated to 800 chars → ~1MB.
+    const topHotelIds       = rankedHotels.slice(0, GALLERY_LIMIT).map(h => h.hotel_id);
+    const captionHotelIds   = rankedHotels.slice(0, 30).map(h => h.hotel_id);
+    const needCaptions      = detectedFeatures.length > 0;
+
+    const [photosResult, captionsResult] = await Promise.all([
+      fetchClient.rpc("score_hotel_photos", { query_embedding: queryEmbedding, hotel_ids: topHotelIds }),
+      needCaptions
+        ? fetchClient.rpc("get_hotel_captions", { hotel_ids: captionHotelIds })
+        : Promise.resolve({ data: null, error: null }),
+    ]);
     const tPhaseB = Date.now();
-    console.log(`[vsearch] phaseB: ${tPhaseB - tPhaseA}ms`);
+    console.log(`[vsearch] phaseB: ${tPhaseB - tPhaseA}ms (captions: ${needCaptions})`);
 
     if (photosResult.error) throw new Error("score_hotel_photos: " + photosResult.error.message);
+    if (captionsResult.error) console.error("[vsearch] get_hotel_captions error:", captionsResult.error.message);
 
     const scoredPhotos = photosResult.data || [];
     console.log(`[vsearch] scored photos for top ${topHotelIds.length} hotels: ${scoredPhotos.length}`);
+
+    // Build captionMap: "hotel_id::photo_url" → caption (only populated for structural queries)
+    const captionMap = new Map();
+    for (const c of (captionsResult.data || [])) {
+      captionMap.set(`${c.hotel_id}::${c.photo_url}`, { caption: c.caption, photo_type: c.photo_type });
+    }
 
     // Log raw similarity distribution
     if (scoredPhotos.length > 0) {
@@ -1176,20 +1191,23 @@ app.get("/api/vsearch", async (req, res) => {
       console.log(`[vsearch] raw similarity — top5: [${top5}]  p95: ${p95}  median: ${p50}`);
     }
 
-    // 4. Build hotelPhotosMap and hotelScoreMap for top 150 hotels.
+    // 4. Build hotelPhotosMap and hotelScoreMap for top GALLERY_LIMIT hotels.
     const cacheMap       = new Map((cached || []).map(h => [h.hotel_id, h]));
-    const hotelPhotosMap = new Map();  // hotel_id → [{url, type, similarity}]
+    const hotelPhotosMap = new Map();  // hotel_id → [{url, type, similarity, caption?}]
     const hotelScoreMap  = new Map();  // hotel_id → {scores[], intentScores[], captions[]}
 
     for (const p of scoredPhotos) {
+      const captionEntry = captionMap.get(`${p.hotel_id}::${p.photo_url}`);
+      const caption      = captionEntry?.caption || null;
+
       if (!hotelPhotosMap.has(p.hotel_id)) hotelPhotosMap.set(p.hotel_id, []);
-      hotelPhotosMap.get(p.hotel_id).push(p);
+      hotelPhotosMap.get(p.hotel_id).push({ ...p, caption });
 
       if (!hotelScoreMap.has(p.hotel_id)) hotelScoreMap.set(p.hotel_id, { scores: [], intentScores: [], captions: [] });
       const hs = hotelScoreMap.get(p.hotel_id);
       hs.scores.push(p.similarity);
       if (!intentType || p.photo_type === intentType) hs.intentScores.push(p.similarity);
-      if (p.caption) hs.captions.push(p.caption);
+      if (caption) hs.captions.push(caption);
     }
 
     // 5. Compute topScore per hotel.
@@ -1232,7 +1250,7 @@ app.get("/api/vsearch", async (req, res) => {
     const hotels = allHotels.map(({ hotelId, topScore, hasPhotos }) => {
       const meta           = cacheMap.get(hotelId) || {};
       const score          = Math.round(topScore);
-      const hotelPhotos    = hotelPhotosMap.get(hotelId) || [];  // sorted by similarity DESC
+      const hotelPhotos    = (hotelPhotosMap.get(hotelId) || []).sort((a, b) => b.similarity - a.similarity);
       const fallbackName   = hotelPhotos[0]?.hotel_name || null;
 
       // Hotels without photo data (beyond GALLERY_LIMIT): return stub with no room types.
