@@ -1122,7 +1122,7 @@ app.get("/api/vsearch", async (req, res) => {
     //    Phase B:  score_hotel_photos — full photo scores for top 150 hotels (~4200 rows),
     //              used for room-level badges and gallery ordering, ~100ms.
     const COARSE_LIMIT  = 300;   // hotels considered for room-type re-ranking
-    const GALLERY_LIMIT = 150;   // hotels that get full photo galleries
+    const GALLERY_LIMIT = 100;   // hotels that get full photo galleries
 
     const [hotelsResult, cachedResult] = await Promise.all([
       fetchClient.rpc("score_hotels", { query_embedding: queryEmbedding, search_city: city }),
