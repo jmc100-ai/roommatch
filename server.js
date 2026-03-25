@@ -1125,6 +1125,29 @@ app.get("/api/vsearch", async (req, res) => {
     const cached       = cachedResult.data;
     console.log(`[vsearch] scored photos: ${scoredPhotos.length}, cached hotels: ${cached?.length ?? 0}`);
 
+    // The scoring RPC returns top 5000 photos (enough to rank all hotels).
+    // Fetch ALL photos for matched hotels so galleries are fully populated.
+    const scoredHotelIds = [...new Set(scoredPhotos.map(p => p.hotel_id))];
+    let allPhotos = scoredPhotos;
+    if (scoredHotelIds.length > 0) {
+      const galleryRes = await fetchClient
+        .from("room_embeddings")
+        .select("hotel_id, hotel_name, room_name, room_type_id, photo_url, photo_type, caption, star_rating, guest_rating")
+        .eq("city", city)
+        .in("hotel_id", scoredHotelIds);
+      if (galleryRes.error) {
+        console.warn("[vsearch] gallery fetch error:", galleryRes.error.message);
+      } else {
+        // Merge: keep similarity scores from scoredPhotos, add any missing gallery photos with similarity=0
+        const simMap = new Map(scoredPhotos.map(p => [`${p.hotel_id}||${p.photo_url}`, p.similarity]));
+        allPhotos = (galleryRes.data || []).map(p => ({
+          ...p,
+          similarity: simMap.get(`${p.hotel_id}||${p.photo_url}`) ?? 0,
+        }));
+        console.log(`[vsearch] gallery photos: ${allPhotos.length} across ${scoredHotelIds.length} hotels`);
+      }
+    }
+
     // Log raw similarity distribution to calibrate SIM_MAX
     if (scoredPhotos.length > 0) {
       const sims = scoredPhotos.map(p => p.similarity).sort((a, b) => b - a);
@@ -1144,7 +1167,7 @@ app.get("/api/vsearch", async (req, res) => {
     const hotelPhotosMap = new Map();  // hotel_id → [{url, type, similarity}]
     const hotelScoreMap  = new Map();  // hotel_id → {scores[], intentScores[], captions[]}
 
-    for (const p of scoredPhotos) {
+    for (const p of allPhotos) {
       if (!hotelPhotosMap.has(p.hotel_id)) hotelPhotosMap.set(p.hotel_id, []);
       hotelPhotosMap.get(p.hotel_id).push(p);
 
