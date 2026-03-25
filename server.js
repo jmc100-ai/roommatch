@@ -1158,7 +1158,7 @@ app.get("/api/vsearch", async (req, res) => {
     // get_hotel_captions is called only for structural feature queries (double sinks etc.)
     // and only for the top 30 hotels with captions truncated to 800 chars → ~1MB.
     const topHotelIds       = rankedHotels.slice(0, GALLERY_LIMIT).map(h => h.hotel_id);
-    const captionHotelIds   = rankedHotels.slice(0, 30).map(h => h.hotel_id);
+    const captionHotelIds   = rankedHotels.slice(0, 50).map(h => h.hotel_id);
     const needCaptions      = detectedFeatures.length > 0;
 
     const [photosResult, captionsResult] = await Promise.all([
