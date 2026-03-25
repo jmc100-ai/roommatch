@@ -1114,48 +1114,39 @@ app.get("/api/vsearch", async (req, res) => {
     }
 
     const fetchClient = supabaseAdmin || supabase;
-    const [photosResult, cachedResult] = await Promise.all([
-      fetchClient.rpc("score_city_photos", { query_embedding: queryEmbedding, search_city: city }),
+
+    // 3. Two-phase scoring:
+    //    Phase A: score_hotels scans hotels_index (~999 rows) — no timeout possible.
+    //    Phase B: score_hotel_photos scores the individual photos for the top 150 hotels
+    //             (~4 200 rows) so rooms can be ranked and galleries are complete.
+    const [hotelsResult, cachedResult] = await Promise.all([
+      fetchClient.rpc("score_hotels", { query_embedding: queryEmbedding, search_city: city }),
       fetchClient.from("hotels_cache").select("*").eq("city", city),
     ]);
-    if (photosResult.error) throw new Error("score_city_photos: " + photosResult.error.message);
+    if (hotelsResult.error) throw new Error("score_hotels: " + hotelsResult.error.message);
     if (cachedResult.error) console.error("[vsearch] hotels_cache error:", cachedResult.error.message);
 
-    const scoredPhotos = photosResult.data || [];
+    const rankedHotels = hotelsResult.data || [];
     const cached       = cachedResult.data;
-    console.log(`[vsearch] scored photos: ${scoredPhotos.length}, cached hotels: ${cached?.length ?? 0}`);
+    console.log(`[vsearch] ranked hotels: ${rankedHotels.length}, cached: ${cached?.length ?? 0}`);
 
-    // The scoring RPC returns top 5000 photos (enough to rank all hotels).
-    // Fetch full gallery photos for the top 150 hotels by score — beyond that,
-    // hotels won't be visible until the user scrolls far down so the RPC photos suffice.
-    const GALLERY_HOTEL_LIMIT = 150;
-    const scoredHotelIds = [...new Set(scoredPhotos.map(p => p.hotel_id))];
-    const galleryHotelIds = scoredHotelIds.slice(0, GALLERY_HOTEL_LIMIT);
-    let allPhotos = scoredPhotos;
-    if (galleryHotelIds.length > 0) {
-      const galleryRes = await fetchClient
-        .from("room_embeddings")
-        .select("hotel_id, hotel_name, room_name, room_type_id, photo_url, photo_type, caption, star_rating, guest_rating")
-        .eq("city", city)
-        .in("hotel_id", galleryHotelIds);
-      if (galleryRes.error) {
-        console.warn("[vsearch] gallery fetch error:", galleryRes.error.message);
-      } else {
-        // Merge: keep similarity scores from scoredPhotos, add remaining gallery photos with similarity=0
-        const simMap = new Map(scoredPhotos.map(p => [`${p.hotel_id}||${p.photo_url}`, p.similarity]));
-        const galleryPhotos = (galleryRes.data || []).map(p => ({
-          ...p,
-          similarity: simMap.get(`${p.hotel_id}||${p.photo_url}`) ?? 0,
-        }));
-        // Keep scored photos for hotels beyond top 150, use full gallery for top 150
-        const gallerySet = new Set(galleryHotelIds);
-        const remainingPhotos = scoredPhotos.filter(p => !gallerySet.has(p.hotel_id));
-        allPhotos = [...galleryPhotos, ...remainingPhotos];
-        console.log(`[vsearch] gallery: ${galleryPhotos.length} photos for top ${galleryHotelIds.length} hotels, ${remainingPhotos.length} scored-only for the rest`);
-      }
+    if (!rankedHotels.length) {
+      return res.json({ hotels: [], query, city, indexing, indexStatus: status });
     }
 
-    // Log raw similarity distribution to calibrate SIM_MAX
+    // Phase B: per-photo scores for top 150 hotels (the ones rendered on screen)
+    const GALLERY_LIMIT  = 150;
+    const topHotelIds    = rankedHotels.slice(0, GALLERY_LIMIT).map(h => h.hotel_id);
+    const photosResult   = await fetchClient.rpc("score_hotel_photos", {
+      query_embedding: queryEmbedding,
+      hotel_ids: topHotelIds,
+    });
+    if (photosResult.error) throw new Error("score_hotel_photos: " + photosResult.error.message);
+
+    const scoredPhotos = photosResult.data || [];
+    console.log(`[vsearch] scored photos for top ${topHotelIds.length} hotels: ${scoredPhotos.length}`);
+
+    // Log raw similarity distribution
     if (scoredPhotos.length > 0) {
       const sims = scoredPhotos.map(p => p.similarity).sort((a, b) => b - a);
       const top5 = sims.slice(0, 5).map(s => s.toFixed(4)).join(', ');
@@ -1164,17 +1155,12 @@ app.get("/api/vsearch", async (req, res) => {
       console.log(`[vsearch] raw similarity — top5: [${top5}]  p95: ${p95}  median: ${p50}`);
     }
 
-    if (!scoredPhotos.length) {
-      return res.json({ hotels: [], query, city, indexing, indexStatus: status });
-    }
-
-    // 4. Build hotelPhotosMap (photos ordered by similarity DESC — already sorted by the RPC)
-    //    and compute per-hotel aggregate score (avg of top-3 intent-matching similarities).
+    // 4. Build hotelPhotosMap and hotelScoreMap for top 150 hotels.
     const cacheMap       = new Map((cached || []).map(h => [h.hotel_id, h]));
     const hotelPhotosMap = new Map();  // hotel_id → [{url, type, similarity}]
     const hotelScoreMap  = new Map();  // hotel_id → {scores[], intentScores[], captions[]}
 
-    for (const p of allPhotos) {
+    for (const p of scoredPhotos) {
       if (!hotelPhotosMap.has(p.hotel_id)) hotelPhotosMap.set(p.hotel_id, []);
       hotelPhotosMap.get(p.hotel_id).push(p);
 
@@ -1185,25 +1171,21 @@ app.get("/api/vsearch", async (req, res) => {
       if (p.caption) hs.captions.push(p.caption);
     }
 
-    // 5. Compute topScore per hotel and sort all hotels.
-    //    Rescale raw similarity [0.40, 0.80] → [0, 100], then apply structural
-    //    feature penalty (×0.45 on the 0-100 scale) for each missing feature.
-    //    Applying penalty after rescaling prevents hotels from flooring to 0%
-    //    just because their penalised raw score dips below SIM_MIN.
+    // 5. Compute topScore per hotel.
+    //    Top 150 use per-photo similarity (accurate). Hotels 151+ use the hotel-level
+    //    similarity from hotels_index (averaged embedding) with no structural penalty
+    //    (no captions available to verify, and they're ranked far down anyway).
     const SIM_MIN = 0.40, SIM_MAX = 0.72;
     const FEATURE_PENALTY = 0.45;
-    const allHotels = [...hotelPhotosMap.keys()].map(hotelId => {
+    const photoHotelIds = new Set(hotelPhotosMap.keys());
+
+    // Scores for top-150 hotels (with captions → full structural penalty logic)
+    const photoHotelScores = [...photoHotelIds].map(hotelId => {
       const hs        = hotelScoreMap.get(hotelId);
       const arr       = hs.intentScores.length > 0 ? hs.intentScores : hs.scores;
       arr.sort((a, b) => b - a);
       const rawScore  = arr.slice(0, 3).reduce((s, x) => s + x, 0) / Math.min(3, arr.length);
-
-      // Rescale to 0-100. SIM_MAX=0.72 reflects the realistic ceiling of cosine
-      // similarity in this embedding space — top matches land at 0.65-0.72, not 0.80.
-      // Using the practical ceiling means top matches read as 75-100% instead of 55-75%.
       let score = Math.max(0, Math.min(100, (rawScore - SIM_MIN) / (SIM_MAX - SIM_MIN) * 100));
-
-      // Then apply penalty on the rescaled score so penalised hotels remain visible
       for (const feat of detectedFeatures) {
         const confirmed = testConfirmSet(feat, hs.captions);
         if (!confirmed) {
@@ -1211,17 +1193,43 @@ app.get("/api/vsearch", async (req, res) => {
           console.log(`[vsearch] penalty: ${hotelId} missing "${feat.label}" → score now ${score.toFixed(1)}`);
         }
       }
+      return { hotelId, topScore: score, hasPhotos: true };
+    });
 
-      return { hotelId, topScore: score };
-    }).sort((a, b) => b.topScore - a.topScore);
+    // Scores for hotels 151+ (hotel-level embedding only, no penalty)
+    const remainingHotelScores = rankedHotels
+      .filter(h => !photoHotelIds.has(h.hotel_id))
+      .map(h => {
+        const score = Math.max(0, Math.min(100, (h.similarity - SIM_MIN) / (SIM_MAX - SIM_MIN) * 100));
+        return { hotelId: h.hotel_id, topScore: score, hasPhotos: false };
+      });
+
+    const allHotels = [...photoHotelScores, ...remainingHotelScores]
+      .sort((a, b) => b.topScore - a.topScore);
 
     // 6. Build response for all hotels
-    const hotels = allHotels.map(({ hotelId, topScore }) => {
+    const hotels = allHotels.map(({ hotelId, topScore, hasPhotos }) => {
       const meta           = cacheMap.get(hotelId) || {};
-      // topScore is already rescaled 0-100 with penalties applied
-      const score = Math.round(topScore);
-      const hotelPhotos    = hotelPhotosMap.get(hotelId) || [];  // already sorted by similarity DESC
+      const score          = Math.round(topScore);
+      const hotelPhotos    = hotelPhotosMap.get(hotelId) || [];  // sorted by similarity DESC
       const fallbackName   = hotelPhotos[0]?.hotel_name || null;
+
+      // Hotels without photo data (ranked 151+): return stub with no room types.
+      // They'll still appear in the sorted list with their match score.
+      if (!hasPhotos) {
+        return {
+          id:          hotelId,
+          name:        meta.name || hotelId,
+          address:     meta.address || "",
+          city,
+          country:     "",
+          starRating:  meta.star_rating || 0,
+          rating:      meta.guest_rating || 0,
+          roomTypes:   [],
+          isMatched:   score > 0,
+          vectorScore: score,
+        };
+      }
 
       // Group photos by room_name; store caption+similarity so we can pin confirming rooms first.
       // hotelPhotos is already sorted similarity DESC so first photo per room is the best.

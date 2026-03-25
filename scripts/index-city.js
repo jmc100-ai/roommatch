@@ -468,6 +468,15 @@ ${caption}`;
 
       hotelsDone++;
       console.log(`[indexer] [${hotelsDone}/${hotels.length}] ${hotelName.slice(0,35)} — ${embedded} embeddings`);
+
+      // Update hotels_index with averaged embedding for this hotel (best-effort, non-blocking)
+      if (embedded > 0) {
+        db.rpc("refresh_hotel_index_entry", { p_hotel_id: hotelId, p_city: city, p_country_code: cc || null })
+          .then(({ error: rpcErr }) => {
+            if (rpcErr) console.warn(`  [hotels_index] ${hotelId}: ${rpcErr.message}`);
+          })
+          .catch(() => {});
+      }
     }));
 
     // Update progress
