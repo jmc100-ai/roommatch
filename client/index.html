@@ -1379,21 +1379,31 @@
         return a.price - b.price;
       });
     } else if (_currentSort === 'match+price+rating') {
-      // Composite "Best Value" score: 50% match + 30% guest rating + 20% price value.
-      // Price is normalised using the 10th–90th percentile of priced hotels so the
-      // scoring adapts to the actual city/date range rather than a hardcoded scale.
+      // Tier-based "Best Value": match tiers (High 40%+ / Mid 15–39% / Low <15%) come first.
+      // Within each tier, when scores are within 3% of each other, rank by an equal
+      // blend of price value + guest rating — so neither dominates the other.
+      // Price normalised against the 10th–90th percentile of this result set.
+      const tier = s => s >= 40 ? 0 : s >= 15 ? 1 : 2;
       const pricedHotels = hotels.filter(h => h.price != null).map(h => h.price).sort((a, b) => a - b);
       const p10 = pricedHotels[Math.floor(pricedHotels.length * 0.10)] ?? pricedHotels[0] ?? 100;
       const p90 = pricedHotels[Math.floor(pricedHotels.length * 0.90)] ?? pricedHotels[pricedHotels.length - 1] ?? 500;
       const priceRange = Math.max(p90 - p10, 1);
 
-      const normPrice  = p => p  == null ? 50  : Math.max(0, Math.min(100, (p90 - p)  / priceRange * 100));
+      const normPrice  = p => p  == null ? 50  : Math.max(0, Math.min(100, (p90 - p) / priceRange * 100));
       const normRating = r => r > 0       ? (r / 10) * 100 : 60; // neutral 60 if unknown
 
       hotels.sort((a, b) => {
-        const aVal = 0.50 * hotelEffectiveScore(a) + 0.30 * normRating(a.rating) + 0.20 * normPrice(a.price);
-        const bVal = 0.50 * hotelEffectiveScore(b) + 0.30 * normRating(b.rating) + 0.20 * normPrice(b.price);
-        return bVal - aVal;
+        const aScore = hotelEffectiveScore(a);
+        const bScore = hotelEffectiveScore(b);
+        const tierDiff = tier(aScore) - tier(bScore);
+        if (tierDiff !== 0) return tierDiff;
+        // Within the same tier: match quality still wins if gap > 3%
+        const scoreDiff = bScore - aScore;
+        if (Math.abs(scoreDiff) > 3) return scoreDiff;
+        // Scores are close — break tie equally on price value + guest rating
+        const aValue = 0.50 * normPrice(a.price) + 0.50 * normRating(a.rating);
+        const bValue = 0.50 * normPrice(b.price) + 0.50 * normRating(b.rating);
+        return bValue - aValue;
       });
     } else if (_currentSort === 'match') {
       hotels.sort((a, b) => hotelEffectiveScore(b) - hotelEffectiveScore(a));
