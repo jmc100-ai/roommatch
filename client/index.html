@@ -377,6 +377,14 @@
     .chevron { font-size: 10px; color: var(--muted); transition: transform 0.2s; flex-shrink: 0; }
     .room-type-row.open .chevron { transform: rotate(180deg); }
 
+    .room-thumb {
+      width: 60px; height: 45px; flex-shrink: 0;
+      object-fit: cover; border-radius: 4px;
+      opacity: 0.85; transition: opacity 0.15s;
+    }
+    .room-thumb:hover { opacity: 1; }
+    .room-type-row.open .room-thumb { display: none; }
+
     /* ── Photo strip ─────────────── */
     .photo-strip-wrap { overflow: hidden; max-height: 0; transition: max-height 0.3s ease; }
     .room-type-row.open .photo-strip-wrap { max-height: 240px; }
@@ -1533,6 +1541,7 @@
             ${(bedsHTML || sizeHTML) ? '<span class="room-meta-sep">·</span>' : ''}
             <div class="room-type-meta">${bedsHTML}${sizeHTML}</div>
           </div>
+          ${photos[0] ? `<img class="room-thumb" src="${photos[0]}" alt="${rt.name}" loading="lazy" onerror="this.style.display='none'">` : ''}
           <span class="chevron">▼</span>
         </div>
         <div class="photo-strip-wrap">
