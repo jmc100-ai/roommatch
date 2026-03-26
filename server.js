@@ -1163,30 +1163,19 @@ app.get("/api/vsearch", async (req, res) => {
     const captionHotelIds = rankedHotels.slice(0, 50).map(h => h.hotel_id);
     const needCaptions    = detectedFeatures.length > 0;
 
-    // Batch photo fetch: Supabase PostgREST max_rows=10000 cannot be overridden client-side.
-    // With ~39 photos/hotel and 600 hotels we need ~23k rows — batch into chunks of 200 (≤7,800 rows each).
-    const PHOTO_BATCH = 200;
-    const photoBatches = [];
-    for (let i = 0; i < topHotelIds.length; i += PHOTO_BATCH) {
-      photoBatches.push(topHotelIds.slice(i, i + PHOTO_BATCH));
-    }
-
-    const [photoBatchResults, captionsResult] = await Promise.all([
-      Promise.all(photoBatches.map(batch =>
-        fetchClient.rpc("fetch_hotel_photos", { hotel_ids: batch })
-      )),
+    const [photosResult, captionsResult] = await Promise.all([
+      fetchClient.rpc("fetch_hotel_photos", { hotel_ids: topHotelIds }),
       needCaptions
         ? fetchClient.rpc("get_hotel_captions", { hotel_ids: captionHotelIds })
         : Promise.resolve({ data: null, error: null }),
     ]);
     const tPhaseB = Date.now();
-    console.log(`[vsearch] phaseB: ${tPhaseB - tPhaseA}ms (captions: ${needCaptions}, photo_batches: ${photoBatches.length})`);
+    console.log(`[vsearch] phaseB: ${tPhaseB - tPhaseA}ms (captions: ${needCaptions})`);
 
-    const photoBatchError = photoBatchResults.find(r => r.error);
-    if (photoBatchError) throw new Error("fetch_hotel_photos: " + photoBatchError.error.message);
+    if (photosResult.error) throw new Error("fetch_hotel_photos: " + photosResult.error.message);
     if (captionsResult.error) console.error("[vsearch] get_hotel_captions error:", captionsResult.error.message);
 
-    const photos = photoBatchResults.flatMap(r => r.data || []);
+    const photos = photosResult.data || [];
     console.log(`[vsearch] photos for top ${topHotelIds.length} hotels: ${photos.length}`);
 
     // Build captionMap: "hotel_id::photo_url" → caption (only populated for structural queries)
