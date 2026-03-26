@@ -807,6 +807,7 @@
     <span class="sort-label">Sort</span>
     <button class="sort-btn active" data-sort="match" onclick="setSortBy('match')">Best Match</button>
     <button class="sort-btn" data-sort="match+price" onclick="setSortBy('match+price')">Match + Price</button>
+    <button class="sort-btn" data-sort="match+price+rating" onclick="setSortBy('match+price+rating')">Best Value</button>
     <button class="sort-btn" data-sort="price" onclick="setSortBy('price')">Best Price</button>
     <button class="sort-btn" data-sort="rating" onclick="setSortBy('rating')">Guest Rating</button>
     <button class="sort-btn" data-sort="stars" onclick="setSortBy('stars')">Stars</button>
@@ -1153,7 +1154,7 @@
   }
 
   function _setPriceBtnsState(loaded) {
-    document.querySelectorAll('[data-sort="match+price"],[data-sort="price"]').forEach(b => {
+    document.querySelectorAll('[data-sort="match+price"],[data-sort="match+price+rating"],[data-sort="price"]').forEach(b => {
       b.disabled = !loaded;
       b.classList.toggle('loading', !loaded);
     });
@@ -1283,7 +1284,7 @@
     //  - match / rating / stars: order doesn't change with prices → update in-place,
     //    no re-render, no flash, list stays stable.
     //  - match+price / price: user expects re-ranking by price → full re-sort.
-    const priceDependentSort = _currentSort === 'match+price' || _currentSort === 'price';
+    const priceDependentSort = _currentSort === 'match+price' || _currentSort === 'match+price+rating' || _currentSort === 'price';
     if (priceDependentSort) {
       renderSortedSmooth();
     } else {
@@ -1305,7 +1306,7 @@
   }
 
   function setSortBy(sort) {
-    if ((sort === 'match+price' || sort === 'price') && !_pricesLoaded) return;
+    if ((sort === 'match+price' || sort === 'match+price+rating' || sort === 'price') && !_pricesLoaded) return;
     _currentSort    = sort;
     _displayedCount = 10;
     document.querySelectorAll('.sort-btn').forEach(b => {
@@ -1376,6 +1377,23 @@
         if (aHasPrice !== bHasPrice) return bHasPrice ? 1 : -1;
         if (!aHasPrice) return scoreDiff;
         return a.price - b.price;
+      });
+    } else if (_currentSort === 'match+price+rating') {
+      // Composite "Best Value" score: 50% match + 30% guest rating + 20% price value.
+      // Price is normalised using the 10th–90th percentile of priced hotels so the
+      // scoring adapts to the actual city/date range rather than a hardcoded scale.
+      const pricedHotels = hotels.filter(h => h.price != null).map(h => h.price).sort((a, b) => a - b);
+      const p10 = pricedHotels[Math.floor(pricedHotels.length * 0.10)] ?? pricedHotels[0] ?? 100;
+      const p90 = pricedHotels[Math.floor(pricedHotels.length * 0.90)] ?? pricedHotels[pricedHotels.length - 1] ?? 500;
+      const priceRange = Math.max(p90 - p10, 1);
+
+      const normPrice  = p => p  == null ? 50  : Math.max(0, Math.min(100, (p90 - p)  / priceRange * 100));
+      const normRating = r => r > 0       ? (r / 10) * 100 : 60; // neutral 60 if unknown
+
+      hotels.sort((a, b) => {
+        const aVal = 0.50 * hotelEffectiveScore(a) + 0.30 * normRating(a.rating) + 0.20 * normPrice(a.price);
+        const bVal = 0.50 * hotelEffectiveScore(b) + 0.30 * normRating(b.rating) + 0.20 * normPrice(b.price);
+        return bVal - aVal;
       });
     } else if (_currentSort === 'match') {
       hotels.sort((a, b) => hotelEffectiveScore(b) - hotelEffectiveScore(a));
