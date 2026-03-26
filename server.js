@@ -1164,7 +1164,7 @@ app.get("/api/vsearch", async (req, res) => {
     const needCaptions    = detectedFeatures.length > 0;
 
     const [photosResult, captionsResult] = await Promise.all([
-      fetchClient.rpc("fetch_hotel_photos", { hotel_ids: topHotelIds }),
+      fetchClient.rpc("fetch_hotel_photos", { hotel_ids: topHotelIds }).limit(100000),
       needCaptions
         ? fetchClient.rpc("get_hotel_captions", { hotel_ids: captionHotelIds })
         : Promise.resolve({ data: null, error: null }),
