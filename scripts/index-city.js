@@ -77,6 +77,28 @@ const COUNTRY_CODES = {
   "sydney":"AU","melbourne":"AU","auckland":"NZ","queenstown":"NZ",
 };
 
+// Extracts the structural feature fields from a hybrid caption, dropping the irrelevant
+// visual-style sections (VIEWS & LIGHT, SPACE & LAYOUT, FLOORING & DECOR, FURNITURE)
+// and the Room type metadata line. Keeps PHOTO TYPE header + BATHROOM + BEDROOM +
+// NOTABLE FEATURES — the only fields needed for structural penalty detection at search time.
+// Mirrors the extract_feature_summary() SQL function in Supabase.
+function extractFeatureSummary(caption) {
+  if (!caption) return null;
+  const viewsIdx    = caption.indexOf('\nVIEWS & LIGHT:');
+  const notableIdx  = caption.indexOf('\nNOTABLE FEATURES:');
+  const roomTypeIdx = caption.indexOf('\nRoom type:');
+
+  const part1 = viewsIdx > 0 ? caption.slice(0, viewsIdx) : caption.slice(0, 350);
+
+  let part2 = '';
+  if (notableIdx > 0) {
+    const end = roomTypeIdx > notableIdx ? roomTypeIdx : caption.length;
+    part2 = caption.slice(notableIdx + 1, end);
+  }
+
+  return part2 ? (part1 + '\n' + part2).trim() : part1.trim();
+}
+
 // ── Rate limiters ─────────────────────────────────────────────────────────────
 // Caption (vision): 500 req/min ceiling to leave headroom
 let _capCount = 0, _capWindow = Date.now();
@@ -451,6 +473,7 @@ ${caption}`;
             photo_url: photo.url,
             photo_type: detectedType,  // use Gemini-detected type
             caption: hybridText,
+            feature_summary: extractFeatureSummary(hybridText),
             embedding,
             star_rating: stars, guest_rating: rating,
           }, { onConflict: "hotel_id,photo_url" }));
