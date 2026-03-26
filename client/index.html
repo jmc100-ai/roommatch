@@ -64,9 +64,9 @@
     /* ── Hero ───────────────────── */
     .hero { padding: 8px 56px 32px; max-width: 1180px; margin: 0 auto; }
     .hero-inner {
-      display: grid; grid-template-columns: minmax(0, 560px) minmax(280px, 360px);
+      display: grid; grid-template-columns: minmax(0, 560px) minmax(240px, 320px);
       justify-content: space-between;
-      gap: 40px; align-items: start; margin-bottom: 30px;
+      gap: 32px; align-items: start; margin-bottom: 22px;
     }
     .hero-left { display: flex; flex-direction: column; padding-top: 8px; }
     .hero-heading { font-family: 'Cormorant Garamond', serif; font-size: clamp(28px, 3.2vw, 50px); font-weight: 300; line-height: 1.12; margin-bottom: 16px; }
@@ -75,10 +75,10 @@
     .hero-photos {
       display: grid; grid-template-columns: 1fr 1fr; gap: 5px;
       border-radius: var(--radius); overflow: hidden;
-      width: min(100%, 360px);
+      width: min(100%, 320px);
       justify-self: end;
     }
-    .hero-photo { width: 100%; aspect-ratio: 1; object-fit: cover; display: block; }
+    .hero-photo { width: 100%; aspect-ratio: 1.15; object-fit: cover; display: block; }
 
     /* ── Form ───────────────────── */
     .search-form { display: flex; flex-direction: column; gap: 12px; max-width: 920px; }
