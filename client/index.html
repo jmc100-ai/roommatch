@@ -1230,8 +1230,11 @@
           ? (availRoomTypes.length > 0 ? availRoomTypes : (hasHotelAvail ? allRoomTypes : []))
           : allRoomTypes;
         const noAvailRooms = canFilter && visibleRooms.length === 0;
+        const isStub = allRoomTypes.length === 0;
         const notice = noAvailRooms
-          ? `<div class="no-avail-notice">No rooms available for these dates — <button class="no-avail-link" onclick="setAvailFilter(false);document.getElementById('availOnlyCheck').checked=false">show all room types</button></div>`
+          ? (isStub && hasHotelAvail
+              ? `<div class="no-avail-notice">Available for your dates — room photos not in our visual index yet</div>`
+              : `<div class="no-avail-notice">No rooms available for these dates — <button class="no-avail-link" onclick="setAvailFilter(false);document.getElementById('availOnlyCheck').checked=false">show all room types</button></div>`)
           : '';
         const rowsHtml = visibleRooms.map((rt, ri) => roomTypeHTML(rt, ri === preservedOpen, h.vectorScore, h.roomPrices, _hasDateSearch)).join('');
         roomsEl.innerHTML = notice + rowsHtml;
@@ -1432,6 +1435,12 @@
       ? (availRoomTypes.length > 0 ? availRoomTypes : (hasHotelAvail ? allRoomTypes : []))
       : allRoomTypes;
     const noAvailRooms = canFilter && roomTypes.length === 0;
+    const isStub = allRoomTypes.length === 0;
+    const noAvailNotice = noAvailRooms
+      ? (isStub && hasHotelAvail
+          ? `<div class="no-avail-notice">Available for your dates — room photos not in our visual index yet</div>`
+          : `<div class="no-avail-notice">No rooms available for these dates — <button class="no-avail-link" onclick="setAvailFilter(false);document.getElementById('availOnlyCheck').checked=false">show all room types</button></div>`)
+      : '';
     // Open the first room in the filtered list
     const openIdx = 0;
     const roomRows = roomTypes.map((rt, ri) => roomTypeHTML(rt, ri === openIdx, h.vectorScore, h.roomPrices, _hasDateSearch)).join('');
@@ -1461,7 +1470,7 @@
           </div>
         </div>
         <div id="hotel-rooms-${h.id}">
-          ${noAvailRooms ? `<div class="no-avail-notice">No rooms available for these dates — <button class="no-avail-link" onclick="setAvailFilter(false);document.getElementById('availOnlyCheck').checked=false">show all room types</button></div>` : ''}
+          ${noAvailNotice}
           ${roomRows}
         </div>
       </div>`;
