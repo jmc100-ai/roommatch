@@ -1116,7 +1116,7 @@ app.get("/api/vsearch", async (req, res) => {
     }
 
     const fetchClient = supabaseAdmin || supabase;
-    const GALLERY_LIMIT = 400;   // hotels that get full photo galleries
+    const GALLERY_LIMIT = 600;   // hotels that get full photo galleries
 
     // ── Phase A: room-type scoring (full city) + hotel metadata cache — in PARALLEL ──
     // score_room_types scans room_types_index (~7k rows for Paris) for all hotels in the
