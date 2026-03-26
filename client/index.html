@@ -207,6 +207,102 @@
     }
     .sort-btn:disabled { opacity: 0.35; cursor: not-allowed; }
     .sort-btn.loading { opacity: 0.5; cursor: wait; }
+
+    /* ── View toggle ─────────────── */
+    .view-toggle { display: flex; gap: 2px; margin-left: auto; background: rgba(255,255,255,0.05); border-radius: 8px; padding: 3px; }
+    .view-btn {
+      display: flex; align-items: center; justify-content: center;
+      width: 30px; height: 28px; border-radius: 6px; border: none;
+      background: transparent; color: var(--muted); cursor: pointer; transition: all 0.15s;
+    }
+    .view-btn:hover { color: var(--text); background: rgba(255,255,255,0.06); }
+    .view-btn.active { background: rgba(255,255,255,0.1); color: var(--text); }
+
+    /* ── Row view layout ─────────────── */
+    .results-rows .hotel-card { padding: 0; }
+
+    .hotel-row {
+      display: grid;
+      grid-template-columns: 58px minmax(0,200px) 1fr auto auto;
+      align-items: center;
+      gap: 14px;
+      padding: 10px 18px;
+      background: var(--surface);
+      border-radius: var(--radius);
+      border: 1px solid var(--border);
+      cursor: pointer;
+      transition: border-color 0.15s;
+      margin-bottom: 6px;
+    }
+    .hotel-row:hover { border-color: rgba(255,255,255,0.18); }
+    .hotel-row.row-open { border-color: rgba(201,169,110,0.3); border-bottom-left-radius: 0; border-bottom-right-radius: 0; margin-bottom: 0; }
+
+    .hotel-row-thumb {
+      width: 58px; height: 54px; object-fit: cover;
+      border-radius: 6px; flex-shrink: 0;
+    }
+    .hotel-row-thumb-placeholder {
+      width: 58px; height: 54px; border-radius: 6px;
+      background: rgba(255,255,255,0.06); flex-shrink: 0;
+    }
+    .hotel-row-info { min-width: 0; }
+    .hotel-row-name { font-size: 13px; font-weight: 500; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .hotel-row-meta { font-size: 11px; color: var(--muted); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .hotel-row-score { font-size: 11px; color: var(--muted); margin-top: 2px; }
+
+    .hotel-row-previews { display: flex; gap: 4px; align-items: center; }
+    .row-preview-thumb {
+      width: 70px; height: 52px; object-fit: cover; border-radius: 5px;
+      flex-shrink: 0; cursor: pointer; transition: opacity 0.15s;
+    }
+    .row-preview-thumb:hover { opacity: 0.85; }
+
+    .hotel-row-match { text-align: center; flex-shrink: 0; min-width: 72px; }
+    .hotel-row-match-pct { font-size: 20px; font-weight: 700; color: var(--accent); line-height: 1; }
+    .hotel-row-match-label { font-size: 9px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
+    .hotel-row-match-room { font-size: 10px; color: rgba(255,255,255,0.6); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 90px; }
+
+    .hotel-row-price { text-align: right; flex-shrink: 0; min-width: 80px; }
+    .hotel-row-price-main { font-size: 15px; font-weight: 600; color: var(--text); }
+    .hotel-row-price-per { font-size: 10px; color: var(--muted); }
+    .hotel-row-price-total { font-size: 10px; color: var(--muted); margin-top: 1px; }
+    .hotel-row-chevron { font-size: 10px; color: var(--muted); transition: transform 0.2s; flex-shrink: 0; }
+    .hotel-row.row-open .hotel-row-chevron { transform: rotate(180deg); }
+
+    .hotel-row-body {
+      background: var(--surface); border: 1px solid rgba(201,169,110,0.3);
+      border-top: none; border-bottom-left-radius: var(--radius); border-bottom-right-radius: var(--radius);
+      padding: 0 18px 12px; margin-bottom: 6px; display: none;
+    }
+    .hotel-row-body.open { display: block; }
+
+    .row-room-list { display: flex; flex-direction: column; gap: 2px; }
+    .row-room-item {
+      display: grid; grid-template-columns: 52px 1fr auto auto;
+      align-items: center; gap: 10px;
+      padding: 7px 0; border-top: 1px solid rgba(255,255,255,0.05);
+      cursor: pointer;
+    }
+    .row-room-item:first-child { border-top: none; padding-top: 4px; }
+    .row-room-thumb { width: 52px; height: 39px; object-fit: cover; border-radius: 4px; }
+    .row-room-name { font-size: 12px; color: var(--text); }
+    .row-room-score { font-size: 11px; }
+    .row-room-chevron { font-size: 9px; color: var(--muted); transition: transform 0.2s; }
+    .row-room-item.room-row-open .row-room-chevron { transform: rotate(180deg); }
+
+    .row-photo-strip-wrap { overflow: hidden; max-height: 0; transition: max-height 0.3s ease; }
+    .row-room-item.room-row-open .row-photo-strip-wrap { max-height: 200px; }
+    .row-photo-strip {
+      display: flex; gap: 3px; padding: 6px 0 4px 62px;
+      overflow-x: auto; scrollbar-width: thin;
+    }
+    .row-photo-cell {
+      flex: 0 0 160px; height: 120px; position: relative;
+      border-radius: 6px; overflow: hidden; cursor: pointer;
+    }
+    .row-photo-cell img { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .row-more-rooms { font-size: 11px; color: var(--accent); padding: 8px 0 0; cursor: pointer; text-align: center; }
+    .row-more-rooms:hover { text-decoration: underline; }
     .result-count { font-size: 12px; color: rgba(255,255,255,0.72); letter-spacing: 0.04em; }
     .rates-status {
       font-size: 12px; letter-spacing: 0.03em; display: flex; align-items: center; gap: 5px;
@@ -821,6 +917,14 @@
   </div>
   <span id="ratesStatus" class="rates-status"></span>
   <span id="resultCount" class="result-count"></span>
+  <div class="view-toggle" id="viewToggle">
+    <button class="view-btn active" id="viewBtnCards" onclick="setViewMode('cards')" title="Card view">
+      <svg width="15" height="15" viewBox="0 0 15 15" fill="none"><rect x="1" y="1" width="5.5" height="5.5" rx="1" fill="currentColor"/><rect x="8.5" y="1" width="5.5" height="5.5" rx="1" fill="currentColor"/><rect x="1" y="8.5" width="5.5" height="5.5" rx="1" fill="currentColor"/><rect x="8.5" y="8.5" width="5.5" height="5.5" rx="1" fill="currentColor"/></svg>
+    </button>
+    <button class="view-btn" id="viewBtnRows" onclick="setViewMode('rows')" title="List view">
+      <svg width="15" height="15" viewBox="0 0 15 15" fill="none"><rect x="1" y="2" width="13" height="2.5" rx="1" fill="currentColor"/><rect x="1" y="6.25" width="13" height="2.5" rx="1" fill="currentColor"/><rect x="1" y="10.5" width="13" height="2.5" rx="1" fill="currentColor"/></svg>
+    </button>
+  </div>
 </div>
 
 <div id="results"></div>
@@ -839,6 +943,7 @@
   let clipDone = 0, clipTotal = 10;
   let _lastHotels     = [];
   let _currentSort    = 'match';
+  let _viewMode       = localStorage.getItem('rmViewMode') || 'cards';
   let _displayedCount = 10;
   let _ratesReqId     = 0;   // incremented per search to discard stale rate responses
   let _pricesLoaded   = false;
@@ -1353,6 +1458,131 @@
     requestAnimationFrame(() => { if (resultsEl) resultsEl.classList.remove('no-anim'); });
   }
 
+  function setViewMode(mode) {
+    _viewMode = mode;
+    localStorage.setItem('rmViewMode', mode);
+    document.getElementById('viewBtnCards').classList.toggle('active', mode === 'cards');
+    document.getElementById('viewBtnRows').classList.toggle('active', mode === 'rows');
+    renderSorted();
+  }
+
+  function toggleHotelRow(hotelId) {
+    const row  = document.getElementById(`hrow-${hotelId}`);
+    const body = document.getElementById(`hrow-body-${hotelId}`);
+    if (!row || !body) return;
+    const isOpen = row.classList.contains('row-open');
+    row.classList.toggle('row-open', !isOpen);
+    body.classList.toggle('open', !isOpen);
+  }
+
+  function toggleRowRoom(hotelId, ri) {
+    const item = document.getElementById(`rrow-${hotelId}-${ri}`);
+    if (!item) return;
+    item.classList.toggle('room-row-open');
+  }
+
+  function openRowThumb(hotelId, ri, pi) {
+    // Open lightbox for photo pi of room ri, and also expand the hotel row + room row
+    const row  = document.getElementById(`hrow-${hotelId}`);
+    const body = document.getElementById(`hrow-body-${hotelId}`);
+    if (row && !row.classList.contains('row-open')) {
+      row.classList.add('row-open');
+      body.classList.add('open');
+    }
+    const item = document.getElementById(`rrow-${hotelId}-${ri}`);
+    if (item && !item.classList.contains('room-row-open')) {
+      item.classList.add('room-row-open');
+    }
+    // Find the registry key stored on the item
+    const regKey = item ? parseInt(item.dataset.regkey, 10) : -1;
+    if (regKey >= 0) openLightbox(regKey, pi);
+  }
+
+  function hotelRowHTML(h) {
+    const sym   = _priceCurrency === 'EUR' ? '€' : '$';
+    const score = hotelEffectiveScore(h);
+    const allRoomTypes = h.roomTypes || [];
+    const canFilter    = _showAvailOnly && _hasDateSearch && _pricesLoaded;
+    const availRTs     = allRoomTypes.filter(rt => rt.roomTypeId != null && h.roomPrices?.[rt.roomTypeId] != null);
+    const visibleRooms = canFilter
+      ? (availRTs.length > 0 ? availRTs : (h.price != null ? allRoomTypes : []))
+      : allRoomTypes;
+
+    const topRoom = visibleRooms[0];
+    const previewPhotos = topRoom ? (topRoom.photos || []).slice(0, 3) : [];
+
+    const thumbHTML = h.mainPhoto
+      ? `<img class="hotel-row-thumb" src="${h.mainPhoto}" alt="${h.name}" loading="lazy" onerror="this.outerHTML='<div class=hotel-row-thumb-placeholder></div>'">`
+      : `<div class="hotel-row-thumb-placeholder"></div>`;
+
+    const stars  = h.starRating > 0 ? '★'.repeat(Math.min(Math.round(h.starRating), 5)) : '';
+    const rating = h.rating > 0 ? `· ${parseFloat(h.rating).toFixed(1)} ★` : '';
+
+    const previewsHTML = previewPhotos.map((url, pi) =>
+      `<img class="row-preview-thumb" src="${url}" loading="lazy"
+           onclick="event.stopPropagation();openRowThumb('${h.id}',0,${pi})"
+           onerror="this.style.display='none'">`
+    ).join('');
+
+    const priceHTML = h.price != null
+      ? `<div class="hotel-row-price-main">${sym}${Math.round(h.price).toLocaleString()}</div>
+         <div class="hotel-row-price-per">/night</div>
+         ${_hasDateSearch ? `<div class="hotel-row-price-total">${sym}${Math.round(h.price * (parseInt(document.getElementById('checkoutInput')?.value && document.getElementById('checkinInput')?.value ? (new Date(document.getElementById('checkoutInput').value) - new Date(document.getElementById('checkinInput').value)) / 86400000 : 0) || 1)).toLocaleString()} total</div>` : ''}`
+      : `<div class="hotel-row-price-per" style="margin-top:4px">${_pricesLoaded ? 'No rates' : 'Add dates'}</div>`;
+
+    // Build room sub-rows
+    const roomRowsHTML = visibleRooms.map((rt, ri) => {
+      const regKey = _lbRegistry.length;
+      _lbRegistry.push({ photos: rt.photos || [], name: rt.name, score: rt.score });
+      const photoHTML = (rt.photos || []).slice(0, 10).map((url, pi) =>
+        `<div class="row-photo-cell" onclick="openLightbox(${regKey},${pi})">
+          <img src="${url}" alt="${rt.name}" loading="lazy" onerror="this.parentElement.style.display='none'">
+        </div>`
+      ).join('');
+      const scoreBadge = rt.score > 0
+        ? `<span class="room-score-badge${rt.score < 20 ? ' room-score-badge--low' : ''}">${rt.score}%</span>`
+        : '';
+      return `
+        <div class="row-room-item${ri === 0 ? ' room-row-open' : ''}" id="rrow-${h.id}-${ri}" data-regkey="${regKey}"
+             onclick="toggleRowRoom('${h.id}',${ri})">
+          <img class="row-room-thumb" src="${(rt.photos||[])[0]||''}" loading="lazy" onerror="this.style.display='none'">
+          <span class="row-room-name">${rt.name}</span>
+          ${scoreBadge}
+          <span class="row-room-chevron">▼</span>
+        </div>
+        <div class="row-photo-strip-wrap${ri === 0 ? ' open' : ''}" style="${ri === 0 ? 'max-height:200px' : ''}">
+          <div class="row-photo-strip">${photoHTML}</div>
+        </div>`;
+    }).join('');
+
+    const moreCount = allRoomTypes.length - visibleRooms.length;
+    const moreHTML  = moreCount > 0
+      ? `<div class="row-more-rooms" onclick="event.stopPropagation()">▾ ${moreCount} more room type${moreCount > 1 ? 's' : ''}</div>`
+      : '';
+
+    return `
+      <div class="hotel-row" id="hrow-${h.id}" onclick="toggleHotelRow('${h.id}')">
+        ${thumbHTML}
+        <div class="hotel-row-info">
+          <div class="hotel-row-name">${h.name}</div>
+          <div class="hotel-row-meta">${stars ? `<span style="color:var(--accent);font-size:10px">${stars}</span> · ` : ''}${h.address || h.city || ''}</div>
+          <div class="hotel-row-score">${rating}</div>
+        </div>
+        <div class="hotel-row-previews">${previewsHTML}</div>
+        <div class="hotel-row-match">
+          <div class="hotel-row-match-pct">${score > 0 ? score + '%' : '—'}</div>
+          <div class="hotel-row-match-label">match</div>
+          ${topRoom ? `<div class="hotel-row-match-room">${topRoom.name}</div>` : ''}
+        </div>
+        <div class="hotel-row-price">${priceHTML}</div>
+        <span class="hotel-row-chevron">▼</span>
+      </div>
+      <div class="hotel-row-body" id="hrow-body-${h.id}">
+        <div class="row-room-list">${roomRowsHTML}</div>
+        ${moreHTML}
+      </div>`;
+  }
+
   function renderSorted() {
     const hotels = [..._lastHotels];
     if (_currentSort === 'rating') {
@@ -1418,7 +1648,11 @@
     document.getElementById('resultCount').textContent =
       remaining > 0 ? `Showing ${showing} of ${total} hotels` : `${total} hotel${total !== 1 ? 's' : ''}`;
 
-    let html = toShow.map(hotelHTML).join('');
+    const resultsEl = document.getElementById('results');
+    resultsEl.classList.toggle('results-rows', _viewMode === 'rows');
+
+    _lbRegistry.length = 0;
+    let html = toShow.map(_viewMode === 'rows' ? hotelRowHTML : hotelHTML).join('');
 
     // Sentinel triggers loading more
     if (remaining > 0) {
@@ -1428,7 +1662,7 @@
       </div>`;
     }
 
-    document.getElementById('results').innerHTML = html;
+    resultsEl.innerHTML = html;
 
     if (remaining > 0) {
       const sentinel = document.getElementById('scroll-sentinel');
@@ -1670,6 +1904,10 @@
 
   // Keyboard nav on city input
   document.addEventListener('DOMContentLoaded', () => {
+    // Restore persisted view mode
+    document.getElementById('viewBtnCards').classList.toggle('active', _viewMode === 'cards');
+    document.getElementById('viewBtnRows').classList.toggle('active', _viewMode === 'rows');
+
     const queryInput = document.getElementById('queryInput');
     const cityInput  = document.getElementById('cityInput');
 
