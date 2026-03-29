@@ -1452,7 +1452,10 @@ app.get("/api/vsearch", async (req, res) => {
     // and raw-query fallback (cross-modal, lower similarities ~0.45-0.75).
     const SIM_MAX = rankedHotels[0]?.similarity ?? 0.90;
     const SIM_MIN = Math.max(SIM_MAX - 0.30, 0);
-    const FEATURE_PENALTY = 0.45;
+    // Penalty applied to hotels that cannot confirm a structural feature (e.g. double sinks).
+    // 0.65 means "probably doesn't have it" rather than a hard 0.45 wall — avoids an
+    // unnatural score cliff where all unconfirmed top hotels cluster at exactly the same %.
+    const FEATURE_PENALTY = 0.65;
     const photoHotelIds = new Set(hotelPhotosMap.keys());
 
     // Scores for top-150 hotels (with captions → full structural penalty logic)
