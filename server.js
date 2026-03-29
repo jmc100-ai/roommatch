@@ -1447,7 +1447,11 @@ app.get("/api/vsearch", async (req, res) => {
     //    Top GALLERY_LIMIT hotels use per-photo similarity (accurate) with structural penalty.
     //    Hotels beyond GALLERY_LIMIT use room-type-level similarity with no penalty
     //    (no captions available to verify, ranked far down anyway).
-    const SIM_MIN = 0.40, SIM_MAX = 0.72;
+    // Adaptive normalization: top result = 100%, spread fixed at 0.30.
+    // This works for both HyDE (same-vocabulary, higher similarities ~0.75-0.95)
+    // and raw-query fallback (cross-modal, lower similarities ~0.45-0.75).
+    const SIM_MAX = rankedHotels[0]?.similarity ?? 0.90;
+    const SIM_MIN = Math.max(SIM_MAX - 0.30, 0);
     const FEATURE_PENALTY = 0.45;
     const photoHotelIds = new Set(hotelPhotosMap.keys());
 
