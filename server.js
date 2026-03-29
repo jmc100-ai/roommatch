@@ -1282,62 +1282,42 @@ app.get("/api/vsearch", async (req, res) => {
 
     // Structural features: if the query specifically requests a feature, hotels whose
     // captions never confirm that feature get penalised (topScore × 0.45).
-    // This prevents a hotel excellent at ONE query term from outranking one that has both.
-    // Helper: confirm can be a RegExp or a function(caption) => bool
-    const testConfirm = (feat, caption) =>
-      typeof feat.confirm === 'function' ? feat.confirm(caption) : feat.confirm.test(caption);
-
-    // Helper: confirmSet checks confirmation across a full array of captions.
-    // Falls back to single-caption confirm if no confirmSet defined.
-    const testConfirmSet = (feat, captions) => {
-      if (feat.confirmSet) return feat.confirmSet(captions);
-      return captions.some(c => testConfirm(feat, c));
-    };
-
-    const STRUCTURAL_FEATURES = [
-      {
-        label: "double sinks",
-        queryMatch: /\bdouble sinks?\b|\btwo sinks?\b|\bdual sinks?\b|\btwin sinks?\b|\bmultiple sinks?\b|\bseveral sinks?\b/i,
-        confirm: /\b(two|double|dual|twin|2)\s*sinks?\b|\bsinks?\s*(?:count)?[:\s]+([2-9]|two|double|twin|dual)/i,
-        // Multi-photo confirmation: a single bathroom photo saying "two sinks" is accepted
-        // (benefit of the doubt — can't cross-check). But if 2+ bathroom photos exist and
-        // only 1 confirms, it's likely a hallucination → treat as unconfirmed.
-        confirmSet: (captions) => {
-          const bathroomRe = /PHOTO TYPE: bathroom/i;
-          const confirmRe  = /\b(two|double|dual|twin|2)\s*sinks?\b|\bsinks?\s*(?:count)?[:\s]+([2-9]|two|double|twin|dual)/i;
-          const bathroomCaptions = captions.filter(c => bathroomRe.test(c));
-          const confirmCount     = bathroomCaptions.filter(c => confirmRe.test(c)).length;
-          if (bathroomCaptions.length <= 1) return confirmCount >= 1;
-          return confirmCount >= 2;
-        },
-      },
-      {
-        label: "soaking tub",
-        queryMatch: /\b(soaking|freestanding|clawfoot)\s*tub\b/i,
-        // Matches: "soaking tub", "bathtub: soaking", "bathtub type: soaking"
-        confirm: /\b(soaking|freestanding|clawfoot|japanese)\s*(tub|bath)\b|\bbathtub\s*(?:type)?[:\s]+(soaking|freestanding|clawfoot)/i,
-      },
-      {
-        label: "balcony",
-        queryMatch: /\bbalcon(y|ies)\b/i,
-        confirm: /\bbalcon(y|ies)\b/i,
-      },
-      {
-        label: "fireplace",
-        queryMatch: /\bfireplace\b/i,
-        confirm: /\bfireplace\b/i,
-      },
-      {
-        label: "large windows",
-        queryMatch: /\b(large|floor.to.ceiling|panoramic|huge|big)\s*windows?\b/i,
-        // Matches: "large windows", "floor-to-ceiling windows", "windows: large", "windows: floor-to-ceiling"
-        confirm: /\b(large|floor.to.ceiling|panoramic|huge|oversized|expansive)\s*windows?\b|\bwindows?\s*(?:type)?[:\s]+(large|floor|panoramic|huge|yes|multiple|floor-to-ceiling)/i,
-      },
+    // Maps user query terms → feature flag names stored in room_types_index.features.
+    // score_room_types pre-filters to rooms that have confirmed the flag, so every hotel
+    // returned already has the feature — no post-hoc caption confirmation or penalty needed.
+    const FEATURE_FLAGS = [
+      // Bathroom
+      { label: 'double sinks',             flag: 'double_sinks',           queryMatch: /\bdouble sinks?\b|\btwo sinks?\b|\bdual sinks?\b|\btwin sinks?\b|\bmultiple sinks?\b|\bseveral sinks?\b/i },
+      { label: 'soaking tub',              flag: 'soaking_tub',            queryMatch: /\b(soaking|freestanding|clawfoot)\s*tub\b/i },
+      { label: 'bathtub',                  flag: 'bathtub',                queryMatch: /\bbathtub\b|\bbath tub\b/i },
+      { label: 'walk-in shower',           flag: 'walk_in_shower',         queryMatch: /\bwalk[- ]in shower\b/i },
+      { label: 'rainfall shower',          flag: 'rainfall_shower',        queryMatch: /\brainfall shower\b/i },
+      { label: 'jacuzzi',                  flag: 'in_room_jacuzzi',        queryMatch: /\bjacuzzi\b|\bin[- ]room hot tub\b|\bwhirlpool\b/i },
+      { label: 'bidet',                    flag: 'bidet',                  queryMatch: /\bbidet\b/i },
+      // Bedroom / Space
+      { label: 'king bed',                 flag: 'king_bed',               queryMatch: /\bking(?:[- ]size(?:d)?)?\s*bed\b|\bking bed\b/i },
+      { label: 'four-poster bed',          flag: 'four_poster_bed',        queryMatch: /\bfour[- ]poster\b/i },
+      { label: 'walk-in closet',           flag: 'walk_in_closet',         queryMatch: /\bwalk[- ]in closet\b|\bdressing room\b/i },
+      { label: 'separate living area',     flag: 'separate_living_area',   queryMatch: /\bseparate living\b|\bliving room\b/i },
+      { label: 'high ceilings',            flag: 'high_ceilings',          queryMatch: /\bhigh ceilings?\b|\bvaulted ceiling\b/i },
+      { label: 'floor-to-ceiling windows', flag: 'floor_to_ceiling_windows', queryMatch: /\bfloor[- ]to[- ]ceiling windows?\b|\bpanoramic windows?\b/i },
+      // Outdoor
+      { label: 'balcony',                  flag: 'balcony',                queryMatch: /\bbalcon(y|ies)\b/i },
+      { label: 'terrace',                  flag: 'terrace',                queryMatch: /\bterrace\b/i },
+      // Views
+      { label: 'Eiffel Tower view',        flag: 'landmark_view',          queryMatch: /\bEiffel Tower\b|\bEiffel view\b/i },
+      { label: 'city view',                flag: 'city_view',              queryMatch: /\bcity view\b/i },
+      { label: 'garden view',              flag: 'garden_view',            queryMatch: /\bgarden view\b/i },
+      { label: 'river view',               flag: 'river_view',             queryMatch: /\briver view\b|\bSeine view\b|\bThames view\b/i },
+      // General
+      { label: 'fireplace',                flag: 'fireplace',              queryMatch: /\bfireplace\b/i },
     ];
-    const queryLower = query.toLowerCase();
-    const detectedFeatures = STRUCTURAL_FEATURES.filter(f => f.queryMatch.test(queryLower));
-    if (detectedFeatures.length) {
-      console.log(`[vsearch] structural features detected: ${detectedFeatures.map(f => f.label).join(", ")}`);
+    const detectedFlags = FEATURE_FLAGS.filter(f => f.queryMatch.test(query));
+    const required_features = detectedFlags.length > 0
+      ? Object.fromEntries(detectedFlags.map(f => [f.flag, true]))
+      : null;
+    if (detectedFlags.length) {
+      console.log(`[vsearch] feature flags detected: ${detectedFlags.map(f => f.label).join(', ')} → DB pre-filter`);
     }
 
     const fetchClient = supabaseAdmin || supabase;
@@ -1355,7 +1335,11 @@ app.get("/api/vsearch", async (req, res) => {
     // 3-phase flow (score_hotels → score_room_types → score_hotel_photos).
     const tAfterEmbed = Date.now();
     const [roomTypesResult, cachedResult] = await Promise.all([
-      fetchClient.rpc("score_room_types", { query_embedding: queryEmbedding, search_city: city }),
+      fetchClient.rpc("score_room_types", {
+        query_embedding: queryEmbedding,
+        search_city: city,
+        ...(required_features ? { required_features } : {}),
+      }),
       hotelsPromise,
     ]);
     const tPhaseA = Date.now();
@@ -1385,34 +1369,17 @@ app.get("/api/vsearch", async (req, res) => {
 
     console.log(`[vsearch] ranked: ${rankedHotels.length} hotels from room-type scoring`);
 
-    // ── Phase B: photo fetch (zero vector computation) + caption fetch — in PARALLEL ──
-    // fetch_hotel_photos returns only photo metadata (no embeddings, no distance computation).
-    // Similarity per photo comes from room_types_index scores already computed in Phase A.
-    // This eliminates all Phase B vector math on the ARM 0.25vCPU, saving ~5s.
-    const topHotelIds     = rankedHotels.slice(0, GALLERY_LIMIT).map(h => h.hotel_id);
-    const captionHotelIds = rankedHotels.slice(0, 50).map(h => h.hotel_id);
-    const needCaptions    = detectedFeatures.length > 0;
-
-    const [photosResult, captionsResult] = await Promise.all([
-      fetchClient.rpc("fetch_hotel_photos", { hotel_ids: topHotelIds }),
-      needCaptions
-        ? fetchClient.rpc("get_hotel_captions", { hotel_ids: captionHotelIds })
-        : Promise.resolve({ data: null, error: null }),
-    ]);
+    // ── Phase B: photo fetch (zero vector computation) ──────────────────────────
+    // fetch_hotel_photos returns photo metadata; similarity per photo comes from
+    // room_types_index scores already computed in Phase A.
+    const topHotelIds = rankedHotels.slice(0, GALLERY_LIMIT).map(h => h.hotel_id);
+    const photosResult = await fetchClient.rpc("fetch_hotel_photos", { hotel_ids: topHotelIds });
     const tPhaseB = Date.now();
-    console.log(`[vsearch] phaseB: ${tPhaseB - tPhaseA}ms (captions: ${needCaptions})`);
+    console.log(`[vsearch] phaseB: ${tPhaseB - tPhaseA}ms`);
 
     if (photosResult.error) throw new Error("fetch_hotel_photos: " + photosResult.error.message);
-    if (captionsResult.error) console.error("[vsearch] get_hotel_captions error:", captionsResult.error.message);
-
     const photos = photosResult.data || [];
     console.log(`[vsearch] photos for top ${topHotelIds.length} hotels: ${photos.length}`);
-
-    // Build captionMap: "hotel_id::photo_url" → caption (only populated for structural queries)
-    const captionMap = new Map();
-    for (const c of (captionsResult.data || [])) {
-      captionMap.set(`${c.hotel_id}::${c.photo_url}`, c.caption);
-    }
 
     // 4. Build hotelPhotosMap and hotelScoreMap.
     // Photo similarity = room_type similarity from Phase A (same room → same score).
@@ -1422,17 +1389,15 @@ app.get("/api/vsearch", async (req, res) => {
     const hotelScoreMap  = new Map();  // hotel_id → {scores[], intentScores[], captions[]}
 
     for (const p of photos) {
-      const similarity   = roomTypeSimMap.get(`${p.hotel_id}::${p.room_name}`) ?? hotelSimMap.get(p.hotel_id) ?? 0;
-      const caption      = captionMap.get(`${p.hotel_id}::${p.photo_url}`) || null;
+      const similarity = roomTypeSimMap.get(`${p.hotel_id}::${p.room_name}`) ?? hotelSimMap.get(p.hotel_id) ?? 0;
 
       if (!hotelPhotosMap.has(p.hotel_id)) hotelPhotosMap.set(p.hotel_id, []);
-      hotelPhotosMap.get(p.hotel_id).push({ ...p, similarity, caption });
+      hotelPhotosMap.get(p.hotel_id).push({ ...p, similarity });
 
-      if (!hotelScoreMap.has(p.hotel_id)) hotelScoreMap.set(p.hotel_id, { scores: [], intentScores: [], captions: [] });
+      if (!hotelScoreMap.has(p.hotel_id)) hotelScoreMap.set(p.hotel_id, { scores: [], intentScores: [] });
       const hs = hotelScoreMap.get(p.hotel_id);
       hs.scores.push(similarity);
       if (!intentType || p.photo_type === intentType) hs.intentScores.push(similarity);
-      if (caption) hs.captions.push(caption);
     }
 
     // Log similarity distribution (from room_types scores, not per-photo)
@@ -1452,41 +1417,18 @@ app.get("/api/vsearch", async (req, res) => {
     // and raw-query fallback (cross-modal, lower similarities ~0.45-0.75).
     const SIM_MAX = rankedHotels[0]?.similarity ?? 0.90;
     const SIM_MIN = Math.max(SIM_MAX - 0.30, 0);
-    // Penalty applied to hotels that cannot confirm a structural feature (e.g. double sinks).
-    // 0.65 means "probably doesn't have it" rather than a hard 0.45 wall — avoids an
-    // unnatural score cliff where all unconfirmed top hotels cluster at exactly the same %.
-    const FEATURE_PENALTY = 0.65;
     const photoHotelIds = new Set(hotelPhotosMap.keys());
 
-    // Scores for top-150 hotels (with captions → full structural penalty logic)
+    // Score = mean of top-3 similarities (intent-type photos first, fallback to all).
+    // Feature flag pre-filter in score_room_types ensures every hotel here has confirmed
+    // the required features — no post-hoc penalty or boost needed.
     const photoHotelScores = [...photoHotelIds].map(hotelId => {
-      const hs        = hotelScoreMap.get(hotelId);
-      const arr       = hs.intentScores.length > 0 ? hs.intentScores : hs.scores;
+      const hs       = hotelScoreMap.get(hotelId);
+      const arr      = hs.intentScores.length > 0 ? hs.intentScores : hs.scores;
       arr.sort((a, b) => b - a);
-      const rawScore  = arr.slice(0, 3).reduce((s, x) => s + x, 0) / Math.min(3, arr.length);
+      const rawScore = arr.slice(0, 3).reduce((s, x) => s + x, 0) / Math.min(3, arr.length);
       let score = Math.max(0, Math.min(100, (rawScore - SIM_MIN) / (SIM_MAX - SIM_MIN) * 100));
-      for (const feat of detectedFeatures) {
-        const confirmed = testConfirmSet(feat, hs.captions);
-        if (!confirmed) {
-          // Unconfirmed: cap at 65% — hotel probably lacks the feature.
-          score *= FEATURE_PENALTY;
-          console.log(`[vsearch] penalty: ${hotelId} missing "${feat.label}" → score now ${score.toFixed(1)}`);
-        } else {
-          // Confirmed: remap [0–100] → [50–100] so confirmed hotels always outrank
-          // the unconfirmed ceiling of 65%, while preserving relative ordering
-          // within the confirmed group. Solves embedding-dilution cases where a
-          // rich feature_summary (bathtub + natural light + double sinks) scores
-          // lower than a sparse one despite confirming the queried feature.
-          const prevScore = score;
-          score = 50 + score / 2;
-          if (score !== prevScore) {
-            console.log(`[vsearch] confirmed remap: ${hotelId} has "${feat.label}" → ${prevScore.toFixed(1)} → ${score.toFixed(1)}`);
-          }
-        }
-      }
       // Photo-count penalty: penalises hotels with too few photos overall (poor visual coverage).
-      // Uses TOTAL photos, not intent-filtered — a hotel with 5 photos but only 1 bathroom photo
-      // still has good coverage and should not be penalised for bathroom queries.
       const hpAll = hotelPhotosMap.get(hotelId) || [];
       if (hpAll.length < 3) {
         const photoFactor = hpAll.length / 3;
@@ -1538,37 +1480,18 @@ app.get("/api/vsearch", async (req, res) => {
         };
       }
 
-      // Group photos by room_name; store caption+similarity so we can pin confirming rooms first.
-      // hotelPhotos is already sorted similarity DESC so first photo per room is the best.
+      // Group photos by room_name; hotelPhotos is already sorted similarity DESC.
       // room_type_id comes from LiteAPI (stored at index time) — may be null for older rows.
       const roomMap = new Map();
       for (const p of hotelPhotos) {
         const rName = p.room_name || "Room";
         if (!roomMap.has(rName)) roomMap.set(rName, { photos: [], roomTypeId: p.room_type_id || null });
         const entry = roomMap.get(rName);
-        if (entry.photos.length < 12) entry.photos.push({ url: p.photo_url, type: p.photo_type, similarity: p.similarity, caption: p.caption });
+        if (entry.photos.length < 12) entry.photos.push({ url: p.photo_url, type: p.photo_type, similarity: p.similarity });
       }
 
-      let roomEntries = [...roomMap.entries()];
-
-      // If structural features are detected, pin the room whose caption actually confirms
-      // the most features to the top. This prevents false positives from room names that
-      // happen to contain query words (e.g. "Two Adjacent Double Rooms" scoring high for
-      // "double sinks" just because "double" appears in the room name).
-      if (detectedFeatures.length > 0) {
-        roomEntries.sort((a, b) => {
-          const countConfirmed = (entry) =>
-            detectedFeatures.filter(f => testConfirmSet(f, entry.photos.map(p => p.caption).filter(Boolean))).length;
-          const aDiff = countConfirmed(a[1]);
-          const bDiff = countConfirmed(b[1]);
-          if (bDiff !== aDiff) return bDiff - aDiff;
-          const aBest = a[1].photos[0]?.similarity ?? 0;
-          const bBest = b[1].photos[0]?.similarity ?? 0;
-          return bBest - aBest;
-        });
-      } else {
-        roomEntries.sort((a, b) => (b[1].photos[0]?.similarity ?? 0) - (a[1].photos[0]?.similarity ?? 0));
-      }
+      const roomEntries = [...roomMap.entries()]
+        .sort((a, b) => (b[1].photos[0]?.similarity ?? 0) - (a[1].photos[0]?.similarity ?? 0));
 
       const roomTypes = roomEntries.map(([name, entry]) => {
         const photoEntries = entry.photos;
@@ -1584,14 +1507,6 @@ app.get("/api/vsearch", async (req, res) => {
           ? sims.slice(0, 3).reduce((s, x) => s + x, 0) / Math.min(3, sims.length)
           : 0;
         let roomScore = Math.max(0, Math.min(100, (rawRoom - SIM_MIN) / (SIM_MAX - SIM_MIN) * 100));
-        for (const feat of detectedFeatures) {
-          const confirmed = testConfirmSet(feat, photoEntries.map(p => p.caption).filter(Boolean));
-          if (!confirmed) {
-            roomScore *= FEATURE_PENALTY;
-          } else {
-            roomScore = 50 + roomScore / 2;
-          }
-        }
         // Photo-count penalty at room level: rooms with < 3 photos rank lower.
         if (photoEntries.length < 3) roomScore *= photoEntries.length / 3;
         return {
@@ -1847,6 +1762,62 @@ function extractFeatureSummary(caption, photoType = null) {
   return kept.length > 1 ? kept.join('\n') : null;
 }
 
+// Parses a feature_summary string into an explicit boolean flags object.
+// Only present keys are true (absent = not confirmed). Must stay in sync with
+// the SQL UPDATE in supabase/feature-flags.sql and the copy in scripts/index-city.js.
+function extractFeatureFlags(featureSummary) {
+  if (!featureSummary) return {};
+  const f = featureSummary;
+  const flags = {};
+
+  // Bathroom
+  if (/^SINKS:\s*double sinks/im.test(f))                                              flags.double_sinks = true;
+  if (/^BATHTUB:/im.test(f))                                                           flags.bathtub = true;
+  if (/^BATHTUB:\s*soaking tub/im.test(f))                                            flags.soaking_tub = true;
+  if (/^BATHTUB:\s*clawfoot/im.test(f))                                               flags.clawfoot_tub = true;
+  if (/^SHOWER:\s*walk-in shower/im.test(f))                                          flags.walk_in_shower = true;
+  if (/^SHOWER:.*rainfall shower/im.test(f) ||
+      /^DISTINCTIVE FEATURES:.*rainfall shower/im.test(f))                            flags.rainfall_shower = true;
+  if (/^IN-ROOM HOT TUB OR JACUZZI:\s*yes/im.test(f) ||
+      /^BATHTUB:\s*(?:jacuzzi|hot tub)/im.test(f))                                    flags.in_room_jacuzzi = true;
+  if (/^BIDET:\s*yes/im.test(f))                                                      flags.bidet = true;
+  if (/^SEPARATE TOILET ROOM:\s*yes/im.test(f))                                       flags.separate_toilet_room = true;
+
+  // Bedroom / Closet
+  if (/^BED:.*\bking\b/im.test(f))                                                    flags.king_bed = true;
+  if (/^BED:.*four[- ]poster/im.test(f))                                              flags.four_poster_bed = true;
+  if (/^BED:.*\btwins?\b/im.test(f))                                                  flags.twin_beds = true;
+  if (/^WALK-IN CLOSET:\s*yes/im.test(f))                                             flags.walk_in_closet = true;
+
+  // Space
+  if (/^SEPARATE LIVING AREA:\s*yes/im.test(f))                                       flags.separate_living_area = true;
+  if (/^CEILING HEIGHT:\s*(?:high ceilings|vaulted ceiling)/im.test(f))              flags.high_ceilings = true;
+  if (/^WINDOWS:\s*floor-to-ceiling windows/im.test(f))                              flags.floor_to_ceiling_windows = true;
+
+  // Outdoor
+  if (/^BALCONY OR TERRACE:\s*yes/im.test(f))                                        flags.balcony = true;
+  if (/^DISTINCTIVE FEATURES:.*\bterrace\b/im.test(f))                               flags.terrace = true;
+
+  // Views
+  if (/^VIEW:\s*city view/im.test(f))                                                 flags.city_view = true;
+  if (/^VIEW:\s*(?:Eiffel Tower|landmark|Big Ben|Tower Bridge|Empire State|monument)/im.test(f)) flags.landmark_view = true;
+  if (/^VIEW:\s*garden view/im.test(f))                                               flags.garden_view = true;
+  if (/^VIEW:\s*(?:river view|seine|thames|hudson|canal view)/im.test(f))             flags.river_view = true;
+  if (/^VIEW:\s*courtyard view/im.test(f))                                            flags.courtyard_view = true;
+  if (/^VIEW:\s*pool view/im.test(f))                                                 flags.pool_view = true;
+  if (/^VIEW:\s*(?:sea view|ocean view)/im.test(f))                                   flags.sea_view = true;
+  if (/^VIEW:\s*mountain view/im.test(f))                                             flags.mountain_view = true;
+
+  // Features
+  if (/^FIREPLACE:\s*yes/im.test(f))                                                  flags.fireplace = true;
+  if (/^DISTINCTIVE FEATURES:.*\bprivate pool\b/im.test(f))                          flags.private_pool = true;
+  if (/^SOFA:\s*yes/im.test(f))                                                       flags.sofa = true;
+  if (/^CHAISE LOUNGE:\s*yes/im.test(f))                                              flags.chaise_lounge = true;
+  if (/^DINING TABLE:\s*yes/im.test(f))                                               flags.dining_table = true;
+
+  return flags;
+}
+
 // ── Backfill feature_embedding for existing rows (protected) ─────────────────
 // Reads each row's raw caption, applies the improved extractFeatureSummary()
 // to get a clean signal-dense text (positive features only, no flooring noise),
@@ -1927,7 +1898,7 @@ app.post("/api/backfill-feature-embeddings", async (req, res) => {
           const vec = await rateLimitedEmbed(summary);
           if (!vec) { failed++; return; }
           const { error: upErr } = await fc.from("room_embeddings")
-            .update({ feature_embedding: vec, feature_summary: summary })
+            .update({ feature_embedding: vec, feature_summary: summary, feature_flags: extractFeatureFlags(summary) })
             .eq("id", row.id);
           if (upErr) { failed++; console.warn("[feat-embed] update err:", upErr.message); }
           else done++;

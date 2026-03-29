@@ -148,6 +148,60 @@ function extractFeatureSummary(caption, photoType = null) {
   return kept.length > 1 ? kept.join('\n') : null;
 }
 
+// Must stay in sync with extractFeatureFlags() in server.js.
+function extractFeatureFlags(featureSummary) {
+  if (!featureSummary) return {};
+  const f = featureSummary;
+  const flags = {};
+
+  // Bathroom
+  if (/^SINKS:\s*double sinks/im.test(f))                                              flags.double_sinks = true;
+  if (/^BATHTUB:/im.test(f))                                                           flags.bathtub = true;
+  if (/^BATHTUB:\s*soaking tub/im.test(f))                                            flags.soaking_tub = true;
+  if (/^BATHTUB:\s*clawfoot/im.test(f))                                               flags.clawfoot_tub = true;
+  if (/^SHOWER:\s*walk-in shower/im.test(f))                                          flags.walk_in_shower = true;
+  if (/^SHOWER:.*rainfall shower/im.test(f) ||
+      /^DISTINCTIVE FEATURES:.*rainfall shower/im.test(f))                            flags.rainfall_shower = true;
+  if (/^IN-ROOM HOT TUB OR JACUZZI:\s*yes/im.test(f) ||
+      /^BATHTUB:\s*(?:jacuzzi|hot tub)/im.test(f))                                    flags.in_room_jacuzzi = true;
+  if (/^BIDET:\s*yes/im.test(f))                                                      flags.bidet = true;
+  if (/^SEPARATE TOILET ROOM:\s*yes/im.test(f))                                       flags.separate_toilet_room = true;
+
+  // Bedroom / Closet
+  if (/^BED:.*\bking\b/im.test(f))                                                    flags.king_bed = true;
+  if (/^BED:.*four[- ]poster/im.test(f))                                              flags.four_poster_bed = true;
+  if (/^BED:.*\btwins?\b/im.test(f))                                                  flags.twin_beds = true;
+  if (/^WALK-IN CLOSET:\s*yes/im.test(f))                                             flags.walk_in_closet = true;
+
+  // Space
+  if (/^SEPARATE LIVING AREA:\s*yes/im.test(f))                                       flags.separate_living_area = true;
+  if (/^CEILING HEIGHT:\s*(?:high ceilings|vaulted ceiling)/im.test(f))              flags.high_ceilings = true;
+  if (/^WINDOWS:\s*floor-to-ceiling windows/im.test(f))                              flags.floor_to_ceiling_windows = true;
+
+  // Outdoor
+  if (/^BALCONY OR TERRACE:\s*yes/im.test(f))                                        flags.balcony = true;
+  if (/^DISTINCTIVE FEATURES:.*\bterrace\b/im.test(f))                               flags.terrace = true;
+
+  // Views
+  if (/^VIEW:\s*city view/im.test(f))                                                 flags.city_view = true;
+  if (/^VIEW:\s*(?:Eiffel Tower|landmark|Big Ben|Tower Bridge|Empire State|monument)/im.test(f)) flags.landmark_view = true;
+  if (/^VIEW:\s*garden view/im.test(f))                                               flags.garden_view = true;
+  if (/^VIEW:\s*(?:river view|seine|thames|hudson|canal view)/im.test(f))             flags.river_view = true;
+  if (/^VIEW:\s*courtyard view/im.test(f))                                            flags.courtyard_view = true;
+  if (/^VIEW:\s*pool view/im.test(f))                                                 flags.pool_view = true;
+  if (/^VIEW:\s*(?:sea view|ocean view)/im.test(f))                                   flags.sea_view = true;
+  if (/^VIEW:\s*mountain view/im.test(f))                                             flags.mountain_view = true;
+
+  // Features
+  if (/^FIREPLACE:\s*yes/im.test(f))                                                  flags.fireplace = true;
+  if (/^DISTINCTIVE FEATURES:.*\bprivate pool\b/im.test(f))                          flags.private_pool = true;
+  if (/^SOFA:\s*yes/im.test(f))                                                       flags.sofa = true;
+  if (/^CHAISE LOUNGE:\s*yes/im.test(f))                                              flags.chaise_lounge = true;
+  if (/^DINING TABLE:\s*yes/im.test(f))                                               flags.dining_table = true;
+
+  return flags;
+}
+
 // ── Rate limiters ─────────────────────────────────────────────────────────────
 // Caption (vision): 500 req/min ceiling to leave headroom
 let _capCount = 0, _capWindow = Date.now();
@@ -511,6 +565,7 @@ ${caption}`;
         // without flooring/decor/furniture noise — gives much better cosine similarity
         // for specific feature queries like "double sinks" or "soaking tub".
         const featureSummaryText = extractFeatureSummary(hybridText, detectedType);
+        const featureFlags = featureSummaryText ? extractFeatureFlags(featureSummaryText) : {};
         const [embedding, featureEmbedding] = await Promise.all([
           geminiEmbed(hybridText),
           featureSummaryText ? geminiEmbed(featureSummaryText) : Promise.resolve(null),
@@ -530,6 +585,7 @@ ${caption}`;
             photo_type: detectedType,  // use Gemini-detected type
             caption: hybridText,
             feature_summary: featureSummaryText,
+            feature_flags: featureFlags,
             embedding,
             feature_embedding: featureEmbedding || null,
             star_rating: stars, guest_rating: rating,
