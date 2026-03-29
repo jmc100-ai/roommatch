@@ -230,6 +230,8 @@ app.get("/api/debug-photos", async (req, res) => {
 });
 
 // ── Debug rates for a single hotel ───────────────────────────────────────────
+// Shows parsed room types AND raw LiteAPI response for full structure inspection.
+// Usage: GET /api/debug-rates?hotelId=lp6556dea4&checkin=2026-03-30&checkout=2026-04-02
 app.get("/api/debug-rates", async (req, res) => {
   const { hotelId, checkin, checkout } = req.query;
   if (!hotelId || !checkin || !checkout) return res.status(400).json({ error: "hotelId, checkin, checkout required" });
@@ -238,22 +240,34 @@ app.get("/api/debug-rates", async (req, res) => {
     method: "POST",
     headers: { "X-API-Key": LITEAPI_KEY, "Content-Type": "application/json", "accept": "application/json" },
     body: JSON.stringify({ hotelIds: [hotelId], checkin, checkout, currency: "EUR", guestNationality: "US",
-      occupancies: [{ adults: 2 }], maxRatesPerHotel: 20, roomMapping: true, timeout: 10 }),
+      occupancies: [{ adults: 2 }], maxRatesPerHotel: 20, roomMapping: true, timeout: 22 }),
   });
   const json = await liteRes.json();
-  const hotel = (json?.data?.rates ?? json?.data ?? json?.rates ?? [])[0];
-  if (!hotel) return res.json({ raw: json, roomTypes: [] });
-  const roomTypes = (hotel.roomTypes || []).map(rt => ({
-    roomTypeId: rt.roomTypeId,
-    rateCount: rt.rates?.length,
-    rates: (rt.rates || []).slice(0, 3).map(r => ({
-      name: r.name,
-      mappedRoomId: r.mappedRoomId,
-      total: r.retailRate?.total?.[0]?.amount,
-      perNight: r.retailRate?.total?.[0]?.amount ? Math.round(r.retailRate.total[0].amount / nights) : null,
-    })),
-  }));
-  res.json({ hotelId, nights, roomTypeCount: roomTypes.length, roomTypes });
+  const ratesList = json?.data?.rates ?? json?.data ?? json?.rates ?? [];
+  const hotel = ratesList[0];
+  if (!hotel) return res.json({ httpStatus: liteRes.status, foundHotel: false, raw: json });
+  const roomTypes = (hotel.roomTypes || []).map(rt => {
+    const firstRate = rt.rates?.[0] || {};
+    // Check multiple possible price locations in LiteAPI response
+    const fromRetailTotal  = firstRate.retailRate?.total?.[0]?.amount;
+    const fromRetailNet    = firstRate.retailRate?.net?.[0]?.amount;
+    const fromTotal        = firstRate.total;
+    const fromNet          = firstRate.net;
+    const resolved = fromRetailTotal ?? fromRetailNet ?? fromTotal ?? fromNet ?? null;
+    return {
+      roomTypeId:      rt.roomTypeId,
+      rateCount:       rt.rates?.length,
+      mappedRoomId:    firstRate.mappedRoomId,
+      name:            firstRate.name,
+      retailTotal:     fromRetailTotal,
+      retailNet:       fromRetailNet,
+      directTotal:     fromTotal,
+      directNet:       fromNet,
+      resolvedAmount:  resolved,
+      perNight:        resolved ? Math.round(resolved / nights) : null,
+    };
+  });
+  res.json({ httpStatus: liteRes.status, hotelId, nights, roomTypeCount: roomTypes.length, roomTypes, rawKeys: Object.keys(json) });
 });
 
 // ── Gemini model debug endpoint ───────────────────────────────────────────────
@@ -1529,33 +1543,6 @@ app.get("/api/rates", async (req, res) => {
   } catch (err) {
     console.error("[rates]", err.message);
     res.json({ prices: {}, currency: "EUR", nights: nights || 1, pricedCount: 0 });
-  }
-});
-
-// ── Debug: raw LiteAPI rates for a single hotel ───────────────────────────────
-// Usage: GET /api/debug-rates?hotelId=lp6556dea4&checkin=2026-03-30&checkout=2026-04-02
-app.get("/api/debug-rates", async (req, res) => {
-  const { hotelId, checkin, checkout } = req.query;
-  if (!hotelId || !checkin || !checkout) {
-    return res.status(400).json({ error: "hotelId, checkin, checkout required" });
-  }
-  const nights = Math.round((new Date(checkout) - new Date(checkin)) / 86400000);
-  if (nights < 1) return res.status(400).json({ error: "checkout must be after checkin" });
-  try {
-    const liteRes = await fetch("https://api.liteapi.travel/v3.0/hotels/rates", {
-      method: "POST",
-      headers: { "X-API-Key": LITEAPI_KEY, "Content-Type": "application/json", "accept": "application/json" },
-      body: JSON.stringify({
-        hotelIds: [hotelId], checkin, checkout,
-        currency: "EUR", guestNationality: "US",
-        occupancies: [{ adults: 2 }], maxRatesPerHotel: 5,
-        roomMapping: true, timeout: 22,
-      }),
-    });
-    const raw = await liteRes.json();
-    res.json({ status: liteRes.status, nights, raw });
-  } catch (err) {
-    res.json({ error: err.message });
   }
 });
 
