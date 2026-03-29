@@ -1130,7 +1130,9 @@ app.get("/api/vsearch", async (req, res) => {
     }
 
     const fetchClient = supabaseAdmin || supabase;
-    const GALLERY_LIMIT = 600;   // hotels that get full photo galleries
+    // 250 hotels × 40 photos cap = 10k rows, just within Supabase PostgREST default limit.
+    // fetch_hotel_photos now applies a per-hotel ROW_NUMBER cap (default 40) as a safety net.
+    const GALLERY_LIMIT = 250;
 
     // ── Phase A: room-type scoring (full city) + hotel metadata cache — in PARALLEL ──
     // score_room_types scans room_types_index (~7k rows for Paris) for all hotels in the
