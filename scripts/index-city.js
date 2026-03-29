@@ -124,7 +124,14 @@ function extractFeatureSummary(caption) {
       if (SKIP_VALUES.has(value)) continue;
       if (value.startsWith('no ')) continue;      // "no bathtub", "no bed visible"
       if (value.includes('not visible')) continue; // "no view visible"
-      kept.push(line);
+      // Normalise vocabulary to match common user query terms so embeddings
+      // land close to user queries (e.g. users say "double sinks", Gemini says "two sinks").
+      const normalised = line
+        .replace(/:\s*two sinks\b/i,       ': double sinks')
+        .replace(/:\s*one sink\b/i,        ': single sink')
+        .replace(/:\s*three sinks\b/i,     ': triple sinks')
+        .replace(/:\s*shower over bath\b/i,': shower over bath, rainfall shower');
+      kept.push(normalised);
     }
   }
 

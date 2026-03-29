@@ -1041,13 +1041,35 @@ app.get("/api/vsearch", async (req, res) => {
     const indexing = false;
 
     // 2. Embed the query with Gemini
+    // Expand query with synonyms before embedding to bridge vocabulary gaps between
+    // user language and Gemini caption output (e.g. users say "double sinks",
+    // Gemini captions say "two sinks"). Appending the synonym makes the query vector
+    // land between both terms in embedding space, greatly improving recall.
+    const QUERY_SYNONYMS = [
+      [/\bdouble sinks?\b/gi,      'double sinks two sinks dual vanity'],
+      [/\btwo sinks?\b/gi,         'two sinks double sinks dual vanity'],
+      [/\bsoaking tub\b/gi,        'soaking tub freestanding bathtub deep bath'],
+      [/\bfreestanding tub\b/gi,   'freestanding tub soaking tub standalone bathtub'],
+      [/\bhardwood floor/gi,       'hardwood floor wood floor parquet flooring'],
+      [/\bwalk.?in (shower|closet)/gi, (m) => `${m} walk-in ${m.split(/\s+/).pop()}`],
+      [/\brain(fall)? shower\b/gi, 'rainfall shower rain shower overhead shower'],
+      [/\bclawfoot\b/gi,           'clawfoot freestanding tub vintage bathtub'],
+    ];
+    let embeddingQuery = query;
+    for (const [pattern, replacement] of QUERY_SYNONYMS) {
+      embeddingQuery = embeddingQuery.replace(pattern, replacement);
+    }
+    if (embeddingQuery !== query) {
+      console.log(`[vsearch] query expanded: "${query}" → "${embeddingQuery}"`);
+    }
+
     const tStartEmbed = Date.now();
     const embedRes = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/gemini-embedding-001:embedContent?key=${process.env.GEMINI_KEY}`,
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ content: { parts: [{ text: query }] } }),
+        body: JSON.stringify({ content: { parts: [{ text: embeddingQuery }] } }),
         signal: AbortSignal.timeout(8000),
       }
     );
@@ -1582,7 +1604,13 @@ function extractFeatureSummary(caption) {
       const value = line.slice(colonIdx + 1).trim().toLowerCase();
       if (!value || SKIP_VALUES.has(value)) continue;
       if (value.startsWith('no ') || value.includes('not visible')) continue;
-      kept.push(line);
+      // Normalise vocabulary to match common user query terms
+      const normalised = line
+        .replace(/:\s*two sinks\b/i,       ': double sinks')
+        .replace(/:\s*one sink\b/i,        ': single sink')
+        .replace(/:\s*three sinks\b/i,     ': triple sinks')
+        .replace(/:\s*shower over bath\b/i,': shower over bath, rainfall shower');
+      kept.push(normalised);
     }
   }
   return kept.length > 1 ? kept.join('\n') : null;
