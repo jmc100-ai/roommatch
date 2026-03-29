@@ -1428,14 +1428,22 @@ app.get("/api/rates", async (req, res) => {
   }
 
   try {
-    const fc = supabaseAdmin || supabase;
-    const { data: hotelRows, error: dbErr } = await fc
-      .from("hotels_cache").select("hotel_id").eq("city", city);
-    if (dbErr) throw new Error("DB: " + dbErr.message);
-    if (!hotelRows?.length) return res.json({ prices: {}, currency: "EUR", nights, pricedCount: 0 });
-
-    const hotelIds = hotelRows.map(h => h.hotel_id);
-    console.log(`[rates] ${city}: fetching rates for ${hotelIds.length} hotels, ${checkin}→${checkout}`);
+    // If the frontend passes ranked hotel IDs directly, use them.
+    // Otherwise fall back to fetching all hotel IDs for the city from the DB.
+    let hotelIds;
+    const rawIds = req.query.hotelIds;
+    if (rawIds && typeof rawIds === 'string' && rawIds.length > 0) {
+      hotelIds = rawIds.split(',').map(s => s.trim()).filter(Boolean).slice(0, 200);
+      console.log(`[rates] ${city}: using ${hotelIds.length} ranked hotel IDs from client, ${checkin}→${checkout}`);
+    } else {
+      const fc = supabaseAdmin || supabase;
+      const { data: hotelRows, error: dbErr } = await fc
+        .from("hotels_cache").select("hotel_id").eq("city", city);
+      if (dbErr) throw new Error("DB: " + dbErr.message);
+      if (!hotelRows?.length) return res.json({ prices: {}, currency: "EUR", nights, pricedCount: 0 });
+      hotelIds = hotelRows.map(h => h.hotel_id);
+      console.log(`[rates] ${city}: fetching rates for ${hotelIds.length} hotels from DB, ${checkin}→${checkout}`);
+    }
 
     const liteRes = await fetch("https://api.liteapi.travel/v3.0/hotels/rates", {
       method: "POST",
@@ -1449,7 +1457,7 @@ app.get("/api/rates", async (req, res) => {
         occupancies: [{ adults: 2 }],
         maxRatesPerHotel: 20,
         roomMapping: true,
-        timeout: 10,
+        timeout: 22,
       }),
     });
 

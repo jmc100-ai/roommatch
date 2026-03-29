@@ -357,6 +357,24 @@
       0%, 100% { opacity: 0.4; }
       50%       { opacity: 0.9; }
     }
+    .price-skeleton {
+      display: inline-block; width: 72px; height: 18px;
+      background: linear-gradient(90deg, var(--border) 25%, #e2e2e2 50%, var(--border) 75%);
+      background-size: 300% 100%; border-radius: 4px;
+      animation: skeletonSlide 1.6s ease-in-out infinite;
+      vertical-align: middle;
+    }
+    .hotel-row-price-skeleton {
+      display: block; width: 56px; height: 15px;
+      background: linear-gradient(90deg, var(--border) 25%, #e2e2e2 50%, var(--border) 75%);
+      background-size: 300% 100%; border-radius: 3px;
+      animation: skeletonSlide 1.6s ease-in-out infinite;
+      margin: 2px auto 0;
+    }
+    @keyframes skeletonSlide {
+      0%   { background-position: 100% center; }
+      100% { background-position: -100% center; }
+    }
 
     /* ── Results ────────────────── */
     #results { padding: 0 56px 80px; display: flex; flex-direction: column; gap: 28px; max-width: 1180px; margin: 0 auto; box-sizing: content-box; }
@@ -947,6 +965,7 @@
   let _displayedCount = 10;
   let _ratesReqId     = 0;   // incremented per search to discard stale rate responses
   let _pricesLoaded   = false;
+  let _fetchingPrices = false;  // true while /api/rates is in flight (shows skeleton)
   let _hasDateSearch  = false;  // true after prices fetched with specific dates
   let _showAvailOnly  = true;   // toggle: only show available rooms (default on when dates entered)
   let _priceCurrency  = 'EUR';  // currency returned by rates API
@@ -1151,13 +1170,14 @@
         setStatus(''); renderEmpty(query, city);
       } else if (hotels.length) {
         setStatus('');
-        render(hotels);  // resets _pricesLoaded = false, _hasDateSearch = false
+        render(hotels, hasDates);  // resets _pricesLoaded = false, sets _fetchingPrices
         if (hasDates) {
-          // Start spinner on price buttons then fetch — spinner set inside fetchPrices
-          fetchPrices(city, checkin, checkout, reqId);
+          // Pass top 200 ranked hotel IDs to /api/rates (avoids DB re-query, improves coverage)
+          fetchPrices(city, checkin, checkout, reqId, hotels.slice(0, 200).map(h => h.id));
         } else {
           // No dates — unlock price sort buttons immediately, no availability state
           _pricesLoaded = true;
+          _fetchingPrices = false;
           _hasDateSearch = false;
           _setPriceBtnsState(true);
         }
@@ -1238,12 +1258,13 @@
 
   // ── Render + sort ──────────────────────────────────────────────────────────
 
-  function render(hotels) {
+  function render(hotels, hasDates = false) {
     _lbRegistry.length = 0;  // reset photo registry for each new search result
     _lastHotels     = hotels;
     _currentSort    = 'match';
     _displayedCount = 10;
     _pricesLoaded   = false;
+    _fetchingPrices = !!hasDates;
     _hasDateSearch  = false;
     _showAvailOnly  = false;
     const availFilter = document.getElementById('availFilter');
@@ -1278,19 +1299,23 @@
   }
 
   // Fires parallel to vsearch. reqId lets us discard stale responses if user re-searches.
-  async function fetchPrices(city, checkin, checkout, reqId) {
+  async function fetchPrices(city, checkin, checkout, reqId, hotelIds = []) {
     _setPriceBtnsState(false);  // show spinner only while fetch is in flight
     _setRatesStatus('loading', 'Checking live rates…');
     try {
-      const resp = await fetch(`${BACKEND}/api/rates?` + new URLSearchParams({ city, checkin, checkout }));
+      const params = new URLSearchParams({ city, checkin, checkout });
+      if (hotelIds.length > 0) params.set('hotelIds', hotelIds.join(','));
+      const resp = await fetch(`${BACKEND}/api/rates?` + params);
       if (reqId !== _ratesReqId) return;  // stale — a new search was started
-      if (!resp.ok) { _setPriceBtnsState(true); return; }
+      if (!resp.ok) { _fetchingPrices = false; _setPriceBtnsState(true); return; }
       const data = await resp.json();
       if (reqId !== _ratesReqId) return;
+      _fetchingPrices = false;
       applyPrices(data.prices || {}, data.roomPrices || {}, data.currency || 'EUR', data.pricedCount || 0);
     } catch (e) {
       console.warn('[prices]', e.message);
       if (reqId === _ratesReqId) {
+        _fetchingPrices = false;
         _setPriceBtnsState(true);
         _setRatesStatus('', '');
       }
@@ -1313,6 +1338,14 @@
       const noteEl = document.getElementById(`hotel-price-note-${h.id}`);
       if (noteEl) {
         noteEl.textContent = h.price != null ? 'Lowest available' : 'No rates found';
+      }
+
+      // --- row view price (list mode) ---
+      const rowPriceEl = document.getElementById(`hotel-row-price-${h.id}`);
+      if (rowPriceEl) {
+        rowPriceEl.innerHTML = h.price != null
+          ? `<div class="hotel-row-price-main">${sym}${Math.round(h.price).toLocaleString()}</div><div class="hotel-row-price-per">/night</div>`
+          : `<div class="hotel-row-price-per" style="margin-top:4px">No rates</div>`;
       }
 
       // --- match badge (effectiveScore changes once _pricesLoaded=true) ---
@@ -1528,7 +1561,9 @@
       ? `<div class="hotel-row-price-main">${sym}${Math.round(h.price).toLocaleString()}</div>
          <div class="hotel-row-price-per">/night</div>
          ${_hasDateSearch ? `<div class="hotel-row-price-total">${sym}${Math.round(h.price * (parseInt(document.getElementById('checkoutInput')?.value && document.getElementById('checkinInput')?.value ? (new Date(document.getElementById('checkoutInput').value) - new Date(document.getElementById('checkinInput').value)) / 86400000 : 0) || 1)).toLocaleString()} total</div>` : ''}`
-      : `<div class="hotel-row-price-per" style="margin-top:4px">${_pricesLoaded ? 'No rates' : 'Add dates'}</div>`;
+      : _fetchingPrices
+        ? `<div class="hotel-row-price-skeleton"></div>`
+        : `<div class="hotel-row-price-per" style="margin-top:4px">${_pricesLoaded ? 'No rates' : 'Add dates'}</div>`;
 
     // Build room sub-rows
     const roomRowsHTML = visibleRooms.map((rt, ri) => {
@@ -1574,7 +1609,7 @@
           <div class="hotel-row-match-label">match</div>
           ${topRoom ? `<div class="hotel-row-match-room">${topRoom.name}</div>` : ''}
         </div>
-        <div class="hotel-row-price">${priceHTML}</div>
+        <div class="hotel-row-price" id="hotel-row-price-${h.id}">${priceHTML}</div>
         <span class="hotel-row-chevron">▼</span>
       </div>
       <div class="hotel-row-body" id="hrow-body-${h.id}">
@@ -1731,10 +1766,19 @@
             <div class="hotel-actions">
               <a class="book-btn" href="${bookUrl}" target="_blank" rel="noopener">Find &amp; Book →</a>
               <div class="hotel-price">
-                <span class="price-value${!h.price && _pricesLoaded === false ? ' price-loading' : ''}" id="hotel-price-${h.id}">
-                  ${h.price != null ? `€${h.price.toLocaleString()}<span class="price-per">/night</span>` : `--<span class="price-per">/night</span>`}
+                <span class="price-value" id="hotel-price-${h.id}">
+                  ${h.price != null
+                    ? `€${h.price.toLocaleString()}<span class="price-per">/night</span>`
+                    : _fetchingPrices
+                      ? `<span class="price-skeleton"></span>`
+                      : `--<span class="price-per">/night</span>`}
                 </span>
-                <span class="price-note" id="hotel-price-note-${h.id}">${h.price != null ? 'Lowest available' : (_pricesLoaded ? 'No rates found' : 'Add dates for rates')}</span>
+                <span class="price-note" id="hotel-price-note-${h.id}">${
+                  h.price != null ? 'Lowest available'
+                  : _fetchingPrices ? 'Loading rates…'
+                  : _pricesLoaded   ? 'No rates found'
+                  :                   'Add dates for rates'
+                }</span>
               </div>
             </div>
           </div>
