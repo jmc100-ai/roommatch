@@ -1251,15 +1251,14 @@ app.get("/api/vsearch", async (req, res) => {
           console.log(`[vsearch] penalty: ${hotelId} missing "${feat.label}" → score now ${score.toFixed(1)}`);
         }
       }
-      // Photo-count penalty: low photo count reduces match confidence and visual quality.
-      // Use intent-filtered photos (e.g. only bathrooms for a bathroom query) so a hotel
-      // with 20 bedroom photos but 1 bathroom photo still gets penalised for bathroom queries.
-      const hpAll      = hotelPhotosMap.get(hotelId) || [];
-      const hpRelevant = intentType ? hpAll.filter(p => p.photo_type === intentType) : hpAll;
-      if (hpRelevant.length < 3) {
-        const photoFactor = hpRelevant.length / 3;
+      // Photo-count penalty: penalises hotels with too few photos overall (poor visual coverage).
+      // Uses TOTAL photos, not intent-filtered — a hotel with 5 photos but only 1 bathroom photo
+      // still has good coverage and should not be penalised for bathroom queries.
+      const hpAll = hotelPhotosMap.get(hotelId) || [];
+      if (hpAll.length < 3) {
+        const photoFactor = hpAll.length / 3;
         score *= photoFactor;
-        console.log(`[vsearch] photo-count penalty: ${hotelId} ${hpRelevant.length} relevant photos → score now ${score.toFixed(1)}`);
+        console.log(`[vsearch] photo-count penalty: ${hotelId} only ${hpAll.length} total photos → score now ${score.toFixed(1)}`);
       }
       return { hotelId, topScore: score, hasPhotos: true };
     });
