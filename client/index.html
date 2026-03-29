@@ -137,7 +137,7 @@
     .search-btn:active { transform: scale(0.98); }
     .search-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
-    .divider { height: 1px; background: var(--border); margin: 0 56px; }
+    .divider { height: 1px; background: var(--border); max-width: 1180px; margin: 0 auto; padding: 0 56px; box-sizing: content-box; }
 
     /* ── City autocomplete ───────────────────────────────────────────────── */
     .city-wrap { position: relative; }
@@ -170,7 +170,7 @@
     .city-loading { padding: 12px 16px; font-size: 12px; color: var(--muted); font-style: italic; }
 
     /* ── Status ─────────────────── */
-    #status { padding: 12px 56px; font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); min-height: 44px; display: flex; align-items: center; gap: 10px; }
+    #status { padding: 12px max(56px, calc((100vw - 1180px) / 2)); font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); min-height: 44px; display: flex; align-items: center; gap: 10px; }
     .spinner { width: 13px; height: 13px; border: 1.5px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.7s linear infinite; flex-shrink: 0; }
     @keyframes spin { to { transform: rotate(360deg); } }
 
@@ -179,7 +179,7 @@
       display: none;
       align-items: center;
       justify-content: flex-start;
-      padding: 10px 56px;
+      padding: 10px max(56px, calc((100vw - 1180px) / 2));
       border-bottom: 1px solid var(--border);
       gap: 14px;
       flex-wrap: wrap;
@@ -359,7 +359,7 @@
     }
 
     /* ── Results ────────────────── */
-    #results { padding: 0 56px 80px; display: flex; flex-direction: column; gap: 28px; }
+    #results { padding: 0 56px 80px; display: flex; flex-direction: column; gap: 28px; max-width: 1180px; margin: 0 auto; box-sizing: content-box; }
 
     /* ── Hotel card ─────────────── */
     .hotel-card {
