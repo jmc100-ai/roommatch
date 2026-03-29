@@ -1546,10 +1546,41 @@ app.get("/api/rates", async (req, res) => {
   }
 });
 
+// ── feature_summary extractor (mirrors index-city.js version) ────────────────
+// Keeps only POSITIVE/PRESENT values; drops FLOORING & DECOR section entirely.
+// Must stay in sync with extractFeatureSummary() in scripts/index-city.js.
+function extractFeatureSummary(caption) {
+  if (!caption) return null;
+  const SKIP_SECTIONS = new Set(['FLOORING & DECOR']);
+  const SKIP_VALUES   = new Set(['no', 'none', 'unknown', 'standard', 'standard ceiling', 'moderate light']);
+  const lines = caption.split('\n');
+  const kept  = [];
+  let skipSection = false;
+  for (const raw of lines) {
+    const line = raw.trim();
+    if (!line) continue;
+    const secMatch = line.match(/^([A-Z][A-Z &]+):$/);
+    if (secMatch) { skipSection = SKIP_SECTIONS.has(secMatch[1]); continue; }
+    if (skipSection) continue;
+    if (line.startsWith('PHOTO TYPE:') && line.includes('|')) { kept.push(line); continue; }
+    if (line.startsWith('Room type:')) { kept.push(line); continue; }
+    const colonIdx = line.indexOf(':');
+    if (colonIdx > 0) {
+      const value = line.slice(colonIdx + 1).trim().toLowerCase();
+      if (!value || SKIP_VALUES.has(value)) continue;
+      if (value.startsWith('no ') || value.includes('not visible')) continue;
+      kept.push(line);
+    }
+  }
+  return kept.length > 1 ? kept.join('\n') : null;
+}
+
 // ── Backfill feature_embedding for existing rows (protected) ─────────────────
-// Embeds each row's feature_summary text with gemini-embedding-001 and stores
-// the result in feature_embedding. After all rows are done, rebuilds
-// room_types_index so searches immediately benefit from the focused embeddings.
+// Reads each row's raw caption, applies the improved extractFeatureSummary()
+// to get a clean signal-dense text (positive features only, no flooring noise),
+// embeds it with gemini-embedding-001, and stores both the cleaned text and
+// the vector. After ALL rows are done, rebuilds room_types_index in one SQL
+// call instead of per-hotel RPCs.
 // Usage: POST /api/backfill-feature-embeddings {"city":"Paris","secret":"..."}
 app.post("/api/backfill-feature-embeddings", async (req, res) => {
   const { city, secret } = req.body || {};
@@ -1562,8 +1593,6 @@ app.post("/api/backfill-feature-embeddings", async (req, res) => {
   if (!GEMINI_KEY) return res.status(500).json({ error: "GEMINI_KEY not set" });
 
   const fc = supabaseAdmin || supabase;
-
-  // Count rows needing backfill
   const { count } = await fc.from("room_embeddings")
     .select("*", { count: "exact", head: true })
     .eq("city", city).is("feature_embedding", null);
@@ -1572,19 +1601,18 @@ app.post("/api/backfill-feature-embeddings", async (req, res) => {
 
   (async () => {
     console.log(`[feat-embed] starting backfill for ${city}: ${count} rows`);
-    const BATCH = 200;   // rows per DB fetch
-    const RATE  = 900;   // embed calls per minute (stay under 1000/min limit)
-    let done = 0, failed = 0, offset = 0;
+    const BATCH = 200, CHUNK = 20, RATE = 900;
+    let done = 0, failed = 0, lastId = 0;
     const startMs = Date.now();
 
-    // Rate limiter: track calls in current 60s window
+    // Rate limiter (per 60s window)
     let windowStart = Date.now(), windowCount = 0;
     async function rateLimitedEmbed(text) {
       const now = Date.now();
       if (now - windowStart > 60000) { windowStart = now; windowCount = 0; }
       if (windowCount >= RATE) {
         const wait = 61000 - (now - windowStart);
-        console.log(`[feat-embed] rate limit reached, pausing ${Math.round(wait/1000)}s`);
+        console.log(`[feat-embed] rate limit, pausing ${Math.round(wait / 1000)}s`);
         await new Promise(r => setTimeout(r, wait));
         windowStart = Date.now(); windowCount = 0;
       }
@@ -1601,25 +1629,28 @@ app.post("/api/backfill-feature-embeddings", async (req, res) => {
       return vals ? vals.slice(0, 768) : null;
     }
 
+    // Cursor-based pagination (avoids offset drift if rows are written mid-run)
     while (true) {
       const { data: rows, error } = await fc.from("room_embeddings")
-        .select("id, feature_summary")
+        .select("id, caption")
         .eq("city", city).is("feature_embedding", null)
-        .range(offset, offset + BATCH - 1);
+        .gt("id", lastId)
+        .order("id", { ascending: true })
+        .limit(BATCH);
 
       if (error) { console.error("[feat-embed] fetch error:", error.message); break; }
       if (!rows?.length) break;
+      lastId = rows[rows.length - 1].id;
 
-      // Embed concurrently in chunks of 20
-      const CHUNK = 20;
       for (let i = 0; i < rows.length; i += CHUNK) {
-        const chunk = rows.slice(i, i + CHUNK);
-        await Promise.all(chunk.map(async row => {
-          if (!row.feature_summary) { failed++; return; }
-          const vec = await rateLimitedEmbed(row.feature_summary);
+        await Promise.all(rows.slice(i, i + CHUNK).map(async row => {
+          // Re-derive improved feature_summary from raw caption at backfill time
+          const summary = extractFeatureSummary(row.caption);
+          if (!summary) { failed++; return; }
+          const vec = await rateLimitedEmbed(summary);
           if (!vec) { failed++; return; }
           const { error: upErr } = await fc.from("room_embeddings")
-            .update({ feature_embedding: vec })
+            .update({ feature_embedding: vec, feature_summary: summary })
             .eq("id", row.id);
           if (upErr) { failed++; console.warn("[feat-embed] update err:", upErr.message); }
           else done++;
@@ -1627,26 +1658,28 @@ app.post("/api/backfill-feature-embeddings", async (req, res) => {
       }
 
       const elapsed = Math.round((Date.now() - startMs) / 1000);
-      const rate = done / (elapsed || 1);
-      console.log(`[feat-embed] progress: ${done} done, ${failed} failed — ${rate.toFixed(1)}/s`);
-      offset += BATCH;
+      console.log(`[feat-embed] progress: ${done} done, ${failed} failed — ${(done / (elapsed || 1)).toFixed(1)}/s`);
     }
 
-    console.log(`[feat-embed] embedding done: ${done} updated, ${failed} failed`);
+    console.log(`[feat-embed] embeddings done: ${done} updated, ${failed} failed`);
 
-    // Rebuild room_types_index for the city using feature_embeddings
+    // Verify completeness before rebuilding the index
+    const { count: remaining } = await fc.from("room_embeddings")
+      .select("*", { count: "exact", head: true })
+      .eq("city", city).is("feature_embedding", null);
+    if (remaining > 0) {
+      console.warn(`[feat-embed] ${remaining} rows still missing feature_embedding — index rebuild may be partial`);
+    }
+
+    // Single bulk SQL call instead of ~1000 per-hotel RPCs
     console.log(`[feat-embed] rebuilding room_types_index for ${city}...`);
-    const { data: hotels } = await fc.from("hotels_cache")
-      .select("hotel_id").eq("city", city);
-
-    let rebuilt = 0;
-    for (const h of (hotels || [])) {
-      await fc.rpc("refresh_room_types_index_entry", {
-        p_hotel_id: h.hotel_id, p_city: city, p_country_code: null,
-      });
-      rebuilt++;
+    const { data: rebuildCount, error: rebuildErr } = await fc
+      .rpc("rebuild_room_types_index_city", { p_city: city });
+    if (rebuildErr) {
+      console.error("[feat-embed] rebuild error:", rebuildErr.message);
+    } else {
+      console.log(`[feat-embed] room_types_index rebuilt: ${rebuildCount} rows — backfill complete`);
     }
-    console.log(`[feat-embed] room_types_index rebuilt for ${rebuilt} hotels — backfill complete`);
   })().catch(err => console.error("[feat-embed] fatal:", err.message));
 });
 

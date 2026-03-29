@@ -81,22 +81,54 @@ const COUNTRY_CODES = {
 // visual-style sections (VIEWS & LIGHT, SPACE & LAYOUT, FLOORING & DECOR, FURNITURE)
 // and the Room type metadata line. Keeps PHOTO TYPE header + BATHROOM + BEDROOM +
 // NOTABLE FEATURES — the only fields needed for structural penalty detection at search time.
-// Mirrors the extract_feature_summary() SQL function in Supabase.
+// Produces a focused feature summary from a structured caption.
+// Keeps only POSITIVE/PRESENT values — filters out "no", "unknown", "none",
+// "no X visible", and "not visible". Drops FLOORING & DECOR entirely (wall
+// colours, styles) since those are aesthetic noise for feature queries.
+// This shorter, signal-dense text produces much better cosine similarity for
+// specific feature queries like "double sinks" or "soaking tub".
 function extractFeatureSummary(caption) {
   if (!caption) return null;
-  const viewsIdx    = caption.indexOf('\nVIEWS & LIGHT:');
-  const notableIdx  = caption.indexOf('\nNOTABLE FEATURES:');
-  const roomTypeIdx = caption.indexOf('\nRoom type:');
 
-  const part1 = viewsIdx > 0 ? caption.slice(0, viewsIdx) : caption.slice(0, 350);
+  const SKIP_SECTIONS = new Set(['FLOORING & DECOR']);
+  // Values that carry no useful signal for feature matching
+  const SKIP_VALUES = new Set(['no', 'none', 'unknown', 'standard', 'standard ceiling', 'moderate light']);
 
-  let part2 = '';
-  if (notableIdx > 0) {
-    const end = roomTypeIdx > notableIdx ? roomTypeIdx : caption.length;
-    part2 = caption.slice(notableIdx + 1, end);
+  const lines = caption.split('\n');
+  const kept  = [];
+  let skipSection = false;
+
+  for (const raw of lines) {
+    const line = raw.trim();
+    if (!line) continue;
+
+    // Section header: all-caps label ending with ":" and nothing after (e.g. "BATHROOM:")
+    const secMatch = line.match(/^([A-Z][A-Z &]+):$/);
+    if (secMatch) {
+      skipSection = SKIP_SECTIONS.has(secMatch[1]);
+      continue; // never include section header labels in output
+    }
+    if (skipSection) continue;
+
+    // Always keep the header line that identifies photo type + room
+    if (line.startsWith('PHOTO TYPE:') && line.includes('|')) { kept.push(line); continue; }
+
+    // Keep room metadata line
+    if (line.startsWith('Room type:')) { kept.push(line); continue; }
+
+    // For key: value field lines, strip out negatives / unknowns
+    const colonIdx = line.indexOf(':');
+    if (colonIdx > 0) {
+      const value = line.slice(colonIdx + 1).trim().toLowerCase();
+      if (!value) continue;
+      if (SKIP_VALUES.has(value)) continue;
+      if (value.startsWith('no ')) continue;      // "no bathtub", "no bed visible"
+      if (value.includes('not visible')) continue; // "no view visible"
+      kept.push(line);
+    }
   }
 
-  return part2 ? (part1 + '\n' + part2).trim() : part1.trim();
+  return kept.length > 1 ? kept.join('\n') : null;
 }
 
 // ── Rate limiters ─────────────────────────────────────────────────────────────
