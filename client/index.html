@@ -41,7 +41,7 @@
     }
 
     /* ── Header ─────────────────── */
-    header { padding: 22px 56px; display: flex; align-items: center; gap: 14px; }
+    header { padding: 22px max(56px, calc((100vw - 1180px) / 2)); display: flex; align-items: center; gap: 14px; }
     .hamburger { font-size: 18px; color: var(--muted); cursor: pointer; line-height: 1; flex-shrink: 0; }
     .logo {
       font-family: 'DM Sans', sans-serif; font-size: 16px; font-weight: 500; letter-spacing: 0.02em;
@@ -689,7 +689,7 @@
     body.has-results .hero {
       position: sticky; top: 0; z-index: 50;
       max-width: none; width: 100%;
-      padding: 10px 56px;
+      padding: 10px max(56px, calc((100vw - 1180px) / 2));
       background: rgba(12,12,14,0.97);
       backdrop-filter: blur(16px);
       -webkit-backdrop-filter: blur(16px);
