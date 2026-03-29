@@ -1172,8 +1172,7 @@
         setStatus('');
         render(hotels, hasDates);  // resets _pricesLoaded = false, sets _fetchingPrices
         if (hasDates) {
-          // Pass top 200 ranked hotel IDs to /api/rates (avoids DB re-query, improves coverage)
-          fetchPrices(city, checkin, checkout, reqId, hotels.slice(0, 200).map(h => h.id));
+          fetchPrices(city, checkin, checkout, reqId);
         } else {
           // No dates — unlock price sort buttons immediately, no availability state
           _pricesLoaded = true;
