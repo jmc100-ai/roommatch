@@ -87,10 +87,20 @@ const COUNTRY_CODES = {
 // colours, styles) since those are aesthetic noise for feature queries.
 // This shorter, signal-dense text produces much better cosine similarity for
 // specific feature queries like "double sinks" or "soaking tub".
-function extractFeatureSummary(caption) {
+// photoType-aware: each photo type only embeds its own relevant sections so
+// the resulting vector isn't diluted by unrelated fields.
+// Must stay in sync with extractFeatureSummary() in server.js.
+function extractFeatureSummary(caption, photoType = null) {
   if (!caption) return null;
 
-  const SKIP_SECTIONS = new Set(['FLOORING & DECOR']);
+  const PHOTO_TYPE_SKIP = {
+    'bathroom':    ['BEDROOM', 'FURNITURE'],
+    'bedroom':     ['BATHROOM'],
+    'living area': ['BATHROOM', 'BEDROOM'],
+    'view':        ['BATHROOM', 'BEDROOM', 'FURNITURE', 'NOTABLE FEATURES'],
+  };
+  const skipExtra = photoType ? (PHOTO_TYPE_SKIP[photoType] || []) : [];
+  const SKIP_SECTIONS = new Set(['FLOORING & DECOR', ...skipExtra]);
   // Values that carry no useful signal for feature matching
   const SKIP_VALUES = new Set(['no', 'none', 'unknown', 'standard', 'standard ceiling', 'moderate light']);
 
@@ -500,7 +510,7 @@ ${caption}`;
         // feature_embedding uses only key room features (sinks, bathtub, shower, etc.)
         // without flooring/decor/furniture noise — gives much better cosine similarity
         // for specific feature queries like "double sinks" or "soaking tub".
-        const featureSummaryText = extractFeatureSummary(hybridText);
+        const featureSummaryText = extractFeatureSummary(hybridText, detectedType);
         const [embedding, featureEmbedding] = await Promise.all([
           geminiEmbed(hybridText),
           featureSummaryText ? geminiEmbed(featureSummaryText) : Promise.resolve(null),

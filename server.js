@@ -1468,17 +1468,19 @@ app.get("/api/vsearch", async (req, res) => {
       for (const feat of detectedFeatures) {
         const confirmed = testConfirmSet(feat, hs.captions);
         if (!confirmed) {
+          // Unconfirmed: cap at 65% — hotel probably lacks the feature.
           score *= FEATURE_PENALTY;
           console.log(`[vsearch] penalty: ${hotelId} missing "${feat.label}" → score now ${score.toFixed(1)}`);
         } else {
-          // Confirmed hotels get a minimum score floor of 75% so they always rank
-          // above penalised (unconfirmed) hotels. This prevents embedding dilution
-          // from unfairly penalising rooms that have the feature but also have many
-          // other notable elements in their feature_summary.
+          // Confirmed: remap [0–100] → [50–100] so confirmed hotels always outrank
+          // the unconfirmed ceiling of 65%, while preserving relative ordering
+          // within the confirmed group. Solves embedding-dilution cases where a
+          // rich feature_summary (bathtub + natural light + double sinks) scores
+          // lower than a sparse one despite confirming the queried feature.
           const prevScore = score;
-          score = Math.max(score, 75);
+          score = 50 + score / 2;
           if (score !== prevScore) {
-            console.log(`[vsearch] confirmed boost: ${hotelId} has "${feat.label}" → score floor ${score.toFixed(1)}`);
+            console.log(`[vsearch] confirmed remap: ${hotelId} has "${feat.label}" → ${prevScore.toFixed(1)} → ${score.toFixed(1)}`);
           }
         }
       }
@@ -1587,7 +1589,7 @@ app.get("/api/vsearch", async (req, res) => {
           if (!confirmed) {
             roomScore *= FEATURE_PENALTY;
           } else {
-            roomScore = Math.max(roomScore, 75);
+            roomScore = 50 + roomScore / 2;
           }
         }
         // Photo-count penalty at room level: rooms with < 3 photos rank lower.
@@ -1797,9 +1799,25 @@ app.get("/api/rates", async (req, res) => {
 // ── feature_summary extractor (mirrors index-city.js version) ────────────────
 // Keeps only POSITIVE/PRESENT values; drops FLOORING & DECOR section entirely.
 // Must stay in sync with extractFeatureSummary() in scripts/index-city.js.
-function extractFeatureSummary(caption) {
+//
+// photoType-aware: each photo type only embeds its own relevant sections so
+// the resulting vector isn't diluted by unrelated fields.  For example, a
+// bathroom embedding should encode sink/bathtub/shower features — not "queen
+// bed" or "armchair" — so it scores closely against a HyDE query like
+// "PHOTO TYPE: bathroom\nSINKS: double sinks".
+function extractFeatureSummary(caption, photoType = null) {
   if (!caption) return null;
-  const SKIP_SECTIONS = new Set(['FLOORING & DECOR']);
+
+  // Sections that carry no useful signal for the given photo type.
+  // FLOORING & DECOR is always skipped (hallucination-prone, rarely queried).
+  const PHOTO_TYPE_SKIP = {
+    'bathroom':    ['BEDROOM', 'FURNITURE'],
+    'bedroom':     ['BATHROOM'],
+    'living area': ['BATHROOM', 'BEDROOM'],
+    'view':        ['BATHROOM', 'BEDROOM', 'FURNITURE', 'NOTABLE FEATURES'],
+  };
+  const skipExtra = photoType ? (PHOTO_TYPE_SKIP[photoType] || []) : [];
+  const SKIP_SECTIONS = new Set(['FLOORING & DECOR', ...skipExtra]);
   const SKIP_VALUES   = new Set(['no', 'none', 'unknown', 'standard', 'standard ceiling', 'moderate light']);
   const lines = caption.split('\n');
   const kept  = [];
@@ -1846,15 +1864,18 @@ app.post("/api/backfill-feature-embeddings", async (req, res) => {
   const GEMINI_KEY = process.env.GEMINI_KEY || "";
   if (!GEMINI_KEY) return res.status(500).json({ error: "GEMINI_KEY not set" });
 
+  const { force } = req.body || {};
   const fc = supabaseAdmin || supabase;
-  const { count } = await fc.from("room_embeddings")
+  let countQuery = fc.from("room_embeddings")
     .select("*", { count: "exact", head: true })
-    .eq("city", city).is("feature_embedding", null);
+    .eq("city", city);
+  if (!force) countQuery = countQuery.is("feature_embedding", null);
+  const { count } = await countQuery;
 
-  res.json({ message: `Backfill started for ${city}`, todo: count });
+  res.json({ message: `Backfill started for ${city} (force=${!!force})`, todo: count });
 
   (async () => {
-    console.log(`[feat-embed] starting backfill for ${city}: ${count} rows`);
+    console.log(`[feat-embed] starting backfill for ${city}: ${count} rows (force=${!!force})`);
     const BATCH = 200, CHUNK = 20, RATE = 900;
     let done = 0, failed = 0, lastId = 0;
     const startMs = Date.now();
@@ -1885,12 +1906,14 @@ app.post("/api/backfill-feature-embeddings", async (req, res) => {
 
     // Cursor-based pagination (avoids offset drift if rows are written mid-run)
     while (true) {
-      const { data: rows, error } = await fc.from("room_embeddings")
-        .select("id, caption")
-        .eq("city", city).is("feature_embedding", null)
+      let rowQuery = fc.from("room_embeddings")
+        .select("id, caption, photo_type")
+        .eq("city", city)
         .gt("id", lastId)
         .order("id", { ascending: true })
         .limit(BATCH);
+      if (!force) rowQuery = rowQuery.is("feature_embedding", null);
+      const { data: rows, error } = await rowQuery;
 
       if (error) { console.error("[feat-embed] fetch error:", error.message); break; }
       if (!rows?.length) break;
@@ -1898,8 +1921,8 @@ app.post("/api/backfill-feature-embeddings", async (req, res) => {
 
       for (let i = 0; i < rows.length; i += CHUNK) {
         await Promise.all(rows.slice(i, i + CHUNK).map(async row => {
-          // Re-derive improved feature_summary from raw caption at backfill time
-          const summary = extractFeatureSummary(row.caption);
+          // Re-derive feature_summary using photo-type-specific section filtering
+          const summary = extractFeatureSummary(row.caption, row.photo_type);
           if (!summary) { failed++; return; }
           const vec = await rateLimitedEmbed(summary);
           if (!vec) { failed++; return; }
