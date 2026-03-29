@@ -188,6 +188,199 @@ const CITY_COORDS = {
   "winnipeg": [49.8951, -97.1384],
 };
 
+// ── HyDE (Hypothetical Document Embeddings) ──────────────────────────────────
+// For each user query, Gemini Flash Lite generates a short structured caption
+// using the same vocabulary stored in room_embeddings. Embedding that caption
+// rather than the raw query bridges vocabulary gaps ("multiple sinks" → "double
+// sinks"), handles abstract terms ("spa bathroom", "romantic suite"), and
+// naturally strips negations ("no carpet" → bedroom photo type only).
+// Results are cached in-memory (4h TTL) — repeated queries pay zero overhead.
+const HYDE_TTL  = 4 * 60 * 60 * 1000;   // 4 hours
+const hydeCache = new Map();             // cacheKey → { hypothetical, embedding, ts }
+
+function hydeKey(q) {
+  return `v1:${q.toLowerCase().trim().replace(/\s+/g, ' ')}`;
+}
+
+// Extract negated concepts for logging and future post-filter work.
+// e.g. "double sinks without bathtub" → { negations: ["bathtub"], positiveQuery: "double sinks" }
+function extractNegations(query) {
+  const negated = [];
+  const PATTERNS = [
+    /\bno\s+([\w][\w\s]{1,30}?)(?=\s*[,.]|\s+(?:and|but|with|just|only|please)|\s*$)/i,
+    /\bwithout\s+(?:a\s+|an\s+)?([\w][\w\s]{1,30}?)(?=\s*[,.]|\s+(?:and|but|with|just|only|please)|\s*$)/i,
+    /\bnot\s+(?:a\s+|an\s+)?([\w][\w\s]{1,30}?)(?=\s*[,.]|\s+(?:and|but|with|just|only|please)|\s*$)/i,
+    /\bavoid(?:ing)?\s+([\w][\w\s]{1,30}?)(?=\s*[,.]|\s+(?:and|but|with|just|only|please)|\s*$)/i,
+  ];
+  let cleaned = query;
+  for (const p of PATTERNS) {
+    const gp = new RegExp(p.source, 'gi');
+    let m;
+    while ((m = gp.exec(query)) !== null) {
+      const concept = m[1].trim().toLowerCase();
+      if (concept.length > 1) negated.push(concept);
+    }
+    cleaned = cleaned.replace(new RegExp(p.source, 'gi'), ' ');
+  }
+  return { negations: negated, positiveQuery: cleaned.replace(/\s+/g, ' ').trim() || null };
+}
+
+// Derive intentType from the hypothetical PHOTO TYPE field, with keyword fallback.
+function extractIntentType(hydeText, query) {
+  if (hydeText) {
+    const m = hydeText.match(/^PHOTO TYPE:\s*(\w[\w ]*)/m);
+    if (m) {
+      const pt = m[1].toLowerCase().trim();
+      if (pt === 'bathroom')    return 'bathroom';
+      if (pt === 'bedroom')     return 'bedroom';
+      if (pt === 'view')        return 'view';
+      if (pt === 'living area') return 'living area';
+    }
+  }
+  const q = query.toLowerCase();
+  if (/\b(baths?|tubs?|showers?|sinks?|toilets?|bidet|bathroom|soaking|jacuzzi|spa)\b/.test(q)) return 'bathroom';
+  if (/\b(beds?|bedroom|sleep|pillow|king|queen|twin|mattress)\b/.test(q)) return 'bedroom';
+  if (/\b(views?|balcon(y|ies)|terrace|window|skyline|ocean|sea|city view)\b/.test(q)) return 'view';
+  if (/\b(living|sofa|lounge|sitting|couch|armchair)\b/.test(q)) return 'living area';
+  return null;
+}
+
+// System prompt for HyDE caption generation.
+const HYDE_SYSTEM_PROMPT = `You are a hotel room photo caption assistant for a visual search engine.
+Given a user search query about hotel rooms, generate a MINIMAL structured caption representing what a matching photo would look like.
+
+RULES:
+- Include ONLY fields directly implied by the query. Do NOT add anything the user did not request.
+- Use ONLY the vocabulary listed for each field.
+- Always output in English.
+- Strip negations ("no carpet", "without bathtub") — only describe what the ideal room SHOULD have.
+- If the query is NOT about visual room features (price, location, hotel brand, pet policy, parking, breakfast, Wi-Fi), output exactly: NOT_ROOM_QUERY
+
+VALID FIELDS AND VALUES:
+PHOTO TYPE: bedroom | bathroom | living area | view | other
+SINKS: single sink | double sinks | triple sinks
+COUNTER SPACE: small counter | large counter
+BATHTUB: built-in tub | freestanding tub | soaking tub
+SHOWER: rainfall shower | walk-in shower | shower over bath | steam shower
+SEPARATE TOILET ROOM: yes
+BED: single bed | twin beds | double bed | queen bed | king bed
+WALK-IN CLOSET: yes
+NATURAL LIGHT: bright natural light | low light
+WINDOWS: large windows | floor-to-ceiling windows | small windows
+VIEW: city view | Eiffel Tower view | garden view | pool view | sea view | courtyard view
+BALCONY OR TERRACE: yes
+SIZE IMPRESSION: spacious | compact
+SEPARATE LIVING AREA: yes
+SOFA: yes
+FIREPLACE: yes
+IN-ROOM HOT TUB OR JACUZZI: yes
+DISTINCTIVE FEATURES: [brief description]
+
+EXAMPLES:
+Query: "double sinks"
+PHOTO TYPE: bathroom
+SINKS: double sinks
+
+Query: "two sinks"
+PHOTO TYPE: bathroom
+SINKS: double sinks
+
+Query: "multiple sinks"
+PHOTO TYPE: bathroom
+SINKS: double sinks
+
+Query: "soaking tub"
+PHOTO TYPE: bathroom
+BATHTUB: soaking tub
+
+Query: "freestanding bathtub"
+PHOTO TYPE: bathroom
+BATHTUB: freestanding tub
+
+Query: "big windows city view"
+PHOTO TYPE: bedroom
+WINDOWS: large windows
+VIEW: city view
+
+Query: "floor to ceiling windows"
+PHOTO TYPE: bedroom
+WINDOWS: floor-to-ceiling windows
+
+Query: "king bed lots of natural light"
+PHOTO TYPE: bedroom
+BED: king bed
+NATURAL LIGHT: bright natural light
+
+Query: "spa bathroom"
+PHOTO TYPE: bathroom
+BATHTUB: soaking tub
+SHOWER: rainfall shower
+
+Query: "room with balcony"
+PHOTO TYPE: bedroom
+BALCONY OR TERRACE: yes
+
+Query: "fireplace"
+PHOTO TYPE: bedroom
+FIREPLACE: yes
+
+Query: "romantic suite"
+PHOTO TYPE: bedroom
+SIZE IMPRESSION: spacious
+SEPARATE LIVING AREA: yes
+
+Query: "modern bathroom with rainfall shower"
+PHOTO TYPE: bathroom
+SHOWER: rainfall shower
+DISTINCTIVE FEATURES: modern style
+
+Query: "views of the Eiffel Tower"
+PHOTO TYPE: view
+VIEW: Eiffel Tower view
+
+Query: "double sinks no bathtub"
+PHOTO TYPE: bathroom
+SINKS: double sinks
+
+Query: "hotel near Eiffel Tower"
+NOT_ROOM_QUERY
+
+Query: "cheap price"
+NOT_ROOM_QUERY
+
+Query: "pet friendly"
+NOT_ROOM_QUERY
+
+Now generate for this query (output ONLY the caption, no explanation):`;
+
+// Generate a hypothetical caption via Gemini Flash Lite. Returns null on failure
+// or when the query is not about room visuals — callers fall back to raw query.
+async function hydeGenerate(query, geminiKey) {
+  try {
+    const resp = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=${geminiKey}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          system_instruction: { parts: [{ text: HYDE_SYSTEM_PROMPT }] },
+          contents: [{ parts: [{ text: `Query: "${query}"` }] }],
+          generationConfig: { temperature: 0, maxOutputTokens: 150 },
+        }),
+        signal: AbortSignal.timeout(3000),
+      }
+    );
+    if (!resp.ok) { console.warn(`[hyde] HTTP ${resp.status}`); return null; }
+    const data = await resp.json();
+    const text = data?.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
+    if (!text || text === 'NOT_ROOM_QUERY') return null;
+    return text;
+  } catch (err) {
+    console.warn(`[hyde] timeout/error (falling back to raw query): ${err.message}`);
+    return null;
+  }
+}
+
 function resolveCoords(city) {
   const key = city.trim().toLowerCase();
   if (CITY_COORDS[key]) return CITY_COORDS[key];
@@ -1040,57 +1233,55 @@ app.get("/api/vsearch", async (req, res) => {
     // Indexing complete — proceed with vector search
     const indexing = false;
 
-    // 2. Embed the query with Gemini
-    // Expand query with synonyms before embedding to bridge vocabulary gaps between
-    // user language and Gemini caption output (e.g. users say "double sinks",
-    // Gemini captions say "two sinks"). Appending the synonym makes the query vector
-    // land between both terms in embedding space, greatly improving recall.
-    const QUERY_SYNONYMS = [
-      [/\bdouble sinks?\b/gi,      'double sinks two sinks dual vanity'],
-      [/\btwo sinks?\b/gi,         'two sinks double sinks dual vanity'],
-      [/\bsoaking tub\b/gi,        'soaking tub freestanding bathtub deep bath'],
-      [/\bfreestanding tub\b/gi,   'freestanding tub soaking tub standalone bathtub'],
-      [/\bhardwood floor/gi,       'hardwood floor wood floor parquet flooring'],
-      [/\bwalk.?in (shower|closet)/gi, (m) => `${m} walk-in ${m.split(/\s+/).pop()}`],
-      [/\brain(fall)? shower\b/gi, 'rainfall shower rain shower overhead shower'],
-      [/\bclawfoot\b/gi,           'clawfoot freestanding tub vintage bathtub'],
-    ];
-    let embeddingQuery = query;
-    for (const [pattern, replacement] of QUERY_SYNONYMS) {
-      embeddingQuery = embeddingQuery.replace(pattern, replacement);
+    // 2. HyDE: generate a hypothetical caption matching the room_embeddings vocabulary,
+    // then embed it. This handles vocabulary gaps ("multiple sinks" → "double sinks"),
+    // abstract queries ("spa bathroom", "romantic suite"), and negations ("no carpet"
+    // → positive features only). Cache miss adds ~500ms; hits are free (4h TTL).
+    const { negations } = extractNegations(query);
+    if (negations.length) {
+      console.log(`[vsearch] negations detected: [${negations.join(', ')}]`);
     }
-    if (embeddingQuery !== query) {
-      console.log(`[vsearch] query expanded: "${query}" → "${embeddingQuery}"`);
-    }
+
+    // Kick off hotels_cache immediately — runs in parallel with HyDE + embed
+    const hotelsPromise = fetchClient.from("hotels_cache").select("*").eq("city", city);
 
     const tStartEmbed = Date.now();
-    const embedRes = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-embedding-001:embedContent?key=${process.env.GEMINI_KEY}`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ content: { parts: [{ text: embeddingQuery }] } }),
-        signal: AbortSignal.timeout(8000),
-      }
-    );
-    if (!embedRes.ok) throw new Error("Gemini embedding failed");
-    const embedData = await embedRes.json();
-    const rawEmbedding = embedData?.embedding?.values;
-    if (!rawEmbedding) throw new Error("No embedding returned");
-    // Truncate to 768 dims to match stored embeddings
-    const queryEmbedding = rawEmbedding.slice(0, 768);
+    let queryEmbedding;
+    let hydeText = null;
+    const hydeKey_str = hydeKey(query);
+    const cachedHyde  = hydeCache.get(hydeKey_str);
 
-    // 3. Score ALL city photos against the query in one RPC call.
-    // score_city_photos() does a full scan (no match_count cap) so every hotel gets a real score.
-    // Run in parallel with the hotel metadata fetch.
-    const queryLower = query.toLowerCase();
-    const intentType = (() => {
-      if (/\b(baths?|tubs?|showers?|sinks?|toilets?|bidet|bathroom|soaking|jacuzzi|spa)\b/.test(queryLower)) return "bathroom";
-      if (/\b(beds?|bedroom|sleep|pillow|king|queen|twin|mattress)\b/.test(queryLower)) return "bedroom";
-      if (/\b(views?|balcon(y|ies)|terrace|window|skyline|ocean|sea|city view)\b/.test(queryLower)) return "view";
-      if (/\b(living|sofa|lounge|sitting|couch|armchair)\b/.test(queryLower)) return "living area";
-      return null;
-    })();
+    if (cachedHyde && Date.now() - cachedHyde.ts < HYDE_TTL) {
+      queryEmbedding = cachedHyde.embedding;
+      hydeText       = cachedHyde.hypothetical;
+      console.log(`[vsearch] HyDE cache hit: "${query}"`);
+    } else {
+      hydeText = await hydeGenerate(query, process.env.GEMINI_KEY);
+      const textToEmbed = hydeText ?? query;
+      if (hydeText) {
+        console.log(`[vsearch] HyDE: "${query}" → "${hydeText.replace(/\n/g, ' ').slice(0, 120)}"`);
+      }
+
+      const embedRes = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-embedding-001:embedContent?key=${process.env.GEMINI_KEY}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ content: { parts: [{ text: textToEmbed }] } }),
+          signal: AbortSignal.timeout(8000),
+        }
+      );
+      if (!embedRes.ok) throw new Error("Gemini embedding failed");
+      const embedData = await embedRes.json();
+      const rawEmbedding = embedData?.embedding?.values;
+      if (!rawEmbedding) throw new Error("No embedding returned");
+      queryEmbedding = rawEmbedding.slice(0, 768);
+      hydeCache.set(hydeKey_str, { hypothetical: hydeText, embedding: queryEmbedding, ts: Date.now() });
+    }
+
+    // 3. Score ALL city room types against the query embedding.
+    // intentType comes from the hypothetical PHOTO TYPE field (more reliable than keywords).
+    const intentType = extractIntentType(hydeText, query);
 
     // Structural features: if the query specifically requests a feature, hotels whose
     // captions never confirm that feature get penalised (topScore × 0.45).
@@ -1109,7 +1300,7 @@ app.get("/api/vsearch", async (req, res) => {
     const STRUCTURAL_FEATURES = [
       {
         label: "double sinks",
-        queryMatch: /\bdouble sinks?\b|\btwo sinks?\b|\bdual sinks?\b|\btwin sinks?\b/i,
+        queryMatch: /\bdouble sinks?\b|\btwo sinks?\b|\bdual sinks?\b|\btwin sinks?\b|\bmultiple sinks?\b|\bseveral sinks?\b/i,
         confirm: /\b(two|double|dual|twin|2)\s*sinks?\b|\bsinks?\s*(?:count)?[:\s]+([2-9]|two|double|twin|dual)/i,
         // Multi-photo confirmation: a single bathroom photo saying "two sinks" is accepted
         // (benefit of the doubt — can't cross-check). But if 2+ bathroom photos exist and
@@ -1164,10 +1355,10 @@ app.get("/api/vsearch", async (req, res) => {
     const tAfterEmbed = Date.now();
     const [roomTypesResult, cachedResult] = await Promise.all([
       fetchClient.rpc("score_room_types", { query_embedding: queryEmbedding, search_city: city }),
-      fetchClient.from("hotels_cache").select("*").eq("city", city),
+      hotelsPromise,
     ]);
     const tPhaseA = Date.now();
-    console.log(`[vsearch] embed: ${tAfterEmbed - tStartEmbed}ms  phaseA(room_types+cache): ${tPhaseA - tAfterEmbed}ms`);
+    console.log(`[vsearch] HyDE+embed: ${tAfterEmbed - tStartEmbed}ms  phaseA(room_types): ${tPhaseA - tAfterEmbed}ms`);
 
     if (roomTypesResult.error) throw new Error("score_room_types: " + roomTypesResult.error.message);
     if (cachedResult.error) console.error("[vsearch] hotels_cache error:", cachedResult.error.message);
