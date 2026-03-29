@@ -1334,6 +1334,7 @@ app.get("/api/vsearch", async (req, res) => {
         confirm: /\b(large|floor.to.ceiling|panoramic|huge|oversized|expansive)\s*windows?\b|\bwindows?\s*(?:type)?[:\s]+(large|floor|panoramic|huge|yes|multiple|floor-to-ceiling)/i,
       },
     ];
+    const queryLower = query.toLowerCase();
     const detectedFeatures = STRUCTURAL_FEATURES.filter(f => f.queryMatch.test(queryLower));
     if (detectedFeatures.length) {
       console.log(`[vsearch] structural features detected: ${detectedFeatures.map(f => f.label).join(", ")}`);
