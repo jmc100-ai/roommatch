@@ -1546,6 +1546,110 @@ app.get("/api/rates", async (req, res) => {
   }
 });
 
+// ── Backfill feature_embedding for existing rows (protected) ─────────────────
+// Embeds each row's feature_summary text with gemini-embedding-001 and stores
+// the result in feature_embedding. After all rows are done, rebuilds
+// room_types_index so searches immediately benefit from the focused embeddings.
+// Usage: POST /api/backfill-feature-embeddings {"city":"Paris","secret":"..."}
+app.post("/api/backfill-feature-embeddings", async (req, res) => {
+  const { city, secret } = req.body || {};
+  if (secret !== (process.env.INDEX_SECRET || "roommatch-index")) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
+  if (!city) return res.status(400).json({ error: "city required" });
+
+  const GEMINI_KEY = process.env.GEMINI_KEY || "";
+  if (!GEMINI_KEY) return res.status(500).json({ error: "GEMINI_KEY not set" });
+
+  const fc = supabaseAdmin || supabase;
+
+  // Count rows needing backfill
+  const { count } = await fc.from("room_embeddings")
+    .select("*", { count: "exact", head: true })
+    .eq("city", city).is("feature_embedding", null);
+
+  res.json({ message: `Backfill started for ${city}`, todo: count });
+
+  (async () => {
+    console.log(`[feat-embed] starting backfill for ${city}: ${count} rows`);
+    const BATCH = 200;   // rows per DB fetch
+    const RATE  = 900;   // embed calls per minute (stay under 1000/min limit)
+    let done = 0, failed = 0, offset = 0;
+    const startMs = Date.now();
+
+    // Rate limiter: track calls in current 60s window
+    let windowStart = Date.now(), windowCount = 0;
+    async function rateLimitedEmbed(text) {
+      const now = Date.now();
+      if (now - windowStart > 60000) { windowStart = now; windowCount = 0; }
+      if (windowCount >= RATE) {
+        const wait = 61000 - (now - windowStart);
+        console.log(`[feat-embed] rate limit reached, pausing ${Math.round(wait/1000)}s`);
+        await new Promise(r => setTimeout(r, wait));
+        windowStart = Date.now(); windowCount = 0;
+      }
+      windowCount++;
+      const r = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-embedding-001:embedContent?key=${GEMINI_KEY}`,
+        { method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ content: { parts: [{ text }] } }),
+          signal: AbortSignal.timeout(10000) }
+      );
+      if (!r.ok) return null;
+      const d = await r.json();
+      const vals = d?.embedding?.values;
+      return vals ? vals.slice(0, 768) : null;
+    }
+
+    while (true) {
+      const { data: rows, error } = await fc.from("room_embeddings")
+        .select("id, feature_summary")
+        .eq("city", city).is("feature_embedding", null)
+        .range(offset, offset + BATCH - 1);
+
+      if (error) { console.error("[feat-embed] fetch error:", error.message); break; }
+      if (!rows?.length) break;
+
+      // Embed concurrently in chunks of 20
+      const CHUNK = 20;
+      for (let i = 0; i < rows.length; i += CHUNK) {
+        const chunk = rows.slice(i, i + CHUNK);
+        await Promise.all(chunk.map(async row => {
+          if (!row.feature_summary) { failed++; return; }
+          const vec = await rateLimitedEmbed(row.feature_summary);
+          if (!vec) { failed++; return; }
+          const { error: upErr } = await fc.from("room_embeddings")
+            .update({ feature_embedding: vec })
+            .eq("id", row.id);
+          if (upErr) { failed++; console.warn("[feat-embed] update err:", upErr.message); }
+          else done++;
+        }));
+      }
+
+      const elapsed = Math.round((Date.now() - startMs) / 1000);
+      const rate = done / (elapsed || 1);
+      console.log(`[feat-embed] progress: ${done} done, ${failed} failed — ${rate.toFixed(1)}/s`);
+      offset += BATCH;
+    }
+
+    console.log(`[feat-embed] embedding done: ${done} updated, ${failed} failed`);
+
+    // Rebuild room_types_index for the city using feature_embeddings
+    console.log(`[feat-embed] rebuilding room_types_index for ${city}...`);
+    const { data: hotels } = await fc.from("hotels_cache")
+      .select("hotel_id").eq("city", city);
+
+    let rebuilt = 0;
+    for (const h of (hotels || [])) {
+      await fc.rpc("refresh_room_types_index_entry", {
+        p_hotel_id: h.hotel_id, p_city: city, p_country_code: null,
+      });
+      rebuilt++;
+    }
+    console.log(`[feat-embed] room_types_index rebuilt for ${rebuilt} hotels — backfill complete`);
+  })().catch(err => console.error("[feat-embed] fatal:", err.message));
+});
+
 // ── Backfill room_type_id for existing rows (protected) ───────────────────────
 app.post("/api/backfill-room-ids", async (req, res) => {
   const { city, secret, dryRun } = req.body || {};

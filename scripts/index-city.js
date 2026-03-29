@@ -457,8 +457,15 @@ ${metaParts}`
           : `${photoTypeStr}
 ${caption}`;
 
-        // Step 2: Embed the hybrid text
-        const embedding = await geminiEmbed(hybridText);
+        // Step 2: Embed full hybrid text AND the shorter feature_summary in parallel.
+        // feature_embedding uses only key room features (sinks, bathtub, shower, etc.)
+        // without flooring/decor/furniture noise — gives much better cosine similarity
+        // for specific feature queries like "double sinks" or "soaking tub".
+        const featureSummaryText = extractFeatureSummary(hybridText);
+        const [embedding, featureEmbedding] = await Promise.all([
+          geminiEmbed(hybridText),
+          featureSummaryText ? geminiEmbed(featureSummaryText) : Promise.resolve(null),
+        ]);
         if (!embedding) { console.warn(`  [pipeline] embed FAILED`); return; }
 
         // Step 3: Store — acquire semaphore to cap concurrent DB writes
@@ -473,8 +480,9 @@ ${caption}`;
             photo_url: photo.url,
             photo_type: detectedType,  // use Gemini-detected type
             caption: hybridText,
-            feature_summary: extractFeatureSummary(hybridText),
+            feature_summary: featureSummaryText,
             embedding,
+            feature_embedding: featureEmbedding || null,
             star_rating: stars, guest_rating: rating,
           }, { onConflict: "hotel_id,photo_url" }));
         } finally {
