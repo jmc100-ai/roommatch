@@ -1242,9 +1242,6 @@ app.get("/api/vsearch", async (req, res) => {
       console.log(`[vsearch] negations detected: [${negations.join(', ')}]`);
     }
 
-    // Kick off hotels_cache immediately — runs in parallel with HyDE + embed
-    const hotelsPromise = fetchClient.from("hotels_cache").select("*").eq("city", city);
-
     const tStartEmbed = Date.now();
     let queryEmbedding;
     let hydeText = null;
@@ -1346,6 +1343,9 @@ app.get("/api/vsearch", async (req, res) => {
     // 250 hotels × 40 photos cap = 10k rows, just within Supabase PostgREST default limit.
     // fetch_hotel_photos now applies a per-hotel ROW_NUMBER cap (default 40) as a safety net.
     const GALLERY_LIMIT = 250;
+
+    // Kick off hotels_cache immediately — runs in parallel with score_room_types
+    const hotelsPromise = fetchClient.from("hotels_cache").select("*").eq("city", city);
 
     // ── Phase A: room-type scoring (full city) + hotel metadata cache — in PARALLEL ──
     // score_room_types scans room_types_index (~7k rows for Paris) for all hotels in the
