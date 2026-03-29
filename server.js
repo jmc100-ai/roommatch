@@ -1470,6 +1470,16 @@ app.get("/api/vsearch", async (req, res) => {
         if (!confirmed) {
           score *= FEATURE_PENALTY;
           console.log(`[vsearch] penalty: ${hotelId} missing "${feat.label}" → score now ${score.toFixed(1)}`);
+        } else {
+          // Confirmed hotels get a minimum score floor of 75% so they always rank
+          // above penalised (unconfirmed) hotels. This prevents embedding dilution
+          // from unfairly penalising rooms that have the feature but also have many
+          // other notable elements in their feature_summary.
+          const prevScore = score;
+          score = Math.max(score, 75);
+          if (score !== prevScore) {
+            console.log(`[vsearch] confirmed boost: ${hotelId} has "${feat.label}" → score floor ${score.toFixed(1)}`);
+          }
         }
       }
       // Photo-count penalty: penalises hotels with too few photos overall (poor visual coverage).
@@ -1574,7 +1584,11 @@ app.get("/api/vsearch", async (req, res) => {
         let roomScore = Math.max(0, Math.min(100, (rawRoom - SIM_MIN) / (SIM_MAX - SIM_MIN) * 100));
         for (const feat of detectedFeatures) {
           const confirmed = testConfirmSet(feat, photoEntries.map(p => p.caption).filter(Boolean));
-          if (!confirmed) roomScore *= FEATURE_PENALTY;
+          if (!confirmed) {
+            roomScore *= FEATURE_PENALTY;
+          } else {
+            roomScore = Math.max(roomScore, 75);
+          }
         }
         // Photo-count penalty at room level: rooms with < 3 photos rank lower.
         if (photoEntries.length < 3) roomScore *= photoEntries.length / 3;
