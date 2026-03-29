@@ -1532,6 +1532,33 @@ app.get("/api/rates", async (req, res) => {
   }
 });
 
+// ── Debug: raw LiteAPI rates for a single hotel ───────────────────────────────
+// Usage: GET /api/debug-rates?hotelId=lp6556dea4&checkin=2026-03-30&checkout=2026-04-02
+app.get("/api/debug-rates", async (req, res) => {
+  const { hotelId, checkin, checkout } = req.query;
+  if (!hotelId || !checkin || !checkout) {
+    return res.status(400).json({ error: "hotelId, checkin, checkout required" });
+  }
+  const nights = Math.round((new Date(checkout) - new Date(checkin)) / 86400000);
+  if (nights < 1) return res.status(400).json({ error: "checkout must be after checkin" });
+  try {
+    const liteRes = await fetch("https://api.liteapi.travel/v3.0/hotels/rates", {
+      method: "POST",
+      headers: { "X-API-Key": LITEAPI_KEY, "Content-Type": "application/json", "accept": "application/json" },
+      body: JSON.stringify({
+        hotelIds: [hotelId], checkin, checkout,
+        currency: "EUR", guestNationality: "US",
+        occupancies: [{ adults: 2 }], maxRatesPerHotel: 5,
+        roomMapping: true, timeout: 22,
+      }),
+    });
+    const raw = await liteRes.json();
+    res.json({ status: liteRes.status, nights, raw });
+  } catch (err) {
+    res.json({ error: err.message });
+  }
+});
+
 // ── Backfill room_type_id for existing rows (protected) ───────────────────────
 app.post("/api/backfill-room-ids", async (req, res) => {
   const { city, secret, dryRun } = req.body || {};
