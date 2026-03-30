@@ -1617,8 +1617,19 @@
       </div>`;
   }
 
+  // Returns true if the hotel should be shown given the current availability filter.
+  // When "available rooms only" is active, hotels with no rate data from LiteAPI
+  // are hidden entirely rather than shown at 0% — cleaner UX than showing a result
+  // the user can't act on.
+  function hotelPassesAvailFilter(h) {
+    if (!(_showAvailOnly && _hasDateSearch && _pricesLoaded)) return true;
+    if (h.price != null) return true;
+    const availRooms = (h.roomTypes || []).filter(rt => rt.roomTypeId != null && h.roomPrices?.[rt.roomTypeId] != null);
+    return availRooms.length > 0;
+  }
+
   function renderSorted() {
-    const hotels = [..._lastHotels];
+    const hotels = [..._lastHotels].filter(hotelPassesAvailFilter);
     if (_currentSort === 'rating') {
       hotels.sort((a, b) => (b.rating || 0) - (a.rating || 0));
     } else if (_currentSort === 'stars') {
