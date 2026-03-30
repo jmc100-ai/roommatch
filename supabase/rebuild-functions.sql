@@ -6,10 +6,12 @@
 -- to prevent single-photo Gemini hallucinations from polluting feature flags.
 --
 -- Confirmation rules per flag:
---   double_sinks, walk_in_shower, rainfall_shower  → always require >=2 photos
---     (high hallucination risk: single photo ambiguous)
---   all other flags                                 → >=2 OR single-photo group
---     (low hallucination risk: visually obvious features)
+--   double_sinks, walk_in_shower, rainfall_shower:
+--     Primary:  room type has >=2 photos with the flag
+--     Fallback: hotel has >=3 total photos with the flag across ANY room types
+--               (LiteAPI often indexes 1 bathroom photo per room type at luxury
+--                hotels; 3 independent Gemini confirmations = reliable signal)
+--   all other flags: >=2 OR single-photo group (no cross-validation possible)
 --
 CREATE OR REPLACE FUNCTION public.rebuild_room_types_index_city(p_city text)
 RETURNS integer
@@ -46,12 +48,19 @@ BEGIN
       AND re.feature_flags != '{}'
     GROUP BY re.hotel_id, re.room_name, re.photo_type, re.city, k
   ),
+  -- Total photos per hotel per flag (across ALL room types) — used for hotel-level fallback.
+  hotel_flag_totals AS (
+    SELECT hotel_id, city, k, SUM(flag_count) AS hotel_total
+    FROM flag_counts
+    GROUP BY hotel_id, city, k
+  ),
   confirmed_keys AS (
+    -- Primary rule: room type has >=2 photos with this flag
     SELECT fc.hotel_id, fc.room_name, fc.photo_type, fc.city, fc.k
     FROM flag_counts fc
     JOIN group_sizes gs USING (hotel_id, room_name, photo_type, city)
     WHERE (
-      -- High hallucination-risk flags: always require >=2 photos, no single-photo exception.
+      -- High hallucination-risk flags: always require >=2 photos per room type.
       fc.k = ANY(ARRAY['double_sinks', 'walk_in_shower', 'rainfall_shower'])
       AND fc.flag_count >= 2
     ) OR (
@@ -59,6 +68,19 @@ BEGIN
       fc.k != ALL(ARRAY['double_sinks', 'walk_in_shower', 'rainfall_shower'])
       AND (fc.flag_count >= 2 OR gs.group_size = 1)
     )
+
+    UNION
+
+    -- Hotel-level fallback for high-risk flags: hotel has >=3 total photos with
+    -- this flag across any room types (LiteAPI often indexes only 1 bathroom photo
+    -- per room type at luxury hotels; 3 independent Gemini matches = reliable).
+    SELECT fc.hotel_id, fc.room_name, fc.photo_type, fc.city, fc.k
+    FROM flag_counts fc
+    JOIN hotel_flag_totals hft
+      ON hft.hotel_id = fc.hotel_id AND hft.city = fc.city AND hft.k = fc.k
+    WHERE fc.k = ANY(ARRAY['double_sinks', 'walk_in_shower', 'rainfall_shower'])
+      AND fc.flag_count >= 1
+      AND hft.hotel_total >= 3
   ),
   feature_agg AS (
     SELECT hotel_id, room_name, photo_type, city,
