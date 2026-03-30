@@ -646,6 +646,16 @@ ${caption}`;
   }).eq("city", city);
 
   console.log(`[indexer] ✅ ${city} complete — ${hotelsDone} hotels, ${totalEmbeds} embeddings`);
+
+  // Rebuild room_types_index so feature-flag searches work immediately for this city
+  console.log(`[indexer] rebuilding room_types_index for ${city}...`);
+  const { data: rebuildCount, error: rebuildErr } = await db.rpc("rebuild_room_types_index_city", { p_city: city });
+  if (rebuildErr) {
+    console.error(`[indexer] rebuild error: ${rebuildErr.message}`);
+  } else {
+    console.log(`[indexer] room_types_index rebuilt: ${rebuildCount} rows`);
+  }
+
   return { hotelsDone, totalEmbeds };
 }
 
