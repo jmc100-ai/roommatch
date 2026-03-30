@@ -1473,7 +1473,7 @@
       // Fall back to hotel-level availability: LiteAPI returned a price → hotel is bookable.
       // Covers stubs (beyond GALLERY_LIMIT, roomTypes=[]) and hotels where mappedRoomId
       // doesn't match our indexed room_type_id. Use vector score so they rank with peers.
-      if (h.price != null) return h.score || 0;
+      if (h.price != null) return h.vectorScore || 0;
       return 0;
     }
     return Math.max(0, ...allRooms.map(rt => rt.score || 0));
