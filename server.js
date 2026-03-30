@@ -1389,7 +1389,11 @@ app.get("/api/vsearch", async (req, res) => {
     const hotelScoreMap  = new Map();  // hotel_id → {scores[], intentScores[], captions[]}
 
     for (const p of photos) {
-      const similarity = roomTypeSimMap.get(`${p.hotel_id}::${p.room_name}`) ?? hotelSimMap.get(p.hotel_id) ?? 0;
+      // For feature-filtered queries, rooms not returned by score_room_types (i.e., rooms
+      // that don't have the required feature) get similarity 0 so they sort to the bottom.
+      // Without this, they'd inherit the hotel-level max and incorrectly appear first.
+      const roomTypeSim = roomTypeSimMap.get(`${p.hotel_id}::${p.room_name}`);
+      const similarity  = roomTypeSim ?? (required_features ? 0 : (hotelSimMap.get(p.hotel_id) ?? 0));
 
       if (!hotelPhotosMap.has(p.hotel_id)) hotelPhotosMap.set(p.hotel_id, []);
       hotelPhotosMap.get(p.hotel_id).push({ ...p, similarity });
