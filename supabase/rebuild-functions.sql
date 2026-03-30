@@ -8,9 +8,9 @@
 -- Confirmation rules per flag:
 --   double_sinks, walk_in_shower, rainfall_shower:
 --     Primary:  room type has >=2 photos with the flag
---     Fallback: hotel has >=3 total photos with the flag across ANY room types
---               (LiteAPI often indexes 1 bathroom photo per room type at luxury
---                hotels; 3 independent Gemini confirmations = reliable signal)
+--     Fallback: hotel has >=2 total photos with the flag across ANY room types
+--               (LiteAPI often indexes 1 bathroom photo per room type; 2 independent
+--                Gemini confirmations across different rooms = reliable signal)
 --   all other flags: >=2 OR single-photo group (no cross-validation possible)
 --
 CREATE OR REPLACE FUNCTION public.rebuild_room_types_index_city(p_city text)
@@ -80,7 +80,7 @@ BEGIN
       ON hft.hotel_id = fc.hotel_id AND hft.city = fc.city AND hft.k = fc.k
     WHERE fc.k = ANY(ARRAY['double_sinks', 'walk_in_shower', 'rainfall_shower'])
       AND fc.flag_count >= 1
-      AND hft.hotel_total >= 3
+      AND hft.hotel_total >= 2
   ),
   feature_agg AS (
     SELECT hotel_id, room_name, photo_type, city,
