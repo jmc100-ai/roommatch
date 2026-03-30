@@ -5,7 +5,7 @@ RoomMatch is a hotel room visual search engine. Users describe their ideal hotel
 
 Live at: **https://www.travelboop.com**
 GitHub: **https://github.com/jmc100-ai/roommatch**
-Render service: **https://roommatch-1fg5.onrender.com**
+Render service: **https://roommatch-1fg5.onrender.com** (service ID: srv-d6s27b75r7bs738737fg)
 Supabase project ID: **dmgxrcmdihgsffvqllms**
 
 ---
@@ -14,16 +14,30 @@ Supabase project ID: **dmgxrcmdihgsffvqllms**
 
 ```
 FRONTEND (client/index.html)
-  → Express backend (server.js) on Render (paid tier)
-  → Vector Search (main and only working mode)
+  → Express backend (server.js) on Render paid tier
+  → Vector Search (only mode — LiteAPI room-search is broken)
 
 VECTOR SEARCH PIPELINE:
-  LiteAPI /data/hotels (up to 7,221 Paris hotels)
-  → /data/hotel (room photos + room_type_id per hotel)
-  → Gemini 2.5 Flash Lite (structured photo captions)
-  → gemini-embedding-001 (768-dim truncated embeddings)
-  → Supabase pgvector (full city scan via score_city_photos RPC)
-  → Live search: embed query → score ALL city photos → rank + filter → return all hotels
+  User query
+  → HyDE: Gemini 2.5 Flash Lite generates a hypothetical room caption
+  → gemini-embedding-001 embeds the HyDE caption (768 dims)
+  → Phase A: score_room_types RPC scans room_types_index
+      - If query triggers a feature flag (e.g. "double sinks"):
+        → DB pre-filter: only room types with features @> {double_sinks:true}
+      - Returns per-room-type similarity scores for all matching hotels
+  → Phase B: fetch_hotel_photos RPC fetches photos for top hotels
+  → Score remapping: raw similarity → 0-100% display score
+  → Return ranked hotels with photos
+
+INDEXING PIPELINE:
+  POST /api/index-city → scripts/index-city.js
+  LiteAPI /data/hotels → /data/hotel (photos + room IDs)
+  → Gemini 2.5 Flash Lite (structured captions + photo_type classification)
+  → extractFeatureSummary() → photo-type-filtered embedding text
+  → extractFeatureFlags() → jsonb boolean flags (double_sinks, walk_in_shower, etc.)
+  → gemini-embedding-001 → feature_embedding vector(768)
+  → Upsert to room_embeddings (with feature_flags, feature_embedding)
+  → After all hotels done: rebuild_room_types_index_city() auto-called
 
 PRICING PIPELINE:
   Dates entered → POST /api/rates → LiteAPI /hotels/rates (batch, all city hotels)
@@ -41,8 +55,9 @@ PRICING PIPELINE:
 | Backend | Node.js + Express, deployed on Render **paid tier** |
 | Frontend | Single HTML file, vanilla JS |
 | Hotel data | LiteAPI (production key) |
-| Photo captioning | Gemini 2.5 Flash Lite (gemini-2.5-flash-lite) |
-| Embeddings | Gemini gemini-embedding-001 (3072 dims, truncated to 768) |
+| Photo captioning | Gemini 2.5 Flash Lite (`gemini-2.5-flash-lite`) |
+| Query expansion | HyDE via Gemini 2.5 Flash Lite (cached per query string) |
+| Embeddings | Gemini `gemini-embedding-001` (3072 dims, truncated to 768) |
 | Vector DB | Supabase pgvector |
 | City autocomplete | Geoapify API |
 
@@ -75,14 +90,17 @@ roommatch/
 ├── client/
 │   └── index.html               — full frontend (single file, vanilla JS)
 ├── scripts/
-│   ├── index-city.js            — batch indexing script
-│   └── backfill-room-ids.js     — backfill room_type_id for existing rows
+│   ├── index-city.js            — batch indexing script (captions + embeddings + feature flags)
+│   ├── backfill-room-ids.js     — backfill room_type_id for existing rows
+│   └── test-search-quality.js  — automated search quality tests (7 tests, run with node)
 └── supabase/
     ├── schema.sql               — full DB schema
-    ├── add-room-type-id.sql     — adds room_type_id column + updates score_city_photos RPC
     ├── migrate-768.sql          — 768-dim vectors + ivfflat + disable RLS
     ├── fix-permissions.sql      — grants permissions on all tables
     ├── add-hotel-name.sql       — adds hotel_name column
+    ├── feature-flags.sql        — bulk UPDATE room_embeddings.feature_flags from feature_summary
+    ├── rebuild-functions.sql    — CREATE OR REPLACE for rebuild_room_types_index_city,
+    │                              score_room_types, fetch_hotel_photos
     └── migrate-3072.sql         — SUPERSEDED, do not use
 ```
 
@@ -95,39 +113,64 @@ roommatch/
 ### Tables
 
 **indexed_cities** — tracks indexing status per city
-- city, country_code, status (pending|indexing|complete|failed), hotel_count, photo_count, started_at, completed_at, last_error, stop_requested
+- city, country_code, status (pending|indexing|complete|failed|cancelled), hotel_count, photo_count, started_at, completed_at, last_error, stop_requested
 
 **hotels_cache** — hotel metadata cache
 - hotel_id (PK), city, country_code, name, address, star_rating, guest_rating, main_photo, cached_at
 
 **room_embeddings** — core table, one row per photo
-- id, hotel_id, city, country_code, hotel_name, room_name, **room_type_id** (TEXT, LiteAPI integer ID)
+- id, hotel_id, city, country_code, hotel_name, room_name, room_type_id (TEXT, LiteAPI integer)
 - photo_type (bedroom|bathroom|living|view|other) — Gemini self-classifies
-- caption (hybrid: structured Gemini output + room metadata)
+- caption, feature_summary (cleaned caption text used for embedding), feature_embedding vector(768)
+- feature_flags jsonb — boolean flags parsed from feature_summary (e.g. `{"double_sinks":true}`)
 - embedding vector(768), star_rating, guest_rating, created_at
 - UNIQUE(hotel_id, photo_url)
 
+**room_types_index** — aggregated per (hotel_id, room_name, photo_type), rebuilt after indexing
+- id, hotel_id, city, country_code, room_name, photo_type
+- embedding vector(768) — avg of feature_embeddings for the group
+- features jsonb — confirmed feature flags for the room type (multi-photo confirmed)
+- updated_at
+
 ### Key SQL functions
 
-**`score_city_photos(query_embedding vector(768), search_city TEXT)`** — primary search function
-```sql
--- Full scan of ALL photos in a city, returns every photo with similarity score.
--- No match_count cap — every hotel gets a real score.
--- Returns: hotel_id, hotel_name, room_name, room_type_id, photo_url, photo_type, caption,
---          star_rating, guest_rating, similarity
--- Ordered by similarity DESC.
--- Run with service role to avoid 3s anon timeout.
-```
+**`score_room_types(query_embedding vector, search_city text, required_features jsonb DEFAULT NULL, hotel_ids text[] DEFAULT NULL)`**
+- Scans `room_types_index` for the city
+- If `required_features` provided: `WHERE features @> required_features` pre-filter
+- Returns hotel_id, room_name, photo_type, similarity (cosine)
 
-### PostgREST row limit fix (required — do not revert)
+**`rebuild_room_types_index_city(p_city text)`**
+- Rebuilds `room_types_index` from `room_embeddings` for a city
+- Confirmation rules for high-risk flags (double_sinks, walk_in_shower, rainfall_shower):
+  - Primary: room type has ≥2 photos with the flag
+  - Fallback: hotel has ≥2 total photos with the flag across ANY room types
+    (LiteAPI often indexes 1 bathroom photo per room type at luxury hotels)
+- All other flags: ≥2 photos OR single-photo group
+- AUTO-CALLED by indexCity() after completing — no manual step needed
+
+**`fetch_hotel_photos(hotel_ids text[], max_per_hotel int DEFAULT 40)`**
+- Returns photo rows for a list of hotel IDs (up to max_per_hotel each)
+- SET LOCAL statement_timeout = '30000' inside function
+
+### PostgREST config (do not revert)
 ```sql
 ALTER ROLE authenticator SET pgrst.db_max_rows = '10000';
 NOTIFY pgrst, 'reload config';
 ```
-Default was 1000, which silently capped all queries. Paris has 4,699 photos — without this fix, only 1,000 returned.
 
 ### Current Index Status
-- **Paris: 140 hotels, 4,699 photos** (indexed with structured caption format, room_type_id backfilled for all rows)
+- **Paris: 999 hotels, ~60,000+ photos** (full city indexed, structured captions, feature flags populated)
+- **Kuala Lumpur: 200 hotels, 9,258 photos** (indexed March 2026)
+- London, NYC: not yet indexed
+
+### Feature flag counts (as of March 2026)
+| Feature | Paris hotels | KL hotels |
+|---|---|---|
+| double_sinks | 159 | 33 |
+| rainfall_shower | 384 | 40 |
+| walk_in_shower | 748 | 157 |
+| soaking_tub | 50 | 19 |
+| bathtub | 677 | 87 |
 
 ---
 
@@ -139,6 +182,7 @@ Default was 1000, which silently capped all queries. Paris has 4,699 photos — 
 | GET /api/rates?city&checkin&checkout | Batch hotel+room pricing from LiteAPI |
 | GET /api/index-status?city | Check indexing status |
 | POST /api/index-city | Trigger indexing (requires INDEX_SECRET in body) |
+| POST /api/backfill-feature-embeddings | Re-embed feature_summary + re-extract feature_flags for a city |
 | POST /api/backfill-room-ids | Backfill room_type_id for existing rows (requires INDEX_SECRET) |
 | GET /api/debug-city?city | LiteAPI coverage analysis |
 | GET /api/debug-gemini | Test available Gemini model names |
@@ -149,16 +193,16 @@ Default was 1000, which silently capped all queries. Paris has 4,699 photos — 
 
 ## Indexer (scripts/index-city.js)
 
-Triggered via: `POST /api/index-city {"city":"Paris","limit":200,"secret":"roommatch-2026"}`
+Triggered via: `POST /api/index-city {"city":"Kuala Lumpur","limit":200,"secret":"roommatch-2026"}`
 
 **Flow:**
 1. Fetch hotels sorted by star rating (best hotels first)
 2. 20 hotels concurrent: fetch room detail → collect photos (max 10/room type, 60/hotel)
-3. **Captures `room_type_id`** from LiteAPI room objects (`room.id || room.roomId || room.roomTypeId`)
-4. Per photo: caption → embed → upsert to Supabase (with room_type_id)
-5. Rate limits: 500 caption/min, 1000 embed/min (paid Gemini tier)
-6. Idempotent: UNIQUE(hotel_id, photo_url) prevents duplicates
-7. DB_CONCURRENCY=3 semaphore prevents connection pool exhaustion
+3. Per photo: caption → `extractFeatureSummary(caption, photoType)` → `extractFeatureFlags(summary)` → embed → upsert
+4. Upsert to `room_embeddings` with `feature_flags`, `feature_embedding`, `feature_summary`
+5. DB_CONCURRENCY=3 semaphore prevents connection pool exhaustion
+6. After all hotels done: **auto-calls `rebuild_room_types_index_city(city)`**
+7. Rate limits: 500 caption/min, 1000 embed/min (paid Gemini tier). ~20–30 min for 200 hotels.
 
 **CRITICAL: geminiCaption signature:**
 ```javascript
@@ -166,207 +210,142 @@ geminiCaption(imageUrl, photoContext = {type, roomName}, retries = 3)
 ```
 photoContext MUST be passed. If omitted: "photo is not defined" error on every call.
 
-**Structured caption prompt fields:**
-- PHOTO TYPE — Gemini self-classifies (bedroom/bathroom/living area/view/other)
-- BATHROOM: sinks count, counter space (no/small/large/very large), bathtub type, shower type, bidet, separate toilet
-- BEDROOM: bed type, walk-in closet
-- VIEWS & LIGHT: natural light, windows, view, balcony
-- SPACE & LAYOUT: size impression, ceiling height, separate living area
-- FLOORING & DECOR: flooring material+colour, wall colour, style 1+2 (Modern/Art Deco/Mid-Century/etc), color mood
-- FURNITURE: sofa, armchair, chaise lounge, desk size, dining table
-- NOTABLE FEATURES: fireplace, coffee machine, TV, in-room hot tub, distinctive features
-- maxOutputTokens: 400 (must be this high or response gets truncated)
-
-**Hybrid embedding text format:**
-```
-PHOTO TYPE: bathroom | ROOM: Junior Suite
-[full structured caption]
-Room type: Junior Suite. Size: 45sqm. Beds: 1x King. Amenities: minibar, soaking tub...
-```
+**Feature flag extraction:**
+- `extractFeatureSummary(caption, photoType)` — cleans caption, filters to photo-type-relevant sections only (bathroom photos only embed bathroom sections, etc.)
+- `extractFeatureFlags(featureSummary)` — regex-parses summary into `{flag: true}` jsonb (must stay in sync between server.js and index-city.js)
+- Both functions exist identically in `server.js` and `scripts/index-city.js`
 
 ---
 
-## Backfill Script (scripts/backfill-room-ids.js)
+## Search Design (/api/vsearch)
 
-Backfills `room_type_id` for existing rows that predate the per-room pricing feature.
-For each hotel, calls LiteAPI `/data/hotel`, matches `room_name` to LiteAPI room names, and UPDATEs matching rows.
+### Phase A — Room-type scoring
+1. **HyDE**: Gemini 2.5 Flash Lite generates a hypothetical caption from the user query (cached by query string, skipped on hit)
+2. Embed HyDE caption with `gemini-embedding-001` (768 dims)
+3. Detect FEATURE_FLAGS from query text (e.g. "double sinks" → `{double_sinks: true}`)
+4. Call `score_room_types` with `required_features` if flags detected → DB pre-filter returns only matching room types
+5. Build `hotelSimMap` (hotel → max similarity) and `roomTypeSimMap` (hotel::room → similarity)
 
-**Paris backfill completed 2026-03-21: 1,213 rows updated, 0 unmatched.**
+### Phase B — Photo fetch
+6. Fetch photos for top GALLERY_LIMIT (250) hotels via `fetch_hotel_photos`
+7. Assign photo similarity from `roomTypeSimMap`; rooms not in map get similarity=0 for feature queries
 
-**To re-run (e.g. after new indexing):**
-```bash
-# Via server endpoint (recommended):
-POST /api/backfill-room-ids {"city":"Paris","secret":"roommatch-2026"}
+### Score remapping
+- `rawScore = max room-type similarity for hotel`
+- `score = (rawScore - SIM_MIN) / (SIM_MAX - SIM_MIN) * 100`
+- SIM_MIN/SIM_MAX computed adaptively from the result set each query
 
-# Or locally:
-node scripts/backfill-room-ids.js --city Paris --dry-run
-node scripts/backfill-room-ids.js --city Paris
+### Feature flags in FEATURE_FLAGS array (server.js)
+Each entry has: `label`, `flag` (DB key), `queryMatch` (regex to detect in query), optional `intentType`.
+Examples: double sinks, soaking tub, bathtub, walk-in shower, rainfall shower, balcony, fireplace, in-room hot tub, etc. (~32 flags total)
+
+### Availability filter (client-side)
+- "Available rooms only" toggle: shows only hotels where LiteAPI confirmed pricing
+- Hotels with no rate data from LiteAPI are **hidden entirely** (not shown at 0%) when filter is active
+- `hotelPassesAvailFilter(h)` checks `h.price != null` OR has per-room pricing matches
+
+---
+
+## Scoring Display
+
+### hotelEffectiveScore (client-side)
+```
+if "available rooms only" active AND dates entered AND prices loaded:
+  if any room has a price AND a roomType sim → return max of those
+  if hotel has a price but no room match → return h.vectorScore
+  else → return 0 (filtered out by hotelPassesAvailFilter)
+else:
+  return h.vectorScore
 ```
 
 ---
 
 ## Pricing (/api/rates)
 
-**Request:** `GET /api/rates?city=Paris&checkin=2026-03-23&checkout=2026-03-26`
-
 **Flow:**
 1. Fetch all hotel_ids for city from hotels_cache
 2. POST to LiteAPI `/hotels/rates` with all IDs, `maxRatesPerHotel:10`, `roomMapping:true`
-3. Parse `hotel.roomTypes[i].rates[0]` for each offer:
-   - `rates[0].name` = room name (supplier name, differs from catalog name — do NOT use for matching)
-   - `rates[0].mappedRoomId` = integer room ID matching `/data/hotel` IDs (i.e. `room_type_id` in DB)
-   - `retailRate.total[0].amount` = total for stay (divide by nights for per-night)
+3. Key: `rates[0].mappedRoomId` = integer matching `room_type_id` in DB (USE THIS, not `roomTypeId`)
 4. Returns `prices` (hotel_id → cheapest/night) and `roomPrices` (hotel_id → {room_type_id → $/night})
 
 **IMPORTANT — LiteAPI ID mismatch:**
-- `/hotels/rates` `roomTypeId` field = encoded base64-style string (e.g. "GMYTSLJRG...") — useless for matching
-- `/hotels/rates` `rates[0].mappedRoomId` = integer matching `/data/hotel` room IDs — USE THIS
-- `/data/hotel` room `id`/`roomId` = integer — stored in `room_embeddings.room_type_id`
-- `rates[0].name` ≠ `/data/hotel` `roomName` — supplier names differ from catalog names, do NOT match by name
-
-**Current results:** ~78-93/140 Paris hotels priced per search (not all hotels have availability on all dates).
+- `/hotels/rates` `roomTypeId` = encoded base64 string — useless for matching
+- `/hotels/rates` `rates[0].mappedRoomId` = integer matching `/data/hotel` IDs → USE THIS
+- `rates[0].name` ≠ `/data/hotel` `roomName` — do NOT match by name
 
 ---
 
-## Search Design (current — /api/vsearch)
+## Automated Tests
 
-### Overview
-Returns ALL hotels in the city index, sorted by match score. Every hotel is scored. No hard filtering — low-scoring hotels appear at the bottom with their score.
+Run the full test suite against the live server:
+```bash
+node scripts/test-search-quality.js
+# or against localhost:
+node scripts/test-search-quality.js --base-url=http://localhost:3000
+```
 
-### Scoring pipeline
-1. Embed the user's query with `gemini-embedding-001`, truncate to 768 dims
-2. Call `score_city_photos` RPC — full scan of all ~4,699 Paris photos
-3. Group photos by hotel. For each hotel, compute `rawScore` = avg of top-3 intent-matching photo similarities
-   - `intentType` detection: bathroom query → use only bathroom photos; bedroom query → bedroom only
-4. **Rescale**: `score = (rawScore - 0.40) / (0.72 - 0.40) * 100` → display percentage 0–100%
-   - SIM_MIN=0.40 (noise floor), SIM_MAX=0.72 (realistic ceiling for top matches)
-5. **Structural feature penalty**: apply `score × 0.45` per missing feature (on rescaled score, not raw)
-6. Sort all hotels descending by final score
+7 tests covering KL feature flags (double sinks, rainfall shower, soaking tub, walk-in shower), semantic search, and Paris. All should pass with exact hotel counts matching the DB.
 
-### Per-room scoring
-Each room type also gets its own score (avg top-3 similarities for that room's photos, same rescaling + penalty). Shown as `X% match` badge inline in the room header row, visible before expanding.
-
-### Structural feature detection (`STRUCTURAL_FEATURES` in server.js)
-Penalty is `0.45×` per unconfirmed feature (applied after rescaling):
-- **double sinks**: confirm `/\b(two|double|dual|twin|2)\s*sinks?\b|\bsinks?\s*(?:count)?[:\s]+([2-9]|two|double...)/`
-- **soaking tub**: confirm `/\b(soaking|freestanding|clawfoot|japanese)\s*(tub|bath)\b|\bbathtub\s*(?:type)?[:\s]+.../`
-- **balcony**: confirm `/\bbalcon(y|ies)\b/`
-- **fireplace**: confirm `/\bfireplace\b/`
-- **large windows**: confirm `/\b(large|floor.to.ceiling|panoramic|huge|oversized|expansive)\s*windows?\b.../`
-
-### Room type ordering within hotel
-Rooms sorted by **count of detected features confirmed in their captions** (descending), similarity as tiebreaker. Ensures the room with e.g. two sinks appears first, not the room whose name contains "double".
-
-### Client-side sort options
-- **Best Match** (default) — vectorScore descending
-- **Match + Price** — tier-based: High (40%+) → Mid (15–39%) → Low (<15%), cheapest-first within tier, unpriced to bottom
-- **Best Price** — price ascending, unpriced to bottom
-- **Guest Rating** — guest score descending
-- **Stars** — star rating descending
-
----
-
-## Frontend Features (client/index.html)
-
-### Search bar
-- Hero state (large, centered) before first search
-- Compact sticky state after search
-- City autocomplete via Geoapify
-- Date pickers — triggers live pricing from LiteAPI when both filled
-- 5 sort buttons: Best Match, Match+Price, Best Price, Guest Rating, Stars
-- Price buttons show spinner while rates fetch; enabled immediately if no dates entered
-
-### Hotel cards
-- Hotel name, stars, location, guest score, "Find & Book" link (Google search)
-- Hotel-level price (cheapest available rate) next to Find & Book button
-- Room type rows — collapsible, first room open by default
-- Room header: **Room Name → €X/night (if available) → X% match badge → · → beds/size → ▼**
-- Per-room match badge: gold for score ≥20%, muted grey for <20%, "browse" only in Match sort for score=0
-- Horizontal photo strip per room, scrollable, up to 10 photos
-- Per-photo match badge on first photo of each room (overlay on photo)
-- Infinite scroll: 10 hotels initially, +10 on scroll via IntersectionObserver
-
-### Lightbox gallery
-- Click any photo → floating panel (62vw) centered on dark backdrop
-- Room name + match % badge at top of panel
-- ← → navigation; keyboard arrow keys; Escape to close
-- Thumbnail strip at bottom; active thumbnail highlighted gold
-- Photo counter (e.g. "3 / 5") above thumbnails
-- Click dark background to close
-
----
-
-## Key Decisions & Why
-
-**Why not LiteAPI room-search?**
-Returns 9 hotels globally regardless of city — geo filtering broken.
-
-**Why not HuggingFace CLIP?**
-Three blockers: api-inference deprecated, CLIP not on free tier, 200 req/5min exhausted instantly.
-
-**Why Gemini over OpenAI?**
-10x cheaper. gemini-2.5-flash-lite + gemini-embedding-001 confirmed working.
-
-**Why 768 dims not 3072?**
-pgvector ivfflat AND hnsw cap at 2000 dims. Truncating 3072→768 is valid (Matryoshka).
-
-**Why structured caption not free-form?**
-Free-form caused hallucination. Structured format with "unknown" is reliable.
-
-**Why score_city_photos instead of search_rooms?**
-search_rooms used match_count cap — hotels outside top 500 got no score. score_city_photos full scan gives every hotel a real score.
-
-**Why structural feature penalty instead of hard filtering?**
-Hard filtering removes hotels unexpectedly. Penalty (×0.45) sinks them to the bottom while keeping them visible.
-
-**Why apply penalty after rescaling?**
-If applied before rescaling on raw similarity, even a 0.60 raw score × 0.45 = 0.27 which is below SIM_MIN (0.40) → clamps to 0%. Applying on rescaled score preserves visibility: 50% × 0.45 = 22%.
-
-**Why key roomPrices by mappedRoomId?**
-LiteAPI `/hotels/rates` has two incompatible room type identifiers:
-- `roomTypeId` (top-level) = encoded base64 string, NOT the same as catalog IDs — useless
-- `rates[0].mappedRoomId` = integer, SAME as `/data/hotel` room IDs stored in DB → use this
+**Update expected counts in the script after re-indexing.**
 
 ---
 
 ## Debugging History — Key Issues
 
+### score_room_types overload ambiguity (2026-03-30)
+- Two versions of `score_room_types` left in DB after feature flags migration: old 3-arg and new 4-arg
+- PostgREST error: "Could not choose the best candidate function between..."
+- Fix: `DROP FUNCTION IF EXISTS public.score_room_types(vector, text, text[]);`
+- Only keep the 4-arg version with `required_features jsonb DEFAULT NULL`
+
+### room_types_index not rebuilt after new city indexing (2026-03-30)
+- `rebuild_room_types_index_city` was only called from `backfill-feature-embeddings` endpoint
+- KL was indexed but `room_types_index.features` was all empty → feature searches returned 0 hotels
+- Fix: `indexCity()` now auto-calls `rebuild_room_types_index_city(city)` after completing
+
+### Feature flag threshold too strict for luxury hotels (2026-03-30)
+- Initial rule: room type needed ≥2 photos with flag. LiteAPI indexes 1 bathroom photo per room type at luxury hotels.
+- Four Seasons KL had 5 double_sinks photos across 5 different room types → none passed ≥2 rule
+- Fix: hotel-level fallback — if hotel has ≥2 total photos with flag across any room types, all those room types confirmed
+- Result: KL double_sinks went from 13 → 33 confirmed hotels
+
+### hotelEffectiveScore using wrong property (2026-03-30)
+- `hotelEffectiveScore` returned `h.score || 0` as fallback when price present but no room match
+- Server returns `vectorScore`, not `score` → always returned 0 → no match badge with "available rooms only" on
+- Fix: changed to `h.vectorScore || 0`
+
+### Hotels with no rate data showing in "available rooms only" filter (2026-03-30)
+- Hotels not in LiteAPI inventory had `h.price = null` → hotelEffectiveScore returned 0 → showed with no badge
+- Fix: `hotelPassesAvailFilter(h)` filters them out entirely before rendering when the toggle is active
+
 ### Per-room pricing (2026-03-21)
-- LiteAPI `/hotels/rates` `roomTypeId` is encoded (e.g. "GMYTSLJRG..."), incompatible with `/data/hotel` integer IDs
-- Room name is at `rates[0].name` NOT `rt.name` (rt has no name field)
-- Supplier rate names differ from catalog room names — name matching unreliable
-- Solution: `roomMapping:true` in request returns `rates[0].mappedRoomId` = integer matching catalog IDs
-- DB `room_type_id` stores catalog integer IDs → exact match via `mappedRoomId`
-- Paris backfill: 1,213 rows updated 2026-03-21, 0 unmatched
+- LiteAPI `/hotels/rates` `roomTypeId` is encoded, incompatible with catalog IDs
+- Fix: `roomMapping:true` in request → `rates[0].mappedRoomId` = integer matching catalog IDs
 
-### Supabase 1000-row cap
-- PostgREST default `max_rows=1000` silently capped queries. Fix: `ALTER ROLE authenticator SET pgrst.db_max_rows='10000'`
-- anon role `statement_timeout=3s` caused full city scan to fail. Fix: use supabaseAdmin (service role)
-
-### Structural feature confirm regex (2026-03-21)
-- Gemini captions write `SINKS: 2` or `sinks count: 2` but old regex only matched `two sinks` or `sinks: 2`
-- Fixed: `\bsinks?\s*(?:count)?[:\s]+([2-9]|two|double|twin|dual)` handles `count` between field and value
-
-### Match sort buttons stuck disabled
-- Buttons initialized as `disabled` + `loading` in HTML. `render()` reset `_pricesLoaded=false`.
-- No-dates case set `_pricesLoaded=true` before `render()` which overwrote it.
-- Fix: set `_pricesLoaded=true` and enable buttons AFTER `render()` completes.
+### Supabase statement_timeout (2026-03-20 through March 2026)
+- PostgREST `authenticator` role has 8s timeout, overrides SET LOCAL in functions
+- Fix: `SET LOCAL statement_timeout = '300000'` inside function definition
+- `fetch_hotel_photos` also got `SET LOCAL statement_timeout = '30000'`
 
 ### Connection pool exhaustion (2026-03-20)
-- Concurrent indexer runs caused Supabase to get stuck PAUSING. Fix: DB_CONCURRENCY=3 semaphore.
+- Concurrent indexer runs caused Supabase to get stuck PAUSING
+- Fix: DB_CONCURRENCY=3 semaphore in index-city.js
 
 ---
 
 ## Known Issues & Next Steps
 
-1. **Expand Paris index** — Top 140 hotels indexed. LiteAPI has 7,221 total.
-   - Cost: ~$9/1,000 hotels, ~50 min. Run batches of 1,000.
-   - `POST /api/index-city {"city":"Paris","limit":1000,"secret":"roommatch-2026"}`
-   - After each batch: `POST /api/backfill-room-ids {"city":"Paris","secret":"roommatch-2026"}`
+1. **Index London and NYC** — same flow as KL: trigger index-city, auto-rebuild happens after
+   ```powershell
+   Invoke-RestMethod -Uri "https://roommatch-1fg5.onrender.com/api/index-city" -Method POST -ContentType "application/json" -Body '{"city":"London","limit":200,"secret":"roommatch-2026"}'
+   ```
 
-2. **Index London and NYC** after Paris expanded.
+2. **Neighborhood/Borough Search** — store lat/lng in hotels_cache, use Geoapify bbox for geo filtering.
+   - Add `lat FLOAT, lng FLOAT` to hotels_cache
+   - Store coordinates from LiteAPI during indexing
+   - Update /api/vsearch to accept optional `bbox` and filter hotels_cache
 
-3. **Neighborhood/Borough Search** — store lat/lng in hotels_cache, use Geoapify bbox for geo filtering.
+3. **Update test-search-quality.js expected counts** after re-indexing any city.
 
 4. **Consider Supabase logging table** to avoid parsing Render logs for analytics.
 
@@ -374,21 +353,34 @@ LiteAPI `/hotels/rates` has two incompatible room type identifiers:
 
 ## Workflow
 
-**Trigger indexing:**
+**Trigger indexing (new city or re-index):**
 ```powershell
-Invoke-RestMethod -Uri "https://roommatch-1fg5.onrender.com/api/index-city" -Method POST -ContentType "application/json" -Body '{"city":"Paris","limit":1000,"secret":"roommatch-2026"}'
+Invoke-RestMethod -Uri "https://roommatch-1fg5.onrender.com/api/index-city" -Method POST -ContentType "application/json" -Body '{"city":"Kuala Lumpur","limit":200,"secret":"roommatch-2026"}'
 ```
+- Room_types_index is automatically rebuilt after indexing completes (no manual step needed)
 
-**Backfill room IDs after indexing:**
-```powershell
-Invoke-RestMethod -Uri "https://roommatch-1fg5.onrender.com/api/backfill-room-ids" -Method POST -ContentType "application/json" -Body '{"city":"Paris","secret":"roommatch-2026"}'
-```
-
-**Check indexing progress (Supabase):**
+**Check indexing progress:**
 ```sql
-SELECT city, status, hotel_count, photo_count FROM indexed_cities;
-SELECT COUNT(*), COUNT(DISTINCT hotel_id) FROM room_embeddings WHERE city = 'Paris';
-SELECT COUNT(*) FROM room_embeddings WHERE city = 'Paris' AND room_type_id IS NOT NULL;
+SELECT city, status, hotel_count, photo_count, started_at FROM indexed_cities;
+SELECT COUNT(*), COUNT(DISTINCT hotel_id) FROM room_embeddings WHERE city = 'Kuala Lumpur';
+```
+
+**Manually rebuild room_types_index (if needed):**
+```sql
+SELECT rebuild_room_types_index_city('Kuala Lumpur');
+-- Check results:
+SELECT COUNT(DISTINCT hotel_id) FROM room_types_index WHERE city = 'Kuala Lumpur' AND features @> '{"double_sinks": true}';
+```
+
+**Drop duplicate SQL function overloads (if overload error occurs):**
+```sql
+DROP FUNCTION IF EXISTS public.score_room_types(vector, text, text[]);
+-- Keep only: score_room_types(vector, text, jsonb, text[])
+```
+
+**Run search quality tests:**
+```bash
+node scripts/test-search-quality.js
 ```
 
 **View Render logs via MCP:**
