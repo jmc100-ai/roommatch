@@ -1,0 +1,23 @@
+{
+  "generatedAt": "2026-03-30",
+  "source": "Supabase room_types_index snapshot",
+  "counts": {
+    "Kuala Lumpur::feature::double_sinks": 33,
+    "Kuala Lumpur::feature::rainfall_shower": 40,
+    "Kuala Lumpur::feature::soaking_tub": 19,
+    "Kuala Lumpur::feature::walk_in_shower": 157,
+    "Kuala Lumpur::feature::balcony": 37,
+    "Kuala Lumpur::feature::city_view": 140,
+    "Kuala Lumpur::feature::king_bed": 161,
+    "Kuala Lumpur::feature::separate_living_area": 139,
+    "Kuala Lumpur::feature::floor_to_ceiling_windows": 120,
+    "Kuala Lumpur::semantic::all": 200,
+    "Paris::feature::double_sinks": 159,
+    "Paris::feature::balcony": 534,
+    "Paris::feature::city_view": 575,
+    "Paris::feature::bathtub": 677,
+    "Paris::feature::terrace": 119,
+    "Paris::feature::landmark_view": 117,
+    "Paris::semantic::all": 999
+  }
+}

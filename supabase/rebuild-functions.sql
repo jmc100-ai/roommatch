@@ -112,6 +112,9 @@ $function$;
 -- Vector similarity search over room_types_index with optional feature pre-filter.
 -- required_features: jsonb of {flag: true} pairs — only rooms with ALL flags are returned.
 -- Example: {"double_sinks": true, "soaking_tub": true}
+-- IMPORTANT: do not cap the raw scan below the indexed city size, or broad semantic
+-- queries (e.g. "Art Deco style room" in Paris) will silently return only a subset
+-- of hotels. PostgREST row caps are handled separately via pgrst.db_max_rows.
 --
 CREATE OR REPLACE FUNCTION public.score_room_types(
   query_embedding vector,
@@ -136,13 +139,11 @@ BEGIN
       AND (hotel_ids IS NULL OR rti.hotel_id = ANY(hotel_ids))
       AND (required_features IS NULL OR required_features = '{}' OR rti.features @> required_features)
     ORDER BY rti.embedding <=> query_embedding
-    LIMIT 3000
   )
   SELECT r.hotel_id, r.room_name, MAX(r.sim) AS similarity
   FROM raw r
   GROUP BY r.hotel_id, r.room_name
-  ORDER BY MAX(r.sim) DESC
-  LIMIT 2000;
+  ORDER BY MAX(r.sim) DESC;
 END;
 $function$;
 
