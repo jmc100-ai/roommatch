@@ -6,9 +6,68 @@
 const express = require("express");
 const cors    = require("cors");
 const path    = require("path");
+const crypto  = require("crypto");
 require("dotenv").config();
 const { createClient } = require("@supabase/supabase-js");
 const { indexCity }    = require("./scripts/index-city");
+
+// ── Password gate helpers ─────────────────────────────────────────────────────
+const SITE_PASSWORD = process.env.SITE_PASSWORD || "";
+const SITE_PASSWORD_HASH = SITE_PASSWORD
+  ? crypto.createHash("sha256").update(SITE_PASSWORD + "rm-salt-2026").digest("hex")
+  : "";
+
+function parseCookies(cookieHeader) {
+  const out = {};
+  if (!cookieHeader) return out;
+  for (const part of cookieHeader.split(";")) {
+    const [k, ...v] = part.split("=");
+    out[k.trim()] = decodeURIComponent(v.join("=").trim());
+  }
+  return out;
+}
+
+function loginHtml(error = "") {
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>RoomMatch</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300;400;600&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet"/>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { min-height: 100vh; display: flex; align-items: center; justify-content: center;
+           background: #0c0c0e; font-family: 'DM Sans', sans-serif; color: #e8e4dc; }
+    .card { background: #18181c; border: 1px solid rgba(255,255,255,0.07); border-radius: 16px;
+            padding: 48px 40px; width: 100%; max-width: 380px; text-align: center; }
+    h1 { font-family: 'Cormorant Garamond', serif; font-size: 28px; font-weight: 300;
+         letter-spacing: 0.05em; margin-bottom: 8px; color: #c9a96e; }
+    p.sub { font-size: 13px; color: rgba(232,228,220,0.5); margin-bottom: 32px; }
+    input[type=password] { width: 100%; padding: 12px 16px; background: #0c0c0e;
+      border: 1px solid rgba(201,169,110,0.3); border-radius: 8px; color: #e8e4dc;
+      font-family: 'DM Sans', sans-serif; font-size: 15px; margin-bottom: 16px; outline: none; }
+    input[type=password]:focus { border-color: rgba(201,169,110,0.7); }
+    button { width: 100%; padding: 12px; background: linear-gradient(135deg, #c9a96e, #a8893d);
+             border: none; border-radius: 8px; color: #0c0c0e; font-family: 'DM Sans', sans-serif;
+             font-size: 14px; font-weight: 500; letter-spacing: 0.08em; cursor: pointer; }
+    .error { color: #e87070; font-size: 13px; margin-top: 12px; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>RoomMatch</h1>
+    <p class="sub">Private access only</p>
+    <form method="POST" action="/auth">
+      <input type="password" name="password" placeholder="Password" autofocus/>
+      <button type="submit">Enter</button>
+      ${error ? `<p class="error">${error}</p>` : ""}
+    </form>
+  </div>
+</body>
+</html>`;
+}
 
 const supabase = (process.env.SUPABASE_URL && process.env.SUPABASE_ANON_KEY)
   ? createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY)
@@ -399,6 +458,31 @@ async function liteGet(path) {
 
 app.use(cors({ origin: "*" }));
 app.use(express.json());
+app.use((_, res, next) => { res.setHeader("X-Robots-Tag", "noindex, nofollow"); next(); });
+
+// ── Password gate (only active when SITE_PASSWORD env var is set) ─────────────
+if (SITE_PASSWORD) {
+  // Handle login form submission
+  app.post("/auth", express.urlencoded({ extended: false }), (req, res) => {
+    const entered = crypto.createHash("sha256")
+      .update((req.body.password || "").trim() + "rm-salt-2026")
+      .digest("hex");
+    if (entered === SITE_PASSWORD_HASH) {
+      res.setHeader("Set-Cookie",
+        `rm_gate=${SITE_PASSWORD_HASH}; Max-Age=2592000; Path=/; HttpOnly; SameSite=Strict`);
+      return res.redirect("/");
+    }
+    return res.send(loginHtml("Wrong password — please try again."));
+  });
+
+  // Gate the frontend — intercept GET / before static middleware serves index.html
+  app.get("/", (req, res, next) => {
+    const cookies = parseCookies(req.headers.cookie);
+    if (cookies.rm_gate === SITE_PASSWORD_HASH) return next();
+    return res.send(loginHtml());
+  });
+}
+
 app.use(express.static(path.join(__dirname, "client")));
 
 app.get("/api/health", (_, res) => res.json({ status: "ok" }));

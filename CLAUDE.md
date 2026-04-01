@@ -75,6 +75,8 @@ SUPABASE_SERVICE_KEY   — service role key (write access for indexer)
 GEOAPIFY_KEY           — city autocomplete
 RENDER_EXTERNAL_URL    — https://roommatch-1fg5.onrender.com (keepalive)
 INDEX_SECRET           — roommatch-2026 (protects indexing + backfill endpoints)
+UNSPLASH_KEY           — (not yet set) free key from unsplash.com/developers — needed for neighborhood card photos
+SITE_PASSWORD          — (not yet set) simple password gate for the frontend; omit to disable gate (API routes never gated)
 ```
 
 ---
@@ -333,6 +335,85 @@ node scripts/test-search-quality.js --base-url=http://localhost:3000
 
 ---
 
+## Data Source Licensing — MUST READ BEFORE BUILDING
+
+### LiteAPI Terms (Updated September 2025)
+LiteAPI's terms **prohibit**:
+- Storing, copying, or creating databases from LiteAPI data outside the permitted scope
+- Building, training, or enriching third-party datasets or machine learning models
+- Mapping LiteAPI data to third-party sources
+
+The permitted scope is narrowly: browsing properties, displaying rates, enabling bookings.
+
+**What this means for our architecture:**
+
+| What we store | Status |
+|---|---|
+| `hotels_cache` (names, ratings, photo URLs) | Likely violates — explicit database of LiteAPI data |
+| `room_embeddings.photo_url` | Likely violates — bulk copy of their content identifiers |
+| Gemini-generated captions (from LiteAPI photos) | Gray area — transformed output but derived from their photos |
+| Vector embeddings (768 floats) | Gray area — two degrees removed from LiteAPI data |
+| Neighborhood vibes (pure Gemini, no LiteAPI data) | Clean — no LiteAPI data involved |
+
+**Gemini API terms:** Clean. Generated content (captions, embeddings, neighborhood text) belongs to us. Storing it is not restricted.
+
+**Unsplash terms:** Clean. Attribution required (planned). Hotlinking allowed. No bulk download.
+
+### Decision Tree — Before Building the Neighborhood Feature
+
+```
+STEP 1: Email LiteAPI (hello@nuitee.com)
+  → Explain: precomputing visual search embeddings from hotel photos
+    for a room recommendation product
+  → Ask for written permission or enterprise agreement
+
+  If YES (permission granted):
+    → Proceed with current architecture as planned
+    → Keep hotels_cache + room_embeddings exactly as-is
+
+  If NO or no response in 1 week:
+    → Use "embeddings-only" architecture (see below)
+    → OR apply to Hotelbeds (explicit Cache API, weeks to onboard)
+```
+
+### Embeddings-Only Architecture (LiteAPI fallback)
+If LiteAPI denies permission, change what we persist:
+- **Keep:** `hotel_id` + `room_name` + `embedding` vector (mathematical derivative, strong legal argument)
+- **Remove from DB:** `photo_url`, captions, hotel metadata from hotels_cache
+- **At search time:** fetch photo URLs + hotel names live from LiteAPI using ranked hotel_ids
+- **Tradeoff:** +150-250ms per search. Photo URLs must be fetched fresh — old embeddings remain valid.
+
+### Alternative Data Sources (if moving off LiteAPI entirely)
+
+| Option | Photos | Caching | Access | Cost | Timeline |
+|---|---|---|---|---|---|
+| LiteAPI + permission | Yes | Permitted | Self-service | Low | Days |
+| Embeddings-only (no LiteAPI data stored) | Live fetch | n/a | Self-service | Low | 1 day rework |
+| **Hotelbeds** | Yes (room codes) | **Explicitly permitted via Cache API** | Application required | Higher | Weeks |
+| SerpApi Google Hotels Photos | Yes (basic categories) | Unknown | Self-service | ~$50/mo | Days |
+| Amadeus | **No photos in v3** | n/a | Self-service | Free sandbox | Ruled out |
+
+**Hotelbeds** is the best long-term commercial option — they have a dedicated Cache API explicitly designed for "getting their portfolio into YOUR local system." Requires commercial agreement.
+
+### Hotelbeds vs LiteAPI — Product Quality Comparison
+
+| Dimension | LiteAPI | Hotelbeds |
+|---|---|---|
+| Hotel coverage | 2M+ (aggregated) | 250K (directly contracted) |
+| Photo quality | Good, varies by source | GIATA standard — consistent |
+| Room type linkage | roomName + room_type_id | roomCode (e.g. DBT.DX) |
+| Caching | Prohibited | Explicitly permitted via Cache API |
+| Pricing | Dynamic | Wholesale (negotiated, hourly cache) |
+| Access | Self-service today | Commercial agreement + certification (weeks) |
+| Cost | $3/booking + 2.5% order | Commission on margin |
+| Developer experience | Modern, REST, MCP-native | B2B, older patterns |
+
+**Verdict:** Hotelbeds produces marginally better/more consistent data (GIATA is the industry standard photo source LiteAPI also draws from), and has **explicit caching permission** — the decisive legal advantage. LiteAPI has 8x more hotels and is far simpler to use today. At commercial scale, Hotelbeds is the right long-term partner. Also worth evaluating: **GIATA direct** (1.4M+ properties mapped, addresses + geocodes + photos + room types — the source Hotelbeds uses).
+
+### GATE: Do not start building the neighborhood feature until LiteAPI response is received or a data source decision is made. Ask the user to confirm before proceeding.
+
+---
+
 ## Known Issues & Next Steps
 
 1. **Index London and NYC** — same flow as KL: trigger index-city, auto-rebuild happens after
@@ -340,10 +421,13 @@ node scripts/test-search-quality.js --base-url=http://localhost:3000
    Invoke-RestMethod -Uri "https://roommatch-1fg5.onrender.com/api/index-city" -Method POST -ContentType "application/json" -Body '{"city":"London","limit":200,"secret":"roommatch-2026"}'
    ```
 
-2. **Neighborhood/Borough Search** — store lat/lng in hotels_cache, use Geoapify bbox for geo filtering.
-   - Add `lat FLOAT, lng FLOAT` to hotels_cache
-   - Store coordinates from LiteAPI during indexing
-   - Update /api/vsearch to accept optional `bbox` and filter hotels_cache
+2. **Neighborhood Vibe + Visual Search** — full plan in `.cursor/plans/neighborhood_vibe_+_visual_search_39871fcd.plan.md`
+   - GATE: resolve LiteAPI licensing before building (see "Data Source Licensing" section above)
+   - Phase 1: lat/lng in hotels_cache + bbox filter in vsearch
+   - Phase 2: Gemini-generated neighborhood cards + Unsplash photos
+   - Phase 3: 3-step frontend flow (city → neighborhood → room search)
+   - Phase 4: photo-tap vibe matching
+   - Phase 5: dynamic country_code from Geoapify
 
 3. **Update test-search-quality.js expected counts** after re-indexing any city.
 
