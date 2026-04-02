@@ -2078,8 +2078,8 @@
     setStatus(`Searching for "${query}" in ${city}…`, true);
     try {
       const resp = await fetch(`${BACKEND}/api/room-search?` + new URLSearchParams({ query, city }));
+      if (!resp.ok) throw new Error(`Search failed (${resp.status})`);
       const data = await resp.json();
-      if (!resp.ok) throw new Error(data.error || 'Search failed');
       const hotels = data.hotels || [];
       if (!hotels.length) { setStatus(''); renderEmpty(query, city); }
       else {
@@ -2110,8 +2110,12 @@
       const vsearchParams = { query, city };
       if (activeBbox) vsearchParams.bbox = activeBbox;
       const resp = await fetch(`${BACKEND}/api/vsearch?` + new URLSearchParams(vsearchParams));
+      if (!resp.ok) {
+        let errMsg = `Search failed (${resp.status})`;
+        try { const e = await resp.json(); errMsg = e.error || errMsg; } catch(_) {}
+        throw new Error(errMsg);
+      }
       const data = await resp.json();
-      if (!resp.ok) throw new Error(data.error || 'Vector search failed');
 
       if (data.indexing) {
         showBanner(data.message || `Building visual index for ${city}…`, true);
@@ -2877,6 +2881,7 @@
     cityTimer = setTimeout(async () => {
       try {
         const resp = await fetch(`${BACKEND}/api/places?q=${encodeURIComponent(val)}`);
+        if (!resp.ok) return;
         const data = await resp.json();
         const places = data.places || [];
         if (!places.length) {
