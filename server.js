@@ -1471,6 +1471,22 @@ app.get("/api/vsearch", async (req, res) => {
       roomTypeSimMap.set(`${rt.hotel_id}::${rt.room_name}`, rt.similarity);
     }
 
+    // If bbox search returned 0 results, retry city-wide as a fallback
+    if (!hotelSimMap.size && bboxHotelIds) {
+      console.log(`[vsearch] 0 results in bbox — retrying city-wide`);
+      const fallback = await fetchClient.rpc("score_room_types", {
+        query_embedding: queryEmbedding,
+        search_city: city,
+        ...(required_features ? { required_features } : {}),
+      });
+      if (fallback.error) throw new Error("score_room_types fallback: " + fallback.error.message);
+      for (const rt of (fallback.data || [])) {
+        const prev = hotelSimMap.get(rt.hotel_id) ?? 0;
+        if (rt.similarity > prev) hotelSimMap.set(rt.hotel_id, rt.similarity);
+        roomTypeSimMap.set(`${rt.hotel_id}::${rt.room_name}`, rt.similarity);
+      }
+    }
+
     if (!hotelSimMap.size) {
       return res.json({ hotels: [], query, city, indexing, indexStatus: status });
     }

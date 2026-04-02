@@ -2293,8 +2293,10 @@
           _hasDateSearch = false;
           _setPriceBtnsState(true);
         }
+      } else if (data.indexing && data.indexStatus === 'indexing') {
+        setStatus(`Still indexing ${city} — try a different vibe or check back shortly`, false);
       } else {
-        setStatus(`Index building for ${city} — results will appear shortly`, false);
+        setStatus(''); renderEmpty(query, city);
       }
     } catch(err) { setStatus(''); renderError(err.message); }
     finally { btn.disabled = false; btn.textContent = 'Search rooms'; }
