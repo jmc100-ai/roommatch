@@ -839,6 +839,38 @@
       .nbhd-section { padding: 0 20px 24px; }
       .nbhd-header { flex-direction: column; align-items: flex-start; gap: 6px; }
       .nbhd-grid { grid-template-columns: 1fr; }
+
+      /* Search results (mobile): drop double gutter — cards use nearly full width; desktop unaffected */
+      #st-results .results-inner {
+        padding-left: 0;
+        padding-right: 0;
+        max-width: 100%;
+      }
+      #st-results #results {
+        padding-left: 12px !important;
+        padding-right: 12px !important;
+        max-width: 100%;
+        width: 100%;
+        box-sizing: border-box;
+      }
+      #st-results .sort-bar,
+      #st-results #status,
+      #st-results footer {
+        padding-left: 16px !important;
+        padding-right: 16px !important;
+      }
+      #st-results .index-banner {
+        margin-left: 16px;
+        margin-right: 16px;
+      }
+      #st-results .clip-progress {
+        margin-left: 12px;
+        margin-right: 12px;
+      }
+      #st-results .hotel-card {
+        max-width: 100%;
+        box-sizing: border-box;
+      }
     }
 
     /* ── Neighborhood section ──────────────────────────────────────────── */
