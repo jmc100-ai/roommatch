@@ -1160,6 +1160,11 @@
       background:linear-gradient(90deg,var(--surface) 25%,rgba(255,255,255,.05) 50%,var(--surface) 75%);
       background-size:200% 100%; animation:shimmer 1.5s infinite;
     }
+    .nbhd-gen-hint {
+      grid-column:1/-1; text-align:center; padding:14px 0 4px;
+      font-size:13px; color:var(--accent); opacity:.75;
+      letter-spacing:.04em;
+    }
 
     /* ── Momentum banner (toast) ────────────────────── */
     .mbanner {
@@ -1707,32 +1712,35 @@
     writeHistory(CITY_HISTORY_KEY, name);
     buildCityChips();
 
-    if (cityHasNeighbourhoods(name)) {
-      // Show neighbourhood step with real or fallback data
-      document.getElementById('nbhd-city-label').textContent = name;
-      fetchAndShowNeighborhoodsNew(name);
-      refreshStory('nbhd');
-      showFlowStep('nbhd');
-    } else {
-      // Skip neighbourhood entirely — city not indexed and no fallback data
-      pickNbhd('All of ' + name, null);
-    }
+    // Always show neighbourhood step — API generates for any city via Gemini
+    document.getElementById('nbhd-city-label').textContent = name;
+    fetchAndShowNeighborhoodsNew(name);
+    refreshStory('nbhd');
+    showFlowStep('nbhd');
   }
 
   // ── NEIGHBOURHOOD ────────────────────────────────────
-  async function fetchAndShowNeighborhoodsNew(city) {
+  async function fetchAndShowNeighborhoodsNew(city, isRetry) {
     const grid = document.getElementById('nbhd-grid');
-    // Show skeletons
-    grid.innerHTML = Array.from({length:6}, () =>
-      `<div class="nbhd-skel-new"></div>`).join('');
 
-    // Try real API first
+    // Show skeletons with a hint on first call
+    if (!isRetry) {
+      grid.innerHTML = Array.from({length:6}, () =>
+        `<div class="nbhd-skel-new"></div>`).join('') +
+        `<div class="nbhd-gen-hint">✦ Discovering neighbourhoods…</div>`;
+    }
+
+    // Fetch from API (works for any city — Gemini generates on first call)
     try {
       const resp = await fetch(`${BACKEND}/api/neighborhoods?city=${encodeURIComponent(city)}`);
       if (resp.ok) {
         const data = await resp.json();
+        // 202 = still generating — poll again in 3s
         if (resp.status === 202 || data.status === 'generating') {
-          setTimeout(() => fetchAndShowNeighborhoodsNew(city), 3000);
+          grid.innerHTML = Array.from({length:6}, () =>
+            `<div class="nbhd-skel-new"></div>`).join('') +
+            `<div class="nbhd-gen-hint">✦ Generating ${city} neighbourhoods with AI… (~5s)</div>`;
+          setTimeout(() => fetchAndShowNeighborhoodsNew(city, true), 3000);
           return;
         }
         const hoods = data.neighborhoods || [];
@@ -1743,12 +1751,12 @@
       }
     } catch(e) { /* fall through to hardcoded */ }
 
-    // Fallback to hardcoded
+    // Fallback to hardcoded data (London, Tokyo, New York)
     const fallback = NBHDS_FALLBACK[city];
     if (fallback && fallback.length) {
       grid.innerHTML = fallback.map(h => renderNbhdCard(h)).join('') + renderNbhdSkip(city);
     } else {
-      // No neighbourhood data — skip step and go to style
+      // No neighbourhood data at all — skip step gracefully
       pickNbhd('All of ' + city, null);
     }
   }

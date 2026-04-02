@@ -2129,16 +2129,6 @@ app.get("/api/neighborhoods", async (req, res) => {
   if (!supabase) return res.status(500).json({ error: "Supabase not configured" });
 
   try {
-    // Gate: city must be indexed
-    const { data: cityRow } = await supabase
-      .from("indexed_cities")
-      .select("status")
-      .eq("city", city)
-      .single();
-    if (!cityRow || cityRow.status !== "complete") {
-      return res.status(404).json({ error: `City "${city}" is not indexed yet` });
-    }
-
     // Return cached rows immediately if they exist
     const { data: cached } = await supabase
       .from("neighborhoods")
