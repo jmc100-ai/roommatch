@@ -1190,14 +1190,6 @@
 
     /* ── Room vibe step ─────────────────────────────── */
     .style-layout { display:grid; grid-template-columns:1fr 420px; gap:24px; align-items:start; }
-    .style-chapter-top { display:grid; grid-template-columns:1fr 420px; gap:24px; align-items:end; max-width:100%; }
-    .style-top-left { display:flex; flex-direction:column; }
-    .style-top-right { display:flex; flex-direction:column; justify-content:flex-end; padding-bottom:2px; justify-self:end; width:420px; }
-    .style-top-right .describe-section { margin-top:0; }
-    @media(max-width:900px){
-      .style-chapter-top { grid-template-columns:1fr; }
-      .style-top-right { margin-top:12px; }
-    }
     .style-left-col { display:flex; flex-direction:column; gap:0; order:1; }
     .style-hero-col { order:2; position:sticky; top:calc(56px + 72px + 16px); align-self:start; }
     @media(max-width:900px){
@@ -1220,8 +1212,39 @@
     .sf-desc { font-size:15px; color:rgba(255,255,255,.65); line-height:1.6; max-width:500px; margin-bottom:10px; text-shadow:0 1px 8px rgba(0,0,0,.4); font-style:italic; }
     .sf-kws { display:flex; gap:7px; flex-wrap:wrap; margin-bottom:18px; align-items:flex-start; }
     .sf-kw { font-size:12px; padding:5px 12px; border-radius:12px; background:rgba(255,255,255,.1); backdrop-filter:blur(6px); color:rgba(255,255,255,.72); border:1px solid rgba(255,255,255,.1); }
-    .sf-cta { align-self:flex-start; padding:13px 30px; background:var(--accent); color:#0c0c0e; border:none; border-radius:12px; font-family:'DM Sans',sans-serif; font-size:15px; font-weight:500; cursor:pointer; transition:opacity .15s; display:flex; align-items:center; gap:9px; }
+    .sf-cta { width:100%; padding:14px 20px; background:var(--accent); color:#0c0c0e; border:none; border-radius:12px; font-family:'DM Sans',sans-serif; font-size:15px; font-weight:600; cursor:pointer; transition:opacity .15s; display:flex; align-items:center; justify-content:space-between; }
     .sf-cta:hover { opacity:.88; }
+    /* overlap describe card */
+    .sf-overlap-card {
+      margin:-22px 14px 0; position:relative; z-index:2;
+      background:var(--surface); border-radius:0 0 16px 16px;
+      border:1px solid rgba(201,169,110,.18); border-top:none;
+      box-shadow:0 14px 40px rgba(0,0,0,.5);
+      display:flex; flex-direction:column; gap:10px; padding:14px 16px 18px;
+    }
+    .sf-overlap-or {
+      display:flex; align-items:center; gap:8px;
+      font-size:11px; color:var(--muted); letter-spacing:.06em;
+    }
+    .sf-overlap-or::before,.sf-overlap-or::after { content:''; flex:1; height:1px; background:rgba(201,169,110,.12); }
+    .sf-overlap-input {
+      display:flex; align-items:center; gap:10px;
+      background:rgba(255,255,255,.05); border:1px solid rgba(201,169,110,.22);
+      border-radius:10px; padding:11px 14px;
+      transition:border-color .2s, box-shadow .2s;
+    }
+    .sf-overlap-input:focus-within { border-color:rgba(201,169,110,.55); box-shadow:0 0 0 2px rgba(201,169,110,.08); }
+    .sf-overlap-input input {
+      flex:1; background:transparent; border:none; outline:none;
+      font-family:'DM Sans',sans-serif; font-size:13px; color:var(--text); min-width:0;
+    }
+    .sf-overlap-input input::placeholder { color:rgba(232,228,220,.28); font-style:italic; }
+    .sf-overlap-go {
+      flex-shrink:0; background:rgba(201,169,110,.15); border:1px solid rgba(201,169,110,.35);
+      color:var(--accent); border-radius:7px; padding:6px 13px; font-size:12px;
+      font-weight:500; cursor:pointer; transition:background .15s;
+    }
+    .sf-overlap-go:hover { background:rgba(201,169,110,.28); }
     .style-thumbs { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; margin-bottom:14px; }
     @media(max-width:900px){ .style-thumbs { display:flex; overflow-x:auto; padding-bottom:4px; scroll-snap-type:x mandatory; margin-bottom:24px; } }
     .style-thumbs::-webkit-scrollbar { height:0; }
@@ -1232,9 +1255,6 @@
     .sthumb-bg { position:absolute; inset:0; width:100%; height:100%; background-size:cover; background-position:center; }
     .sthumb-ov { position:absolute; inset:0; background:linear-gradient(to top,rgba(0,0,0,.88) 0%,rgba(0,0,0,.1) 50%,transparent 100%); padding:10px; display:flex; align-items:flex-end; }
     .sthumb-name { font-size:12px; font-weight:500; line-height:1.3; }
-    .describe-section { border-top:1px solid var(--border); padding-top:20px; }
-    .describe-label { font-size:13px; color:var(--muted); margin-bottom:12px; display:flex; align-items:center; gap:8px; }
-    .describe-label strong { color:var(--accent2); }
     .describe-box {
       background:var(--card); border:1px solid rgba(201,169,110,.35); border-radius:18px;
       display:flex; flex-direction:column; gap:10px; padding:16px 20px;
@@ -1428,39 +1448,20 @@
   <div id="st-style" style="display:none">
     <div class="chapter">
       <div class="chapter-inner">
-        <div class="chapter-top style-chapter-top">
-          <div class="style-top-left">
-            <button class="back-btn" onclick="goToStep('nbhd')"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 3L5 8l5 5"/></svg> Back to Neighbourhood</button>
-            <div class="eyebrow"><div class="eyebrow-dot"></div>Step 3 of 4 · <span style="color:var(--accent2)">The heart of Hotel Vibe Search</span></div>
-            <h1 class="chapter-h1">Choose your <em>room vibe</em></h1>
-            <p class="chapter-sub">This is how we find rooms that actually match your taste — not just price range.</p>
-          </div>
-          <div class="style-top-right">
-            <div class="describe-section">
-              <div class="describe-label">
-                <span>✦</span>
-                <span>Or describe it in your own words — <strong>AI understands anything</strong></span>
-              </div>
-              <div class="describe-box">
-                <div class="describe-input-row">
-                  <span class="describe-icon">✦</span>
-                  <input id="describe-input" type="text"
-                    placeholder="e.g. bright suite with city views and a rain shower…"
-                    onkeydown="if(event.key==='Enter')pickCustomStyle()"/>
-                </div>
-                <button class="describe-btn describe-btn-sm" onclick="pickCustomStyle()">Find rooms →</button>
-              </div>
-            </div>
-          </div>
+        <div class="chapter-top">
+          <button class="back-btn" onclick="goToStep('nbhd')"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 3L5 8l5 5"/></svg> Back to Neighbourhood</button>
+          <div class="eyebrow"><div class="eyebrow-dot"></div>Step 3 of 4 · <span style="color:var(--accent2)">The heart of Hotel Vibe Search</span></div>
+          <h1 class="chapter-h1">Choose your <em>room vibe</em></h1>
+          <p class="chapter-sub">This is how we find rooms that actually match your taste — not just price range.</p>
         </div>
         <div class="chapter-body">
           <div class="style-layout">
             <div class="style-left-col">
               <div class="style-thumbs" id="style-thumbs"></div>
             </div>
-            <!-- Hero card — right column -->
+            <!-- Hero card + overlap describe — right column -->
             <div class="style-hero-col">
-              <div class="style-featured" id="style-featured" onclick="pickStyleFromFeatured()">
+              <div class="style-featured" id="style-featured">
                 <div class="sf-bg" id="sf-bg"></div>
                 <div class="sf-grad"></div>
                 <div class="sf-content">
@@ -1468,7 +1469,19 @@
                   <div class="sf-title" id="sf-title">☀️ Bright & Airy Retreat</div>
                   <div class="sf-desc" id="sf-desc">"Sun-filled rooms with large windows"</div>
                   <div class="sf-kws" id="sf-kws"></div>
-                  <button class="sf-cta"><span id="sf-cta-text">Choose this vibe</span><span>→</span></button>
+                  <button class="sf-cta" onclick="pickStyleFromFeatured()">
+                    <span id="sf-cta-text">Select this vibe</span>
+                    <span>→</span>
+                  </button>
+                </div>
+              </div>
+              <div class="sf-overlap-card">
+                <div class="sf-overlap-or">or describe it yourself</div>
+                <div class="sf-overlap-input">
+                  <input id="describe-input" type="text"
+                    placeholder="e.g. dark moody suite with a rain shower and city views…"
+                    onkeydown="if(event.key==='Enter')pickCustomStyle()"/>
+                  <button class="sf-overlap-go" onclick="pickCustomStyle()">Go →</button>
                 </div>
               </div>
             </div>
