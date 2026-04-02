@@ -2272,12 +2272,13 @@
       }
       const data = await resp.json();
 
-      if (data.indexing) {
+      const hotels = data.hotels || [];
+
+      if (data.indexing && !hotels.length) {
         showBanner(data.message || `Building visual index for ${city}…`, true);
         setTimeout(() => pollIndexStatus(query, city), 15000);
       }
 
-      const hotels = data.hotels || [];
       if (!hotels.length && !data.indexing) {
         setStatus(''); renderEmpty(query, city);
       } else if (hotels.length) {
