@@ -1068,11 +1068,27 @@
       font-family:'DM Sans',sans-serif; font-size:18px; color:var(--text); font-weight:300;
     }
     .city-box input::placeholder { color:rgba(232,228,220,.35); font-style:italic; }
+    .city-go-btn {
+      flex-shrink:0; padding:9px 20px; border-radius:12px;
+      background:var(--accent); color:#0c0c0e; border:none; cursor:pointer;
+      font-family:'DM Sans',sans-serif; font-size:14px; font-weight:600;
+      transition:opacity .15s, transform .1s;
+      white-space:nowrap;
+    }
+    .city-go-btn:hover { opacity:.85; transform:scale(1.02); }
+    .city-go-btn:active { transform:scale(.97); }
     .city-box .city-dropdown,
     .city-box .recent-dropdown {
       position:absolute; top:calc(100% + 6px); left:0; right:0; z-index:100;
     }
     .city-chips { display:flex; flex-wrap:wrap; gap:8px; justify-content:center; margin-top:18px; }
+    .city-chip-recent {
+      padding:7px 15px; border-radius:100px;
+      border:1px solid rgba(201,169,110,.3); color:var(--accent2);
+      background:rgba(201,169,110,.07);
+      font-size:13px; cursor:pointer; transition:border-color .15s, background .15s;
+    }
+    .city-chip-recent:hover { border-color:rgba(201,169,110,.6); background:rgba(201,169,110,.12); }
     .city-chip {
       padding:8px 18px; border-radius:100px;
       border:1px solid rgba(255,255,255,.12); color:var(--muted);
@@ -1350,15 +1366,12 @@
                  oninput="onCityInput(this.value)"
                  onblur="hideCitySuggestions()"
                  onkeydown="onCityKeydown(event)"/>
+          <button class="city-go-btn" id="cityGoBtn" onclick="onCityGo()" aria-label="Go">Go →</button>
           <div class="recent-dropdown" id="cityHistoryDropdown"></div>
           <div class="city-dropdown" id="cityDropdown"></div>
         </div>
         <div class="city-chips" id="city-chips">
-          <div class="city-chip" onclick="selectCity({name:'Paris'})">🇫🇷 Paris</div>
-          <div class="city-chip" onclick="selectCity({name:'Kuala Lumpur'})">🇲🇾 Kuala Lumpur</div>
-          <div class="city-chip" onclick="selectCity({name:'London'})">🇬🇧 London</div>
-          <div class="city-chip" onclick="selectCity({name:'Tokyo'})">🇯🇵 Tokyo</div>
-          <div class="city-chip" onclick="selectCity({name:'New York'})">🇺🇸 New York</div>
+          <!-- populated by buildCityChips() on load -->
         </div>
       </div>
     </div>
@@ -1681,6 +1694,9 @@
     document.getElementById('sv-city').textContent = name.length > 20 ? name.slice(0,18)+'…' : name;
     document.getElementById('nbhd-city-label').textContent = name;
     document.getElementById('story').classList.add('show');
+    // Save to history and rebuild chips so next visit shows it as recent
+    writeHistory(CITY_HISTORY_KEY, name);
+    buildCityChips();
     fetchAndShowNeighborhoodsNew(name);
     refreshStory('nbhd');
     showFlowStep('nbhd');
@@ -2908,6 +2924,40 @@
   }
 
   // cityData: {name, country_code, lat, lng} from autocomplete, or plain string from history/keyboard
+  // ── Top world cities shown as default chips ──────────────────────────────
+  const TOP_CITIES = [
+    {name:'Paris',         flag:'🇫🇷'},
+    {name:'London',        flag:'🇬🇧'},
+    {name:'New York',      flag:'🇺🇸'},
+    {name:'Tokyo',         flag:'🇯🇵'},
+    {name:'Dubai',         flag:'🇦🇪'},
+    {name:'Singapore',     flag:'🇸🇬'},
+    {name:'Kuala Lumpur',  flag:'🇲🇾'},
+    {name:'Barcelona',     flag:'🇪🇸'},
+  ];
+
+  function buildCityChips() {
+    const container = document.getElementById('city-chips');
+    if (!container) return;
+    const recent = JSON.parse(localStorage.getItem(CITY_HISTORY_KEY) || '[]')
+                     .filter(r => !TOP_CITIES.some(t => t.name.toLowerCase() === r.toLowerCase()));
+    const html = [];
+    // Recent additions first (up to 3), styled distinctly
+    recent.slice(0, 3).forEach(r => {
+      html.push(`<div class="city-chip city-chip-recent" onclick="selectCity({name:'${r.replace(/'/g,"\\'")}'})" title="Recent">🕐 ${r}</div>`);
+    });
+    // Top world cities
+    TOP_CITIES.forEach(c => {
+      html.push(`<div class="city-chip" onclick="selectCity({name:'${c.name}'})">${c.flag} ${c.name}</div>`);
+    });
+    container.innerHTML = html.join('');
+  }
+
+  function onCityGo() {
+    const val = (document.getElementById('cityInput').value || '').trim();
+    if (val) selectCity({ name: val });
+  }
+
   function selectCity(cityData) {
     const name = typeof cityData === 'string' ? cityData : (cityData?.name || cityData);
     document.getElementById('cityDropdown').classList.remove('visible');
@@ -3132,6 +3182,9 @@
 
     // Init date inputs with sensible defaults
     _initFlowDates();
+
+    // Build city quick-pick chips (top cities + recent)
+    buildCityChips();
 
     // City input: keyboard nav + history dropdown
     const cityInput = document.getElementById('cityInput');
