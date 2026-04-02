@@ -421,9 +421,11 @@ If LiteAPI denies permission, change what we persist:
    Invoke-RestMethod -Uri "https://roommatch-1fg5.onrender.com/api/index-city" -Method POST -ContentType "application/json" -Body '{"city":"London","limit":200,"secret":"roommatch-2026"}'
    ```
 
-2. **Neighborhood Vibe + Visual Search** — full plan below in "VIBE PLAN" section
+2. **Neighborhood Vibe + Visual Search** — full plan in two places:
+   - **Cursor plan file (authoritative, most detailed):** `C:\Users\jmc10\.cursor\plans\neighborhood_vibe_+_visual_search_39871fcd.plan.md`
+   - **Inline summary:** see "VIBE PLAN" section below
    - **GATE**: resolve LiteAPI licensing FIRST (see "Data Source Licensing" above). Do NOT build until resolved.
-   - When user says **"go build vibe plan"**, work through the phases in order, confirming the gate first.
+   - When user says **"go build vibe plan"**, read the plan file first, then work through the phases in order, confirming the gate first.
 
 3. **Update test-search-quality.js expected counts** after re-indexing any city.
 
