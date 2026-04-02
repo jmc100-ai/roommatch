@@ -64,20 +64,30 @@ async function callGemini(prompt, geminiKey) {
 
 async function fetchNeighborhoodPhoto(name, city, unsplashKey) {
   if (!unsplashKey) return null;
-  const query = `${name} ${city} neighborhood street`;
-  const url   = `https://api.unsplash.com/search/photos?query=${encodeURIComponent(query)}&per_page=1&orientation=landscape`;
-  try {
-    const res = await fetch(url, { headers: { Authorization: `Client-ID ${unsplashKey}` } });
-    if (!res.ok) return null;
-    const data  = await res.json();
-    const photo = data.results?.[0];
-    if (!photo) return null;
-    return {
-      url:          photo.urls.regular,
-      photographer: photo.user.name,
-      profile_url:  photo.user.links.html,
-    };
-  } catch { return null; }
+  // Build a list of queries to try in order, from specific to generic
+  const simpleName = name.replace(/\s*\([^)]*\)/g, "").trim(); // strip "(7th Arrondissement)" etc.
+  const queries = [
+    `${name} ${city} neighborhood`,
+    ...(simpleName !== name ? [`${simpleName} ${city} neighborhood`] : []),
+    `${simpleName} ${city} street`,
+    `${city} neighborhood street`,
+  ];
+  for (const query of queries) {
+    try {
+      const url = `https://api.unsplash.com/search/photos?query=${encodeURIComponent(query)}&per_page=1&orientation=landscape`;
+      const res = await fetch(url, { headers: { Authorization: `Client-ID ${unsplashKey}` } });
+      if (!res.ok) continue;
+      const data  = await res.json();
+      const photo = data.results?.[0];
+      if (!photo) continue;
+      return {
+        url:          photo.urls.regular,
+        photographer: photo.user.name,
+        profile_url:  photo.user.links.html,
+      };
+    } catch { continue; }
+  }
+  return null;
 }
 
 async function getHotelCountForBbox(city, bbox, db) {
@@ -166,7 +176,7 @@ async function generateNeighborhoods(city, db, geminiKey, unsplashKey) {
   }));
 
   // Fallback photo from hotels_cache for rows that got no Unsplash photo
-  const noPhotoRows = rows.filter(r => !r.photo_url && r.bbox?.lat_min != null);
+  const noPhotoRows = rows.filter(r => !r.photo_url);
   if (noPhotoRows.length > 0) {
     const { data: fallbackPhotos } = await db
       .from("hotels_cache")
@@ -175,15 +185,31 @@ async function generateNeighborhoods(city, db, geminiKey, unsplashKey) {
       .not("main_photo", "is", null)
       .not("lat", "is", null)
       .order("star_rating", { ascending: false })
-      .limit(50);
+      .limit(100);
+
+    // Track which fallback photos have been used to avoid duplicates
+    const usedPhotos = new Set();
 
     for (const row of noPhotoRows) {
       if (!fallbackPhotos?.length) break;
-      const { lat_min, lat_max, lon_min, lon_max } = row.bbox;
-      const match = fallbackPhotos.find(h =>
-        h.lat >= lat_min && h.lat <= lat_max && h.lng >= lon_min && h.lng <= lon_max && h.main_photo
-      );
-      if (match) row.photo_url = match.main_photo;
+      const bbox = row.bbox;
+      // Try bbox-matched hotel photo first
+      let match = null;
+      if (bbox?.lat_min != null) {
+        const { lat_min, lat_max, lon_min, lon_max } = bbox;
+        match = fallbackPhotos.find(h =>
+          !usedPhotos.has(h.main_photo) &&
+          h.lat >= lat_min && h.lat <= lat_max && h.lng >= lon_min && h.lng <= lon_max
+        );
+      }
+      // Fallback: any unused top-rated city hotel photo
+      if (!match) {
+        match = fallbackPhotos.find(h => !usedPhotos.has(h.main_photo));
+      }
+      if (match) {
+        row.photo_url = match.main_photo;
+        usedPhotos.add(match.main_photo);
+      }
     }
   }
 
