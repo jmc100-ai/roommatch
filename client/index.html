@@ -8,7 +8,7 @@
   <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet" />
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -1237,17 +1237,35 @@
     }
     .mstyle-grad {
       position:absolute; inset:0;
-      background:linear-gradient(to top,rgba(0,0,0,.92) 0%,rgba(0,0,0,.28) 48%,rgba(0,0,0,.04) 100%);
+      /* Stronger wash behind type for contrast */
+      background:linear-gradient(to top,rgba(0,0,0,.96) 0%,rgba(0,0,0,.55) 42%,rgba(0,0,0,.12) 72%,transparent 100%);
     }
     .mstyle-content {
       position:absolute; inset:0; padding:18px 18px 20px;
       display:flex; flex-direction:column; justify-content:flex-end;
     }
-    .mstyle-content .sf-badge { position:static; align-self:flex-start; margin-bottom:10px; }
-    .mstyle-content .sf-title { font-size:clamp(26px,7vw,42px); margin-bottom:6px; }
-    .mstyle-content .sf-desc { font-size:14px; margin-bottom:8px; max-width:none; }
-    .mstyle-content .sf-kws { margin-bottom:14px; }
-    .mstyle-content .sf-cta { margin-top:0; }
+    .mstyle-content .sf-badge {
+      position:static; align-self:flex-start; margin-bottom:10px;
+      font-size:11px; font-weight:600; letter-spacing:.12em;
+      color:rgba(255,250,245,.92); border-color:rgba(255,255,255,.22);
+      background:rgba(0,0,0,.45);
+    }
+    .mstyle-content .sf-title {
+      font-size:clamp(30px,8vw,46px); font-weight:400; margin-bottom:8px; line-height:1.05;
+      color:#faf8f4;
+      text-shadow:0 2px 28px rgba(0,0,0,.85),0 1px 4px rgba(0,0,0,.9);
+    }
+    .mstyle-content .sf-desc {
+      font-size:16px; font-weight:500; margin-bottom:10px; max-width:none; line-height:1.55;
+      color:rgba(255,252,248,.9); font-style:italic;
+      text-shadow:0 2px 16px rgba(0,0,0,.75),0 1px 2px rgba(0,0,0,.8);
+    }
+    .mstyle-content .sf-kws { margin-bottom:14px; gap:8px; }
+    .mstyle-content .sf-kw {
+      font-size:13px; font-weight:600; padding:6px 13px;
+      color:rgba(255,252,248,.94); background:rgba(0,0,0,.35); border-color:rgba(255,255,255,.22);
+    }
+    .mstyle-content .sf-cta { margin-top:0; font-size:16px; }
     .mstyle-overlap {
       margin:-20px 0 0; position:relative; z-index:2;
       background:var(--surface); border-radius:0 0 16px 16px;
@@ -1255,6 +1273,9 @@
       box-shadow:0 14px 40px rgba(0,0,0,.5);
       display:flex; flex-direction:column; gap:10px; padding:14px 16px 18px;
     }
+    .mstyle-overlap .sf-overlap-or { font-size:12px; font-weight:600; color:rgba(232,228,220,.72); letter-spacing:.08em; }
+    .mstyle-overlap .sf-overlap-input input { font-size:15px; font-weight:400; }
+    .mstyle-overlap .sf-overlap-input input::placeholder { color:rgba(232,228,220,.38); }
     .style-featured {
       border-radius:20px; overflow:hidden; position:relative;
       height:clamp(280px,50vh,500px); cursor:pointer; transition:box-shadow .3s;
@@ -1263,13 +1284,13 @@
     .style-featured.sel { outline:3px solid var(--accent); outline-offset:4px; }
     .sf-bg { position:absolute; inset:0; width:100%; height:100%; transition:transform .5s ease; }
     .style-featured:hover .sf-bg { transform:scale(1.02); }
-    .sf-grad { position:absolute; inset:0; background:linear-gradient(to top,rgba(0,0,0,.92) 0%,rgba(0,0,0,.28) 48%,rgba(0,0,0,.04) 100%); }
+    .sf-grad { position:absolute; inset:0; background:linear-gradient(to top,rgba(0,0,0,.94) 0%,rgba(0,0,0,.42) 45%,rgba(0,0,0,.08) 72%,transparent 100%); }
     .sf-content { position:absolute; inset:0; padding:clamp(20px,4vh,38px); display:flex; flex-direction:column; justify-content:flex-end; }
-    .sf-badge { position:absolute; top:22px; left:22px; background:rgba(0,0,0,.55); backdrop-filter:blur(10px); border:1px solid rgba(255,255,255,.13); border-radius:20px; padding:5px 14px; font-size:10px; letter-spacing:.1em; text-transform:uppercase; color:rgba(255,255,255,.65); }
-    .sf-title { font-family:'Cormorant Garamond',serif; font-size:clamp(34px,5.5vw,60px); font-weight:300; line-height:1.04; margin-bottom:8px; text-shadow:0 2px 20px rgba(0,0,0,.4); }
-    .sf-desc { font-size:15px; color:rgba(255,255,255,.65); line-height:1.6; max-width:500px; margin-bottom:10px; text-shadow:0 1px 8px rgba(0,0,0,.4); font-style:italic; }
+    .sf-badge { position:absolute; top:22px; left:22px; background:rgba(0,0,0,.55); backdrop-filter:blur(10px); border:1px solid rgba(255,255,255,.18); border-radius:20px; padding:6px 14px; font-size:10px; font-weight:600; letter-spacing:.1em; text-transform:uppercase; color:rgba(255,250,245,.88); }
+    .sf-title { font-family:'Cormorant Garamond',serif; font-size:clamp(36px,5.5vw,62px); font-weight:400; line-height:1.04; margin-bottom:8px; color:#faf8f4; text-shadow:0 2px 24px rgba(0,0,0,.55),0 1px 3px rgba(0,0,0,.65); }
+    .sf-desc { font-size:16px; font-weight:500; color:rgba(255,252,248,.88); line-height:1.6; max-width:500px; margin-bottom:10px; text-shadow:0 2px 14px rgba(0,0,0,.5),0 1px 2px rgba(0,0,0,.6); font-style:italic; }
     .sf-kws { display:flex; gap:7px; flex-wrap:wrap; margin-bottom:18px; align-items:flex-start; }
-    .sf-kw { font-size:12px; padding:5px 12px; border-radius:12px; background:rgba(255,255,255,.1); backdrop-filter:blur(6px); color:rgba(255,255,255,.72); border:1px solid rgba(255,255,255,.1); }
+    .sf-kw { font-size:13px; font-weight:600; padding:6px 12px; border-radius:12px; background:rgba(0,0,0,.28); backdrop-filter:blur(6px); color:rgba(255,252,248,.9); border:1px solid rgba(255,255,255,.18); }
     .sf-cta { width:100%; padding:14px 20px; background:var(--accent); color:#0c0c0e; border:none; border-radius:12px; font-family:'DM Sans',sans-serif; font-size:15px; font-weight:600; cursor:pointer; transition:opacity .15s; display:flex; align-items:center; justify-content:space-between; }
     .sf-cta:hover { opacity:.88; }
     /* overlap describe card */
