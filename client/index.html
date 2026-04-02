@@ -1201,7 +1201,7 @@
     .sf-kw { font-size:12px; padding:5px 12px; border-radius:12px; background:rgba(255,255,255,.1); backdrop-filter:blur(6px); color:rgba(255,255,255,.72); border:1px solid rgba(255,255,255,.1); }
     .sf-cta { align-self:flex-start; padding:13px 30px; background:var(--accent); color:#0c0c0e; border:none; border-radius:12px; font-family:'DM Sans',sans-serif; font-size:15px; font-weight:500; cursor:pointer; transition:opacity .15s; display:flex; align-items:center; gap:9px; }
     .sf-cta:hover { opacity:.88; }
-    .style-thumbs { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:14px; }
+    .style-thumbs { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; margin-bottom:14px; }
     @media(max-width:820px){ .style-thumbs { display:flex; overflow-x:auto; padding-bottom:4px; scroll-snap-type:x mandatory; margin-bottom:24px; } }
     .style-thumbs::-webkit-scrollbar { height:0; }
     .sthumb { aspect-ratio:4/3; border-radius:10px; overflow:hidden; cursor:pointer; position:relative; scroll-snap-align:start; transition:transform .15s, box-shadow .15s; border:2px solid transparent; }
@@ -1620,14 +1620,105 @@
   };
 
   const STYLES = [
-    {name:'City Views',       emoji:'🌆', query:'hotel room panoramic city views floor-to-ceiling windows high floor night skyline',  intent:'I want to feel in the heart of the city',   kws:['high floor','big windows','night energy'],   badge:'Views · High floor',   bg:'linear-gradient(160deg,#081420 0%,#060a12 100%)', photo:'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=900&h=600&fit=crop&q=80'},
-    {name:'Spa Retreat',      emoji:'🛁', query:'hotel room spa soaking tub wellness calm bathroom serene rainfall shower',            intent:'I want to relax and recharge',              kws:['soaking tub','calm lighting','serene'],       badge:'Bathroom · Wellness',  bg:'linear-gradient(160deg,#0e1818 0%,#080e10 100%)', photo:'https://images.unsplash.com/photo-1571902943202-507ec2618e8f?w=900&h=600&fit=crop&q=80'},
-    {name:'Cozy Boutique',    emoji:'🏡', query:'hotel room cozy boutique warm textures wood intimate charming layered',               intent:'I want something charming and personal',    kws:['warm lighting','textures','intimate'],        badge:'Boutique · Bedroom',   bg:'linear-gradient(160deg,#1e1410 0%,#0e0908 100%)', photo:'https://images.unsplash.com/photo-1520250497591-112f2f40a3f4?w=900&h=600&fit=crop&q=80'},
-    {name:'Minimalist Zen',   emoji:'🧘', query:'minimalist zen hotel room clean lines neutral calm quiet serene uncluttered',         intent:'I want calm, clean, uncluttered',           kws:['neutral tones','clean lines','serene'],       badge:'All rooms',            bg:'linear-gradient(160deg,#12121a 0%,#0a0a10 100%)', photo:'https://images.unsplash.com/photo-1631049307264-da0ec9d70304?w=900&h=600&fit=crop&q=80'},
-    {name:'Modern Loft',      emoji:'🏙️', query:'modern loft hotel room open layout industrial high ceilings design-led spacious',     intent:'I want space + design',                     kws:['open plan','high ceilings','design-led'],    badge:'Loft · Suite',         bg:'linear-gradient(160deg,#141420 0%,#0a0a12 100%)', photo:'https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?w=900&h=600&fit=crop&q=80'},
-    {name:'Nature Escape',    emoji:'🌿', query:'hotel room nature greenery outdoor connection natural materials garden calm',          intent:'I want to disconnect',                      kws:['natural materials','greenery','garden'],      badge:'Garden · Resort',      bg:'linear-gradient(160deg,#0c1810 0%,#081008 100%)', photo:'https://images.unsplash.com/photo-1587985064135-0366536eab42?w=900&h=600&fit=crop&q=80'},
-    {name:'Resort Luxury',    emoji:'🏖️', query:'resort luxury hotel room bright airy premium finishes vacation pool indulgent',       intent:'I want indulgence and vacation mode',        kws:['bright','premium','vacation energy'],         badge:'Resort · Suite',       bg:'linear-gradient(160deg,#0e1828 0%,#090f18 100%)', photo:'https://images.unsplash.com/photo-1582719478250-c89cae4dc85b?w=900&h=600&fit=crop&q=80'},
-    {name:'Design Statement', emoji:'🎨', query:'design hotel room bold colors artistic unique memorable statement bold boutique',     intent:'I want something truly unique',             kws:['bold colors','artistic','memorable'],         badge:'Design · Boutique',    bg:'linear-gradient(160deg,#1c0e18 0%,#100a10 100%)', photo:'https://images.unsplash.com/photo-1578683010236-d716f9a3f461?w=900&h=600&fit=crop&q=80'},
+    {
+      name:'Bright & Airy Retreat', emoji:'☀️',
+      query:'bright airy hotel room large windows natural light open spacious bathroom wide counter sunlit',
+      intent:'Sun-filled rooms with large windows and bright, open bathrooms featuring wide counters and plenty of natural light.',
+      kws:['large windows','natural light','wide counters'],
+      badge:'Bedroom · Bathroom', bg:'linear-gradient(160deg,#1a160a 0%,#0e0c06 100%)',
+      photo:'https://images.openai.com/static-rsc-4/fuBKMKPbmfou2khUgBTIsw1HJeco0-MusogTQZvg1zIcuqDARmoh5fpfVRmpWzChUEv_YxoE2IXlXqVa0Khk_8oL6dU18TspmW3aWSMWFyrGD9JDvsU1TOfrmUMaJqHfh_XwSQqAXzTa7Tx6nx3STprdpstB9XCe_34lIc8X5d9GiPY80LtIRiH2WCRaAssQ?purpose=fullsize',
+      photos:['https://images.openai.com/static-rsc-4/fuBKMKPbmfou2khUgBTIsw1HJeco0-MusogTQZvg1zIcuqDARmoh5fpfVRmpWzChUEv_YxoE2IXlXqVa0Khk_8oL6dU18TspmW3aWSMWFyrGD9JDvsU1TOfrmUMaJqHfh_XwSQqAXzTa7Tx6nx3STprdpstB9XCe_34lIc8X5d9GiPY80LtIRiH2WCRaAssQ?purpose=fullsize','https://images.openai.com/static-rsc-4/h-bAg7tKE2HCzhJ8KYSUnBy3PTQEyKKrh_nILPcjmKZYQ7j0beeW5BdTdTvjpeCRr7zJPDa5IucMsi2-FLhcoD1o0Ctbmf49jKVuTYOO2Y_1m74NDE6Ko7P40tlsY1OCba0LoMOoCnQgINhH0yL3SED40j8yIUb9AcSSSn-Hgw67YYv9C_rXAg9lmato_9Ek?purpose=fullsize','https://images.openai.com/static-rsc-4/g05Ftb01wA3fXWjsREaleE8q0iKXOzJybQ0sdskh0qZK28cyHVMuatBt4yo1m0X4rSl57EmaqPqcXQFFQfxxk7HNgbrv3hz7XfNGT4byOIJ_MrH_iUVXEXwR_pbvCnZ2X0E8DEI4tNSG46iqz0pG2hGOuudckPcWemyPqLGlE8qPKl0_IS5TbeHUcJ44UWu_?purpose=fullsize']
+    },
+    {
+      name:'Modern Lounge Room', emoji:'🛋️',
+      query:'modern hotel room lounge sofa sitting area contemporary sleek design dedicated seating',
+      intent:'Sleek, contemporary rooms with a dedicated sitting area—great for relaxing, working, or entertaining.',
+      kws:['sofa seating','contemporary','sleek design'],
+      badge:'Bedroom · Suite', bg:'linear-gradient(160deg,#10101a 0%,#0a0a12 100%)',
+      photo:'https://images.openai.com/static-rsc-4/mu9sKLumh9qP3Xx4f8d7S8nLAfvwoMaygUln7BJaJ-QkXMin2HA3g3nTPtcdjf8PvCqtdlqHTAG1liNSPx7I3K0W4tv35CR0LWEnlLRTf5aWxB8_0wOT7VCNXbU8g33mIRl5wwqmlbowoLTiZnnp1kYoejQvZYdS1xirSl9GGhgdT6en0t15ZusN-NHzhr10?purpose=fullsize',
+      photos:['https://images.openai.com/static-rsc-4/mu9sKLumh9qP3Xx4f8d7S8nLAfvwoMaygUln7BJaJ-QkXMin2HA3g3nTPtcdjf8PvCqtdlqHTAG1liNSPx7I3K0W4tv35CR0LWEnlLRTf5aWxB8_0wOT7VCNXbU8g33mIRl5wwqmlbowoLTiZnnp1kYoejQvZYdS1xirSl9GGhgdT6en0t15ZusN-NHzhr10?purpose=fullsize','https://images.openai.com/static-rsc-4/62VqMuSOwUu-VBhKWbhV4L1U1EmOnGkoeEpe7f9SY75NRtoQ8EIpYMYIEcUVBb2gJ4htqEY1BZT6zfuDnu1bmZ3C7hzgCyTFDDnXOw58S3DMqm-bXO9DTRvte1ktc9iZH2Q6TqoPgjJTHwR3uQro3xSxjAiETtAmnCD5_DQRO_P8OB46oXL5F1DDNNibEl99?purpose=fullsize','https://images.openai.com/static-rsc-4/lkAi3DkCmL4ip6F2Ql6-Z1kqVDN5KjfjgXN_JvSH96aWSN3QjrrSmakPZAdLc5lgSapqnoU2LsrJWvDDfTLw4jYKyX6-YbLCPahED4QaAWklhIdI6tHtY-ZAkC8LHSIi6BJNaVvU99qpvxl3Nk0IT-l4M7roGn-iP2PgqCHd0xzTv9eD_cvKjFZFnO8727ap?purpose=fullsize']
+    },
+    {
+      name:'Cozy Boutique Hideaway', emoji:'🕯️',
+      query:'cozy boutique hotel room warm lighting layered textures intimate charming snug wood inviting',
+      intent:'Warm lighting, layered textures, and intimate design create a snug, inviting atmosphere.',
+      kws:['warm lighting','layered textures','intimate'],
+      badge:'Boutique · Bedroom', bg:'linear-gradient(160deg,#1e1008 0%,#100a06 100%)',
+      photo:'https://images.openai.com/static-rsc-4/wyY5p-q0fK9SnO6qbEO8BuKh3BCuf_AUrsiTR245OhDvnoFIY9MAaZ9g4mBctTyx-T1KmGwjcgvm3mfqcOZWEZWZSoI03Mi2nC0wpvnGBt8Daxb7cB1Z3vEyJVivvjvRFTiBYdwQlsW79YUe7UkhD65prlVNnAA3-iln8cdHeP40Me5UJFwkzB9vAkkHo6Ct?purpose=fullsize',
+      photos:['https://images.openai.com/static-rsc-4/wyY5p-q0fK9SnO6qbEO8BuKh3BCuf_AUrsiTR245OhDvnoFIY9MAaZ9g4mBctTyx-T1KmGwjcgvm3mfqcOZWEZWZSoI03Mi2nC0wpvnGBt8Daxb7cB1Z3vEyJVivvjvRFTiBYdwQlsW79YUe7UkhD65prlVNnAA3-iln8cdHeP40Me5UJFwkzB9vAkkHo6Ct?purpose=fullsize','https://images.openai.com/static-rsc-4/7lcl_4XHpTkNxTvOBmP6ipoIfMp9wO9EGZt1sHRAF463utIs2MG6ZfDkKAVXcGTfvgA6LEHEQGq5qA7S-6QaQrZAc64Vnwxylb5lavQhzxlSF6nBngif0ZuT5Nzo51KakrpKYx0msLp2pWip_lrH45VVJ_aO6OlrcPPTq490WHAeAuo6XTbVmB_u38XPF86I?purpose=fullsize','https://images.openai.com/static-rsc-4/L5HDAuoTRUIkcqqhm3uAYgmGa6njZ7iUcIbe6ihTUFmdqFX8Wob_mki-gBeE7IeJ7R5mMi58QRWxK5-hkvW9FOPFajHBU2IGEDg6jaCUZwKcLaK2r9rz-9sa1a7hT-E9SZgo0HK7CZ4jkFPotFz7INCiWaJITMffaJNq68tD7gQCLdYQMclcNcsHZBOUuL-D?purpose=fullsize']
+    },
+    {
+      name:'Ocean View Escape', emoji:'🌊',
+      query:'ocean view hotel room water view balcony sea coastal scenic relaxing waves',
+      intent:'Rooms centered around stunning water views, often with balconies for a relaxing, scenic stay.',
+      kws:['water views','balcony','scenic'],
+      badge:'View · Balcony', bg:'linear-gradient(160deg,#061420 0%,#040c14 100%)',
+      photo:'https://images.openai.com/static-rsc-4/8SI-HEOK2yc8idCFU1pw4cYQr3GXkhjaKblgneiHFyLwwB8LtssVViT_OetHmnSr49spmqK7whQIEEk0FrN0C5o7a9qTKGzPxtKjGJURdPpMYhzetIlJ2zNQeo57YCzdXikkdU7jI8MdL2Bw4qObYp0l5cbQXxEwrFSh3n0fAQuL590mvSd4GtWwqPYYbHHx?purpose=fullsize',
+      photos:['https://images.openai.com/static-rsc-4/8SI-HEOK2yc8idCFU1pw4cYQr3GXkhjaKblgneiHFyLwwB8LtssVViT_OetHmnSr49spmqK7whQIEEk0FrN0C5o7a9qTKGzPxtKjGJURdPpMYhzetIlJ2zNQeo57YCzdXikkdU7jI8MdL2Bw4qObYp0l5cbQXxEwrFSh3n0fAQuL590mvSd4GtWwqPYYbHHx?purpose=fullsize','https://images.openai.com/static-rsc-4/HuLom2TEKH6R1Qh13JyOUaNeFN11plllH10r5SOY18Rs66mGOReuf8bImx6Kk95wPMGE_0GkYnhWnkl0x6Bq1uU8ZyFpN6rXtprW_Ftid1ZIjPSMX0XqkQ9cYRll4B-Z8oqn3EoWYxcSJY7RB6IjsPHaSMR3TYkpWcRzsVeT9yL3J4HTw1rsJQ1uVUL4Gvlg?purpose=fullsize','https://images.openai.com/static-rsc-4/M2_ynZQBfknZUk8PDTTeEAlmgv0J8ObUtvkyXsKEUdhFW_ecgjzlZdZw6wS_dciQWa7L10mgWa5XNWWgI3d2RtSnlw5I5ww9xnv05qlfIzt7Av7hkUdmtiO_fvpt0OsElnRkTTH8YI515genE83Sk6DuXK1xruUmzf8Lj-kx_Ex5bmF4BIzOe9mi-bPI_4A3?purpose=fullsize']
+    },
+    {
+      name:'Luxury Spa Suite', emoji:'🛁',
+      query:'luxury spa suite hotel bathroom soaking tub double sinks rainfall shower expansive counter high-end',
+      intent:'High-end suites featuring spa-style bathrooms with soaking tubs, double sinks, and expansive counter space.',
+      kws:['soaking tub','double sinks','spa finishes'],
+      badge:'Suite · Spa Bathroom', bg:'linear-gradient(160deg,#0e1818 0%,#080e10 100%)',
+      photo:'https://images.openai.com/static-rsc-4/WpegHOHo8BdNcC3UTFYN46CTsUiEJ7K2Gsr2dpsj9_MzuHryWfrgZdEXd5H4Mz_PkR8JSLaeeomiFVtxs6L3NHLaLwbjiqSD0AzYHM0JGXancfpwk7_Qb_2WFZszJbfHuqUooyf1c2BnJmjlkBU2hfAKuVfSkIVsK5pBE0oyERSNsK1d9TJSuTt5f0vN61Pd?purpose=fullsize',
+      photos:['https://images.openai.com/static-rsc-4/WpegHOHo8BdNcC3UTFYN46CTsUiEJ7K2Gsr2dpsj9_MzuHryWfrgZdEXd5H4Mz_PkR8JSLaeeomiFVtxs6L3NHLaLwbjiqSD0AzYHM0JGXancfpwk7_Qb_2WFZszJbfHuqUooyf1c2BnJmjlkBU2hfAKuVfSkIVsK5pBE0oyERSNsK1d9TJSuTt5f0vN61Pd?purpose=fullsize','https://images.openai.com/static-rsc-4/9FzjJo8z8LkvL91iq2_VaI-ByJEw2JOdbDzh85hrtLdxHfnYrYgLygiZs6ST92Ywc7eSrB4es1NgRVJnNoTF4-1ZdwJgw5XpoW3OYnJ9YWDCCZ8W_VhuUt-RhyBJPqKyNkTqmhNtF6_3b-CfEb7XqA07puFnOE6gyyGTofTOWguwoCA3W579U-96-sPKXhFS?purpose=fullsize','https://images.openai.com/static-rsc-4/pSNpQoH1ypfwT-oGt3TjRVFXCki9bkcj9oY8f4FKnT6DVT0RwDRdxVpSyfU6VMbLQs0V_bqmaLvgPgqhAqYyehF_-Mnym5T9o8K2Ht2kYcgX8rEXcQVRiCUPCh5KDtM7jo7Yr0cGWnGvALeGoAyhlQuraEiC0P9sp_9BesIUtXrTQnt6rWBwtIfR7hLWTMhv?purpose=fullsize']
+    },
+    {
+      name:'Work-Friendly Room', emoji:'💼',
+      query:'work-friendly hotel room ergonomic desk strong lighting clutter-free business productivity clean layout',
+      intent:'Designed for productivity with ergonomic desks, strong lighting, and clutter-free layouts.',
+      kws:['desk workspace','strong lighting','clean layout'],
+      badge:'Bedroom · Desk', bg:'linear-gradient(160deg,#10141e 0%,#0a0e14 100%)',
+      photo:'https://images.openai.com/static-rsc-4/CZzelGAMYeAezplMrQKTX6NkgcNiV8XqbMI1Wy_kKR74I1cqtSUIg2fWwQ2mDhXxL7vhiHGzgCzyjfEs9BAJR-ifZm120vrpc-JwxV3tvjk4fXyldnUXaCPKExrt5ScyOKFGb6qzMJ_uxi3g7bfKvTk9z77dP5FWbPp44XxkD51VcBXs0_l2-krpS78W5P9X?purpose=fullsize',
+      photos:['https://images.openai.com/static-rsc-4/CZzelGAMYeAezplMrQKTX6NkgcNiV8XqbMI1Wy_kKR74I1cqtSUIg2fWwQ2mDhXxL7vhiHGzgCzyjfEs9BAJR-ifZm120vrpc-JwxV3tvjk4fXyldnUXaCPKExrt5ScyOKFGb6qzMJ_uxi3g7bfKvTk9z77dP5FWbPp44XxkD51VcBXs0_l2-krpS78W5P9X?purpose=fullsize','https://images.openai.com/static-rsc-4/3gUk1HBeArHZQhUN92kqzxFUPBGnFxvX3f8pHB1zE90JcVllWVccATQGTYiAy0AUwHwRdBpeX3z2oC6UIV9RcTJXDkb2CQVtE5-tkLPlbpG826sYcGOdPurL5sc2vLxxuSGYCbP51ZUQpIQe427YE0_1UMLpW2i4uI3Rd0y-xqd8O5bYVjUk7yrv1d6ob2tA?purpose=fullsize','https://images.openai.com/static-rsc-4/7TbQ4dsYPWjixp5q-brodBNOS3g8XphYM1o9YK3RvilNpXa0rm-VDbKtYDOne1zzW4f2iFvXNn3mmmyS7Gr9ltI_w1xNsqe1vy6rU4tU49gVENIAVyeYOTwQrpzXb19RW16VuNq4tS6u0c_Sm5NFvfcn9uClJpj-xHSAr2FJbkyYhEyAQiivOxFJvt0K_uGZ?purpose=fullsize']
+    },
+    {
+      name:'Family Suite', emoji:'👨‍👩‍👧',
+      query:'family suite hotel room multiple beds spacious sofa bed organized kids family-friendly large room',
+      intent:'Spacious layouts with multiple beds or sofa beds, giving families room to relax and stay organized.',
+      kws:['multiple beds','spacious','sofa bed'],
+      badge:'Suite · Family', bg:'linear-gradient(160deg,#12100c 0%,#0c0a08 100%)',
+      photo:'https://images.openai.com/static-rsc-4/T5L6we-SmmhGuuMfwhbl2NX3wLLOBBhX6s0MOuAJsSUEnnE2L_Q0Ptcxq0XLFE-HkN8WdzAZqaTjv2EGIenMRlgJwrV5mX4GXuXJGC2RIeVWu-WXj0CsF0BIII8PdF4yfZirxvSBkEaiawDumu4l8UaHrF-7fKv2tZn0QdxxPcso_h9bIoAvypj27KupoPtD?purpose=fullsize',
+      photos:['https://images.openai.com/static-rsc-4/T5L6we-SmmhGuuMfwhbl2NX3wLLOBBhX6s0MOuAJsSUEnnE2L_Q0Ptcxq0XLFE-HkN8WdzAZqaTjv2EGIenMRlgJwrV5mX4GXuXJGC2RIeVWu-WXj0CsF0BIII8PdF4yfZirxvSBkEaiawDumu4l8UaHrF-7fKv2tZn0QdxxPcso_h9bIoAvypj27KupoPtD?purpose=fullsize','https://images.openai.com/static-rsc-4/cBAiXZ3FTI8Ycn1cBbjoDrhA9UNvRjwJx3Q4XOMhhE30TeoaTwi4fwmETKuzQH5_Ml3UExh1zoLICl3LOQNV05AKKn_3YoxN6Xg2we4uNAOJHl7Jo99xtgO8PMU68JQP9RG0V1Na6i0_rFKdG1ROb-mNDW7WvWY4tEPlyDIC3j2NvxWI9qzDMtwBt2fyWA17?purpose=fullsize','https://images.openai.com/static-rsc-4/mTvW68-NHn776rzojKhpPpo9wr1_u9pNrQ5TL0lBcetBph9la7WnM7wb6k7efeBwTF68Uq0a4qZ4yOhiuInxh3abdDnTEAyA-3W9MQggtmKL68fsNwQnC6f2TfDA5yuPj1xA-QOOWZN15d1FYX4CBybcWYhciq6kJf3DWhvERMddnSXl5IBcOnMqQH4vH-kT?purpose=fullsize']
+    },
+    {
+      name:'Romantic Minimalist', emoji:'🌙',
+      query:'romantic minimalist hotel room soft lighting clean calm uncluttered double vanity bathroom couple intimate',
+      intent:'Clean, calming spaces with soft lighting and streamlined bathrooms designed for two to get ready comfortably.',
+      kws:['soft lighting','minimal','double vanity'],
+      badge:'Bedroom · Couples', bg:'linear-gradient(160deg,#160c14 0%,#0e080c 100%)',
+      photo:'https://images.openai.com/static-rsc-4/3x_dSnv1MlAz9_NPokIT9jaAhbQNBfLkHb7waPJah8024p9PrU6xlPrpz3tp397LIKNNigjsljeOpmc8bULsQ4hUXLYMyB8x9IUZZ-czqGzOGITZ9eRDfWeAEceELA8QBI51HcTYMhWgsO8eVt4LarS3wQAJK_IFVQssFu6FHGHpE9tdrfMztO3vfxpa4wL9?purpose=fullsize',
+      photos:['https://images.openai.com/static-rsc-4/3x_dSnv1MlAz9_NPokIT9jaAhbQNBfLkHb7waPJah8024p9PrU6xlPrpz3tp397LIKNNigjsljeOpmc8bULsQ4hUXLYMyB8x9IUZZ-czqGzOGITZ9eRDfWeAEceELA8QBI51HcTYMhWgsO8eVt4LarS3wQAJK_IFVQssFu6FHGHpE9tdrfMztO3vfxpa4wL9?purpose=fullsize','https://images.openai.com/static-rsc-4/zWdDs8DUcbvPf-M4sN6jrNxv5q59wzgVLQiQI6hWe_c86UN8vOZ-zZu7u8bc_h0iq3CaWIUGe_6jQS8VHkJm6rW1RdZlVpjFtFa7BO5eSwC5gLfipApd22DNpWeuLg95Z3xK8LwoZTNHaavjxv6JOmNfhlQzvfvPXnEPyrxFgQvULSiy5e_3Gv6BjcVQ-zxx?purpose=fullsize','https://images.openai.com/static-rsc-4/3aLgltJN880PtnYDsiESpfyX4vKv_yjEPVL-eOL38fSNuL_kIt9gUoTtktVupu8oVeuLepr6aWynGHTPn4_cQN4lq-LJtpxirehav3iEdUEcLVHfNZTofMvsG_rMtjZcDgyxarGpWkDW86LJFc6HBdF8mLwzQwcLthC4rJMetL6OcsmGEgPCn4dcsGkaUe9b?purpose=fullsize']
+    },
+    {
+      name:'Urban High-Rise View', emoji:'🌆',
+      query:'urban high-rise hotel room city view sweeping skyline panoramic elevated floor-to-ceiling windows night',
+      intent:'Elevated rooms with sweeping city views—perfect for travelers who want an energetic, urban feel.',
+      kws:['city skyline','high floor','panoramic windows'],
+      badge:'High Floor · Views', bg:'linear-gradient(160deg,#081420 0%,#060a12 100%)',
+      photo:'https://images.openai.com/static-rsc-4/8MnKNtEVc10jLMVZa735WInkG6GPprdetN-5vxH1xcarVfqXcbJoTeUgxtmI07L2JRAXwLCVeyN4gOdAAaho-kZQ45kRH7PfFmDqbePzOF2kOOgt7-onJv3P5hJPAGa1q2-5gTUw0yW70VGEtCIGO7TxTtp92dtLD6i8-mXmNbJ-3ROjJW-R4rSZ941oOSr_?purpose=fullsize',
+      photos:['https://images.openai.com/static-rsc-4/8MnKNtEVc10jLMVZa735WInkG6GPprdetN-5vxH1xcarVfqXcbJoTeUgxtmI07L2JRAXwLCVeyN4gOdAAaho-kZQ45kRH7PfFmDqbePzOF2kOOgt7-onJv3P5hJPAGa1q2-5gTUw0yW70VGEtCIGO7TxTtp92dtLD6i8-mXmNbJ-3ROjJW-R4rSZ941oOSr_?purpose=fullsize','https://images.openai.com/static-rsc-4/8BOqO4AHyw4io0KadHFF__CwMQLN0R6K0MoOeoxqzcMT8alrHmwp3TXd7CF5Cmcpqnh0qlEtie4SXN83FQNNGa1rG0JIYQdwlRmKUlf5GC8WBfXDtFnYbgRr4uwudNKqJOxenb6y5Da0QEuu9Zqqa-HJTO8YEy2M6ffmd8-dgThUoPnvs-V-TISMlNdPLDc7?purpose=fullsize','https://images.openai.com/static-rsc-4/tTVqBLetcwy0kr2j00925VU97jNApjgwDHRE9lgWmSa0e4U884e7OP-ov3riPYOIFBoQLctiJrO6FKNqm7kkcADVDuJhNZGm4fpLCV2UUAGf0tx1pReaTFletsEhAZ4H96HCiobeOQj5YwNlYwqLWCIdD_d3nHZO9tu_iqsOyhleu5o-BIUTtb46JLjiIr2q?purpose=fullsize']
+    },
+    {
+      name:'Nature-Inspired Retreat', emoji:'🌿',
+      query:'nature-inspired hotel room earthy materials outdoor view greenery natural wood garden calm organic',
+      intent:'Earthy materials and outdoor views create a calming environment that blends comfort with nature.',
+      kws:['earthy materials','garden view','natural wood'],
+      badge:'Garden · Nature', bg:'linear-gradient(160deg,#0c1808 0%,#081006 100%)',
+      photo:'https://images.openai.com/static-rsc-4/tVGf54g8ICwVa-xLwCv-WkaYc27jICsjJolWbq05Lq43x4QmX_jbqZA7mUK0Ci0VSq7MkWQozp0gFSKo1pak_08HATglLsrDEjSwf4xbgGvGrWsw7dXRtJsYc3izGnLX1DJgFa2yMsfAX0BAY44BOgb59nC9qPpAm2WBeR7jWHZLh1vzyBtzRFdtYEAr4NYL?purpose=fullsize',
+      photos:['https://images.openai.com/static-rsc-4/tVGf54g8ICwVa-xLwCv-WkaYc27jICsjJolWbq05Lq43x4QmX_jbqZA7mUK0Ci0VSq7MkWQozp0gFSKo1pak_08HATglLsrDEjSwf4xbgGvGrWsw7dXRtJsYc3izGnLX1DJgFa2yMsfAX0BAY44BOgb59nC9qPpAm2WBeR7jWHZLh1vzyBtzRFdtYEAr4NYL?purpose=fullsize','https://images.openai.com/static-rsc-4/eSELWLXYClW5HFIvgTetsK93GmtG1goAenCA23R9LZc5bWOwVBKZDbsIGE36P1KG-EpfKA89620CtNDfDXbh8Sqlql0toVx74QaFd-2Zl0WKzVnTGjuWoAGSNuDc2V5nkKNoMzv82EfwZnHpx3S5JTGefkA66ggQs3b3WsdozVFh4dBF_6XR59aTaot9k-xs?purpose=fullsize','https://images.openai.com/static-rsc-4/14I8gY6VaoXl9ak3H5MOhmjdoN9hThhDw6Sz7tlSjLxzD2U911kOMgzjdVDspUodJJo0QIXIDxcYRz4wuwQqe1xBbHw66BksakKUSNl-izdBgoOGdFJB1mhUrkbohuHtUJbfp6N3zemF0YVMYE3vwT-zqcKS3zms-trd9PyGemdT0Sr5pyXBP-ImlfczedIP?purpose=fullsize']
+    },
+    {
+      name:'Double Vanity Suite', emoji:'🪞',
+      query:'hotel bathroom double vanity double sinks generous counter space couples get-ready bathroom wide mirror',
+      intent:'Rooms built around spacious bathrooms with double sinks and generous counter space—ideal for couples or group stays.',
+      kws:['double sinks','wide counter','couples'],
+      badge:'Bathroom · Couples', bg:'linear-gradient(160deg,#141218 0%,#0c0a10 100%)',
+      photo:'https://images.openai.com/static-rsc-4/pSNpQoH1ypfwT-oGt3TjRVFXCki9bkcj9oY8f4FKnT6DVT0RwDRdxVpSyfU6VMbLQs0V_bqmaLvgPgqhAqYyehF_-Mnym5T9o8K2Ht2kYcgX8rEXcQVRiCUPCh5KDtM7jo7Yr0cGWnGvALeGoAyhlQuraEiC0P9sp_9BesIUtXrTQnt6rWBwtIfR7hLWTMhv?purpose=fullsize',
+      photos:['https://images.openai.com/static-rsc-4/pSNpQoH1ypfwT-oGt3TjRVFXCki9bkcj9oY8f4FKnT6DVT0RwDRdxVpSyfU6VMbLQs0V_bqmaLvgPgqhAqYyehF_-Mnym5T9o8K2Ht2kYcgX8rEXcQVRiCUPCh5KDtM7jo7Yr0cGWnGvALeGoAyhlQuraEiC0P9sp_9BesIUtXrTQnt6rWBwtIfR7hLWTMhv?purpose=fullsize','https://images.openai.com/static-rsc-4/jmCky3GwRCqlR4gkHP39IM52UktXSqRCmrVe6n9ePwhuSbdDandwswRn7-jD5scrvVlUW6qenpNrfxZGMqP06EpMnYocCSdCb9k7md4_afJkUnXxzmEhQgCEw0E8x2AjPlkC4sQ76vWcU92i-hQi6N4I2DWS0dhcqzx2Dgry9dBKLg6O90D_rKW_CgI2v_di?purpose=fullsize','https://images.openai.com/static-rsc-4/YLi36zxImng2sSMhL_xzgwJ4v_n9g5tGA_Uv9NLju4bcd4yCOE6yy9iuYu1jaC5MZIgZupII7Xpcf66WmvquBUy2lDiO34VW4aRS8QieBy_C75HKh8gSgceMppwEYUI3KFp1y37hnNb7kPaN0pqdzRTxnCnWNx9TvxwgZCY8fijvZfS3rLW-n2s75PbthBCB?purpose=fullsize']
+    },
   ];
 
   // App state
