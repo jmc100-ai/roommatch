@@ -13,7 +13,7 @@ const { createClient } = require("@supabase/supabase-js");
 const LITEAPI_KEY  = process.env.LITEAPI_PROD_KEY || process.env.LITEAPI_KEY || "";
 const GEMINI_KEY   = process.env.GEMINI_KEY  || "";
 const SUPABASE_URL = process.env.SUPABASE_URL || "";
-const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY || "";
+const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_ANON_KEY || "";
 const MAX_PHOTOS         = 15; // per room type (5 bathroom + 10 other)
 const BATCH_SIZE         = 20; // concurrent hotel detail fetches
 const PHOTO_CONCURRENCY  = 5;  // concurrent Gemini calls per hotel
@@ -427,8 +427,15 @@ function classifyPhoto(photo, roomName, photoIndex = 0) {
 // ── Main export (called from server.js) and CLI entry point ───────────────────
 async function indexCity(city, limit = 200) {
   if (!LITEAPI_KEY || !GEMINI_KEY || !SUPABASE_URL || !SUPABASE_KEY) {
-    throw new Error("[indexer] Missing required env vars: LITEAPI_KEY, GEMINI_KEY, SUPABASE_URL, SUPABASE_SERVICE_KEY");
+    const missing = [
+      !LITEAPI_KEY && 'LITEAPI_PROD_KEY',
+      !GEMINI_KEY  && 'GEMINI_KEY',
+      !SUPABASE_URL && 'SUPABASE_URL',
+      !SUPABASE_KEY && 'SUPABASE_SERVICE_KEY (or SUPABASE_ANON_KEY)',
+    ].filter(Boolean).join(', ');
+    throw new Error(`[indexer] Missing required env vars: ${missing}`);
   }
+  console.log(`[indexer] Using ${process.env.SUPABASE_SERVICE_KEY ? 'service' : 'anon'} key for Supabase`);
   const db = getSupabase();
   const cc = COUNTRY_CODES[city.toLowerCase()] || "";
   console.log(`\n[indexer] Starting: ${city} (${cc}) — limit ${limit}`);

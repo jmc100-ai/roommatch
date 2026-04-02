@@ -2290,7 +2290,9 @@ app.post("/api/index-city", async (req, res) => {
   if (!city) return res.status(400).json({ error: "city required" });
   // Fire and forget
   indexCity(city, limit || 200)
-    .catch(e => console.error("[indexer]", e.message));
+    .catch(e => {
+      console.error(`[indexer] FAILED for ${city}:`, e.message);
+    });
   res.json({ message: `Indexing ${city} started`, city, limit: limit || 200 });
 });
 
