@@ -1217,19 +1217,43 @@
     .style-layout { display:grid; grid-template-columns:1fr 420px; gap:24px; align-items:start; }
     .style-left-col { display:flex; flex-direction:column; gap:0; order:1; }
     .style-hero-col { order:2; position:sticky; top:calc(56px + 72px + 16px); align-self:start; }
+    .style-stack-mobile { display:none; }
     @media(max-width:900px){
-      .style-layout { grid-template-columns:1fr; gap:16px; width:100%; max-width:100%; }
-      .style-hero-col {
-        order:1; position:relative; top:auto; width:100%; max-width:100%; min-width:0;
+      /* Room vibe: desktop layout hidden — use vertical card stack instead */
+      .style-layout { display:none !important; }
+      .style-stack-mobile {
+        display:flex; flex-direction:column; gap:32px; width:100%; padding-bottom:24px;
       }
-      .style-left-col { order:2; margin-top:0; width:100%; min-width:0; }
-      .style-featured { max-width:100%; border-radius:16px; }
-      .sf-content { padding:16px 16px 18px; }
-      .sf-title { font-size:clamp(26px,8vw,44px); }
-      .sf-overlap-card {
-        margin:-18px 0 0; width:100%; max-width:100%; box-sizing:border-box;
-        border-radius:0 0 14px 14px; padding:12px 14px 16px;
-      }
+    }
+    /* Mobile vibe card — same visual language as desktop hero + overlap */
+    .mstyle-card { width:100%; }
+    .mstyle-hero {
+      border-radius:20px 20px 0 0; overflow:hidden; position:relative;
+      height:min(58vh,440px); min-height:300px;
+    }
+    .mstyle-bg {
+      position:absolute; inset:0; width:100%; height:100%;
+      background-size:cover; background-position:center; transition:transform .5s ease;
+    }
+    .mstyle-grad {
+      position:absolute; inset:0;
+      background:linear-gradient(to top,rgba(0,0,0,.92) 0%,rgba(0,0,0,.28) 48%,rgba(0,0,0,.04) 100%);
+    }
+    .mstyle-content {
+      position:absolute; inset:0; padding:18px 18px 20px;
+      display:flex; flex-direction:column; justify-content:flex-end;
+    }
+    .mstyle-content .sf-badge { position:static; align-self:flex-start; margin-bottom:10px; }
+    .mstyle-content .sf-title { font-size:clamp(26px,7vw,42px); margin-bottom:6px; }
+    .mstyle-content .sf-desc { font-size:14px; margin-bottom:8px; max-width:none; }
+    .mstyle-content .sf-kws { margin-bottom:14px; }
+    .mstyle-content .sf-cta { margin-top:0; }
+    .mstyle-overlap {
+      margin:-20px 0 0; position:relative; z-index:2;
+      background:var(--surface); border-radius:0 0 16px 16px;
+      border:1px solid rgba(201,169,110,.18); border-top:none;
+      box-shadow:0 14px 40px rgba(0,0,0,.5);
+      display:flex; flex-direction:column; gap:10px; padding:14px 16px 18px;
     }
     .style-featured {
       border-radius:20px; overflow:hidden; position:relative;
@@ -1280,19 +1304,8 @@
     }
     .sf-overlap-go:hover { background:rgba(201,169,110,.28); }
     .style-thumbs { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; margin-bottom:14px; }
-    @media(max-width:900px){
-      .style-thumbs {
-        display:grid; grid-template-columns:repeat(2,1fr); gap:12px;
-        margin-bottom:28px;
-      }
-    }
     .style-thumbs::-webkit-scrollbar { height:0; }
     .sthumb { aspect-ratio:5/6; border-radius:14px; overflow:hidden; cursor:pointer; position:relative; scroll-snap-align:start; transition:transform .18s, box-shadow .18s; border:2px solid transparent; min-width:0; }
-    @media(max-width:900px){
-      .sthumb { width:100%; aspect-ratio:4/5; }
-      .sthumb-name { font-size:13px; line-height:1.35; }
-      .sthumb-ov { padding:12px; }
-    }
     .sthumb:hover { transform:scale(1.04); box-shadow:0 10px 28px rgba(0,0,0,.5); }
     .sthumb.active { border-color:var(--accent); box-shadow:0 0 0 1px var(--accent), 0 10px 28px rgba(0,0,0,.5); }
     .sthumb-bg { position:absolute; inset:0; width:100%; height:100%; background-size:cover; background-position:center; }
@@ -1499,6 +1512,9 @@
           <p class="chapter-sub">This is how we find rooms that actually match your taste — not just price range.</p>
         </div>
         <div class="chapter-body">
+          <!-- Mobile: full-size vibe cards stacked (scroll to pick) -->
+          <div class="style-stack-mobile" id="style-stack-mobile"></div>
+          <!-- Desktop: thumb grid + hero -->
           <div class="style-layout">
             <div class="style-left-col">
               <div class="style-thumbs" id="style-thumbs"></div>
@@ -2021,6 +2037,42 @@
         </div>
       </div>`;
     }).join('');
+
+    const stack = document.getElementById('style-stack-mobile');
+    if (stack) {
+      const esc = s => (s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;');
+      stack.innerHTML = STYLES.map((s,i) => {
+        const bgStyle = s.photo
+          ? `background:${s.bg};background-image:url('${s.photo}');background-size:cover;background-position:center;`
+          : `background:${s.bg};`;
+        const kws = s.kws.map(k => `<span class="sf-kw">${esc(k)}</span>`).join('');
+        return `
+      <article class="mstyle-card" data-mstyle-idx="${i}">
+        <div class="mstyle-hero">
+          <div class="mstyle-bg" style="${bgStyle}"></div>
+          <div class="mstyle-grad"></div>
+          <div class="mstyle-content">
+            <div class="sf-badge">${esc(s.badge)}</div>
+            <div class="sf-title">${esc(s.emoji + ' ' + s.name)}</div>
+            <div class="sf-desc">"${esc(s.intent)}"</div>
+            <div class="sf-kws">${kws}</div>
+            <button type="button" class="sf-cta" onclick="pickStyleAtIndex(${i})">
+              <span>Select this vibe</span><span>→</span>
+            </button>
+          </div>
+        </div>
+        <div class="mstyle-overlap">
+          <div class="sf-overlap-or">or describe it yourself</div>
+          <div class="sf-overlap-input">
+            <input type="text" class="mstyle-describe-inp"
+              placeholder="e.g. dark moody suite, rain shower, city views…"
+              onkeydown="if(event.key==='Enter')pickCustomStyleMobile(this)"/>
+            <button type="button" class="sf-overlap-go" onclick="pickCustomStyleMobile(this)">Go →</button>
+          </div>
+        </div>
+      </article>`;
+      }).join('');
+    }
   }
 
   function setFeaturedVibe(idx) {
@@ -2044,9 +2096,12 @@
     document.getElementById('style-featured').classList.remove('sel');
   }
 
-  function pickStyleFromFeatured() {
-    const s = STYLES[_flowFeatIdx];
-    S.style = s.name; S.q = s.query;
+  function pickStyleAtIndex(i) {
+    const s = STYLES[i];
+    if (!s) return;
+    _flowFeatIdx = i;
+    S.style = s.name;
+    S.q = s.query;
     document.getElementById('style-featured').classList.add('sel');
     document.getElementById('dates-style-label').textContent = '"' + s.name + '"';
     const cq = document.getElementById('cmd-q'); if (cq) cq.value = s.query;
@@ -2055,11 +2110,28 @@
     setTimeout(() => showFlowStep('dates'), 300);
   }
 
+  function pickStyleFromFeatured() {
+    pickStyleAtIndex(_flowFeatIdx);
+  }
+
   function pickCustomStyle() {
-    const v = document.getElementById('describe-input').value.trim();
+    const el = document.getElementById('describe-input');
+    const v = (el && el.value || '').trim();
     if (!v) return;
+    applyCustomStyleQuery(v);
+  }
+
+  function pickCustomStyleMobile(btn) {
+    const card = btn && btn.closest && btn.closest('.mstyle-card');
+    const inp = card && card.querySelector('.mstyle-describe-inp');
+    const v = (inp && inp.value || '').trim();
+    if (!v) return;
+    applyCustomStyleQuery(v);
+  }
+
+  function applyCustomStyleQuery(v) {
     S.style = v.length > 24 ? v.slice(0,22)+'…' : v;
-    S.q     = v;
+    S.q = v;
     document.getElementById('dates-style-label').textContent = '"' + S.style + '"';
     const cq = document.getElementById('cmd-q'); if (cq) cq.value = v;
     refreshStory('dates');
