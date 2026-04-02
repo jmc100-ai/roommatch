@@ -1048,9 +1048,10 @@
     .city-chapter-inner .eyebrow { justify-content:center; }
     .city-chapter-inner .chapter-sub { margin-left:auto; margin-right:auto; }
     .city-heading {
-      font-family:'Cormorant Garamond',serif; font-size:clamp(36px,5.5vw,68px);
-      font-weight:300; line-height:1.05; margin-bottom:12px;
+      font-family:'Cormorant Garamond',serif; font-size:clamp(28px,4.2vw,56px);
+      font-weight:300; line-height:1.1; margin-bottom:12px; white-space:nowrap;
     }
+    @media(max-width:500px){ .city-heading { white-space:normal; font-size:clamp(26px,7vw,38px); } }
     .city-heading em { font-style:italic; color:var(--accent); }
     .city-box {
       max-width:520px; margin:0 auto;
@@ -1103,9 +1104,10 @@
     .chapter-inner { max-width:var(--max); margin:0 auto; padding:0 var(--gutter); width:100%; }
     .chapter-top { padding-top:40px; padding-bottom:0; max-width:660px; }
     .chapter-h1 {
-      font-family:'Cormorant Garamond',serif; font-size:clamp(32px,5vw,62px);
-      font-weight:300; line-height:1.05; margin-bottom:12px;
+      font-family:'Cormorant Garamond',serif; font-size:clamp(26px,3.8vw,48px);
+      font-weight:300; line-height:1.1; margin-bottom:12px; white-space:nowrap;
     }
+    @media(max-width:600px){ .chapter-h1 { white-space:normal; font-size:clamp(24px,6.5vw,36px); } }
     .chapter-h1 em { font-style:italic; color:var(--accent); }
     .chapter-sub { font-size:14px; color:var(--muted); line-height:1.75; max-width:440px; margin-bottom:32px; }
     .chapter-body { flex:1; padding-bottom:80px; }
@@ -1377,7 +1379,7 @@
     <div class="city-chapter">
       <div class="city-chapter-inner">
         <div class="eyebrow"><div class="eyebrow-dot"></div>Hotel Vibe Search · Start here</div>
-        <h1 class="city-heading">Where are you<br><em>headed?</em></h1>
+        <h1 class="city-heading">Where are you <em>headed?</em></h1>
         <p class="chapter-sub">Pick a city — we'll show you its best neighbourhoods and help you find a room that matches your vibe.</p>
         <div class="city-box">
           <span class="city-box-icon">⌕</span>
@@ -1404,7 +1406,7 @@
         <div class="chapter-top">
           <button class="back-btn" onclick="goToStep('city')"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 3L5 8l5 5"/></svg> Back to City</button>
           <div class="eyebrow"><div class="eyebrow-dot"></div><span id="nbhd-city-label">Paris</span> · Step 2 of 4</div>
-          <h1 class="chapter-h1">Find your<br><em>neighbourhood vibe</em></h1>
+          <h1 class="chapter-h1">Find your <em>neighbourhood vibe</em></h1>
           <p class="chapter-sub">Hover any card to learn more about the area, then tap to choose — or explore the whole city.</p>
         </div>
         <div class="chapter-body">
@@ -1421,7 +1423,7 @@
         <div class="chapter-top">
           <button class="back-btn" onclick="goToStep('nbhd')"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 3L5 8l5 5"/></svg> Back to Neighbourhood</button>
           <div class="eyebrow"><div class="eyebrow-dot"></div>Step 3 of 4 · <span style="color:var(--accent2)">The heart of Hotel Vibe Search</span></div>
-          <h1 class="chapter-h1">Choose your<br><em>room vibe</em></h1>
+          <h1 class="chapter-h1">Choose your <em>room vibe</em></h1>
           <p class="chapter-sub">This is how we find rooms that actually match your taste — not just price range.</p>
         </div>
         <div class="chapter-body">
@@ -1471,7 +1473,7 @@
         <div class="chapter-top">
           <button class="back-btn" onclick="goToStep('style')"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 3L5 8l5 5"/></svg> Back to Room Vibe</button>
           <div class="eyebrow"><div class="eyebrow-dot"></div>Almost there · Step 4 of 4</div>
-          <h1 class="chapter-h1">When are you<br><em>going?</em></h1>
+          <h1 class="chapter-h1">When are you <em>going?</em></h1>
           <p class="chapter-sub">Add dates to see live pricing and availability. You can always skip and browse first.</p>
         </div>
         <div class="chapter-body">

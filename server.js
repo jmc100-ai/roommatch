@@ -1281,10 +1281,12 @@ app.get("/api/vsearch", async (req, res) => {
       .single();
 
     const status = cityRow?.status || "none";
+    const hotelCount = cityRow?.hotel_count || 0;
 
-    // Already indexing — don't trigger again, just return status
-    if (status === "indexing") {
-      console.log(`[vsearch] ${city} already indexing — skipping trigger`);
+    // Already indexing but has partial data — allow search to proceed on whatever's indexed
+    // Only block entirely if there is truly nothing indexed yet
+    if (status === "indexing" && hotelCount === 0) {
+      console.log(`[vsearch] ${city} indexing with no data yet — returning status`);
       return res.json({
         hotels: [], query, city,
         indexing: true,
@@ -1319,8 +1321,8 @@ app.get("/api/vsearch", async (req, res) => {
       });
     }
 
-    // Indexing complete — proceed with vector search
-    const indexing = false;
+    // Proceed with vector search (complete or partially-indexed city)
+    const indexing = status === "indexing"; // let client know if still in progress
 
     // 2. HyDE: generate a hypothetical caption matching the room_embeddings vocabulary,
     // then embed it. This handles vocabulary gaps ("multiple sinks" → "double sinks"),
