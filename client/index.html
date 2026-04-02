@@ -1190,8 +1190,16 @@
 
     /* ── Room vibe step ─────────────────────────────── */
     .style-layout { display:grid; grid-template-columns:1fr 420px; gap:24px; align-items:start; }
+    .style-chapter-top { display:grid; grid-template-columns:1fr 420px; gap:24px; align-items:end; }
+    .style-top-left { display:flex; flex-direction:column; }
+    .style-top-right { display:flex; flex-direction:column; justify-content:flex-end; padding-bottom:2px; }
+    .style-top-right .describe-section { margin-top:0; }
+    @media(max-width:900px){
+      .style-chapter-top { grid-template-columns:1fr; }
+      .style-top-right { margin-top:12px; }
+    }
     .style-left-col { display:flex; flex-direction:column; gap:0; order:1; }
-    .style-hero-col { order:2; display:flex; flex-direction:column; gap:16px; position:sticky; top:calc(56px + 72px + 16px); align-self:start; }
+    .style-hero-col { order:2; position:sticky; top:calc(56px + 72px + 16px); align-self:start; }
     @media(max-width:900px){
       .style-layout { grid-template-columns:1fr; }
       .style-hero-col { order:1; }
@@ -1240,6 +1248,7 @@
     .describe-box input::placeholder { color:rgba(232,228,220,.32); font-style:italic; }
     .describe-btn { width:100%; padding:12px 20px; background:var(--accent); color:#0c0c0e; border:none; border-radius:12px; font-family:'DM Sans',sans-serif; font-size:14px; font-weight:500; cursor:pointer; transition:opacity .15s; text-align:center; }
     .describe-btn:hover { opacity:.88; }
+    .describe-btn-sm { padding:9px 16px; font-size:13px; border-radius:10px; }
 
     /* ── Dates step ─────────────────────────────────── */
     .dates-card { max-width:700px; margin:0 auto; background:var(--card); border:1px solid rgba(255,255,255,.09); border-radius:20px; overflow:hidden; box-shadow:0 12px 40px rgba(0,0,0,.35); }
@@ -1419,18 +1428,37 @@
   <div id="st-style" style="display:none">
     <div class="chapter">
       <div class="chapter-inner">
-        <div class="chapter-top">
-          <button class="back-btn" onclick="goToStep('nbhd')"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 3L5 8l5 5"/></svg> Back to Neighbourhood</button>
-          <div class="eyebrow"><div class="eyebrow-dot"></div>Step 3 of 4 · <span style="color:var(--accent2)">The heart of Hotel Vibe Search</span></div>
-          <h1 class="chapter-h1">Choose your <em>room vibe</em></h1>
-          <p class="chapter-sub">This is how we find rooms that actually match your taste — not just price range.</p>
+        <div class="chapter-top style-chapter-top">
+          <div class="style-top-left">
+            <button class="back-btn" onclick="goToStep('nbhd')"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 3L5 8l5 5"/></svg> Back to Neighbourhood</button>
+            <div class="eyebrow"><div class="eyebrow-dot"></div>Step 3 of 4 · <span style="color:var(--accent2)">The heart of Hotel Vibe Search</span></div>
+            <h1 class="chapter-h1">Choose your <em>room vibe</em></h1>
+            <p class="chapter-sub">This is how we find rooms that actually match your taste — not just price range.</p>
+          </div>
+          <div class="style-top-right">
+            <div class="describe-section">
+              <div class="describe-label">
+                <span>✦</span>
+                <span>Or describe it in your own words — <strong>AI understands anything</strong></span>
+              </div>
+              <div class="describe-box">
+                <div class="describe-input-row">
+                  <span class="describe-icon">✦</span>
+                  <input id="describe-input" type="text"
+                    placeholder="e.g. bright suite with city views and a rain shower…"
+                    onkeydown="if(event.key==='Enter')pickCustomStyle()"/>
+                </div>
+                <button class="describe-btn describe-btn-sm" onclick="pickCustomStyle()">Find rooms →</button>
+              </div>
+            </div>
+          </div>
         </div>
         <div class="chapter-body">
           <div class="style-layout">
             <div class="style-left-col">
               <div class="style-thumbs" id="style-thumbs"></div>
             </div>
-            <!-- Hero card + describe box — right column -->
+            <!-- Hero card — right column -->
             <div class="style-hero-col">
               <div class="style-featured" id="style-featured" onclick="pickStyleFromFeatured()">
                 <div class="sf-bg" id="sf-bg"></div>
@@ -1441,21 +1469,6 @@
                   <div class="sf-desc" id="sf-desc">"Sun-filled rooms with large windows"</div>
                   <div class="sf-kws" id="sf-kws"></div>
                   <button class="sf-cta"><span id="sf-cta-text">Choose this vibe</span><span>→</span></button>
-                </div>
-              </div>
-              <div class="describe-section">
-                <div class="describe-label">
-                  <span>✦</span>
-                  <span>Or describe it in your own words — <strong>AI understands anything</strong></span>
-                </div>
-                <div class="describe-box">
-                  <div class="describe-input-row">
-                    <span class="describe-icon">✦</span>
-                    <input id="describe-input" type="text"
-                      placeholder="e.g. bright suite with city views and a rain shower…"
-                      onkeydown="if(event.key==='Enter')pickCustomStyle()"/>
-                  </div>
-                  <button class="describe-btn" onclick="pickCustomStyle()">Find rooms →</button>
                 </div>
               </div>
             </div>
