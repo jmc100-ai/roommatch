@@ -1235,21 +1235,62 @@
       font-size:13px; color:var(--accent); opacity:.75;
       letter-spacing:.04em;
     }
-    /* Touch / small screens: Choose lives inside hover-only detail — always show it */
+    .nbhd-top-new { display:contents; }
+    /* Touch / small screens: title stack at top, long copy + CTA at bottom — clear image in the middle */
     @media(max-width:900px){
-      .nbhd-card-new { aspect-ratio:auto; min-height:300px; }
+      .nbhd-card-new { aspect-ratio:auto; min-height:380px; }
       .nbhd-card-new:hover { transform:none; }
       .nbhd-card-new:hover .nbhd-card-bg { transform:none; }
+      /* Lighter wash through the middle so the photo reads */
+      .nbhd-card-new .nbhd-grad-base {
+        background:linear-gradient(
+          to bottom,
+          rgba(0,0,0,.72) 0%,
+          rgba(0,0,0,.28) 22%,
+          rgba(0,0,0,.06) 42%,
+          rgba(0,0,0,.02) 52%,
+          rgba(0,0,0,.02) 62%,
+          rgba(0,0,0,.45) 82%,
+          rgba(0,0,0,.88) 100%
+        );
+      }
+      .nbhd-top-new {
+        display:flex;
+        flex-direction:column;
+        align-items:flex-start;
+        gap:6px;
+        flex-shrink:0;
+        padding:12px 14px 14px;
+        margin:-14px -14px 0 -14px;
+        width:calc(100% + 28px);
+        background:linear-gradient(to bottom,rgba(0,0,0,.5) 0%,rgba(0,0,0,.22) 70%,transparent 100%);
+        border-radius:16px 16px 0 0;
+      }
+      .nbhd-content-new {
+        padding:0 14px 16px;
+        min-height:100%;
+        display:flex;
+        flex-direction:column;
+        justify-content:flex-start;
+        box-sizing:border-box;
+      }
       .nbhd-detail-new {
         max-height:none!important; opacity:1!important; overflow:visible;
-        margin-top:8px;
+        margin-top:auto;
+        margin-left:-14px;
+        margin-right:-14px;
+        width:calc(100% + 28px);
+        padding:14px 14px 16px;
+        background:linear-gradient(to top,rgba(0,0,0,.82) 0%,rgba(0,0,0,.5) 55%,rgba(0,0,0,.12) 100%);
+        border-radius:0 0 16px 16px;
       }
       .nbhd-detail-desc-new {
         display:-webkit-box; -webkit-line-clamp:4; -webkit-box-orient:vertical;
         overflow:hidden;
       }
-      .nbhd-content-new { padding:14px 14px 16px; justify-content:flex-end; }
       .nbhd-detail-row-new { align-items:flex-end; }
+      .nbhd-name-new { margin-bottom:2px; }
+      .nbhd-vibe-new { margin-bottom:0; }
     }
 
     /* ── Momentum banner (toast) ────────────────────── */
@@ -2054,9 +2095,11 @@
       <div class="nbhd-grad-base"></div>
       <div class="nbhd-grad-hover"></div>
       <div class="nbhd-content-new">
+        <div class="nbhd-top-new">
         <div class="nbhd-tags-new">${tags.map(t=>`<span class="nbhd-tag-new">${esc(t)}</span>`).join('')}</div>
         <div class="nbhd-name-new">${esc(h.name)}</div>
         <div class="nbhd-vibe-new">${esc(h.vibe_short||'')}</div>
+        </div>
         <div class="nbhd-detail-new">
           <div class="nbhd-detail-desc-new">${esc(h.vibe_long||h.vibe_short||'')}</div>
           <div class="nbhd-best-for-new">${tags.map(f=>`<span class="nbhd-bf-pill-new">✓ ${esc(f)}</span>`).join('')}</div>
