@@ -759,6 +759,153 @@
       body.has-results .hero { padding: 10px 20px; }
       body.has-results .date-field { display: none; }
       body.has-results .city-field { flex: 1; }
+      .nbhd-section { padding: 0 20px 24px; }
+      .nbhd-header { flex-direction: column; align-items: flex-start; gap: 6px; }
+      .nbhd-grid { grid-template-columns: 1fr; }
+    }
+
+    /* ── Neighborhood section ──────────────────────────────────────────── */
+    .nbhd-section {
+      max-width: 1180px; margin: 0 auto; padding: 0 max(56px, calc((100vw - 1180px) / 2)) 40px;
+      display: none;
+      animation: fadeSlideDown 0.28s ease;
+    }
+    .nbhd-section.visible { display: block; }
+    @keyframes fadeSlideDown {
+      from { opacity: 0; transform: translateY(-8px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    .nbhd-header {
+      display: flex; align-items: baseline; gap: 16px; margin-bottom: 20px; flex-wrap: wrap;
+    }
+    .nbhd-back-btn {
+      font-family: 'DM Sans', sans-serif; font-size: 12px; color: var(--muted);
+      background: none; border: none; cursor: pointer; padding: 0; letter-spacing: 0.04em;
+      transition: color 0.15s; flex-shrink: 0;
+    }
+    .nbhd-back-btn:hover { color: var(--accent); }
+    .nbhd-title {
+      font-family: 'Cormorant Garamond', serif; font-size: 24px; font-weight: 300;
+      color: var(--text); line-height: 1.1;
+    }
+    .nbhd-title em { color: var(--accent); font-style: italic; }
+    .nbhd-sub { font-size: 12px; color: var(--muted); margin-left: auto; }
+
+    .nbhd-grid {
+      display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 14px;
+    }
+
+    .nbhd-card {
+      background: var(--card); border: 1px solid var(--border); border-radius: var(--radius);
+      overflow: hidden; cursor: pointer;
+      transition: border-color 0.18s, transform 0.18s, box-shadow 0.18s;
+      display: flex; flex-direction: column;
+    }
+    .nbhd-card:hover {
+      border-color: rgba(201,169,110,0.45); transform: translateY(-2px);
+      box-shadow: 0 8px 28px rgba(0,0,0,0.3);
+    }
+    .nbhd-card-photo {
+      width: 100%; aspect-ratio: 16/9; object-fit: cover; display: block;
+      background: var(--surface);
+    }
+    .nbhd-card-photo-placeholder {
+      width: 100%; aspect-ratio: 16/9; background: var(--surface);
+    }
+    .nbhd-card-body { padding: 13px 14px 14px; flex: 1; display: flex; flex-direction: column; gap: 6px; }
+    .nbhd-card-name { font-size: 14px; font-weight: 500; color: var(--text); }
+    .nbhd-card-vibe { font-size: 12px; color: var(--muted); line-height: 1.4; }
+    .nbhd-card-tags { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 2px; }
+    .nbhd-card-tag {
+      font-size: 10px; padding: 3px 8px; border-radius: 100px;
+      border: 1px solid var(--border); color: var(--muted);
+    }
+    .nbhd-card-footer { display: flex; align-items: center; justify-content: space-between; margin-top: auto; }
+    .nbhd-card-count { font-size: 10px; color: var(--muted); }
+    .nbhd-card-visitor {
+      font-size: 9px; letter-spacing: 0.1em; text-transform: uppercase;
+      color: var(--accent); opacity: 0.8;
+    }
+    .nbhd-card-credit {
+      font-size: 9px; color: rgba(255,255,255,0.35); padding: 4px 8px;
+      background: rgba(0,0,0,0.4); text-align: right;
+    }
+    .nbhd-card-credit a { color: inherit; text-decoration: none; }
+    .nbhd-card-credit a:hover { color: rgba(255,255,255,0.6); }
+
+    /* Explore all card */
+    .nbhd-card-all {
+      border: 1px dashed rgba(201,169,110,0.25); background: transparent;
+      align-items: center; justify-content: center; min-height: 160px;
+    }
+    .nbhd-card-all:hover { border-color: rgba(201,169,110,0.55); background: rgba(201,169,110,0.04); }
+    .nbhd-card-all-label { font-size: 13px; color: var(--muted); text-align: center; padding: 20px; }
+    .nbhd-card-all-icon { font-size: 20px; display: block; margin-bottom: 8px; }
+
+    /* Skeleton cards */
+    .nbhd-skeleton {
+      background: var(--card); border: 1px solid var(--border); border-radius: var(--radius);
+      overflow: hidden;
+    }
+    .skel-photo { width: 100%; aspect-ratio: 16/9; background: var(--surface); }
+    .skel-body { padding: 13px 14px; display: flex; flex-direction: column; gap: 8px; }
+    .skel-line { border-radius: 4px; background: linear-gradient(90deg, var(--surface) 25%, rgba(255,255,255,0.05) 50%, var(--surface) 75%); background-size: 200% 100%; animation: shimmer 1.5s infinite; }
+    @keyframes shimmer { to { background-position: -200% 0; } }
+
+    /* Active neighborhood chip */
+    .nbhd-chip-bar {
+      display: flex; align-items: center; gap: 8px; margin-bottom: 8px;
+    }
+    .nbhd-chip {
+      display: flex; align-items: center; gap: 6px;
+      background: rgba(201,169,110,0.1); border: 1px solid rgba(201,169,110,0.28);
+      border-radius: 100px; padding: 5px 10px 5px 12px; font-size: 12px; color: var(--text);
+    }
+    .nbhd-chip strong { color: var(--accent); font-weight: 500; }
+    .nbhd-chip-x {
+      background: none; border: none; cursor: pointer; color: var(--muted);
+      font-size: 14px; line-height: 1; padding: 0 2px; margin-left: 2px;
+      transition: color 0.15s;
+    }
+    .nbhd-chip-x:hover { color: var(--text); }
+    .nbhd-change-btn {
+      background: none; border: none; cursor: pointer; font-family: 'DM Sans', sans-serif;
+      font-size: 11px; color: var(--muted); letter-spacing: 0.05em; padding: 0;
+      transition: color 0.15s;
+    }
+    .nbhd-change-btn:hover { color: var(--accent); }
+
+    /* Vibe presets row */
+    .vibe-row { margin-bottom: 10px; }
+    .vibe-row-label {
+      font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase;
+      color: var(--muted); margin-bottom: 8px;
+    }
+    .vibe-scroll {
+      display: flex; gap: 8px; overflow-x: auto; padding-bottom: 6px;
+      scrollbar-width: thin; scrollbar-color: rgba(255,255,255,0.1) transparent;
+    }
+    .vibe-scroll::-webkit-scrollbar { height: 3px; }
+    .vibe-scroll::-webkit-scrollbar-track { background: transparent; }
+    .vibe-scroll::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.12); border-radius: 2px; }
+    .vibe-preset-card {
+      flex: 0 0 110px; height: 80px; border-radius: 8px; overflow: hidden; cursor: pointer;
+      position: relative; border: 1.5px solid transparent; transition: border-color 0.15s, transform 0.15s;
+    }
+    .vibe-preset-card:hover { border-color: rgba(201,169,110,0.5); transform: scale(1.03); }
+    .vibe-preset-card img {
+      width: 100%; height: 100%; object-fit: cover; display: block;
+    }
+    .vibe-preset-label {
+      position: absolute; bottom: 0; left: 0; right: 0;
+      background: linear-gradient(transparent, rgba(0,0,0,0.75));
+      color: #fff; font-size: 9px; font-weight: 500; letter-spacing: 0.04em;
+      padding: 12px 6px 5px; text-align: center; line-height: 1.2;
+    }
+    .vibe-skel-card {
+      flex: 0 0 110px; height: 80px; border-radius: 8px; overflow: hidden;
+      background: linear-gradient(90deg, var(--surface) 25%, rgba(255,255,255,0.05) 50%, var(--surface) 75%);
+      background-size: 200% 100%; animation: shimmer 1.5s infinite;
     }
   </style>
 </head>
@@ -783,6 +930,20 @@
       <img class="hero-photo" src="https://images.unsplash.com/photo-1596394516093-501ba68a0ba6?w=480&h=340&fit=crop&q=80" alt="City view hotel room" loading="lazy">
       <img class="hero-photo" src="https://images.unsplash.com/photo-1616594039964-ae9021a400a0?w=480&h=340&fit=crop&q=80" alt="Luxury hotel bedroom" loading="lazy">
     </div>
+  </div>
+
+  <!-- Active neighborhood chip + vibe presets (shown after neighborhood selected) -->
+  <div id="neighborhood-chip" class="nbhd-chip-bar" style="display:none">
+    <div class="nbhd-chip">
+      <span>📍 in <strong id="nbhd-chip-name"></strong></span>
+      <button type="button" class="nbhd-chip-x" onclick="clearNeighborhood()" title="Remove neighborhood filter">&#215;</button>
+    </div>
+    <button type="button" class="nbhd-change-btn" onclick="showNeighborhoodSection()">Change</button>
+  </div>
+
+  <div id="vibe-row" class="vibe-row" style="display:none">
+    <p class="vibe-row-label">Room style</p>
+    <div class="vibe-scroll" id="vibeScroll"></div>
   </div>
 
   <form class="search-form" onsubmit="handleSearch(event)">
@@ -823,6 +984,16 @@
     </div>
   </form>
 </section>
+
+<!-- ── Neighborhood picker (Step 2) ───────────────────────────────────── -->
+<div id="neighborhood-section" class="nbhd-section" aria-hidden="true">
+  <div class="nbhd-header">
+    <button class="nbhd-back-btn" onclick="clearCitySelection()">&#8592; Change city</button>
+    <h2 class="nbhd-title">Where in <em id="nbhd-step-city"></em>?</h2>
+    <span class="nbhd-sub">Pick a neighborhood or explore the whole city</span>
+  </div>
+  <div class="nbhd-grid" id="nbhdGrid"></div>
+</div>
 
 <div class="trust-bar">
   <span class="trust-label">Compare across</span>
@@ -961,6 +1132,8 @@
   let clipES = null;
   let clipDone = 0, clipTotal = 10;
   let _lastHotels     = [];
+  let selectedNeighborhood = null; // {name, bbox: "lat_min,lat_max,lon_min,lon_max"} or null
+  let selectedCityData     = null; // {name, country_code, lat, lng} from Geoapify autocomplete
   let _currentSort    = 'match';
   let _viewMode       = localStorage.getItem('rmViewMode') || 'cards';
   let _displayedCount = 10;
@@ -1024,9 +1197,9 @@
   }
 
   function selectRecentCity(value) {
-    document.getElementById('cityInput').value = value;
     hideRecentDropdown('cityHistoryDropdown');
     document.getElementById('cityDropdown').classList.remove('visible');
+    selectCity({ name: value });
   }
 
   // Pre-fill dates: tomorrow + tomorrow+2. Clamp checkout to max 30 nights from checkin.
@@ -1118,6 +1291,7 @@
     writeHistory(CITY_HISTORY_KEY, city);
     hideRecentDropdown('queryHistoryDropdown');
     hideRecentDropdown('cityHistoryDropdown');
+    hideNeighborhoodSection();
     if (clipES) { clipES.close(); clipES = null; }
     const btn = document.getElementById('searchBtn');
     btn.disabled = true; btn.textContent = 'Searching…';
@@ -1144,8 +1318,11 @@
     finally { btn.disabled = false; btn.textContent = 'Search rooms'; }
   }
 
-  async function startVectorSearch(query, city, btn) {
-    setStatus(`Searching vector index for "${query}" in ${city}…`, true);
+  async function startVectorSearch(query, city, btn, bbox) {
+    const activeBbox = bbox ?? selectedNeighborhood?.bbox ?? null;
+    const nbhdLabel  = selectedNeighborhood?.name;
+    const statusSuffix = nbhdLabel ? ` in ${nbhdLabel}, ${city}` : ` in ${city}`;
+    setStatus(`Searching for "${query}"${statusSuffix}…`, true);
     hideBanner();
 
     // Increment race ID — any in-flight rates response with an older ID will be discarded
@@ -1157,7 +1334,9 @@
     const hasDates = checkin && checkout && checkin < checkout;
 
     try {
-      const resp = await fetch(`${BACKEND}/api/vsearch?` + new URLSearchParams({ query, city }));
+      const vsearchParams = { query, city };
+      if (activeBbox) vsearchParams.bbox = activeBbox;
+      const resp = await fetch(`${BACKEND}/api/vsearch?` + new URLSearchParams(vsearchParams));
       const data = await resp.json();
       if (!resp.ok) throw new Error(data.error || 'Vector search failed');
 
@@ -1691,8 +1870,9 @@
 
     // Update result count in sort bar
     const showing = toShow.length;
+    const nbhdSuffix = selectedNeighborhood?.name ? ` · ${selectedNeighborhood.name}` : '';
     document.getElementById('resultCount').textContent =
-      remaining > 0 ? `Showing ${showing} of ${total} hotels` : `${total} hotel${total !== 1 ? 's' : ''}`;
+      remaining > 0 ? `Showing ${showing} of ${total} hotels${nbhdSuffix}` : `${total} hotel${total !== 1 ? 's' : ''}${nbhdSuffix}`;
 
     const resultsEl = document.getElementById('results');
     resultsEl.classList.toggle('results-rows', _viewMode === 'rows');
@@ -1929,10 +2109,10 @@
           const label    = p.name;
           const subParts = [p.state, p.country].filter(Boolean);
           const sub      = subParts.join(', ');
-          const safeLabel = label.replace(/'/g, "\\'");
+          const safe = JSON.stringify(p).replace(/'/g, "&#39;");
           return `
             <div class="city-option" data-name="${label}" data-idx="${i}"
-                 onmousedown="selectCity('${safeLabel}')">
+                 onmousedown="selectCity(${safe})">
               <span class="city-option-icon">📍</span>
               <span>${label}</span>
               ${sub ? `<span class="city-option-sub">${sub}</span>` : ''}
@@ -1944,10 +2124,16 @@
     }, 250);
   }
 
-  function selectCity(name) {
+  // cityData: {name, country_code, lat, lng} from autocomplete, or plain string from history/keyboard
+  function selectCity(cityData) {
+    const name = typeof cityData === 'string' ? cityData : (cityData?.name || cityData);
     document.getElementById('cityInput').value = name;
     document.getElementById('cityDropdown').classList.remove('visible');
     hideRecentDropdown('cityHistoryDropdown');
+    // Store full city data for country_code pass-through
+    selectedCityData = typeof cityData === 'object' ? cityData : { name };
+    // Kick off neighborhood fetch and show neighborhood section
+    fetchAndShowNeighborhoods(name);
   }
 
   function hideCitySuggestions() {
@@ -1956,6 +2142,178 @@
       hideRecentDropdown('cityHistoryDropdown');
     }, 150);
   }
+
+  function clearCitySelection() {
+    document.getElementById('cityInput').value = '';
+    document.getElementById('cityInput').focus();
+    selectedCityData = null;
+    hideNeighborhoodSection();
+    clearNeighborhood();
+  }
+
+  function showNeighborhoodSection() {
+    const city = document.getElementById('cityInput').value.trim();
+    if (!city) return;
+    document.getElementById('nbhd-step-city').textContent = city;
+    document.getElementById('neighborhood-section').classList.add('visible');
+    document.getElementById('neighborhood-section').setAttribute('aria-hidden', 'false');
+  }
+
+  function hideNeighborhoodSection() {
+    document.getElementById('neighborhood-section').classList.remove('visible');
+    document.getElementById('neighborhood-section').setAttribute('aria-hidden', 'true');
+  }
+
+  async function fetchAndShowNeighborhoods(city) {
+    const section = document.getElementById('neighborhood-section');
+    const grid = document.getElementById('nbhdGrid');
+    document.getElementById('nbhd-step-city').textContent = city;
+
+    // Show skeleton
+    grid.innerHTML = renderNeighborhoodSkeletons(6);
+    section.classList.add('visible');
+    section.setAttribute('aria-hidden', 'false');
+
+    try {
+      const resp = await fetch(`${BACKEND}/api/neighborhoods?city=${encodeURIComponent(city)}`);
+      if (!resp.ok) {
+        // City not indexed or error — hide neighborhood section, proceed to search directly
+        hideNeighborhoodSection();
+        return;
+      }
+      const data = await resp.json();
+
+      // 202 = still generating — poll once more after 3s
+      if (resp.status === 202 || data.status === 'generating') {
+        grid.innerHTML = renderNeighborhoodSkeletons(6);
+        setTimeout(() => fetchAndShowNeighborhoods(city), 3000);
+        return;
+      }
+
+      const hoods = data.neighborhoods || [];
+      if (!hoods.length) {
+        hideNeighborhoodSection();
+        return;
+      }
+
+      grid.innerHTML = hoods.map(renderNeighborhoodCard).join('') + renderExploreAllCard(city);
+    } catch {
+      hideNeighborhoodSection();
+    }
+  }
+
+  function renderNeighborhoodSkeletons(n) {
+    return Array.from({ length: n }, () => `
+      <div class="nbhd-skeleton">
+        <div class="skel-photo"></div>
+        <div class="skel-body">
+          <div class="skel-line" style="height:14px;width:55%"></div>
+          <div class="skel-line" style="height:11px;width:80%"></div>
+          <div class="skel-line" style="height:11px;width:65%"></div>
+          <div class="skel-line" style="height:10px;width:40%;margin-top:4px"></div>
+        </div>
+      </div>`).join('');
+  }
+
+  function renderNeighborhoodCard(hood) {
+    const esc = s => (s || '').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+    const bboxStr = hood.bbox
+      ? `${hood.bbox.lat_min},${hood.bbox.lat_max},${hood.bbox.lon_min},${hood.bbox.lon_max}`
+      : '';
+    const tags = (hood.tags || []).slice(0, 4).map(t =>
+      `<span class="nbhd-card-tag">${esc(t)}</span>`).join('');
+    const count = hood.hotel_count > 0 ? `${hood.hotel_count} hotels` : '—';
+    const visitorLabel = hood.visitor_type === 'first-timer' ? 'First visit'
+      : hood.visitor_type === 'returning' ? 'Off the beaten path' : '';
+    const credit = hood.photo_credit
+      ? `<div class="nbhd-card-credit">Photo by <a href="${esc(hood.photo_credit.profile_url)}" target="_blank" rel="noopener">${esc(hood.photo_credit.photographer)}</a> on Unsplash</div>`
+      : '';
+
+    return `<div class="nbhd-card" onclick="selectNeighborhood('${esc(hood.name)}','${bboxStr}')">
+      ${hood.photo_url
+        ? `<img class="nbhd-card-photo" src="${esc(hood.photo_url)}" alt="${esc(hood.name)}" loading="lazy">`
+        : `<div class="nbhd-card-photo-placeholder"></div>`}
+      ${credit}
+      <div class="nbhd-card-body">
+        <div class="nbhd-card-name">${esc(hood.name)}</div>
+        <div class="nbhd-card-vibe">${esc(hood.vibe_short || '')}</div>
+        <div class="nbhd-card-tags">${tags}</div>
+        <div class="nbhd-card-footer">
+          <span class="nbhd-card-count">${count}</span>
+          ${visitorLabel ? `<span class="nbhd-card-visitor">${visitorLabel}</span>` : ''}
+        </div>
+      </div>
+    </div>`;
+  }
+
+  function renderExploreAllCard(city) {
+    return `<div class="nbhd-card nbhd-card-all" onclick="selectNeighborhood(null, null)">
+      <div class="nbhd-card-all-label">
+        <span class="nbhd-card-all-icon">🌍</span>
+        Explore all of ${city}
+      </div>
+    </div>`;
+  }
+
+  function selectNeighborhood(name, bbox) {
+    selectedNeighborhood = name ? { name, bbox } : null;
+    hideNeighborhoodSection();
+
+    const chip = document.getElementById('neighborhood-chip');
+    if (name) {
+      document.getElementById('nbhd-chip-name').textContent = name;
+      chip.style.display = 'flex';
+    } else {
+      chip.style.display = 'none';
+    }
+
+    // Focus query input ready to search
+    setTimeout(() => document.getElementById('queryInput').focus(), 100);
+
+    // Load vibe presets for this city
+    const city = document.getElementById('cityInput').value.trim();
+    loadVibePresets(city);
+  }
+
+  function clearNeighborhood() {
+    selectedNeighborhood = null;
+    document.getElementById('neighborhood-chip').style.display = 'none';
+    document.getElementById('vibe-row').style.display = 'none';
+  }
+
+  async function loadVibePresets(city) {
+    if (!city) return;
+    const row = document.getElementById('vibe-row');
+    const scroll = document.getElementById('vibeScroll');
+
+    // Show skeletons while loading
+    scroll.innerHTML = Array.from({ length: 6 }, () => `<div class="vibe-skel-card"></div>`).join('');
+    row.style.display = 'block';
+
+    try {
+      const resp = await fetch(`${BACKEND}/api/vibe-presets?city=${encodeURIComponent(city)}`);
+      if (!resp.ok) { row.style.display = 'none'; return; }
+      const data = await resp.json();
+      const presets = data.presets || [];
+      if (!presets.length) { row.style.display = 'none'; return; }
+
+      scroll.innerHTML = presets.map(p => `
+        <div class="vibe-preset-card" onclick="selectVibe(${JSON.stringify(p).replace(/"/g,'&quot;')})" title="${(p.style_label||'').replace(/"/g,'&quot;')}">
+          <img src="${(p.photo_url||'').replace(/"/g,'&quot;')}" alt="${(p.style_label||'').replace(/"/g,'&quot;')}" loading="lazy">
+          <div class="vibe-preset-label">${p.style_label || ''}</div>
+        </div>`).join('');
+    } catch { row.style.display = 'none'; }
+  }
+
+  function selectVibe(preset) {
+    document.getElementById('queryInput').value = preset.style_label || preset.query_used;
+    const city = document.getElementById('cityInput').value.trim();
+    const btn  = document.getElementById('searchBtn');
+    btn.disabled = true; btn.textContent = 'Searching…';
+    document.getElementById('results').innerHTML = '';
+    startVectorSearch(preset.caption || preset.query_used, city, btn, selectedNeighborhood?.bbox);
+  }
+
 
   // Keyboard nav on city input
   document.addEventListener('DOMContentLoaded', () => {
@@ -2019,7 +2377,7 @@
         opts.forEach((o, i) => o.classList.toggle('active', i === activeIdx));
       } else if (e.key === 'Enter' && activeIdx >= 0) {
         e.preventDefault();
-        selectCity(opts[activeIdx].dataset.name);
+        selectCity({ name: opts[activeIdx].dataset.name });
       } else if (e.key === 'Escape') {
         dd.classList.remove('visible');
       }

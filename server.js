@@ -10,6 +10,8 @@ const crypto  = require("crypto");
 require("dotenv").config();
 const { createClient } = require("@supabase/supabase-js");
 const { indexCity }    = require("./scripts/index-city");
+const { generateNeighborhoods, refreshHotelCounts } = require("./scripts/neighborhood-generator");
+const { backfillCity } = require("./scripts/backfill-latlng");
 
 // ── Password gate helpers ─────────────────────────────────────────────────────
 const SITE_PASSWORD = process.env.SITE_PASSWORD || "";
@@ -769,9 +771,12 @@ app.get("/api/places", async (req, res) => {
     const places = (data.results || [])
       .filter(p => p.city || p.name)
       .map(p => ({
-        name:    p.city || p.name || "",
-        country: p.country || "",
-        state:   p.state   || "",
+        name:         p.city || p.name || "",
+        country:      p.country || "",
+        state:        p.state   || "",
+        country_code: (p.country_code || "").toUpperCase() || null,
+        lat:          p.lat ?? null,
+        lng:          p.lon ?? null,
       }))
       // Deduplicate by name+country
       .filter((p, i, arr) =>
@@ -1412,6 +1417,26 @@ app.get("/api/vsearch", async (req, res) => {
     // Kick off hotels_cache immediately — runs in parallel with score_room_types
     const hotelsPromise = fetchClient.from("hotels_cache").select("*").eq("city", city);
 
+    // ── bbox pre-filter: if bbox param provided, resolve hotel_ids within bounding box ──
+    let bboxHotelIds = null;
+    const bboxParam = req.query.bbox;
+    if (bboxParam) {
+      const parts = bboxParam.split(",").map(Number);
+      if (parts.length === 4 && parts.every(n => !isNaN(n))) {
+        const [lat_min, lat_max, lon_min, lon_max] = parts;
+        const { data: bboxHotels } = await supabase
+          .from("hotels_cache")
+          .select("hotel_id")
+          .eq("city", city)
+          .gte("lat", lat_min).lte("lat", lat_max)
+          .gte("lng", lon_min).lte("lng", lon_max);
+        bboxHotelIds = bboxHotels?.map(h => h.hotel_id) ?? [];
+        console.log(`[vsearch] bbox filter: ${bboxHotelIds.length} hotels in bbox`);
+        // If bbox resolves to zero hotels (lat/lng not yet backfilled), ignore bbox to avoid empty results
+        if (bboxHotelIds.length === 0) bboxHotelIds = null;
+      }
+    }
+
     // ── Phase A: room-type scoring (full city) + hotel metadata cache — in PARALLEL ──
     // score_room_types scans room_types_index (~7k rows for Paris) for all hotels in the
     // city. No pre-filter needed: hotel score = MAX room-type similarity across all rooms.
@@ -1423,6 +1448,7 @@ app.get("/api/vsearch", async (req, res) => {
         query_embedding: queryEmbedding,
         search_city: city,
         ...(required_features ? { required_features } : {}),
+        ...(bboxHotelIds ? { hotel_ids: bboxHotelIds } : {}),
       }),
       hotelsPromise,
     ]);
@@ -2088,6 +2114,180 @@ app.post("/api/backfill-room-ids", async (req, res) => {
       } catch(e) { console.warn(`[backfill] ${hotelId}: ${e.message}`); failed += roomNames.size; }
     }
     console.log(`[backfill] Done — ${updated} updated, ${failed} unmatched`);
+  })();
+});
+
+// ── Neighborhoods endpoint ─────────────────────────────────────────────────────
+// GET /api/neighborhoods?city=Paris
+// Returns 5-8 Gemini-generated neighborhood cards with vibes + Unsplash photos.
+// Gated to indexed cities only. Caches in DB — first call takes ~4-8s.
+const neighborhoodGenerating = new Set(); // track in-flight generation per city
+
+app.get("/api/neighborhoods", async (req, res) => {
+  const city = (req.query.city || "").trim();
+  if (!city) return res.status(400).json({ error: "city required" });
+  if (!supabase) return res.status(500).json({ error: "Supabase not configured" });
+
+  try {
+    // Gate: city must be indexed
+    const { data: cityRow } = await supabase
+      .from("indexed_cities")
+      .select("status")
+      .eq("city", city)
+      .single();
+    if (!cityRow || cityRow.status !== "complete") {
+      return res.status(404).json({ error: `City "${city}" is not indexed yet` });
+    }
+
+    // Return cached rows immediately if they exist
+    const { data: cached } = await supabase
+      .from("neighborhoods")
+      .select("*")
+      .eq("city", city)
+      .order("id");
+    if (cached?.length > 0) {
+      return res.json({ neighborhoods: cached, city });
+    }
+
+    // If generation already in-flight for this city, return 202
+    if (neighborhoodGenerating.has(city)) {
+      return res.status(202).json({ status: "generating", city });
+    }
+
+    // Kick off generation
+    neighborhoodGenerating.add(city);
+    try {
+      const rows = await generateNeighborhoods(
+        city, supabaseAdmin || supabase,
+        process.env.GEMINI_KEY, process.env.UNSPLASH_KEY
+      );
+      neighborhoodGenerating.delete(city);
+      return res.json({ neighborhoods: rows, city });
+    } catch (e) {
+      neighborhoodGenerating.delete(city);
+      console.error(`[neighborhoods] generation failed for ${city}:`, e.message);
+      return res.status(500).json({ error: "Neighborhood generation failed", detail: e.message });
+    }
+  } catch (err) {
+    console.error("[neighborhoods]", err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── Vibe presets endpoint ──────────────────────────────────────────────────────
+// GET /api/vibe-presets?city=Paris
+// Returns 8 canonical room-style photos + captions for photo-tap search.
+const VIBE_STYLES = [
+  { label: "Bright & Minimal",    query: "bright white room large windows minimal modern" },
+  { label: "Warm Art Deco",       query: "art deco warm tones dark wood ornate details" },
+  { label: "Romantic & Soft",     query: "soft lighting romantic canopy bed pastel tones" },
+  { label: "Bold & Contemporary", query: "bold contemporary design statement furniture dramatic" },
+  { label: "Classic Luxury",      query: "classic luxury marble chandelier high ceilings gold" },
+  { label: "Cozy & Intimate",     query: "cozy intimate warm textures fireplace reading nook" },
+  { label: "Urban & Industrial",  query: "urban industrial exposed brick concrete loft dark" },
+  { label: "Serene & Spa-Like",   query: "serene spa bathroom soaking tub natural light zen" },
+];
+
+app.get("/api/vibe-presets", async (req, res) => {
+  const city = (req.query.city || "").trim();
+  if (!city) return res.status(400).json({ error: "city required" });
+  if (!supabase) return res.status(500).json({ error: "Supabase not configured" });
+
+  try {
+    // Return cached presets if available
+    const { data: cached } = await supabase
+      .from("vibe_presets")
+      .select("style_label, query_used, photo_url, caption")
+      .eq("city", city)
+      .order("id");
+    if (cached?.length >= VIBE_STYLES.length) {
+      return res.json({ presets: cached, city });
+    }
+
+    // Generate: run vsearch for each style, take top photo
+    const presets = [];
+    for (const style of VIBE_STYLES) {
+      try {
+        // Inline vsearch to get top photo without an HTTP round-trip
+        const embedRes = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/gemini-embedding-001:embedContent?key=${process.env.GEMINI_KEY}`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ content: { parts: [{ text: style.query }] } }),
+          }
+        );
+        if (!embedRes.ok) continue;
+        const embedData = await embedRes.json();
+        const embedding = embedData?.embedding?.values?.slice(0, 768);
+        if (!embedding) continue;
+
+        const fc = supabaseAdmin || supabase;
+        const { data: roomTypes } = await fc.rpc("score_room_types", {
+          query_embedding: embedding,
+          search_city: city,
+        });
+        if (!roomTypes?.length) continue;
+
+        const topHotelId = roomTypes[0].hotel_id;
+        const { data: photos } = await fc.rpc("fetch_hotel_photos", {
+          hotel_ids: [topHotelId],
+          max_per_hotel: 5,
+        });
+        const photo = photos?.find(p => p.photo_url);
+        if (!photo) continue;
+
+        presets.push({
+          city,
+          style_label: style.label,
+          query_used:  style.query,
+          photo_url:   photo.photo_url,
+          caption:     photo.caption || style.query,
+          hotel_id:    topHotelId,
+        });
+      } catch (e) {
+        console.warn(`[vibe-presets] style "${style.label}" failed:`, e.message);
+      }
+    }
+
+    if (presets.length > 0) {
+      await (supabaseAdmin || supabase)
+        .from("vibe_presets")
+        .upsert(presets, { onConflict: "city,style_label" });
+    }
+
+    res.json({ presets: presets.map(p => ({
+      style_label: p.style_label, query_used: p.query_used,
+      photo_url: p.photo_url, caption: p.caption,
+    })), city });
+  } catch (err) {
+    console.error("[vibe-presets]", err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── Backfill lat/lng endpoint (protected) ─────────────────────────────────────
+// POST /api/backfill-latlng {"secret":"roommatch-2026","city":"Paris"}
+app.post("/api/backfill-latlng", async (req, res) => {
+  const { city, secret, dry_run } = req.body || {};
+  if (secret !== (process.env.INDEX_SECRET || "roommatch-index")) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
+  const db = supabaseAdmin || supabase;
+  const cities = city ? [city] : ["Paris", "Kuala Lumpur"];
+  res.json({ message: `backfill-latlng started for: ${cities.join(", ")}` });
+  (async () => {
+    for (const c of cities) {
+      try {
+        const updated = await backfillCity(c, db, !!dry_run);
+        console.log(`[backfill-latlng] ${c}: ${updated} updated`);
+        // Refresh hotel_count for neighborhoods after backfill
+        await refreshHotelCounts(c, db).catch(() => {});
+      } catch (e) {
+        console.error(`[backfill-latlng] ${c} error:`, e.message);
+      }
+    }
+    console.log("[backfill-latlng] done");
   })();
 });
 

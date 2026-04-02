@@ -472,13 +472,17 @@ async function indexCity(city, limit = 200) {
       if (!detailRes.ok) { hotelsDone++; return; }
       const detail = detailRes.data?.data || {};
 
-      // Cache hotel
+      // Cache hotel (lat/lng: try LiteAPI location fields, fallback handled in backfill-latlng.js)
+      const hotelLat = detail.location?.latitude ?? detail.location?.lat ?? detail.latitude ?? detail.lat ?? null;
+      const hotelLng = detail.location?.longitude ?? detail.location?.lng ?? detail.longitude ?? detail.lng ?? null;
       await db.from("hotels_cache").upsert({
         hotel_id: hotelId, city, country_code: cc,
         name: detail.name || hotelName,
         address: detail.address || "",
         star_rating: stars, guest_rating: rating,
         main_photo: detail.main_photo || detail.mainPhoto || "",
+        lat: hotelLat,
+        lng: hotelLng,
         cached_at: new Date().toISOString(),
       }, { onConflict: "hotel_id" });
 
@@ -654,6 +658,25 @@ ${caption}`;
     console.error(`[indexer] rebuild error: ${rebuildErr.message}`);
   } else {
     console.log(`[indexer] room_types_index rebuilt: ${rebuildCount} rows`);
+  }
+
+  // Auto-generate neighborhoods if none exist; refresh hotel_count if they do
+  try {
+    const { generateNeighborhoods, refreshHotelCounts } = require("./neighborhood-generator");
+    const { count: nCount } = await db
+      .from("neighborhoods")
+      .select("id", { count: "exact", head: true })
+      .eq("city", city);
+    if ((nCount ?? 0) === 0) {
+      console.log(`[indexer] generating neighborhoods for ${city}...`);
+      await generateNeighborhoods(city, db, process.env.GEMINI_KEY, process.env.UNSPLASH_KEY);
+      console.log(`[indexer] neighborhoods generated for ${city}`);
+    } else {
+      console.log(`[indexer] refreshing neighborhood hotel_count for ${city}...`);
+      await refreshHotelCounts(city, db);
+    }
+  } catch (e) {
+    console.error(`[indexer] neighborhood step failed (non-fatal): ${e.message}`);
   }
 
   return { hotelsDone, totalEmbeds };
