@@ -1024,6 +1024,7 @@
     }
     .s-chip.next-up .s-chip-inner { animation:pulse-border 2s ease infinite; }
     .s-chip.next-up .s-val { color:rgba(201,169,110,.55); font-style:italic; }
+    .s-step { font-size:9px; letter-spacing:.12em; text-transform:uppercase; color:rgba(201,169,110,.5); margin-bottom:1px; white-space:nowrap; }
     .s-lbl { font-size:10px; letter-spacing:.18em; text-transform:uppercase; color:var(--muted); margin-bottom:3px; white-space:nowrap; }
     .s-val { font-size:15px; font-weight:400; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:180px; transition:color .15s; color:rgba(232,228,220,.35); font-style:italic; }
     .s-chip.done .s-val   { color:var(--text); font-style:normal; font-weight:500; }
@@ -1110,6 +1111,14 @@
     .chapter-body { flex:1; padding-bottom:80px; }
     .eyebrow { font-size:11px; letter-spacing:.18em; text-transform:uppercase; color:var(--muted); margin-bottom:16px; display:flex; align-items:center; gap:8px; }
     .eyebrow-dot { width:5px; height:5px; border-radius:50%; background:var(--accent); flex-shrink:0; }
+    .back-btn {
+      display:inline-flex; align-items:center; gap:5px;
+      font-size:12px; color:var(--muted); background:none; border:none;
+      cursor:pointer; padding:0; margin-bottom:14px;
+      transition:color .15s; letter-spacing:.02em;
+    }
+    .back-btn:hover { color:var(--text); }
+    .back-btn svg { width:14px; height:14px; flex-shrink:0; }
 
     /* ── Neighbourhood cards (new design — full-bleed overlay) */
     .nbhd-grid-new {
@@ -1207,7 +1216,7 @@
     .style-thumbs { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; margin-bottom:14px; }
     @media(max-width:900px){ .style-thumbs { display:flex; overflow-x:auto; padding-bottom:4px; scroll-snap-type:x mandatory; margin-bottom:24px; } }
     .style-thumbs::-webkit-scrollbar { height:0; }
-    .sthumb { aspect-ratio:3/4; border-radius:14px; overflow:hidden; cursor:pointer; position:relative; scroll-snap-align:start; transition:transform .18s, box-shadow .18s; border:2px solid transparent; }
+    .sthumb { aspect-ratio:5/6; border-radius:14px; overflow:hidden; cursor:pointer; position:relative; scroll-snap-align:start; transition:transform .18s, box-shadow .18s; border:2px solid transparent; }
     @media(max-width:900px){ .sthumb { flex-shrink:0; width:clamp(120px,20vw,160px); } }
     .sthumb:hover { transform:scale(1.04); box-shadow:0 10px 28px rgba(0,0,0,.5); }
     .sthumb.active { border-color:var(--accent); box-shadow:0 0 0 1px var(--accent), 0 10px 28px rgba(0,0,0,.5); }
@@ -1338,6 +1347,7 @@
     <div class="story-inner">
       <div class="s-chip" id="sc-city" onclick="goToStep('city')">
         <div class="s-chip-inner">
+          <div class="s-step">Step 1</div>
           <div class="s-lbl">City</div>
           <div class="s-val" id="sv-city">—</div>
         </div>
@@ -1345,6 +1355,7 @@
       <div class="s-arrow">›</div>
       <div class="s-chip" id="sc-nbhd" onclick="goToStep('nbhd')">
         <div class="s-chip-inner">
+          <div class="s-step">Step 2</div>
           <div class="s-lbl">Neighbourhood</div>
           <div class="s-val" id="sv-nbhd">—</div>
         </div>
@@ -1352,6 +1363,7 @@
       <div class="s-arrow">›</div>
       <div class="s-chip" id="sc-style" onclick="goToStep('style')">
         <div class="s-chip-inner">
+          <div class="s-step">Step 3</div>
           <div class="s-lbl">Room Vibe</div>
           <div class="s-val" id="sv-style">—</div>
         </div>
@@ -1390,6 +1402,7 @@
     <div class="chapter">
       <div class="chapter-inner">
         <div class="chapter-top">
+          <button class="back-btn" onclick="goToStep('city')"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 3L5 8l5 5"/></svg> Back to City</button>
           <div class="eyebrow"><div class="eyebrow-dot"></div><span id="nbhd-city-label">Paris</span> · Step 2 of 4</div>
           <h1 class="chapter-h1">Find your<br><em>neighbourhood vibe</em></h1>
           <p class="chapter-sub">Hover any card to learn more about the area, then tap to choose — or explore the whole city.</p>
@@ -1406,6 +1419,7 @@
     <div class="chapter">
       <div class="chapter-inner">
         <div class="chapter-top">
+          <button class="back-btn" onclick="goToStep('nbhd')"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 3L5 8l5 5"/></svg> Back to Neighbourhood</button>
           <div class="eyebrow"><div class="eyebrow-dot"></div>Step 3 of 4 · <span style="color:var(--accent2)">The heart of Hotel Vibe Search</span></div>
           <h1 class="chapter-h1">Choose your<br><em>room vibe</em></h1>
           <p class="chapter-sub">This is how we find rooms that actually match your taste — not just price range.</p>
@@ -1455,6 +1469,7 @@
     <div class="chapter">
       <div class="chapter-inner">
         <div class="chapter-top">
+          <button class="back-btn" onclick="goToStep('style')"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 3L5 8l5 5"/></svg> Back to Room Vibe</button>
           <div class="eyebrow"><div class="eyebrow-dot"></div>Almost there · Step 4 of 4</div>
           <h1 class="chapter-h1">When are you<br><em>going?</em></h1>
           <p class="chapter-sub">Add dates to see live pricing and availability. You can always skip and browse first.</p>
