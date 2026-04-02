@@ -1583,6 +1583,16 @@
   // ════════════════════════════════════════════════════════
 
   // Hardcoded neighbourhood fallback for non-indexed cities
+  // Cities that are indexed in our DB (real neighbourhood data available)
+  const DB_INDEXED_CITIES = ['Paris', 'Kuala Lumpur'];
+
+  // Returns true if a city has neighbourhood data (DB or fallback hardcoded)
+  function cityHasNeighbourhoods(name) {
+    const n = name.trim().toLowerCase();
+    if (DB_INDEXED_CITIES.some(c => c.toLowerCase() === n)) return true;
+    return Object.keys(NBHDS_FALLBACK).some(c => c.toLowerCase() === n);
+  }
+
   const NBHDS_FALLBACK = {
     'London': [
       {name:'Mayfair',       vibe_short:'Luxury, hushed, white-glove',  vibe_long:'London\'s most prestigious postcode — Georgian townhouses, Michelin-starred dining, and the kind of quiet money that doesn\'t need to announce itself.',       tags:['luxury','quiet','returning'],      hotel_count:35, bg:'linear-gradient(160deg,#161010 0%,#0e0c0c 100%)'},
@@ -1692,14 +1702,21 @@
     S.city = name;
     document.getElementById('cityInput').value = name;
     document.getElementById('sv-city').textContent = name.length > 20 ? name.slice(0,18)+'…' : name;
-    document.getElementById('nbhd-city-label').textContent = name;
     document.getElementById('story').classList.add('show');
     // Save to history and rebuild chips so next visit shows it as recent
     writeHistory(CITY_HISTORY_KEY, name);
     buildCityChips();
-    fetchAndShowNeighborhoodsNew(name);
-    refreshStory('nbhd');
-    showFlowStep('nbhd');
+
+    if (cityHasNeighbourhoods(name)) {
+      // Show neighbourhood step with real or fallback data
+      document.getElementById('nbhd-city-label').textContent = name;
+      fetchAndShowNeighborhoodsNew(name);
+      refreshStory('nbhd');
+      showFlowStep('nbhd');
+    } else {
+      // Skip neighbourhood entirely — city not indexed and no fallback data
+      pickNbhd('All of ' + name, null);
+    }
   }
 
   // ── NEIGHBOURHOOD ────────────────────────────────────
@@ -1790,7 +1807,9 @@
     selectedNeighborhood = name && !name.startsWith('All of') ? { name, bbox } : null;
     refreshStory('style');
     buildVibeStyles();
-    flashMsg('✓ ' + name + ' · Now choose your room vibe →');
+    const isAll = name.startsWith('All of');
+    flashMsg(isAll ? '📍 Searching all of ' + S.city + ' · Choose your room vibe →'
+                   : '✓ ' + name + ' · Now choose your room vibe →');
     showFlowStep('style');
   }
 
