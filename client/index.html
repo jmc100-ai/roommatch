@@ -1105,6 +1105,15 @@
       min-height:calc(100vh - 56px); display:flex; align-items:center; justify-content:center;
       padding:60px var(--gutter);
     }
+    /* Desktop: sit a bit higher than dead-center — less “floating” mid-viewport */
+    @media (min-width: 641px) {
+      .city-chapter {
+        align-items:flex-start;
+        justify-content:center;
+        padding-top:clamp(36px, 6.5vh, 76px);
+        padding-bottom:56px;
+      }
+    }
     @media(max-width:640px){
       .city-chapter {
         align-items:flex-start;
@@ -1116,7 +1125,7 @@
     }
     .city-chapter-inner { max-width:620px; width:100%; text-align:center; box-sizing:border-box; min-width:0; overflow-x:hidden; }
     .city-chapter-inner .eyebrow { justify-content:center; }
-    .city-chapter-inner .chapter-sub { margin-left:auto; margin-right:auto; }
+    .city-chapter-inner .chapter-sub { margin-left:auto; margin-right:auto; max-width:520px; }
     .city-heading {
       font-family:'Cormorant Garamond',serif; font-size:clamp(28px,4.2vw,56px);
       font-weight:300; line-height:1.1; margin-bottom:12px; white-space:nowrap;
@@ -1589,7 +1598,7 @@
       <div class="city-chapter-inner">
         <div class="eyebrow"><div class="eyebrow-dot"></div>TravelBoop · Find your vibe</div>
         <h1 class="city-heading">Where are you <em>headed?</em></h1>
-        <p class="chapter-sub">Pick a city — we'll map neighbourhoods and rooms around what feels like you. When the area vibe and room vibe line up, that's your <em style="color:var(--accent2);font-style:italic">Boop</em> — the sweet spot TravelBoop is built for.</p>
+        <p class="chapter-sub">Pick a city — we show neighbourhoods you'll actually care about, then run an <strong style="color:var(--text);font-weight:500">AI visual search</strong> across real hotel room photos so your match is how the space <em>looks</em>, not just a vibe keyword. When the area vibe and room vibe line up, that's your <em style="color:var(--accent2);font-style:italic">Boop</em> — the sweet spot TravelBoop is built for.</p>
         <div class="city-box">
           <span class="city-box-icon">⌕</span>
           <input type="text" id="cityInput" placeholder="Paris, Kuala Lumpur, Tokyo…"
