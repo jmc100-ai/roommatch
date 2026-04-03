@@ -59,7 +59,7 @@ function loginHtml(error = "") {
 </head>
 <body>
   <div class="card">
-    <h1>RoomMatch</h1>
+    <h1>TravelBoop</h1>
     <p class="sub">Private access only</p>
     <form method="POST" action="/auth">
       <input type="password" name="password" placeholder="Password" autofocus/>
