@@ -1605,10 +1605,9 @@
         <p class="chapter-sub">Pick a city and discover neighborhoods that actually match your energy — not just the usual tourist blurbs. Then we scan real hotel room photos with AI to find places that feel right to you, not just ones with generic <strong style="color:var(--text);font-weight:600">vibes</strong>. When your neighborhood and room <strong style="color:var(--text);font-weight:600">vibe</strong> click, that's your <strong style="color:var(--accent2);font-weight:600">Boop</strong>.</p>
         <div class="city-box">
           <span class="city-box-icon">⌕</span>
+          <!-- Geoapify + recent popover paused (clashed with chips) — restore oninput/onblur + onCityInput -->
           <input type="text" id="cityInput" placeholder="Paris, Kuala Lumpur, Tokyo…"
                  autocomplete="off"
-                 oninput="onCityInput(this.value)"
-                 onblur="hideCitySuggestions()"
                  onkeydown="onCityKeydown(event)"/>
           <button class="city-go-btn" id="cityGoBtn" onclick="onCityGo()" aria-label="Go">Go →</button>
           <div class="recent-dropdown" id="cityHistoryDropdown"></div>
@@ -3295,6 +3294,9 @@
   let activeIdx = -1;
 
   async function onCityInput(val) {
+    /* GEO_AUTOCOMPLETE PAUSED — homepage chip conflict; remove this line + closing comment to restore */
+    return;
+    /*
     clearTimeout(cityTimer);
     const dd = document.getElementById('cityDropdown');
     if (val.length < 2) {
@@ -3345,6 +3347,7 @@
         dd.classList.remove('visible');
       }
     }, 250);
+    */
   }
 
   // cityData: {name, country_code, lat, lng} from autocomplete, or plain string from history/keyboard
@@ -3614,6 +3617,7 @@
     const cityInput = document.getElementById('cityInput');
     if (!cityInput) return;
 
+    /* Recent popover on focus + duplicate arrow-key nav — paused with Geo autocomplete (use onCityKeydown on input)
     cityInput.addEventListener('focus', () => {
       if (cityInput.value.trim().length < 2) {
         showRecentDropdown({
@@ -3647,6 +3651,7 @@
         dd.classList.remove('visible');
       }
     });
+    */
 
     // Focus city input on load
     setTimeout(() => cityInput.focus(), 100);
