@@ -1102,16 +1102,17 @@
 
     /* ── City step (centred hero) ───────────────────── */
     .city-chapter {
-      min-height:calc(100vh - 56px); display:flex; align-items:center; justify-content:center;
-      padding:60px var(--gutter);
+      /* dvh avoids extra doc height vs 100vh when browser UI / scrollbar eat pixels */
+      min-height:calc(100vh - 56px);
+      min-height:calc(100dvh - 56px);
+      display:flex; align-items:center; justify-content:center;
+      padding:52px var(--gutter) 48px;
+      box-sizing:border-box;
     }
-    /* Desktop: sit a bit higher than dead-center — less “floating” mid-viewport */
+    /* Desktop: slightly above optical centre (not flex-start — avoids “stuck to top” + layout overflow) */
     @media (min-width: 641px) {
-      .city-chapter {
-        align-items:flex-start;
-        justify-content:center;
-        padding-top:clamp(36px, 6.5vh, 76px);
-        padding-bottom:56px;
+      .city-chapter-inner {
+        transform:translateY(calc(-1.25vh - 6px));
       }
     }
     @media(max-width:640px){
@@ -1120,8 +1121,9 @@
         justify-content:flex-start;
         padding:16px var(--gutter) 40px;
         min-height:calc(100vh - 56px);
+        min-height:calc(100dvh - 56px);
       }
-      .city-chapter-inner { padding-top:8px; }
+      .city-chapter-inner { padding-top:8px; transform:none; }
     }
     .city-chapter-inner { max-width:620px; width:100%; text-align:center; box-sizing:border-box; min-width:0; overflow-x:hidden; }
     .city-chapter-inner .eyebrow { justify-content:center; }
