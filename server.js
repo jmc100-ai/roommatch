@@ -2084,6 +2084,86 @@ app.post("/api/backfill-feature-embeddings", async (req, res) => {
   })().catch(err => console.error("[feat-embed] fatal:", err.message));
 });
 
+// ── Backfill hotel_photos gallery for existing hotels_cache rows (protected) ──
+// Fetches LiteAPI /data/hotel for each hotel where hotel_photos = '[]',
+// extracts hotelImages[], and updates hotels_cache.hotel_photos.
+// Usage: POST /api/backfill-hotel-gallery {"city":"Paris","secret":"roommatch-2026"}
+app.post("/api/backfill-hotel-gallery", async (req, res) => {
+  const { city, secret, dryRun } = req.body || {};
+  if (secret !== (process.env.INDEX_SECRET || "roommatch-index")) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
+  if (!city) return res.status(400).json({ error: "city required" });
+
+  res.json({ message: `Hotel gallery backfill started for ${city}`, dryRun: !!dryRun });
+
+  (async () => {
+    const t0 = Date.now();
+    console.log(`[gallery-backfill] Starting for ${city} dryRun=${!!dryRun}`);
+
+    // Fetch all hotels_cache rows for city (including those already done, for resume safety)
+    const { data: allHotels, error: fetchErr } = await supabaseAdmin
+      .from("hotels_cache")
+      .select("hotel_id, main_photo, hotel_photos")
+      .eq("city", city);
+
+    if (fetchErr || !allHotels) {
+      console.error("[gallery-backfill] hotels_cache fetch failed:", fetchErr?.message);
+      return;
+    }
+
+    // Only process hotels where gallery is empty
+    const todo = allHotels.filter(h => !h.hotel_photos || h.hotel_photos.length === 0);
+    console.log(`[gallery-backfill] ${allHotels.length} hotels total, ${todo.length} need gallery`);
+
+    const CONCURRENCY = 20;
+    let done = 0, filled = 0, empty = 0;
+
+    for (let i = 0; i < todo.length; i += CONCURRENCY) {
+      const batch = todo.slice(i, i + CONCURRENCY);
+      await Promise.all(batch.map(async (row) => {
+        try {
+          const r = await liteGet(`/data/hotel?hotelId=${row.hotel_id}`);
+          if (!r.ok) { done++; empty++; return; }
+          const detail = r.data?.data || {};
+          const mainPhotoUrl = row.main_photo || "";
+
+          const rawPhotos = [
+            ...(detail.hotelImages || []),
+            ...(detail.photos      || []),
+            ...(detail.images      || []),
+            ...(detail.gallery     || []),
+          ];
+          const photos = rawPhotos
+            .map(p => (typeof p === "string" ? p : p?.urlHd || p?.url || p?.hd_url || ""))
+            .filter(Boolean)
+            .filter(u => u !== mainPhotoUrl)
+            .slice(0, 8);
+
+          if (!dryRun && photos.length > 0) {
+            await supabaseAdmin
+              .from("hotels_cache")
+              .update({ hotel_photos: photos })
+              .eq("hotel_id", row.hotel_id);
+          }
+
+          done++;
+          if (photos.length > 0) filled++; else empty++;
+          if (done % 50 === 0) {
+            console.log(`[gallery-backfill] ${done}/${todo.length} done, ${filled} filled, ${empty} empty`);
+          }
+        } catch (e) {
+          done++; empty++;
+          console.warn(`[gallery-backfill] ${row.hotel_id} error:`, e.message);
+        }
+      }));
+    }
+
+    const elapsed = Math.round((Date.now() - t0) / 1000);
+    console.log(`[gallery-backfill] Done in ${elapsed}s — ${filled}/${todo.length} hotels got photos, ${empty} empty`);
+  })().catch(err => console.error("[gallery-backfill] fatal:", err.message));
+});
+
 // ── Backfill room_type_id for existing rows (protected) ───────────────────────
 app.post("/api/backfill-room-ids", async (req, res) => {
   const { city, secret, dryRun } = req.body || {};

@@ -487,18 +487,20 @@ async function indexCity(city, limit = 200) {
       // LiteAPI returns these in various top-level fields depending on API version.
       // We try every known field name and deduplicate. These are NOT room photos.
       const mainPhotoUrl = detail.main_photo || detail.mainPhoto || "";
+      // hotelImages is the confirmed LiteAPI field (url/urlHd/caption/order/defaultImage).
+      // Fallback fields tried in case the response shape varies across API versions.
       const rawHotelPhotos = [
-        ...(detail.photos        || []),
         ...(detail.hotelImages   || []),
+        ...(detail.photos        || []),
         ...(detail.images        || []),
         ...(detail.gallery       || []),
         ...(detail.hotelPhotos   || []),
       ];
       const hotelPhotos = rawHotelPhotos
-        .map(p => (typeof p === "string" ? p : p?.url || p?.hd_url || p?.imageUrl || ""))
+        .map(p => (typeof p === "string" ? p : p?.urlHd || p?.url || p?.hd_url || p?.imageUrl || ""))
         .filter(Boolean)
         .filter(u => u !== mainPhotoUrl)   // don't duplicate main photo
-        .slice(0, 5);                      // store up to 5
+        .slice(0, 8);                      // store up to 8 hotel-level photos
 
       await db.from("hotels_cache").upsert({
         hotel_id: hotelId, city, country_code: cc,
