@@ -485,40 +485,47 @@
     .hotel-card:nth-child(7) { animation-delay:.28s }
     .hotel-card:nth-child(8) { animation-delay:.32s }
 
-    /* ── Hotel hero photo strip ─── */
+    /* ── Hotel hero photo block — 1 large left, 2 stacked right ── */
     .hotel-hero {
       display: grid;
-      grid-template-columns: 1.6fr 1fr 1fr;
-      height: 190px;
+      grid-template-columns: 1.6fr 1fr;
+      grid-template-rows: 1fr 1fr;
+      height: 200px;
       overflow: hidden;
-      /* no radius on inner elements — card handles the outer rounding */
     }
     .hotel-hero-img {
       width: 100%; height: 100%;
       object-fit: cover; display: block;
       background: var(--surface);
     }
-    .hotel-hero-img + .hotel-hero-img { border-left: 2px solid var(--card); }
-    /* Dim placeholder when no photo */
-    .hotel-hero-blank {
-      background: linear-gradient(160deg,#1a1610 0%,#0e0c09 100%);
-    }
-    /* 1 photo only → single full-width */
-    .hotel-hero.hero-1 { grid-template-columns: 1fr; }
-    /* 2 photos → 60/40 */
-    .hotel-hero.hero-2 { grid-template-columns: 1.5fr 1fr; }
-    /* Mobile: single photo, shorter */
+    /* First photo spans both rows (the large hero) */
+    .hotel-hero-img:first-child { grid-row: 1 / 3; }
+    /* Right-side stacked photos */
+    .hotel-hero-img:nth-child(2) { border-left: 2px solid var(--card); border-bottom: 1px solid var(--card); }
+    .hotel-hero-img:nth-child(3) { border-left: 2px solid var(--card); border-top: 1px solid var(--card); }
+    .hotel-hero-blank { background: linear-gradient(160deg,#1a1610 0%,#0e0c09 100%); }
+    /* Fallbacks when fewer photos available */
+    .hotel-hero.hero-1 { grid-template-columns: 1fr; grid-template-rows: 1fr; }
+    .hotel-hero.hero-1 .hotel-hero-img:first-child { grid-row: 1; }
+    .hotel-hero.hero-2 { grid-template-columns: 1.5fr 1fr; grid-template-rows: 1fr; }
+    .hotel-hero.hero-2 .hotel-hero-img:first-child { grid-row: 1; }
+    .hotel-hero.hero-2 .hotel-hero-img:nth-child(2) { border-bottom: none; }
+    /* Mobile: single photo only */
     @media(max-width:640px){
-      .hotel-hero { height: 160px; grid-template-columns: 1fr; }
+      .hotel-hero { height: 155px; grid-template-columns: 1fr; grid-template-rows: 1fr; }
+      .hotel-hero-img:first-child { grid-row: 1; }
       .hotel-hero-img:not(:first-child) { display: none; }
     }
 
-    /* ── Hotel header ───────────── */
+    /* ── Hotel header — horizontal split desktop ── */
     .hotel-header {
-      padding: 18px 24px 14px; border-bottom: 1px solid var(--border);
+      padding: 15px 24px;
+      display: flex; align-items: flex-start; justify-content: space-between; gap: 20px;
     }
-    .hotel-header-left { min-width: 0; display: flex; flex-direction: column; gap: 6px; }
-    .hotel-name-row { display: flex; align-items: center; gap: 14px; min-width: 0; flex-wrap: wrap; }
+    .hotel-header-left { min-width: 0; display: flex; flex-direction: column; gap: 5px; flex: 1; }
+    .hotel-header-right { display: flex; flex-direction: column; align-items: flex-end; gap: 9px; flex-shrink: 0; }
+    .hotel-header-right-top { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+    .hotel-name-row { display: flex; align-items: center; gap: 10px; min-width: 0; }
     .hotel-name { font-family: 'Cormorant Garamond', serif; font-size: 22px; font-weight: 400; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
     .hotel-meta { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
     .stars { color: var(--accent); font-size: 11px; letter-spacing: 2px; }
@@ -538,12 +545,8 @@
     .book-btn:hover { background: rgba(201,169,110,0.08); border-color: var(--accent); }
 
     /* ── Book + price row ── */
-    .hotel-actions {
-      display: flex; align-items: center; gap: 20px; flex-wrap: wrap; padding-top: 4px;
-    }
-    .hotel-price {
-      display: flex; align-items: baseline; gap: 6px;
-    }
+    .hotel-actions { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+    .hotel-price { display: flex; flex-direction: column; align-items: flex-end; gap: 1px; }
     .price-value {
       font-family: 'Cormorant Garamond', serif;
       font-size: 20px; font-weight: 300; color: var(--text);
@@ -555,6 +558,79 @@
     /* ── Room type row ──────────── */
     .room-type-row { border-bottom: 1px solid var(--border); }
     .room-type-row:last-child { border-bottom: none; }
+
+    /* ── Gold divider band between hotel info and best room ── */
+    .hotel-divider-band {
+      background: #221d0e;
+      border-top: 1px solid rgba(201,169,110,0.18);
+      border-bottom: 1px solid rgba(201,169,110,0.18);
+      padding: 7px 24px;
+      font-size: 10px; font-weight: 600; letter-spacing: 0.14em;
+      color: var(--accent); text-align: center; text-transform: uppercase;
+      font-family: 'DM Sans', sans-serif;
+    }
+
+    /* ── Featured (top match) room ── */
+    .room-featured { border-bottom: 1px solid var(--border); }
+    .room-featured-grid {
+      display: grid; grid-template-columns: 1fr 1fr 1fr;
+      height: 175px; overflow: hidden;
+    }
+    .room-featured-grid .room-photo-cell {
+      flex: none; height: 175px; border-radius: 0; cursor: zoom-in;
+      border-right: 2px solid var(--card);
+    }
+    .room-featured-grid .room-photo-cell:last-child { border-right: none; }
+    .room-featured-info {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 11px 24px; gap: 12px; flex-wrap: wrap;
+    }
+    .room-featured-name {
+      font-size: 14px; font-weight: 400; color: var(--text);
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .room-featured-meta { display: flex; align-items: center; gap: 10px; flex-shrink: 0; flex-wrap: wrap; }
+
+    /* ── Other rooms section ── */
+    .rooms-other-header {
+      padding: 10px 24px 2px;
+      font-size: 10px; font-weight: 500; letter-spacing: 0.13em;
+      color: var(--muted); text-transform: uppercase; font-family: 'DM Sans', sans-serif;
+    }
+    .room-hidden { display: none; }
+    .rooms-show-more {
+      display: block; width: 100%; padding: 13px;
+      background: transparent; border: none;
+      border-top: 1px solid var(--border);
+      color: rgba(201,169,110,0.55);
+      font-size: 11px; font-weight: 500; letter-spacing: 0.08em; text-align: center;
+      cursor: pointer; font-family: 'DM Sans', sans-serif; transition: color 0.15s;
+    }
+    .rooms-show-more:hover { color: var(--accent); }
+
+    /* ── Match bar on compact room rows ── */
+    .room-match-bar-wrap {
+      width: 44px; height: 3px; background: rgba(255,255,255,0.08);
+      border-radius: 2px; flex-shrink: 0; overflow: hidden;
+    }
+    .room-match-bar-fill { height: 100%; background: var(--accent); border-radius: 2px; min-width: 2px; }
+
+    /* ── Mobile overrides for new card sections ── */
+    @media(max-width:640px) {
+      .hotel-header { flex-direction: column; gap: 10px; }
+      .hotel-header-right { align-items: flex-start; flex-direction: row; flex-wrap: wrap; gap: 10px; width: 100%; }
+      .hotel-header-right-top { flex-wrap: wrap; justify-content: flex-start; }
+      .hotel-actions { width: 100%; }
+      .hotel-price { flex-direction: row; align-items: baseline; gap: 4px; }
+      .room-featured-grid { height: 148px; }
+      .room-featured-grid .room-photo-cell { height: 148px; }
+      .room-featured-info { padding: 10px 16px; }
+      .rooms-other-header { padding: 10px 16px 2px; }
+      .hotel-divider-band { padding: 7px 16px; }
+      /* Compact rooms: on mobile expand to a swipeable horizontal strip with scroll-snap */
+      .photo-strip { scroll-snap-type: x mandatory; -webkit-overflow-scrolling: touch; }
+      .room-photo-cell { scroll-snap-align: start; }
+    }
 
     .room-type-header {
       display: flex; align-items: center; justify-content: space-between;
@@ -865,7 +941,7 @@
       .city-field { grid-column: 1 / -1; }
       .search-btn { grid-column: 1 / -1; width: 100%; }
       .room-photo-cell { flex: 0 0 200px; height: 150px; }
-      .hotel-name-row { flex-direction: column; align-items: flex-start; gap: 8px; }
+      .hotel-name { white-space: normal; }
       .room-type-header { flex-wrap: nowrap; }
       .index-banner { margin: 0 20px 16px; }
       body.has-results .hero { padding: 10px 20px; }
@@ -2826,22 +2902,19 @@
           : '';
       }
 
-      // --- room rows: rebuild and inject, appending to _lbRegistry ---
+      // --- room rows: rebuild and inject using roomsSectionHTML ---
       const roomsEl = document.getElementById(`hotel-rooms-${h.id}`);
       if (roomsEl) {
-        // Preserve which room index the user currently has open so the rebuild
-        // doesn't collapse whatever they were reading.
+        // Preserve which compact row the user has open (compact rows have .room-type-row)
         const currentRows = roomsEl.querySelectorAll('.room-type-row');
         const openIdx = [...currentRows].findIndex(r => r.classList.contains('open'));
-        const preservedOpen = openIdx >= 0 ? openIdx : 0;
+        const openCompactIdx = openIdx >= 0 ? openIdx : 0;
 
         const allRoomTypes = h.roomTypes || [];
         const isAvail = rt => rt.roomTypeId != null && h.roomPrices?.[rt.roomTypeId] != null;
         const canFilter = _showAvailOnly && _hasDateSearch && _pricesLoaded;
         const availRoomTypes = allRoomTypes.filter(isAvail);
         const hasHotelAvail = h.price != null;
-        // If specific room-type IDs match rates → show only those.
-        // If hotel is priced but no room-type match → show all rooms (hotel is available, room-level unknown).
         const visibleRooms = canFilter
           ? (availRoomTypes.length > 0 ? availRoomTypes : (hasHotelAvail ? allRoomTypes : []))
           : allRoomTypes;
@@ -2852,8 +2925,7 @@
               ? `<div class="no-avail-notice">Available for your dates — room photos not in our visual index yet</div>`
               : `<div class="no-avail-notice">No rooms available for these dates — <button class="no-avail-link" onclick="setAvailFilter(false);document.getElementById('availOnlyCheck').checked=false">show all room types</button></div>`)
           : '';
-        const rowsHtml = visibleRooms.map((rt, ri) => roomTypeHTML(rt, ri === preservedOpen, h.vectorScore, h.roomPrices, _hasDateSearch)).join('');
-        roomsEl.innerHTML = notice + rowsHtml;
+        roomsEl.innerHTML = roomsSectionHTML(visibleRooms, h.vectorScore, h.roomPrices, _hasDateSearch, notice, openCompactIdx);
       }
     }
 
@@ -3193,30 +3265,76 @@
     }
   }
 
+  // ── showMoreRooms ─────────────────────────────────────────────────────────
+  // Reveals hidden compact room rows and removes the "Show N more" button.
+  function showMoreRooms(btn) {
+    const container = btn.closest('.rooms-other');
+    if (!container) return;
+    container.querySelectorAll('.room-hidden').forEach(r => r.classList.remove('room-hidden'));
+    btn.remove();
+  }
+
+  // ── roomsSectionHTML ──────────────────────────────────────────────────────
+  // Generates the full rooms section (divider band + featured room + compact list).
+  // Called by both hotelHTML() and applyPricesInPlace() to keep output in sync.
+  //
+  // openCompactIdx: which compact row (0-based among compact rows) should be open.
+  const COMPACT_SHOW = 4;
+
+  function roomsSectionHTML(roomTypes, hotelScore, roomPrices, hasDateSearch, noAvailNotice, openCompactIdx = 0) {
+    if (roomTypes.length === 0) return noAvailNotice;
+
+    const featured = roomTypes[0];
+    const others   = roomTypes.slice(1);
+
+    const featuredHTML = roomTypeHTML(featured, true, hotelScore, roomPrices, hasDateSearch, 'featured');
+
+    let othersSection = '';
+    if (others.length > 0) {
+      const visibleOthers = others.slice(0, COMPACT_SHOW);
+      const hiddenOthers  = others.slice(COMPACT_SHOW);
+
+      const visibleHTML = visibleOthers.map((rt, ci) =>
+        roomTypeHTML(rt, ci === openCompactIdx, hotelScore, roomPrices, hasDateSearch, 'compact', false)
+      ).join('');
+
+      const hiddenHTML = hiddenOthers.map(rt =>
+        roomTypeHTML(rt, false, hotelScore, roomPrices, hasDateSearch, 'compact', true)
+      ).join('');
+
+      const showMoreBtn = hiddenOthers.length > 0
+        ? `<button class="rooms-show-more" onclick="showMoreRooms(this)">Show ${hiddenOthers.length} more room type${hiddenOthers.length !== 1 ? 's' : ''} ↓</button>`
+        : '';
+
+      othersSection = `
+        <div class="rooms-other-header">OTHER ROOM TYPES (${others.length})</div>
+        <div class="rooms-other">${visibleHTML}${hiddenHTML}${showMoreBtn}</div>`;
+    }
+
+    return `${noAvailNotice}
+      <div class="hotel-divider-band">BEST MATCHING ROOM</div>
+      ${featuredHTML}
+      ${othersSection}`;
+  }
+
   function hotelHTML(h) {
     const stars    = '★'.repeat(Math.min(Math.max(Math.round(h.starRating || 0), 0), 5));
     const location = [h.address, h.city, h.country].filter(Boolean).join(', ');
     const rating   = h.rating > 0 ? `<span class="hotel-guest-score"><strong>${parseFloat(h.rating).toFixed(1)}</strong> guest score</span>` : '';
     const bookUrl  = `https://www.google.com/search?q=${encodeURIComponent(h.name + ' ' + (h.city||'') + ' hotel booking')}`;
     const clipBadge = h.clipScore > 0 ? `<span class="clip-score-badge">&#9889; ${h.clipScore}% CLIP</span>` : '';
-    // Hotel badge uses hotelEffectiveScore so when "available only" is on it shows
-    // the best available room's score — consistent with the sort order.
     const effectiveScore = hotelEffectiveScore(h);
     const matchBadgeInner = effectiveScore > 0
       ? `<span class="hotel-match-badge${effectiveScore < 20 ? ' hotel-match-badge--low' : ''}">${effectiveScore}% match</span>`
       : '';
-    // Wrap in a stable container so applyPricesInPlace can update it without a full re-render
     const matchBadge = `<span id="hotel-badge-wrap-${h.id}">${matchBadgeInner}</span>`;
-    // Rooms always sorted by match score (server order).
-    // When "available only" toggle is on, show only rooms confirmed available by LiteAPI.
-    // Hotels with no available rooms (or no rates data) show a notice with no room rows.
+
+    // ── Room filtering (availability toggle) ────────────────────────────────
     const allRoomTypes = h.roomTypes || [];
-    const isAvail = rt => rt.roomTypeId != null && h.roomPrices?.[rt.roomTypeId] != null;
+    const isAvail  = rt => rt.roomTypeId != null && h.roomPrices?.[rt.roomTypeId] != null;
     const canFilter = _showAvailOnly && _hasDateSearch && _pricesLoaded;
     const availRoomTypes = allRoomTypes.filter(isAvail);
-    const hasHotelAvail = h.price != null;
-    // If specific room-type IDs match rates → show only those.
-    // If hotel is priced but no room-type match → show all rooms (hotel available, room-level unknown).
+    const hasHotelAvail  = h.price != null;
     const roomTypes = canFilter
       ? (availRoomTypes.length > 0 ? availRoomTypes : (hasHotelAvail ? allRoomTypes : []))
       : allRoomTypes;
@@ -3227,17 +3345,10 @@
           ? `<div class="no-avail-notice">Available for your dates — room photos not in our visual index yet</div>`
           : `<div class="no-avail-notice">No rooms available for these dates — <button class="no-avail-link" onclick="setAvailFilter(false);document.getElementById('availOnlyCheck').checked=false">show all room types</button></div>`)
       : '';
-    // Open the first room in the filtered list
-    const openIdx = 0;
-    const roomRows = roomTypes.map((rt, ri) => roomTypeHTML(rt, ri === openIdx, h.vectorScore, h.roomPrices, _hasDateSearch)).join('');
 
-    // ── Hero photo strip ──────────────────────────────────────────────────
-    // Option A (live now): mainPhoto + up to 2 top room-match photos.
-    // Option B (post-backfill): h.hotelPhotos[] will contain real exterior/lobby/bar shots,
-    //   which replace the room fill slots automatically once backfill runs.
+    // ── Hotel hero: mainPhoto (large left) + up to 2 gallery/room photos (stacked right) ──
     const heroPhotos = [];
     if (h.mainPhoto) heroPhotos.push(h.mainPhoto);
-    // Fill remaining slots from hotel gallery (Option B), then fall back to room photos (Option A).
     const galleryFill = (h.hotelPhotos && h.hotelPhotos.length > 0) ? h.hotelPhotos : [];
     for (const url of galleryFill) {
       if (!heroPhotos.includes(url)) heroPhotos.push(url);
@@ -3253,111 +3364,136 @@
     }
     const heroCount = heroPhotos.length;
     const heroClass = heroCount <= 1 ? 'hero-1' : heroCount === 2 ? 'hero-2' : '';
-    const heroImgs = heroPhotos.map((url, i) =>
+    const heroImgs  = heroPhotos.map(url =>
       `<img class="hotel-hero-img" src="${url}" alt="" loading="lazy" onerror="this.classList.add('hotel-hero-blank');this.style.visibility='hidden'">`
     ).join('');
     const heroStrip = heroCount > 0
       ? `<div class="hotel-hero ${heroClass}">${heroImgs}</div>`
       : `<div class="hotel-hero hero-1"><div class="hotel-hero-img hotel-hero-blank"></div></div>`;
 
+    // ── Price display ────────────────────────────────────────────────────────
+    const priceDisplay = h.price != null
+      ? `€${h.price.toLocaleString()}<span class="price-per">/night</span>`
+      : _fetchingPrices
+        ? `<span class="price-skeleton"></span>`
+        : `--<span class="price-per">/night</span>`;
+    const priceNote = h.price != null ? 'Lowest available'
+      : _fetchingPrices ? 'Loading rates…'
+      : _pricesLoaded   ? 'No rates found'
+      :                   'Add dates for rates';
+
     return `
       <div class="hotel-card">
         ${heroStrip}
         <div class="hotel-header">
           <div class="hotel-header-left">
-            <div class="hotel-name-row">
-              <div class="hotel-name">${h.name}</div>
-              ${matchBadge}
-            </div>
+            <div class="hotel-name">${h.name}</div>
             <div class="hotel-meta">
               ${stars ? `<span class="stars">${stars}</span>` : ''}
               ${location ? `<span class="hotel-location">${location}</span>` : ''}
+            </div>
+          </div>
+          <div class="hotel-header-right">
+            <div class="hotel-header-right-top">
+              ${matchBadge}
               ${rating}${clipBadge}
             </div>
             <div class="hotel-actions">
-              <a class="book-btn" href="${bookUrl}" target="_blank" rel="noopener">Find &amp; Book →</a>
               <div class="hotel-price">
-                <span class="price-value" id="hotel-price-${h.id}">
-                  ${h.price != null
-                    ? `€${h.price.toLocaleString()}<span class="price-per">/night</span>`
-                    : _fetchingPrices
-                      ? `<span class="price-skeleton"></span>`
-                      : `--<span class="price-per">/night</span>`}
-                </span>
-                <span class="price-note" id="hotel-price-note-${h.id}">${
-                  h.price != null ? 'Lowest available'
-                  : _fetchingPrices ? 'Loading rates…'
-                  : _pricesLoaded   ? 'No rates found'
-                  :                   'Add dates for rates'
-                }</span>
+                <span class="price-value" id="hotel-price-${h.id}">${priceDisplay}</span>
+                <span class="price-note" id="hotel-price-note-${h.id}">${priceNote}</span>
               </div>
+              <a class="book-btn" href="${bookUrl}" target="_blank" rel="noopener">Find &amp; Book →</a>
             </div>
           </div>
         </div>
         <div id="hotel-rooms-${h.id}">
-          ${noAvailNotice}
-          ${roomRows}
+          ${roomsSectionHTML(roomTypes, h.vectorScore, h.roomPrices, _hasDateSearch, noAvailNotice, 0)}
         </div>
       </div>`;
   }
+  }
 
-  function roomTypeHTML(rt, isTopMatch, hotelScore, hotelRoomPrices, hasDateSearch) {
+  function roomTypeHTML(rt, isTopMatch, hotelScore, hotelRoomPrices, hasDateSearch, variant = 'compact', isHidden = false) {
     const sizeHTML = rt.size ? `<span class="room-size">${rt.size}</span>` : '';
     const bedsHTML = rt.beds ? `<span class="room-beds">${rt.beds}</span>` : '';
 
-    // Availability state: only meaningful when dates were searched AND we have room-level
-    // price data for this hotel. If hotelRoomPrices is undefined the hotel returned no
-    // per-room data from LiteAPI, so we cannot say individual rooms are unavailable.
     const hasPrice  = rt.roomTypeId != null && hotelRoomPrices?.[rt.roomTypeId] != null;
     const isUnavail = hasDateSearch && hotelRoomPrices != null && rt.roomTypeId != null && !hasPrice;
 
-    const photos = rt.photos || [];
-    const regKey = _lbRegistry.length;
+    const photos  = rt.photos || [];
+    const regKey  = _lbRegistry.length;
     _lbRegistry.push({ photos, name: rt.name, score: rt.score });
-    const photoHTML = photos.length
-      ? photos.slice(0, 10).map((url, pi) => {
-          let badge = '';
-          if (pi === 0) {
-            if (rt.score !== null && rt.score > 0) {
-              badge = `<div class="best-badge">${rt.score}% match</div>`;
-            } else if (isTopMatch && hotelScore === 0 && _currentSort === 'match') {
-              badge = `<div class="best-badge best-badge--browse">browse</div>`;
-            }
-          }
-          return `
-          <div class="room-photo-cell" onclick="openLightbox(${regKey}, ${pi})">
-            <img src="${url}" alt="${rt.name}" loading="lazy"
-                 onerror="this.parentElement.innerHTML='<div class=no-photo>🛏</div>'">
-            ${badge}
-            <div class="zoom-hint">⤢</div>
-          </div>`;
-        }).join('')
-      : `<div class="room-photo-cell"><div class="no-photo">🛏</div></div>`;
 
-    const amenityHTML = rt.amenities?.length
-      ? `<div class="amenity-tags">${rt.amenities.map(a => `<span class="amenity-tag">${a}</span>`).join('')}</div>`
-      : '';
-
-    const openClass = isTopMatch ? ' open' : '';
-    const unavailClass = isUnavail ? ' room-unavailable' : '';
-
-    // Price or availability indicator
     const priceHTML = hasPrice
       ? `<span class="room-rate">€${hotelRoomPrices[rt.roomTypeId].toLocaleString()}<span class="room-rate-per">/night</span></span>`
       : isUnavail
         ? `<span class="room-unavail-badge">not available</span>`
         : '';
 
+    // ── Featured variant (top match room — always open, 3-photo grid) ────────
+    if (variant === 'featured') {
+      // Build up to 3 photo cells for the grid; pad with blanks if needed
+      const gridCells = [0, 1, 2].map(pi => {
+        const url = photos[pi];
+        if (!url) return `<div class="room-photo-cell"><div class="no-photo">🛏</div></div>`;
+        return `<div class="room-photo-cell" onclick="openLightbox(${regKey}, ${pi})">
+          <img src="${url}" alt="${rt.name}" loading="lazy"
+               onerror="this.parentElement.innerHTML='<div class=no-photo>🛏</div>'">
+          <div class="zoom-hint">⤢</div>
+        </div>`;
+      }).join('');
+
+      const scoreBadge = rt.score > 0
+        ? `<span class="room-score-badge">${rt.score}% match</span>`
+        : (isTopMatch && hotelScore === 0 && _currentSort === 'match'
+            ? `<span class="room-score-badge room-score-badge--low">browse</span>` : '');
+
+      return `
+        <div class="room-featured">
+          <div class="room-featured-grid">${gridCells}</div>
+          <div class="room-featured-info">
+            <div class="room-featured-name">${rt.name}${bedsHTML ? `<span class="room-meta-sep"> · </span>${bedsHTML}` : ''}${sizeHTML ? `<span class="room-meta-sep"> · </span>${sizeHTML}` : ''}</div>
+            <div class="room-featured-meta">${scoreBadge}${priceHTML}</div>
+          </div>
+        </div>`;
+    }
+
+    // ── Compact variant (other rooms — collapsible with match bar) ────────────
+    const matchBar = rt.score > 0
+      ? `<div class="room-match-bar-wrap"><div class="room-match-bar-fill" style="width:${rt.score}%"></div></div>`
+      : '';
+
+    const scoreBadge = rt.score > 0
+      ? `<span class="room-score-badge${rt.score < 20 ? ' room-score-badge--low' : ''}">${rt.score}%</span>`
+      : '';
+
+    const amenityHTML = rt.amenities?.length
+      ? `<div class="amenity-tags">${rt.amenities.map(a => `<span class="amenity-tag">${a}</span>`).join('')}</div>`
+      : '';
+
+    const photoHTML = photos.length
+      ? photos.slice(0, 10).map((url, pi) =>
+          `<div class="room-photo-cell" onclick="openLightbox(${regKey}, ${pi})">
+            <img src="${url}" alt="${rt.name}" loading="lazy"
+                 onerror="this.parentElement.innerHTML='<div class=no-photo>🛏</div>'">
+            <div class="zoom-hint">⤢</div>
+          </div>`).join('')
+      : `<div class="room-photo-cell"><div class="no-photo">🛏</div></div>`;
+
+    const openClass   = isTopMatch ? ' open' : '';
+    const unavailClass = isUnavail ? ' room-unavailable' : '';
+    const hiddenClass  = isHidden  ? ' room-hidden' : '';
+
     return `
-      <div class="room-type-row${openClass}${unavailClass}">
+      <div class="room-type-row${openClass}${unavailClass}${hiddenClass}">
         <div class="room-type-header" onclick="toggleRoom(this.parentElement)">
           ${photos[0] ? `<img class="room-thumb" src="${photos[0]}" alt="${rt.name}" loading="lazy" onerror="this.style.display='none'">` : ''}
           <div class="room-type-left">
             <span class="room-type-name">${rt.name}</span>
+            ${matchBar}
+            ${scoreBadge}
             ${priceHTML}
-            ${rt.score > 0 ? `<span class="room-score-badge${rt.score < 20 ? ' room-score-badge--low' : ''}">${rt.score}% match</span>` : ''}
-            ${(bedsHTML || sizeHTML) ? '<span class="room-meta-sep">·</span>' : ''}
-            <div class="room-type-meta">${bedsHTML}${sizeHTML}</div>
           </div>
           <span class="chevron">▼</span>
         </div>

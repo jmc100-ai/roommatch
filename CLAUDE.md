@@ -416,12 +416,14 @@ If LiteAPI denies permission, change what we persist:
 
 ## Known Issues & Next Steps
 
-1. **Index London and NYC** — same flow as KL: trigger index-city, auto-rebuild happens after
+1. **Hotel-level vibe score** — TODO: The `hotel-match-badge` currently shows the best room's vectorScore as a proxy for "hotel match." This is slightly misleading. When hotel-level vibe scoring is built (as part of the neighborhood vibe phase), replace `hotelEffectiveScore(h)` with a true hotel-level embedding score separate from the room score. The badge label can then be changed to "Hotel Vibe X%". See `hotelHTML()` and `applyPricesInPlace()` in `client/index.html`.
+
+2. **Index London and NYC** — same flow as KL: trigger index-city, auto-rebuild happens after
    ```powershell
    Invoke-RestMethod -Uri "https://roommatch-1fg5.onrender.com/api/index-city" -Method POST -ContentType "application/json" -Body '{"city":"London","limit":200,"secret":"roommatch-2026"}'
    ```
 
-2. **Neighborhood Vibe + Visual Search** — full plan in two places:
+3. **Neighborhood Vibe + Visual Search** — full plan in two places:
    - **Cursor plan file (authoritative, most detailed):** `C:\Users\jmc10\.cursor\plans\neighborhood_vibe_+_visual_search_39871fcd.plan.md`
    - **Inline summary:** see "VIBE PLAN" section below
    - **GATE**: resolve LiteAPI licensing FIRST (see "Data Source Licensing" above). Do NOT build until resolved.
