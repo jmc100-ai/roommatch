@@ -482,12 +482,31 @@ async function indexCity(city, limit = 200) {
       // Cache hotel (lat/lng: try LiteAPI location fields, fallback handled in backfill-latlng.js)
       const hotelLat = detail.location?.latitude ?? detail.location?.lat ?? detail.latitude ?? detail.lat ?? null;
       const hotelLng = detail.location?.longitude ?? detail.location?.lng ?? detail.longitude ?? detail.lng ?? null;
+
+      // Capture hotel-level gallery photos (exterior, lobby, bar, pool etc.) — Option B.
+      // LiteAPI returns these in various top-level fields depending on API version.
+      // We try every known field name and deduplicate. These are NOT room photos.
+      const mainPhotoUrl = detail.main_photo || detail.mainPhoto || "";
+      const rawHotelPhotos = [
+        ...(detail.photos        || []),
+        ...(detail.hotelImages   || []),
+        ...(detail.images        || []),
+        ...(detail.gallery       || []),
+        ...(detail.hotelPhotos   || []),
+      ];
+      const hotelPhotos = rawHotelPhotos
+        .map(p => (typeof p === "string" ? p : p?.url || p?.hd_url || p?.imageUrl || ""))
+        .filter(Boolean)
+        .filter(u => u !== mainPhotoUrl)   // don't duplicate main photo
+        .slice(0, 5);                      // store up to 5
+
       await db.from("hotels_cache").upsert({
         hotel_id: hotelId, city, country_code: cc,
         name: detail.name || hotelName,
         address: detail.address || "",
         star_rating: stars, guest_rating: rating,
-        main_photo: detail.main_photo || detail.mainPhoto || "",
+        main_photo: mainPhotoUrl,
+        hotel_photos: hotelPhotos,
         lat: hotelLat,
         lng: hotelLng,
         cached_at: new Date().toISOString(),

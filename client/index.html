@@ -485,9 +485,37 @@
     .hotel-card:nth-child(7) { animation-delay:.28s }
     .hotel-card:nth-child(8) { animation-delay:.32s }
 
+    /* ── Hotel hero photo strip ─── */
+    .hotel-hero {
+      display: grid;
+      grid-template-columns: 1.6fr 1fr 1fr;
+      height: 190px;
+      overflow: hidden;
+      /* no radius on inner elements — card handles the outer rounding */
+    }
+    .hotel-hero-img {
+      width: 100%; height: 100%;
+      object-fit: cover; display: block;
+      background: var(--surface);
+    }
+    .hotel-hero-img + .hotel-hero-img { border-left: 2px solid var(--card); }
+    /* Dim placeholder when no photo */
+    .hotel-hero-blank {
+      background: linear-gradient(160deg,#1a1610 0%,#0e0c09 100%);
+    }
+    /* 1 photo only → single full-width */
+    .hotel-hero.hero-1 { grid-template-columns: 1fr; }
+    /* 2 photos → 60/40 */
+    .hotel-hero.hero-2 { grid-template-columns: 1.5fr 1fr; }
+    /* Mobile: single photo, shorter */
+    @media(max-width:640px){
+      .hotel-hero { height: 160px; grid-template-columns: 1fr; }
+      .hotel-hero-img:not(:first-child) { display: none; }
+    }
+
     /* ── Hotel header ───────────── */
     .hotel-header {
-      padding: 20px 24px 16px; border-bottom: 1px solid var(--border);
+      padding: 18px 24px 14px; border-bottom: 1px solid var(--border);
     }
     .hotel-header-left { min-width: 0; display: flex; flex-direction: column; gap: 6px; }
     .hotel-name-row { display: flex; align-items: center; gap: 14px; min-width: 0; flex-wrap: wrap; }
@@ -3203,8 +3231,38 @@
     const openIdx = 0;
     const roomRows = roomTypes.map((rt, ri) => roomTypeHTML(rt, ri === openIdx, h.vectorScore, h.roomPrices, _hasDateSearch)).join('');
 
+    // ── Hero photo strip ──────────────────────────────────────────────────
+    // Option A (live now): mainPhoto + up to 2 top room-match photos.
+    // Option B (post-backfill): h.hotelPhotos[] will contain real exterior/lobby/bar shots,
+    //   which replace the room fill slots automatically once backfill runs.
+    const heroPhotos = [];
+    if (h.mainPhoto) heroPhotos.push(h.mainPhoto);
+    // Fill remaining slots from hotel gallery (Option B), then fall back to room photos (Option A).
+    const galleryFill = (h.hotelPhotos && h.hotelPhotos.length > 0) ? h.hotelPhotos : [];
+    for (const url of galleryFill) {
+      if (!heroPhotos.includes(url)) heroPhotos.push(url);
+      if (heroPhotos.length >= 3) break;
+    }
+    if (heroPhotos.length < 3) {
+      for (const rt of (h.roomTypes || [])) {
+        for (const photo of (rt.photos || [])) {
+          if (!heroPhotos.includes(photo)) { heroPhotos.push(photo); break; }
+        }
+        if (heroPhotos.length >= 3) break;
+      }
+    }
+    const heroCount = heroPhotos.length;
+    const heroClass = heroCount <= 1 ? 'hero-1' : heroCount === 2 ? 'hero-2' : '';
+    const heroImgs = heroPhotos.map((url, i) =>
+      `<img class="hotel-hero-img" src="${url}" alt="" loading="lazy" onerror="this.classList.add('hotel-hero-blank');this.style.visibility='hidden'">`
+    ).join('');
+    const heroStrip = heroCount > 0
+      ? `<div class="hotel-hero ${heroClass}">${heroImgs}</div>`
+      : `<div class="hotel-hero hero-1"><div class="hotel-hero-img hotel-hero-blank"></div></div>`;
+
     return `
       <div class="hotel-card">
+        ${heroStrip}
         <div class="hotel-header">
           <div class="hotel-header-left">
             <div class="hotel-name-row">
