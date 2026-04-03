@@ -495,7 +495,26 @@ app.get("/api/debug-photos", async (req, res) => {
   if (!hotelId) return res.status(400).json({ error: "hotelId required" });
   const r = await liteGet(`/data/hotel?hotelId=${hotelId}`);
   if (!r.ok) return res.status(500).json({ error: "LiteAPI failed", status: r.status });
-  const rooms = r.data?.data?.rooms || [];
+  const detail = r.data?.data || {};
+  const rooms = detail.rooms || [];
+
+  // Scan top-level hotel fields for any photo-like arrays (hotel gallery, exterior, lobby, etc.)
+  const topLevelPhotoFields = {};
+  for (const [k, v] of Object.entries(detail)) {
+    if (k === "rooms") continue;
+    if (Array.isArray(v) && v.length > 0) {
+      const first = v[0];
+      if (typeof first === "string" && (first.includes("http") || first.includes(".jpg") || first.includes(".png"))) {
+        topLevelPhotoFields[k] = { count: v.length, sample: v.slice(0, 3) };
+      } else if (typeof first === "object" && first !== null && (first.url || first.hd_url || first.imageUrl)) {
+        topLevelPhotoFields[k] = { count: v.length, sampleFields: Object.keys(first), sample: v.slice(0, 2) };
+      }
+    }
+  }
+
+  // All top-level keys (excluding rooms) so we know what the response shape is
+  const topLevelKeys = Object.keys(detail).filter(k => k !== "rooms");
+
   const sample = rooms.slice(0, 3).map(room => ({
     roomName: room.roomName || room.name,
     photoCount: (room.photos||[]).length,
@@ -505,7 +524,7 @@ app.get("/api/debug-photos", async (req, res) => {
       ...Object.fromEntries(Object.entries(p).filter(([k]) => k !== 'url' && k !== 'hd_url')),
     })),
   }));
-  res.json({ hotelId, roomCount: rooms.length, sample });
+  res.json({ hotelId, topLevelKeys, topLevelPhotoFields, roomCount: rooms.length, sample });
 });
 
 // ── Debug rates for a single hotel ───────────────────────────────────────────
