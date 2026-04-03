@@ -1109,10 +1109,11 @@
       padding:52px var(--gutter) 48px;
       box-sizing:border-box;
     }
-    /* Desktop: slightly above optical centre (not flex-start — avoids “stuck to top” + layout overflow) */
+    /* Desktop: nudge block slightly above dead-centre via padding (avoid transform — can inflate scroll overflow) */
     @media (min-width: 641px) {
-      .city-chapter-inner {
-        transform:translateY(calc(-1.25vh - 6px));
+      .city-chapter {
+        padding-top:44px;
+        padding-bottom:56px;
       }
     }
     @media(max-width:640px){
@@ -1123,9 +1124,10 @@
         min-height:calc(100vh - 56px);
         min-height:calc(100dvh - 56px);
       }
-      .city-chapter-inner { padding-top:8px; transform:none; }
+      .city-chapter-inner { padding-top:8px; }
     }
-    .city-chapter-inner { max-width:620px; width:100%; text-align:center; box-sizing:border-box; min-width:0; overflow-x:hidden; }
+    /* No overflow-x:hidden here: pairs with overflow-y visible → y becomes auto → focus/dropdown draws a bogus vertical scrollbar */
+    .city-chapter-inner { max-width:620px; width:100%; text-align:center; box-sizing:border-box; min-width:0; }
     .city-chapter-inner .eyebrow { justify-content:center; }
     .city-chapter-inner .chapter-sub { margin-left:auto; margin-right:auto; max-width:520px; }
     .city-heading {
@@ -1181,8 +1183,8 @@
     .city-chip:hover { border-color:rgba(201,169,110,.5); color:var(--accent); background:rgba(201,169,110,.06); }
 
     /* ── Chapter layout (steps 2–4) ─────────────────── */
-    .chapter { min-height:calc(100vh - 72px); display:flex; flex-direction:column; max-width:100%; overflow-x:hidden; box-sizing:border-box; }
-    .chapter-inner { max-width:var(--max); margin:0 auto; padding:0 var(--gutter); width:100%; box-sizing:border-box; min-width:0; overflow-x:hidden; }
+    .chapter { min-height:calc(100vh - 72px); display:flex; flex-direction:column; max-width:100%; box-sizing:border-box; }
+    .chapter-inner { max-width:var(--max); margin:0 auto; padding:0 var(--gutter); width:100%; box-sizing:border-box; min-width:0; }
     .chapter-top { padding-top:40px; padding-bottom:0; max-width:660px; }
     .chapter-h1 {
       font-family:'Cormorant Garamond',serif; font-size:clamp(26px,3.8vw,48px);
