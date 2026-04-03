@@ -35,7 +35,7 @@ function loginHtml(error = "") {
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>RoomMatch</title>
+  <title>TravelBoop</title>
   <link rel="preconnect" href="https://fonts.googleapis.com"/>
   <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300;400;600&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet"/>
   <style>
@@ -2363,7 +2363,7 @@ process.on("SIGINT",  () => gracefulShutdown("SIGINT"));
 
 app.listen(PORT, () => {
   console.log(`[config] Using ${IS_PROD ? "PRODUCTION" : "SANDBOX"} LiteAPI key`);
-  console.log(`RoomMatch on port ${PORT}`);
+  console.log(`TravelBoop on port ${PORT}`);
 
   // ── Keepalive: ping self every 10 min to prevent Render free tier spin-down
   const RENDER_URL = process.env.RENDER_EXTERNAL_URL;

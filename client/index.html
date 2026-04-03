@@ -4,7 +4,8 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="robots" content="noindex, nofollow" />
-  <title>Hotel Vibe Search</title>
+  <title>TravelBoop — Find your vibe</title>
+  <meta name="description" content="TravelBoop matches hotels to your neighbourhood vibe and room vibe — your Boop is when both feel like you." />
   <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -68,11 +69,11 @@
     }
     .logo-mark {
       width: 30px; height: 30px;
-      filter: drop-shadow(0 0 8px rgba(240,112,32,.45));
+      filter: drop-shadow(0 0 8px rgba(201,169,110,.4));
       transition: filter .25s;
     }
     .topnav-logo:hover .logo-mark {
-      filter: drop-shadow(0 0 14px rgba(240,112,32,.7));
+      filter: drop-shadow(0 0 14px rgba(201,169,110,.65));
     }
     .logo-text {
       font-family: 'Cormorant Garamond', serif;
@@ -83,6 +84,12 @@
       line-height: 1;
     }
     .logo-accent { color: var(--accent); }
+    .topnav-logo .logo-accent {
+      font-family: 'DM Sans', sans-serif;
+      font-weight: 700;
+      letter-spacing: .04em;
+      font-size: .93em;
+    }
     .topnav-links {
       display: flex; align-items: center; gap: 4px;
       margin-left: 8px;
@@ -1520,28 +1527,14 @@
 <nav class="topnav" id="topnav">
   <div class="topnav-inner">
     <!-- Logo -->
-    <a class="topnav-logo" href="/" onclick="setMode('search'); return false;" aria-label="Hotel Vibe Search">
-      <!-- Flame + diamond mark -->
+    <a class="topnav-logo" href="/" onclick="setMode('search'); return false;" aria-label="TravelBoop — find your vibe">
+      <!-- Boop mark: ring + dot -->
       <svg class="logo-mark" viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-        <!-- outer glow ring -->
-        <circle cx="18" cy="18" r="17" fill="url(#lg1)" opacity=".18"/>
-        <!-- stylised flame -->
-        <path d="M18 5C18 5 22 10 22 14c0 2-1 3.5-2.5 4.2C21 15.5 19.5 13 18 11c0 0 .5 4-2 6.5C14.5 19 13 21 13 23a5 5 0 0 0 10 0c0-4-5-18-5-18Z" fill="url(#lg2)"/>
-        <!-- inner highlight -->
-        <path d="M18 17c0 0 1.5 2.5 1.5 5a1.5 1.5 0 0 1-3 0c0-2.5 1.5-5 1.5-5Z" fill="rgba(255,255,255,.55)"/>
-        <defs>
-          <radialGradient id="lg1" cx="50%" cy="50%" r="50%">
-            <stop offset="0%" stop-color="#f5a623"/>
-            <stop offset="100%" stop-color="#e8501a"/>
-          </radialGradient>
-          <linearGradient id="lg2" x1="18" y1="5" x2="18" y2="28" gradientUnits="userSpaceOnUse">
-            <stop offset="0%" stop-color="#f7c948"/>
-            <stop offset="55%" stop-color="#f07020"/>
-            <stop offset="100%" stop-color="#c03010"/>
-          </linearGradient>
-        </defs>
+        <circle cx="18" cy="18" r="15" stroke="#c9a96e" stroke-width="1.85" opacity=".88"/>
+        <circle cx="18" cy="18" r="6.5" fill="#c9a96e"/>
+        <ellipse cx="16" cy="16" rx="2.2" ry="1.6" fill="#e8d5b0" opacity=".45"/>
       </svg>
-      <span class="logo-text">Hotel<span class="logo-accent">Vibe</span></span>
+      <span class="logo-text">Travel<span class="logo-accent">Boop</span></span>
     </a>
 
     <!-- Nav links (desktop) -->
@@ -1594,9 +1587,9 @@
   <div id="st-city">
     <div class="city-chapter">
       <div class="city-chapter-inner">
-        <div class="eyebrow"><div class="eyebrow-dot"></div>Hotel Vibe Search · Start here</div>
+        <div class="eyebrow"><div class="eyebrow-dot"></div>TravelBoop · Find your vibe</div>
         <h1 class="city-heading">Where are you <em>headed?</em></h1>
-        <p class="chapter-sub">Pick a city — we'll show you its best neighbourhoods and help you find a room that matches your vibe.</p>
+        <p class="chapter-sub">Pick a city — we'll map neighbourhoods and rooms around what feels like you. When the area vibe and room vibe line up, that's your <em style="color:var(--accent2);font-style:italic">Boop</em> — the sweet spot TravelBoop is built for.</p>
         <div class="city-box">
           <span class="city-box-icon">⌕</span>
           <input type="text" id="cityInput" placeholder="Paris, Kuala Lumpur, Tokyo…"
@@ -1623,7 +1616,7 @@
           <button class="back-btn" onclick="goToStep('city')"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 3L5 8l5 5"/></svg> Back to City</button>
           <div class="eyebrow"><div class="eyebrow-dot"></div><span id="nbhd-city-label">Paris</span> · Step 2 of 4</div>
           <h1 class="chapter-h1">Find your <em>neighbourhood vibe</em></h1>
-          <p class="chapter-sub">Hover any card to learn more about the area, then tap to choose — or explore the whole city.</p>
+          <p class="chapter-sub">Every card is a neighbourhood vibe — the feel of where you'll stay. Find your <em style="color:var(--accent2);font-style:italic">Boop</em> for the area, or skip and search the whole city.</p>
         </div>
         <div class="chapter-body">
           <div class="nbhd-grid-new" id="nbhd-grid"></div>
@@ -1638,9 +1631,9 @@
       <div class="chapter-inner">
         <div class="chapter-top">
           <button class="back-btn" onclick="goToStep('nbhd')"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 3L5 8l5 5"/></svg> Back to Neighbourhood</button>
-          <div class="eyebrow"><div class="eyebrow-dot"></div>Step 3 of 4 · <span style="color:var(--accent2)">The heart of Hotel Vibe Search</span></div>
+          <div class="eyebrow"><div class="eyebrow-dot"></div>Step 3 of 4 · <span style="color:var(--accent2)">Find your room Boop</span> <span style="color:var(--muted);letter-spacing:.04em;text-transform:none">(your vibe)</span></div>
           <h1 class="chapter-h1">Choose your <em>room vibe</em></h1>
-          <p class="chapter-sub">This is how we find rooms that actually match your taste — not just price range.</p>
+          <p class="chapter-sub">Describe the look or tap a preset — we match your vibe with real room photos. Think of it as locking in the room half of your <em style="color:var(--accent2);font-style:italic">Boop</em>.</p>
         </div>
         <div class="chapter-body">
           <!-- Mobile: full-size vibe cards stacked (scroll to pick) -->
@@ -1737,7 +1730,7 @@
       </div>
       <div class="cmd-search">
         <span class="cmd-icon">✦</span>
-        <input id="cmd-q" type="text" placeholder="Refine your vibe — describe the room you want…"
+        <input id="cmd-q" type="text" placeholder="Refine your room vibe — your Boop — describe the room…"
                onkeydown="if(event.key==='Enter')cmdSearch()"/>
       </div>
       <button class="cmd-go" onclick="cmdSearch()">Search</button>
@@ -1790,7 +1783,7 @@
 <div id="results"></div>
 
 <footer>
-  <span class="footer-text">Powered by <a href="https://liteapi.travel" target="_blank">LiteAPI</a></span>
+  <span class="footer-text"><strong style="color:var(--text);font-weight:500">TravelBoop</strong> · Find your vibe, then your stay — powered by <a href="https://liteapi.travel" target="_blank">LiteAPI</a></span>
   <span class="footer-text">Best-match room type highlighted in green</span>
 </footer>
 
@@ -2057,7 +2050,7 @@
     if (!isRetry) {
       grid.innerHTML = Array.from({length:6}, () =>
         `<div class="nbhd-skel-new"></div>`).join('') +
-        `<div class="nbhd-gen-hint">✦ Discovering neighbourhoods…</div>`;
+        `<div class="nbhd-gen-hint">✦ Mapping neighbourhood vibes…</div>`;
     }
 
     // Fetch from API (works for any city — Gemini generates on first call)
@@ -2069,7 +2062,7 @@
         if (resp.status === 202 || data.status === 'generating') {
           grid.innerHTML = Array.from({length:6}, () =>
             `<div class="nbhd-skel-new"></div>`).join('') +
-            `<div class="nbhd-gen-hint">✦ Generating ${city} neighbourhoods with AI… (~5s)</div>`;
+            `<div class="nbhd-gen-hint">✦ Finding your ${city} neighbourhood vibes with AI… (~5s)</div>`;
           setTimeout(() => fetchAndShowNeighborhoodsNew(city, true), 3000);
           return;
         }
