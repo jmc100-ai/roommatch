@@ -600,7 +600,9 @@
     .hotel-name {
       font-family: 'Cormorant Garamond', serif; font-size: 24px; font-weight: 600;
       color: #f7f4ee; letter-spacing: 0.01em;
-      white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0;
+      line-height: 1.18;
+      min-width: 0;
+      overflow-wrap: break-word;
     }
     .hotel-meta { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
     .stars { color: var(--accent); font-size: 11px; letter-spacing: 2px; }
@@ -659,6 +661,52 @@
     .room-featured {
       border-bottom: 1px solid var(--border);
       min-width: 0;
+    }
+    .room-featured-scroll-wrap {
+      position: relative;
+      min-width: 0;
+    }
+    .room-featured-nav {
+      display: none;
+      position: absolute;
+      top: 50%;
+      z-index: 4;
+      transform: translateY(-50%);
+      width: 36px;
+      height: 52px;
+      padding: 0;
+      margin: 0;
+      border: 1px solid rgba(201, 169, 110, 0.35);
+      border-radius: 6px;
+      background: rgba(8, 8, 10, 0.72);
+      color: rgba(201, 169, 110, 0.9);
+      font-size: 22px;
+      line-height: 1;
+      cursor: pointer;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.45);
+      transition: background 0.15s, color 0.15s, border-color 0.15s, opacity 0.15s;
+    }
+    .room-featured-nav:hover:not(.is-disabled) {
+      background: rgba(20, 18, 14, 0.92);
+      color: #e8c56c;
+      border-color: rgba(201, 169, 110, 0.55);
+    }
+    .room-featured-nav.is-disabled {
+      opacity: 0;
+      pointer-events: none;
+      visibility: hidden;
+    }
+    .room-featured-scroll-wrap:not(.room-featured-scroll-wrap--scrollable) .room-featured-nav {
+      display: none !important;
+    }
+    @media (min-width: 641px) {
+      .room-featured-nav {
+        display: flex;
+      }
+      .room-featured-nav--prev { left: 8px; }
+      .room-featured-nav--next { right: 8px; }
     }
     .room-featured-scroll {
       overflow-x: auto;
@@ -729,7 +777,7 @@
     }
     .room-featured:not(.open) .room-featured-collapse { content: '▶ expand'; }
     .room-featured-collapse:hover { color: var(--accent); }
-    .room-featured:not(.open) .room-featured-scroll { display: none; }
+    .room-featured:not(.open) .room-featured-scroll-wrap { display: none; }
 
     /* ── Other rooms section ── */
     .rooms-other-header {
@@ -1104,7 +1152,6 @@
       .city-field { grid-column: 1 / -1; }
       .search-btn { grid-column: 1 / -1; width: 100%; }
       .room-photo-cell { flex: 0 0 200px; height: 150px; }
-      .hotel-name { white-space: normal; }
       .room-type-header { flex-wrap: nowrap; }
       .index-banner { margin: 0 20px 16px; }
       body.has-results .hero { padding: 10px 20px; }
@@ -1151,6 +1198,7 @@
         font-weight: 600;
         color: #fdfbf7;
         letter-spacing: 0.01em;
+        line-height: 1.15;
       }
     }
 
@@ -1818,8 +1866,20 @@
     .cmd-go { flex-shrink:0; padding:10px 22px; background:var(--accent); color:#0c0c0e; border:none; border-radius:10px; font-family:'DM Sans',sans-serif; font-size:13px; font-weight:500; cursor:pointer; transition:opacity .15s; }
     .cmd-go:hover { opacity:.85; }
     .cmd-tray { display:none; border-top:1px solid var(--border); padding:16px var(--gutter); }
-    .cmd-tray.open { display:block; animation:fd .18s ease; }
-    .cmd-tray-inner { max-width:560px; display:flex; gap:14px; flex-wrap:wrap; align-items:flex-end; }
+    .cmd-tray.open {
+      display:flex;
+      justify-content:center;
+      animation:fd .18s ease;
+    }
+    .cmd-tray-inner {
+      max-width:560px;
+      width:100%;
+      box-sizing:border-box;
+      display:flex;
+      gap:14px;
+      flex-wrap:wrap;
+      align-items:flex-end;
+    }
     @keyframes fd { from{opacity:0;transform:translateY(-6px)} to{opacity:1;transform:translateY(0)} }
     /* Feature chips inside results meta */
     .fc-wrap { display:flex; gap:6px; flex-wrap:wrap; }
@@ -2806,6 +2866,55 @@
     el.classList.toggle('open');
     const lbl = el.querySelector('.room-featured-collapse');
     if (lbl) lbl.textContent = el.classList.contains('open') ? '▾ collapse' : '▶ expand';
+    if (el.classList.contains('open')) {
+      const sc = el.querySelector('.room-featured-scroll');
+      if (sc) requestAnimationFrame(() => updateFeaturedStripNavState(sc));
+    }
+  }
+
+  function featuredStripNav(btn, dir) {
+    const wrap = btn.closest('.room-featured-scroll-wrap');
+    if (!wrap) return;
+    const sc = wrap.querySelector('.room-featured-scroll');
+    if (!sc) return;
+    const step = Math.max(Math.floor(sc.clientWidth * 0.88), 160) * dir;
+    sc.scrollBy({ left: step, behavior: 'smooth' });
+  }
+
+  function updateFeaturedStripNavState(sc) {
+    const wrap = sc.closest('.room-featured-scroll-wrap');
+    if (!wrap) return;
+    const prev = wrap.querySelector('.room-featured-nav--prev');
+    const next = wrap.querySelector('.room-featured-nav--next');
+    if (!prev || !next) return;
+    const max = sc.scrollWidth - sc.clientWidth;
+    const tol = 3;
+    const canScroll = max > tol && sc.clientWidth > 0;
+    wrap.classList.toggle('room-featured-scroll-wrap--scrollable', canScroll);
+    prev.classList.toggle('is-disabled', !canScroll || sc.scrollLeft <= tol);
+    next.classList.toggle('is-disabled', !canScroll || sc.scrollLeft >= max - tol);
+  }
+
+  function bindFeaturedStripNavs(root) {
+    if (!root) return;
+    root.querySelectorAll('.room-featured-scroll-wrap').forEach(wrap => {
+      const sc = wrap.querySelector('.room-featured-scroll');
+      const strip = wrap.querySelector('.room-featured-strip');
+      if (!sc || sc.dataset.navBound === '1') return;
+      sc.dataset.navBound = '1';
+      const update = () => updateFeaturedStripNavState(sc);
+      sc.addEventListener('scroll', update, { passive: true });
+      if (typeof ResizeObserver !== 'undefined') {
+        const ro = new ResizeObserver(update);
+        ro.observe(sc);
+        if (strip) ro.observe(strip);
+      }
+      wrap.querySelectorAll('.room-featured-strip img').forEach(img => {
+        img.addEventListener('load', update, { passive: true });
+        img.addEventListener('error', update, { passive: true });
+      });
+      requestAnimationFrame(update);
+    });
   }
 
   async function handleSearch(e) {
@@ -3095,6 +3204,7 @@
               : `<div class="no-avail-notice">No rooms available for these dates — <button class="no-avail-link" onclick="setAvailFilter(false);document.getElementById('availOnlyCheck').checked=false">show all room types</button></div>`)
           : '';
         roomsEl.innerHTML = roomsSectionHTML(visibleRooms, h.vectorScore, h.roomPrices, _hasDateSearch, notice, openCompactIdx);
+        bindFeaturedStripNavs(roomsEl);
       }
     }
 
@@ -3420,6 +3530,7 @@
     }
 
     resultsEl.innerHTML = html;
+    bindFeaturedStripNavs(resultsEl);
 
     if (remaining > 0) {
       const sentinel = document.getElementById('scroll-sentinel');
@@ -3623,8 +3734,12 @@
 
       return `
         <div class="room-featured open" onclick="toggleFeatured(this)">
-          <div class="room-featured-scroll">
-            <div class="room-featured-strip">${stripCells}</div>
+          <div class="room-featured-scroll-wrap">
+            <button type="button" class="room-featured-nav room-featured-nav--prev" aria-label="Previous photos" onclick="event.stopPropagation();featuredStripNav(this,-1)">&#8249;</button>
+            <div class="room-featured-scroll">
+              <div class="room-featured-strip">${stripCells}</div>
+            </div>
+            <button type="button" class="room-featured-nav room-featured-nav--next" aria-label="Next photos" onclick="event.stopPropagation();featuredStripNav(this,1)">&#8250;</button>
           </div>
           <div class="room-featured-info">
             <div class="room-featured-name">${rt.name}${bedsHTML ? `<span class="room-meta-sep"> · </span>${bedsHTML}` : ''}${sizeHTML ? `<span class="room-meta-sep"> · </span>${sizeHTML}` : ''}</div>
