@@ -497,8 +497,28 @@
 
     /* ── Hotel hero — recessed in dark gutter; square-tile grid with black seams ── */
     .hotel-hero-wrap {
+      position: relative;
       padding: 5px 7px 0 7px;
       background: #070707;
+    }
+    .hotel-hero-badge-wrap {
+      position: absolute;
+      z-index: 2;
+      top: calc(5px + 10px);
+      left: calc(7px + 10px);
+      pointer-events: none;
+      max-width: calc(100% - 28px);
+    }
+    .hotel-hero-badge-wrap:empty { display: none; }
+    .hotel-hero-badge-wrap .hotel-match-badge {
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      background: rgba(10, 9, 7, 0.78);
+      border-color: rgba(201, 169, 110, 0.5);
+      box-shadow: 0 4px 18px rgba(0, 0, 0, 0.45);
+    }
+    .hotel-hero-badge-wrap .hotel-match-badge--low {
+      background: rgba(10, 9, 7, 0.72);
     }
     .hotel-hero {
       display: grid;
@@ -529,6 +549,11 @@
     .hotel-hero.hero-2 .hotel-hero-img:first-child { grid-row: 1; }
     @media(max-width:640px){
       .hotel-hero-wrap { padding: 4px 5px 0 5px; }
+      .hotel-hero-badge-wrap {
+        top: calc(4px + 8px);
+        left: calc(5px + 8px);
+        max-width: calc(100% - 22px);
+      }
       .hotel-hero {
         height: 171px; grid-template-columns: 1fr; grid-template-rows: 1fr; gap: 0;
         border-top-left-radius: calc(18px - 5px);
@@ -545,7 +570,6 @@
     }
     .hotel-header-left { min-width: 0; display: flex; flex-direction: column; gap: 5px; flex: 1; }
     .hotel-header-right { display: flex; flex-direction: column; align-items: flex-end; gap: 9px; flex-shrink: 0; }
-    .hotel-header-right-top { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
     .hotel-name-row { display: flex; align-items: center; gap: 10px; min-width: 0; }
     .hotel-name {
       font-family: 'Cormorant Garamond', serif; font-size: 24px; font-weight: 600;
@@ -659,7 +683,6 @@
     @media(max-width:640px) {
       .hotel-header { flex-direction: column; gap: 10px; }
       .hotel-header-right { align-items: flex-start; flex-direction: row; flex-wrap: wrap; gap: 10px; width: 100%; }
-      .hotel-header-right-top { flex-wrap: wrap; justify-content: flex-start; }
       .hotel-actions { width: 100%; }
       .hotel-price { flex-direction: row; align-items: baseline; gap: 4px; }
       .room-featured-grid { height: 148px; }
@@ -3374,7 +3397,7 @@
     const matchBadgeInner = effectiveScore > 0
       ? `<span class="hotel-match-badge${effectiveScore < 20 ? ' hotel-match-badge--low' : ''}">Hotel Vibe · ${effectiveScore}% match</span>`
       : '';
-    const matchBadge = `<span id="hotel-badge-wrap-${h.id}">${matchBadgeInner}</span>`;
+    const matchBadgeWrap = `<span class="hotel-hero-badge-wrap" id="hotel-badge-wrap-${h.id}">${matchBadgeInner}</span>`;
 
     // ── Room filtering (availability toggle) ────────────────────────────────
     const allRoomTypes = h.roomTypes || [];
@@ -3417,7 +3440,7 @@
     const heroInner = heroCount > 0
       ? `<div class="hotel-hero ${heroClass}">${heroImgs}</div>`
       : `<div class="hotel-hero hero-1"><div class="hotel-hero-img hotel-hero-blank"></div></div>`;
-    const heroStrip = `<div class="hotel-hero-wrap">${heroInner}</div>`;
+    const heroStrip = `<div class="hotel-hero-wrap">${matchBadgeWrap}${heroInner}</div>`;
 
     // ── Price display ────────────────────────────────────────────────────────
     const priceDisplay = h.price != null
@@ -3439,13 +3462,10 @@
             <div class="hotel-meta">
               ${stars ? `<span class="stars">${stars}</span>` : ''}
               ${location ? `<span class="hotel-location">${location}</span>` : ''}
+              ${rating}${clipBadge}
             </div>
           </div>
           <div class="hotel-header-right">
-            <div class="hotel-header-right-top">
-              ${matchBadge}
-              ${rating}${clipBadge}
-            </div>
             <div class="hotel-actions">
               <div class="hotel-price">
                 <span class="price-value" id="hotel-price-${h.id}">${priceDisplay}</span>
