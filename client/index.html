@@ -2951,10 +2951,10 @@
       // --- room rows: rebuild and inject using roomsSectionHTML ---
       const roomsEl = document.getElementById(`hotel-rooms-${h.id}`);
       if (roomsEl) {
-        // Preserve which compact row the user has open (compact rows have .room-type-row)
+        // Preserve a user-expanded compact row only; never default-open a compact row (featured shows best match).
         const currentRows = roomsEl.querySelectorAll('.room-type-row');
         const openIdx = [...currentRows].findIndex(r => r.classList.contains('open'));
-        const openCompactIdx = openIdx >= 0 ? openIdx : 0;
+        const openCompactIdx = openIdx >= 0 ? openIdx : -1;
 
         const allRoomTypes = h.roomTypes || [];
         const isAvail = rt => rt.roomTypeId != null && h.roomPrices?.[rt.roomTypeId] != null;
@@ -3324,10 +3324,11 @@
   // Generates the full rooms section (divider band + featured room + compact list).
   // Called by both hotelHTML() and applyPricesInPlace() to keep output in sync.
   //
-  // openCompactIdx: which compact row (0-based among compact rows) should be open.
+  // Best match uses the featured 3-photo block only. Compact rows stay collapsed unless
+  // openCompactIdx >= 0 (user had that row expanded before an in-place rebuild).
   const COMPACT_SHOW = 4;
 
-  function roomsSectionHTML(roomTypes, hotelScore, roomPrices, hasDateSearch, noAvailNotice, openCompactIdx = 0) {
+  function roomsSectionHTML(roomTypes, hotelScore, roomPrices, hasDateSearch, noAvailNotice, openCompactIdx = -1) {
     if (roomTypes.length === 0) return noAvailNotice;
 
     const featured = roomTypes[0];
@@ -3341,7 +3342,7 @@
       const hiddenOthers  = others.slice(COMPACT_SHOW);
 
       const visibleHTML = visibleOthers.map((rt, ci) =>
-        roomTypeHTML(rt, ci === openCompactIdx, hotelScore, roomPrices, hasDateSearch, 'compact', false)
+        roomTypeHTML(rt, openCompactIdx >= 0 && ci === openCompactIdx, hotelScore, roomPrices, hasDateSearch, 'compact', false)
       ).join('');
 
       const hiddenHTML = hiddenOthers.map(rt =>
@@ -3455,7 +3456,7 @@
           </div>
         </div>
         <div id="hotel-rooms-${h.id}">
-          ${roomsSectionHTML(roomTypes, h.vectorScore, h.roomPrices, _hasDateSearch, noAvailNotice, 0)}
+          ${roomsSectionHTML(roomTypes, h.vectorScore, h.roomPrices, _hasDateSearch, noAvailNotice)}
         </div>
       </div>`;
   }
