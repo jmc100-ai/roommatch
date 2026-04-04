@@ -555,13 +555,38 @@
         left: calc(5px + 8px);
         max-width: calc(100% - 22px);
       }
-      .hotel-hero {
-        height: 171px; grid-template-columns: 1fr; grid-template-rows: 1fr; gap: 0;
+      /* Swipeable full-width slides (3 photos); desktop grid unchanged above */
+      .hotel-hero,
+      .hotel-hero.hero-1,
+      .hotel-hero.hero-2 {
+        display: flex;
+        flex-direction: row;
+        flex-wrap: nowrap;
+        align-items: stretch;
+        grid-template-columns: unset;
+        grid-template-rows: unset;
+        gap: 4px;
+        height: 171px;
         border-top-left-radius: calc(18px - 5px);
         border-top-right-radius: calc(18px - 5px);
+        overflow-x: auto;
+        overflow-y: hidden;
+        overscroll-behavior-x: contain;
+        scroll-snap-type: x mandatory;
+        -webkit-overflow-scrolling: touch;
+        scrollbar-width: none;
       }
-      .hotel-hero-img:first-child { grid-row: 1; }
-      .hotel-hero-img:not(:first-child) { display: none; }
+      .hotel-hero::-webkit-scrollbar { display: none; }
+      .hotel-hero-img {
+        flex: 0 0 100%;
+        min-width: 100%;
+        width: 100%;
+        height: 100%;
+        scroll-snap-align: start;
+        scroll-snap-stop: always;
+      }
+      .hotel-hero-img:first-child { grid-row: unset; grid-column: unset; }
+      .hotel-hero-img:not(:first-child) { display: block; }
     }
 
     /* ── Hotel header — horizontal split desktop ── */

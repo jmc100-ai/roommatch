@@ -36,3 +36,9 @@ CREATE TABLE IF NOT EXISTS vibe_presets (
 );
 
 CREATE INDEX IF NOT EXISTS vibe_presets_city ON vibe_presets(city);
+
+-- Permissions
+GRANT ALL ON TABLE public.neighborhoods TO anon, authenticated, service_role;
+GRANT USAGE, SELECT ON SEQUENCE public.neighborhoods_id_seq TO anon, authenticated, service_role;
+GRANT ALL ON TABLE public.vibe_presets TO anon, authenticated, service_role;
+GRANT USAGE, SELECT ON SEQUENCE public.vibe_presets_id_seq TO anon, authenticated, service_role;
