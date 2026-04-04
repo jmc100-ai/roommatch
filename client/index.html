@@ -590,6 +590,14 @@
       white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
     }
     .room-featured-meta { display: flex; align-items: center; gap: 10px; flex-shrink: 0; flex-wrap: wrap; }
+    .room-featured-collapse {
+      font-size: 11px; color: var(--muted); cursor: pointer; white-space: nowrap;
+      font-family: 'DM Sans', sans-serif; transition: color 0.15s; user-select: none;
+    }
+    .room-featured:not(.open) .room-featured-collapse { content: '▶ expand'; }
+    .room-featured-collapse:hover { color: var(--accent); }
+    /* Hide the photo grid when featured room is collapsed */
+    .room-featured:not(.open) .room-featured-grid { display: none; }
 
     /* ── Other rooms section ── */
     .rooms-other-header {
@@ -2639,6 +2647,12 @@
     row.classList.toggle('open');
   }
 
+  function toggleFeatured(el) {
+    el.classList.toggle('open');
+    const lbl = el.querySelector('.room-featured-collapse');
+    if (lbl) lbl.textContent = el.classList.contains('open') ? '▾ collapse' : '▶ expand';
+  }
+
   async function handleSearch(e) {
     e.preventDefault();
     const query = document.getElementById('queryInput').value.trim();
@@ -3449,11 +3463,11 @@
             ? `<span class="room-score-badge room-score-badge--low">browse</span>` : '');
 
       return `
-        <div class="room-featured">
+        <div class="room-featured open" onclick="toggleFeatured(this)">
           <div class="room-featured-grid">${gridCells}</div>
           <div class="room-featured-info">
             <div class="room-featured-name">${rt.name}${bedsHTML ? `<span class="room-meta-sep"> · </span>${bedsHTML}` : ''}${sizeHTML ? `<span class="room-meta-sep"> · </span>${sizeHTML}` : ''}</div>
-            <div class="room-featured-meta">${scoreBadge}${priceHTML}</div>
+            <div class="room-featured-meta">${scoreBadge}${priceHTML}<span class="room-featured-collapse">▾ collapse</span></div>
           </div>
         </div>`;
     }
