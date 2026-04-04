@@ -466,15 +466,24 @@
 
     /* ── Hotel card ─────────────── */
     .hotel-card {
-      background: var(--card);
-      border: 1px solid rgba(255,255,255,0.11);
+      background: #1c1c22;
+      border-top: 1px solid rgba(255,255,255,0.13);
+      border-right: 1px solid rgba(255,255,255,0.13);
+      border-bottom: 1px solid rgba(255,255,255,0.13);
+      border-left: 2px solid #C9A96E;
       border-radius: 18px;
       overflow: hidden;
       animation: fadeUp 0.4s ease both;
-      transition: border-color 0.2s;
-      box-shadow: 0 2px 16px rgba(0,0,0,0.35);
+      transition: border-color 0.2s, box-shadow 0.2s;
+      box-shadow: 0 8px 36px rgba(0,0,0,0.55);
     }
-    .hotel-card:hover { border-color: rgba(201,169,110,0.35); }
+    .hotel-card:hover {
+      border-top-color: rgba(255,255,255,0.2);
+      border-right-color: rgba(255,255,255,0.2);
+      border-bottom-color: rgba(255,255,255,0.2);
+      border-left-color: #dfc07d;
+      box-shadow: 0 12px 48px rgba(0,0,0,0.65);
+    }
     @keyframes fadeUp { from { opacity:0; transform:translateY(14px); } to { opacity:1; transform:translateY(0); } }
     #results.no-anim .hotel-card { animation: none !important; }
     .hotel-card:nth-child(1) { animation-delay:.04s }
