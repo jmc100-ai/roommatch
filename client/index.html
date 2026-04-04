@@ -466,6 +466,7 @@
 
     /* ── Hotel card ─────────────── */
     .hotel-card {
+      min-width: 0;
       background: #1c1c22;
       border-top: 1px solid rgba(255,255,255,0.13);
       border-right: 1px solid rgba(255,255,255,0.13);
@@ -612,7 +613,10 @@
     .price-note { font-size: 10px; color: var(--muted); font-style: italic; letter-spacing: 0.04em; }
 
     /* ── Room type row ──────────── */
-    .room-type-row { border-bottom: 1px solid var(--border); }
+    .room-type-row {
+      border-bottom: 1px solid var(--border);
+      min-width: 0;
+    }
     .room-type-row:last-child { border-bottom: none; }
 
     /* ── Gold divider band between hotel info and best room ── */
@@ -716,9 +720,11 @@
       .room-featured-info { padding: 10px 16px; }
       .rooms-other-header { padding: 10px 16px 2px; }
       .hotel-divider-band { padding: 7px 16px; }
-      /* Compact rooms: on mobile expand to a swipeable horizontal strip with scroll-snap */
-      .photo-strip { scroll-snap-type: x mandatory; -webkit-overflow-scrolling: touch; }
-      .room-photo-cell { scroll-snap-align: start; }
+      /* Scroll + snap on the strip wrapper (actual scroll container) */
+      .room-type-row.open .photo-strip-wrap {
+        scroll-snap-type: x mandatory;
+      }
+      .photo-strip-wrap .room-photo-cell { scroll-snap-align: start; }
     }
 
     .room-type-header {
@@ -778,16 +784,29 @@
     .room-type-row.open .room-thumb { display: none; }
 
     /* ── Photo strip ─────────────── */
-    .photo-strip-wrap { overflow: hidden; max-height: 0; transition: max-height 0.3s ease; }
-    .room-type-row.open .photo-strip-wrap { max-height: 240px; }
+    .photo-strip-wrap {
+      overflow: hidden;
+      max-height: 0;
+      transition: max-height 0.3s ease;
+      min-width: 0;
+    }
+    .room-type-row.open .photo-strip-wrap {
+      max-height: 240px;
+      overflow-x: auto;
+      overflow-y: hidden;
+      -webkit-overflow-scrolling: touch;
+      scrollbar-width: thin;
+      scrollbar-color: rgba(201,169,110,0.35) transparent;
+    }
+    .room-type-row.open .photo-strip-wrap::-webkit-scrollbar { height: 6px; }
+    .room-type-row.open .photo-strip-wrap::-webkit-scrollbar-thumb {
+      background: rgba(201,169,110,0.35); border-radius: 3px;
+    }
 
     .photo-strip {
       display: flex; gap: 3px; padding: 3px 0 0;
-      overflow-x: auto; scrollbar-width: thin;
-      scrollbar-color: rgba(201,169,110,0.2) transparent;
+      width: max-content;
     }
-    .photo-strip::-webkit-scrollbar { height: 3px; }
-    .photo-strip::-webkit-scrollbar-thumb { background: rgba(201,169,110,0.2); border-radius: 2px; }
 
     .room-photo-cell { flex: 0 0 240px; height: 180px; overflow: hidden; position: relative; background: var(--surface); cursor: zoom-in; }
     .room-photo-cell img { width: 100%; height: 100%; object-fit: cover; display: block; transition: transform 0.3s; }
