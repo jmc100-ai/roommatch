@@ -630,18 +630,40 @@
       font-family: 'DM Sans', sans-serif;
     }
 
-    /* ── Featured (top match) room ── */
-    .room-featured { border-bottom: 1px solid var(--border); }
-    .room-featured-grid {
-      display: grid; grid-template-columns: 1fr 1fr 1fr;
-      height: 175px; overflow: hidden;
+    /* ── Featured (top match) room — horizontal scroll through all photos ── */
+    .room-featured {
+      border-bottom: 1px solid var(--border);
+      min-width: 0;
     }
-    .room-featured-grid .room-photo-cell {
-      flex: none; height: 175px; border-radius: 0; cursor: zoom-in;
+    .room-featured-scroll {
+      overflow-x: auto;
+      overflow-y: hidden;
+      min-width: 0;
+      -webkit-overflow-scrolling: touch;
+      scrollbar-width: thin;
+      scrollbar-color: rgba(201, 169, 110, 0.35) transparent;
+    }
+    .room-featured-scroll::-webkit-scrollbar { height: 6px; }
+    .room-featured-scroll::-webkit-scrollbar-thumb {
+      background: rgba(201, 169, 110, 0.35); border-radius: 3px;
+    }
+    .room-featured-strip {
+      display: flex;
+      gap: 3px;
+      height: 175px;
+      width: max-content;
+      background: #000;
+    }
+    .room-featured-scroll .room-photo-cell {
+      flex: 0 0 240px;
+      width: 240px;
+      height: 175px;
+      border-radius: 0;
+      cursor: zoom-in;
       border-right: 2px solid var(--card);
     }
-    .room-featured-grid .room-photo-cell:last-child { border-right: none; }
-    .room-featured-grid .room-photo-cell--featured-hero { position: relative; }
+    .room-featured-scroll .room-photo-cell:last-child { border-right: none; }
+    .room-featured-scroll .room-photo-cell--featured-hero { position: relative; }
     .room-featured-vibe-badge {
       position: absolute;
       top: 8px; left: 8px;
@@ -682,8 +704,7 @@
     }
     .room-featured:not(.open) .room-featured-collapse { content: '▶ expand'; }
     .room-featured-collapse:hover { color: var(--accent); }
-    /* Hide the photo grid when featured room is collapsed */
-    .room-featured:not(.open) .room-featured-grid { display: none; }
+    .room-featured:not(.open) .room-featured-scroll { display: none; }
 
     /* ── Other rooms section ── */
     .rooms-other-header {
@@ -715,8 +736,16 @@
       .hotel-header-right { align-items: flex-start; flex-direction: row; flex-wrap: wrap; gap: 10px; width: 100%; }
       .hotel-actions { width: 100%; }
       .hotel-price { flex-direction: row; align-items: baseline; gap: 4px; }
-      .room-featured-grid { height: 148px; }
-      .room-featured-grid .room-photo-cell { height: 148px; }
+      .room-featured-strip { height: 148px; }
+      .room-featured-scroll .room-photo-cell {
+        flex: 0 0 200px;
+        width: 200px;
+        height: 148px;
+      }
+      .room-featured-scroll {
+        scroll-snap-type: x mandatory;
+      }
+      .room-featured-scroll .room-photo-cell { scroll-snap-align: start; }
       .room-featured-info { padding: 10px 16px; }
       .rooms-other-header { padding: 10px 16px 2px; }
       .hotel-divider-band { padding: 7px 16px; }
@@ -3543,15 +3572,15 @@
         ? `<span class="room-unavail-badge">not available</span>`
         : '';
 
-    // ── Featured variant (top match room — always open, 3-photo grid) ────────
+    // ── Featured variant (top match room — scrollable strip, same indices as lightbox) ──
     if (variant === 'featured') {
       const vibeOverlay = rt.score > 0
         ? `<span class="room-featured-vibe-badge">Room vibe - ${rt.score}% match</span>`
         : (isTopMatch && hotelScore === 0 && _currentSort === 'match'
             ? `<span class="room-featured-vibe-badge room-featured-vibe-badge--low">Room vibe - browse</span>` : '');
 
-      const gridCells = [0, 1, 2].map(pi => {
-        const url = photos[pi];
+      const toShow = photos.length > 0 ? photos.slice(0, 10) : [null];
+      const stripCells = toShow.map((url, pi) => {
         const heroCls = pi === 0 ? ' room-photo-cell--featured-hero' : '';
         const overlay = pi === 0 ? vibeOverlay : '';
         const lbClick = `event.stopPropagation(); openLightbox(${regKey}, ${pi})`;
@@ -3568,7 +3597,9 @@
 
       return `
         <div class="room-featured open" onclick="toggleFeatured(this)">
-          <div class="room-featured-grid">${gridCells}</div>
+          <div class="room-featured-scroll">
+            <div class="room-featured-strip">${stripCells}</div>
+          </div>
           <div class="room-featured-info">
             <div class="room-featured-name">${rt.name}${bedsHTML ? `<span class="room-meta-sep"> · </span>${bedsHTML}` : ''}${sizeHTML ? `<span class="room-meta-sep"> · </span>${sizeHTML}` : ''}</div>
             <div class="room-featured-meta">${priceHTML}<span class="room-featured-collapse">▾ collapse</span></div>
