@@ -637,6 +637,32 @@
       border-right: 2px solid var(--card);
     }
     .room-featured-grid .room-photo-cell:last-child { border-right: none; }
+    .room-featured-grid .room-photo-cell--featured-hero { position: relative; }
+    .room-featured-vibe-badge {
+      position: absolute;
+      top: 8px; left: 8px;
+      z-index: 3;
+      pointer-events: none;
+      font-size: 10px; font-weight: 600;
+      letter-spacing: 0.04em;
+      white-space: nowrap;
+      max-width: calc(100% - 16px);
+      overflow: hidden; text-overflow: ellipsis;
+      padding: 4px 9px;
+      border-radius: 100px;
+      background: rgba(10, 9, 7, 0.78);
+      color: var(--accent);
+      border: 1px solid rgba(201, 169, 110, 0.5);
+      font-family: 'DM Sans', sans-serif;
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      box-shadow: 0 2px 12px rgba(0, 0, 0, 0.4);
+    }
+    .room-featured-vibe-badge--low {
+      color: var(--muted);
+      border-color: rgba(255, 255, 255, 0.14);
+      background: rgba(10, 9, 7, 0.72);
+    }
     .room-featured-info {
       display: flex; align-items: center; justify-content: space-between;
       padding: 11px 24px; gap: 12px; flex-wrap: wrap;
@@ -3500,28 +3526,33 @@
 
     // ── Featured variant (top match room — always open, 3-photo grid) ────────
     if (variant === 'featured') {
-      // Build up to 3 photo cells for the grid; pad with blanks if needed
+      const vibeOverlay = rt.score > 0
+        ? `<span class="room-featured-vibe-badge">Room vibe - ${rt.score}% match</span>`
+        : (isTopMatch && hotelScore === 0 && _currentSort === 'match'
+            ? `<span class="room-featured-vibe-badge room-featured-vibe-badge--low">Room vibe - browse</span>` : '');
+
       const gridCells = [0, 1, 2].map(pi => {
         const url = photos[pi];
-        if (!url) return `<div class="room-photo-cell"><div class="no-photo">🛏</div></div>`;
-        return `<div class="room-photo-cell" onclick="openLightbox(${regKey}, ${pi})">
+        const heroCls = pi === 0 ? ' room-photo-cell--featured-hero' : '';
+        const overlay = pi === 0 ? vibeOverlay : '';
+        const lbClick = `event.stopPropagation(); openLightbox(${regKey}, ${pi})`;
+        if (!url) {
+          return `<div class="room-photo-cell${heroCls}">${overlay}<div class="no-photo">🛏</div></div>`;
+        }
+        return `<div class="room-photo-cell${heroCls}" onclick="${lbClick}">
+          ${overlay}
           <img src="${url}" alt="${rt.name}" loading="lazy"
                onerror="this.parentElement.innerHTML='<div class=no-photo>🛏</div>'">
           <div class="zoom-hint">⤢</div>
         </div>`;
       }).join('');
 
-      const scoreBadge = rt.score > 0
-        ? `<span class="room-score-badge">${rt.score}% match</span>`
-        : (isTopMatch && hotelScore === 0 && _currentSort === 'match'
-            ? `<span class="room-score-badge room-score-badge--low">browse</span>` : '');
-
       return `
         <div class="room-featured open" onclick="toggleFeatured(this)">
           <div class="room-featured-grid">${gridCells}</div>
           <div class="room-featured-info">
             <div class="room-featured-name">${rt.name}${bedsHTML ? `<span class="room-meta-sep"> · </span>${bedsHTML}` : ''}${sizeHTML ? `<span class="room-meta-sep"> · </span>${sizeHTML}` : ''}</div>
-            <div class="room-featured-meta">${scoreBadge}${priceHTML}<span class="room-featured-collapse">▾ collapse</span></div>
+            <div class="room-featured-meta">${priceHTML}<span class="room-featured-collapse">▾ collapse</span></div>
           </div>
         </div>`;
     }
