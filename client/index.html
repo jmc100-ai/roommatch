@@ -1901,7 +1901,7 @@
       .nbhd-grid-new { grid-template-columns:1fr; gap:16px; }
       .dates-row { grid-template-columns:1fr; }
       .cmd-seg { display:none; }
-      .cmd-seg:first-child { display:flex; }
+      .cmd-seg.cmd-mobile-visible { display:flex; }
     }
   </style>
 </head>
@@ -2099,7 +2099,7 @@
   <!-- Command bar -->
   <div class="cmd" id="cmd">
     <div class="cmd-inner">
-      <div class="cmd-seg" onclick="goToStep('city')">
+      <div class="cmd-seg cmd-mobile-visible" onclick="goToStep('city')">
         <div class="cmd-l">City</div>
         <div class="cmd-v" id="cv-city">—</div>
       </div>
@@ -2110,6 +2110,10 @@
       <div class="cmd-seg" onclick="toggleDatesTray()">
         <div class="cmd-l">Dates</div>
         <div class="cmd-v ph" id="cv-dates">Add dates</div>
+      </div>
+      <div class="cmd-seg cmd-mobile-visible" onclick="goToStep('style')">
+        <div class="cmd-l">Room vibe</div>
+        <div class="cmd-v ph" id="cv-vibe">—</div>
       </div>
       <div class="cmd-search">
         <span class="cmd-icon">✦</span>
@@ -2408,6 +2412,17 @@
     return dt.toLocaleDateString('en-US', { month:'short', day:'numeric' });
   }
 
+  /** Truncated search query for the results cmd bar "Room vibe" chip */
+  const VIBE_CHIP_MAX = 32;
+  const VIBE_CHIP_SUFFIX = '...';
+  function formatVibeChipValue(q) {
+    if (!q || !String(q).trim()) return { text: '—', placeholder: true };
+    const s = String(q).trim();
+    if (s.length <= VIBE_CHIP_MAX) return { text: s, placeholder: false };
+    const keep = Math.max(1, VIBE_CHIP_MAX - VIBE_CHIP_SUFFIX.length);
+    return { text: s.slice(0, keep) + VIBE_CHIP_SUFFIX, placeholder: false };
+  }
+
   // ── CITY ─────────────────────────────────────────────
   function pickCity(name) {
     S.city = name;
@@ -2699,6 +2714,12 @@
       cn.textContent = n.length > 18 ? n.slice(0,16)+'…' : n;
     }
     const cq = document.getElementById('cmd-q'); if (cq && S.q) cq.value = S.q;
+    const cvv = document.getElementById('cv-vibe');
+    if (cvv) {
+      const chip = formatVibeChipValue(S.q);
+      cvv.textContent = chip.text;
+      cvv.classList.toggle('ph', chip.placeholder);
+    }
     const cd = document.getElementById('cv-dates');
     if (cd) {
       if (S.checkin && S.checkout) {
