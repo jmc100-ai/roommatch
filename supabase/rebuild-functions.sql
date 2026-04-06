@@ -150,15 +150,19 @@ $function$;
 
 -- ── fetch_hotel_photos ────────────────────────────────────────────────────────
 -- Returns up to max_per_hotel photos per hotel, ordered by room_name/photo_type/id.
+-- feature_flags: per-photo jsonb for UI ordering on flag-heavy queries.
 -- SET LOCAL statement_timeout overrides the 8s authenticator role limit.
 --
+DROP FUNCTION IF EXISTS public.fetch_hotel_photos(text[], integer);
+
 CREATE OR REPLACE FUNCTION public.fetch_hotel_photos(
   hotel_ids text[],
   max_per_hotel integer DEFAULT 40
 )
 RETURNS TABLE(
   hotel_id text, hotel_name text, room_name text, room_type_id text,
-  photo_url text, photo_type text, star_rating double precision, guest_rating double precision
+  photo_url text, photo_type text, star_rating double precision, guest_rating double precision,
+  feature_flags jsonb
 )
 LANGUAGE plpgsql
 AS $function$
@@ -175,6 +179,7 @@ BEGIN
       re.photo_type     AS r_photo_type,
       re.star_rating    AS r_star_rating,
       re.guest_rating   AS r_guest_rating,
+      COALESCE(re.feature_flags, '{}'::jsonb) AS r_feature_flags,
       ROW_NUMBER() OVER (
         PARTITION BY re.hotel_id
         ORDER BY re.room_name, re.photo_type, re.id
@@ -183,7 +188,7 @@ BEGIN
     WHERE re.hotel_id = ANY(hotel_ids)
       AND re.embedding IS NOT NULL
   )
-  SELECT r_hotel_id, r_hotel_name, r_room_name, r_room_type_id, r_photo_url, r_photo_type, r_star_rating, r_guest_rating
+  SELECT r_hotel_id, r_hotel_name, r_room_name, r_room_type_id, r_photo_url, r_photo_type, r_star_rating, r_guest_rating, r_feature_flags
   FROM ranked
   WHERE rn <= max_per_hotel;
 END;

@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 /**
- * Search quality test suite — calls the live /api/vsearch endpoint
+ * Search quality test suite — calls the live /api/vsearch endpoint with flag_mode=strict
+ * so expected DB counts match legacy hard-filter behavior.
  * and cross-references results against live DB counts from room_types_index.
  *
  * Usage:
@@ -27,7 +28,7 @@ function yellow(s){ return `\x1b[33m${s}\x1b[0m`; }
 function bold(s)  { return `\x1b[1m${s}\x1b[0m`; }
 
 async function callVsearch(query, city) {
-  const url = `${BASE_URL}/api/vsearch?query=${encodeURIComponent(query)}&city=${encodeURIComponent(city)}`;
+  const url = `${BASE_URL}/api/vsearch?query=${encodeURIComponent(query)}&city=${encodeURIComponent(city)}&flag_mode=strict`;
   const start = Date.now();
   const res = await fetch(url);
   const elapsed = Date.now() - start;

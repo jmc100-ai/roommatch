@@ -101,8 +101,8 @@ rankedHotels.sort((a, b) => b.s_boosted - a.s_boosted);
 **SIM_MAX / SIM_MIN — use UNBOOSTED values:**
 
 ```js
-// BEFORE boost, as today:
-const SIM_MAX = rankedHotels[0]?.similarity ?? 0.90;  // raw, pre-boost
+// BEFORE boost: SIM_MAX = max raw similarity across the result set (= rankedHotels[0] after sort by raw sim desc)
+const SIM_MAX = Math.max(...hotelSimMap.values()) || 0.9;
 const SIM_MIN = Math.max(SIM_MAX - 0.30, 0);
 ```
 

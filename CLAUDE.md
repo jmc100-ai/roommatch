@@ -75,6 +75,10 @@ SUPABASE_SERVICE_KEY   — service role key (write access for indexer)
 GEOAPIFY_KEY           — city autocomplete
 RENDER_EXTERNAL_URL    — https://roommatch-1fg5.onrender.com (keepalive)
 INDEX_SECRET           — roommatch-2026 (protects indexing + backfill endpoints)
+VSEARCH_FLAG_MODE      — soft (default) or strict: strict uses SQL `required_features` pre-filter; soft uses semantic recall + per-hotel flag coverage boost (see Search Design)
+SOFT_FLAG_COVERAGE_MULT — multiplicative boost factor for soft flag-heavy queries: raw × (1 + mult × coverage); default 0.28 (replaces legacy SOFT_FLAG_BONUS_MAX additive)
+SOFT_FLAG_MISS_PENALTY — multiply raw by (1 − pen × (1 − coverage)) so low coverage ranks lower; default 0.08; set 0 to disable
+SOFT_FLAG_HOTEL_CAP    — max hotels scanned for coverage in soft mode (default 1500)
 UNSPLASH_KEY           — (not yet set) free key from unsplash.com/developers — needed for neighborhood card photos
 SITE_PASSWORD          — (not yet set) simple password gate for the frontend; omit to disable gate (API routes never gated)
 ```
@@ -225,16 +229,17 @@ photoContext MUST be passed. If omitted: "photo is not defined" error on every c
 1. **HyDE**: Gemini 2.5 Flash Lite generates a hypothetical caption from the user query (cached by query string, skipped on hit)
 2. Embed HyDE caption with `gemini-embedding-001` (768 dims)
 3. Detect FEATURE_FLAGS from query text (e.g. "double sinks" → `{double_sinks: true}`)
-4. Call `score_room_types` with `required_features` if flags detected → DB pre-filter returns only matching room types
+4. **Default (soft):** call `score_room_types` **without** `required_features`; load per-hotel flag coverage from `room_types_index.features`, apply multiplicative boost `× (1 + coverageMult × coverage) × (1 − missPenalty × (1 − coverage))` + re-sort before Phase B. **Strict:** `VSEARCH_FLAG_MODE=strict` or `?flag_mode=strict` → pass `required_features` (legacy hard AND pre-filter).
 5. Build `hotelSimMap` (hotel → max similarity) and `roomTypeSimMap` (hotel::room → similarity)
 
 ### Phase B — Photo fetch
-6. Fetch photos for top GALLERY_LIMIT (250) hotels via `fetch_hotel_photos`
+6. Fetch photos for top GALLERY_LIMIT (250) hotels via `fetch_hotel_photos` (includes per-photo `feature_flags`)
 7. Assign photo similarity from `roomTypeSimMap`; rooms not in map get similarity=0 for feature queries
+8. **Flag-heavy soft:** sort photos so images with more matching query flags come first; sort room rows the same way (then by score). Hotels with a feature anywhere in the index rank higher; presentation surfaces matching photos first.
 
 ### Score remapping
 - `rawScore = max room-type similarity for hotel`
-- `score = (rawScore - SIM_MIN) / (SIM_MAX - SIM_MIN) * 100`
+- `score = (rawScore - SIM_MIN) / simSpan * 100` with `simSpan = max(SIM_MAX - SIM_MIN, ε)`; `SIM_MAX` = max raw similarity in the result set (unboosted)
 - SIM_MIN/SIM_MAX computed adaptively from the result set each query
 
 ### Feature flags in FEATURE_FLAGS array (server.js)

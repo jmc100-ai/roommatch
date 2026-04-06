@@ -10,3 +10,12 @@ services:
         sync: false
       - key: NODE_ENV
         value: production
+      # Optional: vector search flag behavior (defaults in server.js if unset)
+      - key: VSEARCH_FLAG_MODE
+        sync: false
+      - key: SOFT_FLAG_COVERAGE_MULT
+        sync: false
+      - key: SOFT_FLAG_MISS_PENALTY
+        sync: false
+      - key: SOFT_FLAG_HOTEL_CAP
+        sync: false

@@ -306,6 +306,129 @@ function extractIntentType(hydeText, query) {
   return null;
 }
 
+// Regex → DB feature flags (shared by /api/vsearch strict + soft modes)
+const VSEARCH_FEATURE_FLAGS = [
+  { label: 'double sinks',             flag: 'double_sinks',           queryMatch: /\bdouble sinks?\b|\btwo sinks?\b|\bdual sinks?\b|\btwin sinks?\b|\bmultiple sinks?\b|\bseveral sinks?\b/i },
+  { label: 'soaking tub',              flag: 'soaking_tub',            queryMatch: /\b(soaking|freestanding|clawfoot)\s*tub\b/i },
+  { label: 'bathtub',                  flag: 'bathtub',                queryMatch: /\bbathtub\b|\bbath tub\b/i },
+  { label: 'walk-in shower',           flag: 'walk_in_shower',         queryMatch: /\bwalk[- ]in shower\b/i },
+  { label: 'rainfall shower',          flag: 'rainfall_shower',        queryMatch: /\brainfall shower\b/i },
+  { label: 'jacuzzi',                  flag: 'in_room_jacuzzi',        queryMatch: /\bjacuzzi\b|\bin[- ]room hot tub\b|\bwhirlpool\b/i },
+  { label: 'bidet',                    flag: 'bidet',                  queryMatch: /\bbidet\b/i },
+  { label: 'king bed',                 flag: 'king_bed',               queryMatch: /\bking(?:[- ]size(?:d)?)?\s*bed\b|\bking bed\b/i },
+  { label: 'four-poster bed',          flag: 'four_poster_bed',        queryMatch: /\bfour[- ]poster\b/i },
+  { label: 'walk-in closet',           flag: 'walk_in_closet',         queryMatch: /\bwalk[- ]in closet\b|\bdressing room\b/i },
+  { label: 'separate living area',     flag: 'separate_living_area',   queryMatch: /\bseparate living\b|\bliving room\b/i },
+  { label: 'high ceilings',            flag: 'high_ceilings',          queryMatch: /\bhigh ceilings?\b|\bvaulted ceiling\b/i },
+  { label: 'floor-to-ceiling windows', flag: 'floor_to_ceiling_windows', queryMatch: /\bfloor[- ]to[- ]ceiling windows?\b|\bpanoramic windows?\b/i },
+  { label: 'balcony',                  flag: 'balcony',                queryMatch: /\bbalcon(y|ies)\b/i },
+  { label: 'terrace',                  flag: 'terrace',                queryMatch: /\bterrace\b/i },
+  { label: 'Eiffel Tower view',        flag: 'landmark_view',          queryMatch: /\bEiffel Tower\b|\bEiffel view\b/i },
+  { label: 'city view',                flag: 'city_view',              queryMatch: /\bcity view\b/i },
+  { label: 'garden view',              flag: 'garden_view',            queryMatch: /\bgarden view\b/i },
+  { label: 'river view',               flag: 'river_view',             queryMatch: /\briver view\b|\bSeine view\b|\bThames view\b/i },
+  { label: 'fireplace',                flag: 'fireplace',              queryMatch: /\bfireplace\b/i },
+];
+
+const SOFT_FLAG_COVERAGE_CACHE_TTL_MS = 5 * 60 * 1000;
+const softFlagCoverageCache = new Map();
+
+function getCachedSoftFlagCoverage(city, flagKeys) {
+  const key = `${city}::${[...flagKeys].sort().join(',')}`;
+  const hit = softFlagCoverageCache.get(key);
+  if (hit && hit.expires > Date.now()) return hit.data;
+  return null;
+}
+
+function setCachedSoftFlagCoverage(city, flagKeys, data) {
+  const key = `${city}::${[...flagKeys].sort().join(',')}`;
+  softFlagCoverageCache.set(key, { data, expires: Date.now() + SOFT_FLAG_COVERAGE_CACHE_TTL_MS });
+}
+
+async function fetchFlagCoverageBatched(city, flagKeys, hotelIds, fetchClient) {
+  const BATCH = 400;
+  const hotelFlagHits = new Map();
+  const n = flagKeys.length;
+  if (n === 0) return new Map();
+
+  for (let i = 0; i < hotelIds.length; i += BATCH) {
+    const batch = hotelIds.slice(i, i + BATCH);
+    const { data, error } = await fetchClient
+      .from('room_types_index')
+      .select('hotel_id, features')
+      .eq('city', city)
+      .in('hotel_id', batch);
+    if (error) {
+      console.error('[soft_flags] coverage batch error:', error.message);
+      throw error;
+    }
+    for (const row of data || []) {
+      if (!hotelFlagHits.has(row.hotel_id)) hotelFlagHits.set(row.hotel_id, new Set());
+      const hits = hotelFlagHits.get(row.hotel_id);
+      for (const fk of flagKeys) {
+        if (row.features && row.features[fk] === true) hits.add(fk);
+      }
+    }
+  }
+
+  const coverageMap = new Map();
+  for (const [hotelId, hits] of hotelFlagHits) {
+    coverageMap.set(hotelId, hits.size / n);
+  }
+  return coverageMap;
+}
+
+function buildSoftFlagCoveragePromise(city, detectedFlagKeys, fetchClient) {
+  if (!detectedFlagKeys.length) return Promise.resolve(null);
+  const cached = getCachedSoftFlagCoverage(city, detectedFlagKeys);
+  if (cached) return Promise.resolve(cached);
+
+  const cap = parseInt(process.env.SOFT_FLAG_HOTEL_CAP || '1500', 10);
+  return fetchClient
+    .from('hotels_cache')
+    .select('hotel_id')
+    .eq('city', city)
+    .then(({ data, error }) => {
+      if (error) throw error;
+      const ids = (data || []).map(h => h.hotel_id).slice(0, cap);
+      return fetchFlagCoverageBatched(city, detectedFlagKeys, ids, fetchClient);
+    })
+    .then((map) => {
+      setCachedSoftFlagCoverage(city, detectedFlagKeys, map);
+      return map;
+    })
+    .catch((e) => {
+      console.error('[soft_flags] coverage fetch failed:', e.message);
+      return null;
+    });
+}
+
+/** How many detected query flags are true on this photo's feature_flags jsonb. */
+function countPhotoFlagMatches(featureFlags, detectedFlagKeys) {
+  if (!featureFlags || !detectedFlagKeys?.length) return 0;
+  let n = 0;
+  for (const fk of detectedFlagKeys) {
+    if (featureFlags[fk] === true) n++;
+  }
+  return n;
+}
+
+/** In-place sort: confirmed flags first, then intent, then similarity. */
+function sortHotelPhotosForDisplay(photos, intentType, detectedFlagKeys, flagMode) {
+  const useFlagOrder = detectedFlagKeys.length > 0 && flagMode === "soft";
+  photos.sort((a, b) => {
+    if (useFlagOrder) {
+      const fa = countPhotoFlagMatches(a.feature_flags, detectedFlagKeys);
+      const fb = countPhotoFlagMatches(b.feature_flags, detectedFlagKeys);
+      if (fb !== fa) return fb - fa;
+    }
+    const aIntent = (!intentType || a.photo_type === intentType) ? 1 : 0;
+    const bIntent = (!intentType || b.photo_type === intentType) ? 1 : 0;
+    if (bIntent !== aIntent) return bIntent - aIntent;
+    return b.similarity - a.similarity;
+  });
+}
+
 // System prompt for HyDE caption generation.
 const HYDE_SYSTEM_PROMPT = `You are a hotel room photo caption assistant for a visual search engine.
 Given a user search query about hotel rooms, generate a MINIMAL structured caption representing what a matching photo would look like.
@@ -1343,6 +1466,36 @@ app.get("/api/vsearch", async (req, res) => {
     // Proceed with vector search (complete or partially-indexed city)
     const indexing = status === "indexing"; // let client know if still in progress
 
+    const fetchClient = supabaseAdmin || supabase;
+    const GALLERY_LIMIT = 250;
+
+    // Feature flags from raw query — before HyDE so soft-flag coverage can run in parallel with HyDE + Phase A.
+    const detectedFlags = VSEARCH_FEATURE_FLAGS.filter(f => f.queryMatch.test(query));
+    const flagMode =
+      (process.env.VSEARCH_FLAG_MODE || "soft").toLowerCase() === "strict" ||
+      String(req.query.flag_mode || "").toLowerCase() === "strict"
+        ? "strict"
+        : "soft";
+    const required_features =
+      flagMode === "strict" && detectedFlags.length > 0
+        ? Object.fromEntries(detectedFlags.map(f => [f.flag, true]))
+        : null;
+    const detectedFlagKeys = detectedFlags.map(f => f.flag);
+
+    if (detectedFlags.length) {
+      console.log(
+        `[vsearch] feature flags: ${detectedFlags.map(f => f.label).join(", ")}` +
+          (flagMode === "strict" ? " → DB pre-filter" : " → soft boost (no hard filter)")
+      );
+    }
+
+    let coveragePromise = Promise.resolve(null);
+    if (flagMode === "soft" && detectedFlagKeys.length > 0) {
+      coveragePromise = buildSoftFlagCoveragePromise(city, detectedFlagKeys, fetchClient);
+    }
+
+    const hotelsPromise = fetchClient.from("hotels_cache").select("*").eq("city", city);
+
     // 2. HyDE: generate a hypothetical caption matching the room_embeddings vocabulary,
     // then embed it. This handles vocabulary gaps ("multiple sinks" → "double sinks"),
     // abstract queries ("spa bathroom", "romantic suite"), and negations ("no carpet"
@@ -1386,57 +1539,8 @@ app.get("/api/vsearch", async (req, res) => {
       hydeCache.set(hydeKey_str, { hypothetical: hydeText, embedding: queryEmbedding, ts: Date.now() });
     }
 
-    // 3. Score ALL city room types against the query embedding.
-    // intentType comes from the hypothetical PHOTO TYPE field (more reliable than keywords).
+    // 3. intentType from HyDE (photo-type focus for scoring).
     const intentType = extractIntentType(hydeText, query);
-
-    // Structural features: if the query specifically requests a feature, hotels whose
-    // captions never confirm that feature get penalised (topScore × 0.45).
-    // Maps user query terms → feature flag names stored in room_types_index.features.
-    // score_room_types pre-filters to rooms that have confirmed the flag, so every hotel
-    // returned already has the feature — no post-hoc caption confirmation or penalty needed.
-    const FEATURE_FLAGS = [
-      // Bathroom
-      { label: 'double sinks',             flag: 'double_sinks',           queryMatch: /\bdouble sinks?\b|\btwo sinks?\b|\bdual sinks?\b|\btwin sinks?\b|\bmultiple sinks?\b|\bseveral sinks?\b/i },
-      { label: 'soaking tub',              flag: 'soaking_tub',            queryMatch: /\b(soaking|freestanding|clawfoot)\s*tub\b/i },
-      { label: 'bathtub',                  flag: 'bathtub',                queryMatch: /\bbathtub\b|\bbath tub\b/i },
-      { label: 'walk-in shower',           flag: 'walk_in_shower',         queryMatch: /\bwalk[- ]in shower\b/i },
-      { label: 'rainfall shower',          flag: 'rainfall_shower',        queryMatch: /\brainfall shower\b/i },
-      { label: 'jacuzzi',                  flag: 'in_room_jacuzzi',        queryMatch: /\bjacuzzi\b|\bin[- ]room hot tub\b|\bwhirlpool\b/i },
-      { label: 'bidet',                    flag: 'bidet',                  queryMatch: /\bbidet\b/i },
-      // Bedroom / Space
-      { label: 'king bed',                 flag: 'king_bed',               queryMatch: /\bking(?:[- ]size(?:d)?)?\s*bed\b|\bking bed\b/i },
-      { label: 'four-poster bed',          flag: 'four_poster_bed',        queryMatch: /\bfour[- ]poster\b/i },
-      { label: 'walk-in closet',           flag: 'walk_in_closet',         queryMatch: /\bwalk[- ]in closet\b|\bdressing room\b/i },
-      { label: 'separate living area',     flag: 'separate_living_area',   queryMatch: /\bseparate living\b|\bliving room\b/i },
-      { label: 'high ceilings',            flag: 'high_ceilings',          queryMatch: /\bhigh ceilings?\b|\bvaulted ceiling\b/i },
-      { label: 'floor-to-ceiling windows', flag: 'floor_to_ceiling_windows', queryMatch: /\bfloor[- ]to[- ]ceiling windows?\b|\bpanoramic windows?\b/i },
-      // Outdoor
-      { label: 'balcony',                  flag: 'balcony',                queryMatch: /\bbalcon(y|ies)\b/i },
-      { label: 'terrace',                  flag: 'terrace',                queryMatch: /\bterrace\b/i },
-      // Views
-      { label: 'Eiffel Tower view',        flag: 'landmark_view',          queryMatch: /\bEiffel Tower\b|\bEiffel view\b/i },
-      { label: 'city view',                flag: 'city_view',              queryMatch: /\bcity view\b/i },
-      { label: 'garden view',              flag: 'garden_view',            queryMatch: /\bgarden view\b/i },
-      { label: 'river view',               flag: 'river_view',             queryMatch: /\briver view\b|\bSeine view\b|\bThames view\b/i },
-      // General
-      { label: 'fireplace',                flag: 'fireplace',              queryMatch: /\bfireplace\b/i },
-    ];
-    const detectedFlags = FEATURE_FLAGS.filter(f => f.queryMatch.test(query));
-    const required_features = detectedFlags.length > 0
-      ? Object.fromEntries(detectedFlags.map(f => [f.flag, true]))
-      : null;
-    if (detectedFlags.length) {
-      console.log(`[vsearch] feature flags detected: ${detectedFlags.map(f => f.label).join(', ')} → DB pre-filter`);
-    }
-
-    const fetchClient = supabaseAdmin || supabase;
-    // 250 hotels × 40 photos cap = 10k rows, just within Supabase PostgREST default limit.
-    // fetch_hotel_photos now applies a per-hotel ROW_NUMBER cap (default 40) as a safety net.
-    const GALLERY_LIMIT = 250;
-
-    // Kick off hotels_cache immediately — runs in parallel with score_room_types
-    const hotelsPromise = fetchClient.from("hotels_cache").select("*").eq("city", city);
 
     // ── bbox pre-filter: if bbox param provided, resolve hotel_ids within bounding box ──
     let bboxHotelIds = null;
@@ -1464,7 +1568,7 @@ app.get("/api/vsearch", async (req, res) => {
     // Running alongside hotels_cache eliminates a full sequential round trip vs the old
     // 3-phase flow (score_hotels → score_room_types → score_hotel_photos).
     const tAfterEmbed = Date.now();
-    const [roomTypesResult, cachedResult] = await Promise.all([
+    const [roomTypesResult, cachedResult, coverageMap] = await Promise.all([
       fetchClient.rpc("score_room_types", {
         query_embedding: queryEmbedding,
         search_city: city,
@@ -1472,6 +1576,7 @@ app.get("/api/vsearch", async (req, res) => {
         ...(bboxHotelIds ? { hotel_ids: bboxHotelIds } : {}),
       }),
       hotelsPromise,
+      coveragePromise,
     ]);
     const tPhaseA = Date.now();
     console.log(`[vsearch] HyDE+embed: ${tAfterEmbed - tStartEmbed}ms  phaseA(room_types): ${tPhaseA - tAfterEmbed}ms`);
@@ -1510,9 +1615,46 @@ app.get("/api/vsearch", async (req, res) => {
       return res.json({ hotels: [], query, city, indexing, indexStatus: status });
     }
 
-    const rankedHotels = [...hotelSimMap.entries()]
+    // Max raw cosine across all hotels (for display % — independent of soft-flag re-order).
+    const maxRawSim = Math.max(...hotelSimMap.values());
+
+    let rankedHotels = [...hotelSimMap.entries()]
       .map(([hotel_id, similarity]) => ({ hotel_id, similarity }))
       .sort((a, b) => b.similarity - a.similarity);
+
+    // Soft flag-heavy: multiplicative boost by coverage + mild penalty when coverage < 1
+    // (replaces legacy additive SOFT_FLAG_BONUS_MAX — see SOFT_FLAG_COVERAGE_MULT).
+    const covMult = parseFloat(process.env.SOFT_FLAG_COVERAGE_MULT || "0.28");
+    const missPen = parseFloat(process.env.SOFT_FLAG_MISS_PENALTY || "0.08");
+    if (flagMode === "soft" && coverageMap && detectedFlagKeys.length > 0) {
+      let withCov = 0;
+      for (const h of rankedHotels) {
+        const c = coverageMap.get(h.hotel_id) ?? 0;
+        if (c > 0) withCov++;
+        let boosted = h.similarity * (1 + covMult * c);
+        boosted *= 1 - missPen * (1 - c);
+        h.s_boosted = Math.min(0.999, boosted);
+      }
+      rankedHotels.sort((a, b) => (b.s_boosted ?? b.similarity) - (a.s_boosted ?? a.similarity));
+      if (rankedHotels.length >= 2) {
+        const top = rankedHotels[0];
+        const second = rankedHotels[1];
+        if (
+          top.similarity < 0.55 &&
+          second.similarity > 0.65 &&
+          (top.s_boosted ?? top.similarity) > (second.s_boosted ?? second.similarity)
+        ) {
+          console.warn(
+            `[soft_flags] rank inversion: top ${top.hotel_id} raw=${top.similarity.toFixed(3)} vs #2 ${second.hotel_id} raw=${second.similarity.toFixed(3)}`
+          );
+        }
+      }
+      console.log(
+        `[vsearch] soft_flags: cov_mult=${covMult} miss_penalty=${missPen} hotels_with_coverage=${withCov}/${rankedHotels.length}`
+      );
+    } else {
+      rankedHotels.forEach(h => { h.s_boosted = h.similarity; });
+    }
 
     console.log(`[vsearch] ranked: ${rankedHotels.length} hotels from room-type scoring`);
 
@@ -1551,6 +1693,10 @@ app.get("/api/vsearch", async (req, res) => {
       if (!intentType || p.photo_type === intentType) hs.intentScores.push(similarity);
     }
 
+    for (const arr of hotelPhotosMap.values()) {
+      sortHotelPhotosForDisplay(arr, intentType, detectedFlagKeys, flagMode);
+    }
+
     // Log similarity distribution (from room_types scores, not per-photo)
     if (rankedHotels.length > 0) {
       const sims = rankedHotels.slice(0, Math.min(rankedHotels.length, 200)).map(h => h.similarity);
@@ -1563,11 +1709,11 @@ app.get("/api/vsearch", async (req, res) => {
     //    Top GALLERY_LIMIT hotels use per-photo similarity (accurate) with structural penalty.
     //    Hotels beyond GALLERY_LIMIT use room-type-level similarity with no penalty
     //    (no captions available to verify, ranked far down anyway).
-    // Adaptive normalization: top result = 100%, spread fixed at 0.30.
-    // This works for both HyDE (same-vocabulary, higher similarities ~0.75-0.95)
-    // and raw-query fallback (cross-modal, lower similarities ~0.45-0.75).
-    const SIM_MAX = rankedHotels[0]?.similarity ?? 0.90;
+    // Adaptive normalization: SIM_MAX = max raw similarity in the result set (not boosted order).
+    // Spread fixed at 0.30.
+    const SIM_MAX = maxRawSim > 0 ? maxRawSim : 0.9;
     const SIM_MIN = Math.max(SIM_MAX - 0.30, 0);
+    const simSpan = Math.max(SIM_MAX - SIM_MIN, 1e-9);
     const photoHotelIds = new Set(hotelPhotosMap.keys());
 
     // Score = mean of top-3 similarities (intent-type photos first, fallback to all).
@@ -1578,7 +1724,7 @@ app.get("/api/vsearch", async (req, res) => {
       const arr      = hs.intentScores.length > 0 ? hs.intentScores : hs.scores;
       arr.sort((a, b) => b - a);
       const rawScore = arr.slice(0, 3).reduce((s, x) => s + x, 0) / Math.min(3, arr.length);
-      let score = Math.max(0, Math.min(100, (rawScore - SIM_MIN) / (SIM_MAX - SIM_MIN) * 100));
+      let score = Math.max(0, Math.min(100, (rawScore - SIM_MIN) / simSpan * 100));
       // Photo-count penalty: penalises hotels with too few photos overall (poor visual coverage).
       const hpAll = hotelPhotosMap.get(hotelId) || [];
       if (hpAll.length < 3) {
@@ -1593,7 +1739,7 @@ app.get("/api/vsearch", async (req, res) => {
     const remainingHotelScores = rankedHotels
       .filter(h => !photoHotelIds.has(h.hotel_id))
       .map(h => {
-        const score = Math.max(0, Math.min(100, (h.similarity - SIM_MIN) / (SIM_MAX - SIM_MIN) * 100));
+        const score = Math.max(0, Math.min(100, (h.similarity - SIM_MIN) / simSpan * 100));
         return { hotelId: h.hotel_id, topScore: score, hasPhotos: false };
       });
 
@@ -1604,13 +1750,7 @@ app.get("/api/vsearch", async (req, res) => {
     const hotels = allHotels.map(({ hotelId, topScore, hasPhotos }) => {
       const meta           = cacheMap.get(hotelId) || {};
       const score          = Math.round(topScore);
-      // Sort: intent-matching photo types first, then by room similarity, then photo_type
-      const hotelPhotos    = (hotelPhotosMap.get(hotelId) || []).sort((a, b) => {
-        const aIntent = (!intentType || a.photo_type === intentType) ? 1 : 0;
-        const bIntent = (!intentType || b.photo_type === intentType) ? 1 : 0;
-        if (bIntent !== aIntent) return bIntent - aIntent;
-        return b.similarity - a.similarity;
-      });
+      const hotelPhotos    = hotelPhotosMap.get(hotelId) || [];
       const fallbackName   = hotelPhotos[0]?.hotel_name || null;
 
       // Hotels without photo data (beyond GALLERY_LIMIT): return stub with no room types.
@@ -1639,13 +1779,31 @@ app.get("/api/vsearch", async (req, res) => {
         const rName = p.room_name || "Room";
         if (!roomMap.has(rName)) roomMap.set(rName, { photos: [], roomTypeId: p.room_type_id || null });
         const entry = roomMap.get(rName);
-        if (entry.photos.length < 12) entry.photos.push({ url: p.photo_url, type: p.photo_type, similarity: p.similarity });
+        if (entry.photos.length < 12) {
+          entry.photos.push({
+            url: p.photo_url,
+            type: p.photo_type,
+            similarity: p.similarity,
+            feature_flags: p.feature_flags,
+          });
+        }
       }
 
-      const roomEntries = [...roomMap.entries()]
-        .sort((a, b) => (b[1].photos[0]?.similarity ?? 0) - (a[1].photos[0]?.similarity ?? 0));
+      const roomEntries = [...roomMap.entries()].map(([name, entry]) => {
+        const fm = entry.photos.reduce(
+          (m, ph) => Math.max(m, countPhotoFlagMatches(ph.feature_flags, detectedFlagKeys)),
+          0
+        );
+        return { name, entry, flagMatch: fm };
+      });
+      roomEntries.sort((a, b) => {
+        if (detectedFlagKeys.length > 0 && flagMode === "soft") {
+          if (b.flagMatch !== a.flagMatch) return b.flagMatch - a.flagMatch;
+        }
+        return (b.entry.photos[0]?.similarity ?? 0) - (a.entry.photos[0]?.similarity ?? 0);
+      });
 
-      const roomTypes = roomEntries.map(([name, entry]) => {
+      const roomTypes = roomEntries.map(({ name, entry, flagMatch }) => {
         const photoEntries = entry.photos;
         // Per-room score: use intent-filtered photos (same filter as hotel-level score)
         // so bedroom photos don't dilute a bathroom query score and vice versa.
@@ -1658,7 +1816,7 @@ app.get("/api/vsearch", async (req, res) => {
         const rawRoom = sims.length > 0
           ? sims.slice(0, 3).reduce((s, x) => s + x, 0) / Math.min(3, sims.length)
           : 0;
-        let roomScore = Math.max(0, Math.min(100, (rawRoom - SIM_MIN) / (SIM_MAX - SIM_MIN) * 100));
+        let roomScore = Math.max(0, Math.min(100, (rawRoom - SIM_MIN) / simSpan * 100));
         // Photo-count penalty at room level: rooms with < 3 photos rank lower.
         if (photoEntries.length < 3) roomScore *= photoEntries.length / 3;
         return {
@@ -1669,13 +1827,18 @@ app.get("/api/vsearch", async (req, res) => {
           size:       "",
           beds:       "",
           amenities:  [],
+          flagMatch,
         };
       });
 
-      // Re-sort rooms by score DESC now that scores are computed.
-      // The pre-sort (by confirmation count / raw similarity) was a heuristic;
-      // the final score is the authoritative ranking signal.
-      roomTypes.sort((a, b) => (b.score || 0) - (a.score || 0));
+      // Flag-heavy soft: rooms with confirmed query flags first, then by score.
+      roomTypes.sort((a, b) => {
+        if (detectedFlagKeys.length > 0 && flagMode === "soft") {
+          if (b.flagMatch !== a.flagMatch) return b.flagMatch - a.flagMatch;
+        }
+        return (b.score || 0) - (a.score || 0);
+      });
+      for (const rt of roomTypes) delete rt.flagMatch;
 
       return {
         id:          hotelId,
@@ -1696,8 +1859,25 @@ app.get("/api/vsearch", async (req, res) => {
     const tTotal = Date.now() - t0;
     const kpiFlag = tTotal > 3000 ? " ⚠️ KPI BREACH" : "";
     console.log(`[vsearch] TOTAL: ${tTotal}ms${kpiFlag} | ${city}: ${hotels.length} hotels, top score ${allHotels[0]?.topScore?.toFixed(3)}`);
-    res.json({ hotels, query, city, indexing, indexStatus: status,
-      stats: { indexed: cityRow?.photo_count || 0 } });
+
+    const stats = { indexed: cityRow?.photo_count || 0 };
+    if (String(req.query.debug || "") === "1") {
+      const sample = rankedHotels.slice(0, 10).map(h => ({
+        hotel_id: h.hotel_id,
+        raw: h.similarity,
+        boosted: h.s_boosted ?? h.similarity,
+        coverage: coverageMap?.get?.(h.hotel_id) ?? 0,
+      }));
+      stats.softFlags = {
+        mode: flagMode,
+        detected: detectedFlagKeys,
+        coverageMult: covMult,
+        missPenalty: missPen,
+        sample,
+      };
+    }
+
+    res.json({ hotels, query, city, indexing, indexStatus: status, stats });
 
   } catch(err) {
     console.error("[vsearch]", err.message);
