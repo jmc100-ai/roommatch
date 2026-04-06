@@ -1,0 +1,1384 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>RoomMatch · Flow v2</title>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet"/>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg:       #0c0c0e;
+  --surface:  #131316;
+  --card:     #18181c;
+  --row:      #1c1c21;
+  --border:   rgba(255,255,255,0.07);
+  --text:     #e8e4dc;
+  --muted:    #9a9590;
+  --accent:   #c9a96e;
+  --accent2:  #e8d5b0;
+  --green:    #6dba8a;
+  --radius:   14px;
+  --page-gutter: clamp(20px, 5vw, 56px);
+  --max-w: 1180px;
+}
+
+html { scroll-behavior: smooth; }
+body {
+  font-family: 'DM Sans', sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+/* film grain */
+body::before {
+  content: '';
+  position: fixed; inset: 0;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.03'/%3E%3C/svg%3E");
+  pointer-events: none; z-index: 9999; opacity: 0.4;
+}
+
+/* ═══════════════════════════════════
+   Canvas chrome (prototype frame)
+════════════════════════════════════ */
+.canvas-bar {
+  position: fixed; top: 0; left: 0; right: 0; z-index: 2000;
+  background: rgba(8,8,10,0.95); backdrop-filter: blur(12px);
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+  padding: 10px 20px; display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+}
+.canvas-label { font-size: 11px; color: var(--muted); letter-spacing: 0.1em; text-transform: uppercase; white-space: nowrap; }
+.canvas-tabs  { display: flex; gap: 6px; flex-wrap: wrap; }
+.ctab {
+  padding: 6px 14px; border-radius: 7px; font-size: 11px; font-weight: 500; cursor: pointer;
+  border: 1px solid rgba(255,255,255,0.1); color: var(--muted); background: transparent;
+  font-family: 'DM Sans', sans-serif; transition: all 0.15s; white-space: nowrap;
+}
+.ctab:hover  { border-color: rgba(201,169,110,0.4); color: var(--accent2); }
+.ctab.active { background: rgba(201,169,110,0.12); border-color: rgba(201,169,110,0.5); color: var(--accent); }
+.dev-grp { display: flex; gap: 4px; margin-left: auto; }
+.dbtn {
+  padding: 6px 12px; border-radius: 7px; font-size: 12px; cursor: pointer;
+  background: transparent; border: 1px solid rgba(255,255,255,0.1); color: var(--muted);
+  font-family: 'DM Sans', sans-serif; transition: all 0.15s;
+}
+.dbtn.active { background: rgba(255,255,255,0.06); color: var(--text); border-color: rgba(255,255,255,0.15); }
+
+/* ═══════════════════════════════════
+   Viewport frame
+════════════════════════════════════ */
+.frame-wrap {
+  padding-top: 52px; /* canvas bar height */
+  min-height: 100vh;
+  display: flex; justify-content: center;
+}
+.frame {
+  width: 100%; max-width: 100%;
+  background: var(--bg);
+  transition: max-width 0.35s cubic-bezier(.4,0,.2,1);
+  position: relative;
+}
+.frame.mobile { max-width: 390px; border-left: 1px solid rgba(255,255,255,0.05); border-right: 1px solid rgba(255,255,255,0.05); }
+
+/* ═══════════════════════════════════
+   Panels
+════════════════════════════════════ */
+.panel { display: none; }
+.panel.active { display: block; }
+
+/* ═══════════════════════════════════
+   Shared header
+════════════════════════════════════ */
+.app-header {
+  padding: 18px var(--page-gutter);
+  display: flex; align-items: center; gap: 12px;
+  border-bottom: 1px solid var(--border);
+  position: relative;
+}
+.logo { font-size: 15px; font-weight: 500; color: var(--text); text-decoration: none; letter-spacing: 0.01em; }
+.logo span { color: var(--accent); }
+
+/* ═══════════════════════════════════
+   ★ STICKY SEARCH STORY BAR ★
+   Always visible once journey starts
+════════════════════════════════════ */
+.story-bar {
+  position: sticky; top: 52px; z-index: 500;
+  background: rgba(12,12,14,0.96); backdrop-filter: blur(16px);
+  border-bottom: 1px solid rgba(255,255,255,0.07);
+  padding: 0 var(--page-gutter);
+  display: flex; align-items: stretch;
+  transition: opacity 0.3s, transform 0.3s;
+  opacity: 0; pointer-events: none;
+  transform: translateY(-4px);
+}
+.story-bar.visible { opacity: 1; pointer-events: auto; transform: translateY(0); }
+
+.story-seg {
+  display: flex; align-items: center; gap: 7px;
+  padding: 12px 16px 12px 0; cursor: pointer; position: relative;
+  transition: opacity 0.15s;
+  min-width: 0; flex-shrink: 0;
+}
+.story-seg:hover .story-seg-val { color: var(--accent2); }
+.story-seg-label { font-size: 9px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); white-space: nowrap; }
+.story-seg-val {
+  font-size: 13px; font-weight: 400; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  max-width: 140px; transition: color 0.15s;
+  color: var(--text);
+}
+.story-seg-val.pending { color: rgba(201,169,110,0.55); font-style: italic; font-size: 12px; }
+.story-seg-val.set { color: var(--text); }
+.story-arrow { color: rgba(255,255,255,0.18); font-size: 14px; align-self: center; flex-shrink: 0; padding: 0 4px; }
+.story-edit-dot {
+  width: 5px; height: 5px; border-radius: 50%; background: var(--accent);
+  opacity: 0; transition: opacity 0.2s; flex-shrink: 0;
+}
+.story-seg.done .story-edit-dot { opacity: 1; }
+.story-seg.current { }
+.story-seg.current .story-seg-val { color: var(--accent); }
+
+/* Dates segment = call to action style when pending */
+.story-dates-cta {
+  margin-left: auto; align-self: center;
+  padding: 6px 14px; border-radius: 20px;
+  border: 1px solid rgba(201,169,110,0.35); color: var(--accent);
+  font-size: 12px; font-weight: 500; cursor: pointer; white-space: nowrap;
+  background: rgba(201,169,110,0.06); transition: all 0.15s; flex-shrink: 0;
+}
+.story-dates-cta:hover { background: rgba(201,169,110,0.12); border-color: rgba(201,169,110,0.6); }
+.story-dates-cta.set { color: var(--text); border-color: rgba(255,255,255,0.12); background: transparent; font-weight: 400; font-size: 13px; padding: 6px 12px; }
+
+/* ═══════════════════════════════════
+   STATE SCREENS — base layout
+════════════════════════════════════ */
+.screen { padding: 40px var(--page-gutter) 80px; max-width: var(--max-w); margin: 0 auto; }
+.screen-sm { max-width: 680px; }
+
+.screen-eyebrow {
+  font-size: 10px; letter-spacing: 0.16em; text-transform: uppercase;
+  color: var(--muted); margin-bottom: 14px;
+  display: flex; align-items: center; gap: 8px;
+}
+.screen-eyebrow-dot { width: 4px; height: 4px; border-radius: 50%; background: var(--accent); flex-shrink: 0; }
+
+.screen-heading {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: clamp(28px, 4vw, 52px);
+  font-weight: 300; line-height: 1.08; margin-bottom: 12px;
+}
+.screen-heading em { font-style: italic; color: var(--accent); }
+.screen-sub { font-size: 14px; color: var(--muted); line-height: 1.7; margin-bottom: 28px; max-width: 480px; }
+
+/* ═══════════════════════════════════
+   STEP 1 — City
+════════════════════════════════════ */
+.city-input-wrap {
+  position: relative; max-width: 520px;
+  background: var(--card);
+  border: 1px solid rgba(201,169,110,0.38); border-radius: 18px;
+  display: flex; align-items: center; gap: 12px; padding: 14px 18px;
+  box-shadow: 0 0 0 1px rgba(201,169,110,0.1), 0 0 48px rgba(201,169,110,0.1), 0 12px 32px rgba(0,0,0,0.35);
+  transition: box-shadow 0.2s, border-color 0.2s;
+}
+.city-input-wrap:focus-within {
+  border-color: rgba(201,169,110,0.7);
+  box-shadow: 0 0 0 1px rgba(201,169,110,0.2), 0 0 56px rgba(201,169,110,0.14), 0 12px 32px rgba(0,0,0,0.4);
+}
+.city-input-icon { color: var(--accent2); font-size: 17px; opacity: 0.8; flex-shrink: 0; }
+.city-input-wrap input {
+  flex: 1; background: transparent; border: none; outline: none;
+  font-family: 'DM Sans', sans-serif; font-size: 16px; color: var(--text); font-weight: 300;
+}
+.city-input-wrap input::placeholder { color: rgba(232,228,220,0.38); font-style: italic; }
+
+.city-suggestions {
+  display: flex; gap: 8px; flex-wrap: wrap; margin-top: 16px; max-width: 520px;
+}
+.city-chip {
+  padding: 9px 18px; border-radius: 22px; font-size: 13px; cursor: pointer;
+  border: 1px solid var(--border); color: var(--muted); background: var(--card);
+  transition: all 0.15s; font-family: 'DM Sans', sans-serif;
+}
+.city-chip:hover { border-color: rgba(201,169,110,0.45); color: var(--accent2); background: rgba(201,169,110,0.06); }
+
+/* recent */
+.recent-label { font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); margin-bottom: 10px; }
+
+/* ═══════════════════════════════════
+   STEP 2 — Neighbourhood
+════════════════════════════════════ */
+.nbhd-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+  gap: 12px; margin-bottom: 16px;
+}
+.nbhd-card {
+  border-radius: var(--radius); overflow: hidden; cursor: pointer; position: relative;
+  aspect-ratio: 5/4; transition: transform 0.2s, box-shadow 0.2s;
+  background: var(--card);
+}
+.nbhd-card:hover { transform: translateY(-3px); box-shadow: 0 16px 40px rgba(0,0,0,0.55); }
+.nbhd-card.selected { outline: 2px solid var(--accent); outline-offset: 3px; }
+.nbhd-card-bg { width: 100%; height: 100%; object-fit: cover; display: block; position: absolute; inset: 0; }
+.nbhd-overlay {
+  position: absolute; inset: 0;
+  background: linear-gradient(to top, rgba(0,0,0,0.84) 0%, rgba(0,0,0,0.12) 55%, transparent 100%);
+  padding: 14px; display: flex; flex-direction: column; justify-content: flex-end;
+}
+.nbhd-name { font-size: 15px; font-weight: 500; margin-bottom: 3px; line-height: 1.2; }
+.nbhd-vibe { font-size: 11px; color: rgba(255,255,255,0.65); font-style: italic; margin-bottom: 8px; }
+.nbhd-tags { display: flex; gap: 4px; flex-wrap: wrap; }
+.nbhd-tag {
+  font-size: 10px; padding: 2px 8px; border-radius: 10px;
+  background: rgba(255,255,255,0.12); color: rgba(255,255,255,0.75);
+}
+.nbhd-card-skip {
+  border-radius: var(--radius); overflow: hidden; cursor: pointer; position: relative;
+  aspect-ratio: 5/4; background: var(--surface);
+  border: 1px dashed rgba(255,255,255,0.1);
+  display: flex; align-items: center; justify-content: center;
+  transition: border-color 0.15s;
+}
+.nbhd-card-skip:hover { border-color: rgba(201,169,110,0.35); }
+.nbhd-skip-inner { text-align: center; padding: 20px; }
+.nbhd-skip-icon { font-size: 24px; opacity: 0.3; margin-bottom: 8px; }
+.nbhd-skip-label { font-size: 14px; color: var(--muted); }
+.nbhd-skip-sub   { font-size: 11px; color: rgba(154,149,144,0.6); margin-top: 3px; }
+
+/* ═══════════════════════════════════
+   STEP 3 — Room Style (HERO MOMENT)
+════════════════════════════════════ */
+.style-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 14px;
+}
+.style-card {
+  border-radius: 16px; overflow: hidden; cursor: pointer; position: relative;
+  aspect-ratio: 4/3; transition: transform 0.22s cubic-bezier(.4,0,.2,1), box-shadow 0.22s;
+}
+.style-card:hover { transform: translateY(-4px) scale(1.01); box-shadow: 0 20px 50px rgba(0,0,0,0.6); }
+.style-card.selected { outline: 2px solid var(--accent); outline-offset: 3px; }
+.style-card-bg {
+  position: absolute; inset: 0; width: 100%; height: 100%;
+}
+.style-overlay {
+  position: absolute; inset: 0;
+  padding: 20px;
+  display: flex; flex-direction: column; justify-content: space-between;
+}
+.style-tag-top {
+  display: inline-flex; align-items: center; gap: 5px;
+  background: rgba(0,0,0,0.45); backdrop-filter: blur(8px);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 20px; padding: 4px 10px;
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: rgba(255,255,255,0.7);
+  align-self: flex-start;
+}
+.style-bottom { }
+.style-name {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 22px; font-weight: 400; line-height: 1.15; margin-bottom: 5px;
+  text-shadow: 0 2px 12px rgba(0,0,0,0.5);
+}
+.style-desc {
+  font-size: 12px; color: rgba(255,255,255,0.65); line-height: 1.55;
+  text-shadow: 0 1px 6px rgba(0,0,0,0.5);
+}
+.style-keywords {
+  display: flex; gap: 5px; flex-wrap: wrap; margin-top: 8px;
+}
+.style-kw {
+  font-size: 10px; padding: 3px 8px; border-radius: 10px;
+  background: rgba(255,255,255,0.1); color: rgba(255,255,255,0.65);
+}
+/* Style card unique bg gradients */
+.bg-bright   { background: linear-gradient(135deg, #1e2b38 0%, #131d28 50%, #0e1620 100%); }
+.bg-moody    { background: linear-gradient(135deg, #1a0e1f 0%, #130a18 50%, #0c0810 100%); }
+.bg-minimal  { background: linear-gradient(135deg, #1a1a22 0%, #141418 50%, #0e0e12 100%); }
+.bg-luxury   { background: linear-gradient(135deg, #1e1808 0%, #16120a 50%, #0c0c08 100%); }
+.bg-cozy     { background: linear-gradient(135deg, #1e1410 0%, #160e0a 50%, #0e0908 100%); }
+.bg-indust   { background: linear-gradient(135deg, #181820 0%, #101018 50%, #0a0a12 100%); }
+.bg-views    { background: linear-gradient(135deg, #0e1820 0%, #0a1218 50%, #080e12 100%); }
+.bg-classic  { background: linear-gradient(135deg, #1c1016 0%, #140c10 50%, #0c080c 100%); }
+
+/* Overlay gradient for style cards (stronger than nbhd) */
+.style-overlay-grad {
+  position: absolute; inset: 0;
+  background: linear-gradient(to top, rgba(0,0,0,0.88) 0%, rgba(0,0,0,0.3) 45%, rgba(0,0,0,0.1) 100%);
+  pointer-events: none;
+}
+
+/* Custom SVG decorations inside style cards */
+.style-deco {
+  position: absolute; inset: 0; overflow: hidden; pointer-events: none;
+}
+.style-deco svg { position: absolute; opacity: 0.12; }
+
+/* Skip / custom */
+.style-custom {
+  border: 1px dashed rgba(255,255,255,0.1); background: var(--surface);
+  display: flex; align-items: center; justify-content: center;
+  aspect-ratio: 4/3; border-radius: 16px; cursor: pointer; transition: border-color 0.15s;
+}
+.style-custom:hover { border-color: rgba(201,169,110,0.35); }
+.style-custom-inner { text-align: center; padding: 24px; }
+.style-custom-icon { font-size: 28px; opacity: 0.3; margin-bottom: 10px; }
+.style-custom-label { font-size: 14px; color: var(--muted); }
+.style-custom-sub { font-size: 12px; color: rgba(154,149,144,0.6); margin-top: 4px; }
+
+/* ═══════════════════════════════════
+   STEP 4 — Dates (Lightweight)
+════════════════════════════════════ */
+.dates-card {
+  background: var(--card); border: 1px solid var(--border);
+  border-radius: 18px; padding: 28px; max-width: 520px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+}
+.dates-card h3 {
+  font-family: 'Cormorant Garamond', serif; font-size: 22px; font-weight: 400;
+  margin-bottom: 6px;
+}
+.dates-card p { font-size: 13px; color: var(--muted); margin-bottom: 22px; line-height: 1.6; }
+.dates-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 18px; }
+.date-field label { font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); display: block; margin-bottom: 6px; }
+.date-field input {
+  background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+  color: var(--text); font-family: 'DM Sans', sans-serif; font-size: 14px;
+  padding: 12px 14px; width: 100%; outline: none; color-scheme: dark;
+  transition: border-color 0.2s;
+}
+.date-field input:focus { border-color: rgba(201,169,110,0.45); }
+.dates-actions { display: flex; gap: 10px; align-items: center; }
+.btn-primary {
+  padding: 12px 24px; background: var(--accent); color: #0c0c0e;
+  border: none; border-radius: 11px; font-family: 'DM Sans', sans-serif;
+  font-size: 13px; font-weight: 500; cursor: pointer; transition: opacity 0.15s;
+}
+.btn-primary:hover { opacity: 0.88; }
+.btn-skip {
+  padding: 12px 18px; background: transparent; color: var(--muted);
+  border: 1px solid var(--border); border-radius: 11px;
+  font-family: 'DM Sans', sans-serif; font-size: 13px; cursor: pointer;
+  transition: border-color 0.15s, color 0.15s;
+}
+.btn-skip:hover { border-color: rgba(255,255,255,0.15); color: var(--text); }
+.dates-soft-gate {
+  margin-top: 18px; padding: 12px 16px; border-radius: 10px;
+  background: rgba(201,169,110,0.06); border: 1px solid rgba(201,169,110,0.15);
+  font-size: 12px; color: var(--muted); line-height: 1.6;
+}
+.dates-soft-gate strong { color: var(--accent2); }
+
+/* ═══════════════════════════════════
+   STEP 5 — Results + Command Bar
+════════════════════════════════════ */
+/* Command bar (sticky refinement tool once in results) */
+.cmd-bar {
+  position: sticky; top: 52px; z-index: 500;
+  background: rgba(12,12,14,0.97); backdrop-filter: blur(20px);
+  border-bottom: 1px solid rgba(255,255,255,0.07);
+  padding: 0 var(--page-gutter);
+}
+.cmd-row {
+  display: flex; align-items: stretch; gap: 0;
+  max-width: var(--max-w); margin: 0 auto;
+}
+.cmd-seg {
+  display: flex; flex-direction: column; justify-content: center;
+  padding: 11px 16px 11px 0; cursor: pointer; flex-shrink: 0;
+  border-right: 1px solid rgba(255,255,255,0.06); margin-right: 16px; padding-right: 16px;
+  transition: opacity 0.15s; min-width: 0;
+}
+.cmd-seg:last-of-type { border-right: none; }
+.cmd-seg:hover .cmd-val { color: var(--accent2); }
+.cmd-lbl { font-size: 9px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); margin-bottom: 2px; }
+.cmd-val { font-size: 13px; color: var(--text); white-space: nowrap; }
+.cmd-val.ph { color: rgba(201,169,110,0.55); font-style: italic; }
+.cmd-search-wrap {
+  flex: 1; display: flex; align-items: center; gap: 10px;
+  padding: 8px 0;
+}
+.cmd-search-icon { color: var(--accent2); font-size: 14px; opacity: 0.7; flex-shrink: 0; }
+.cmd-search-wrap input {
+  flex: 1; background: transparent; border: none; outline: none;
+  font-family: 'DM Sans', sans-serif; font-size: 13px; color: var(--text); font-weight: 300;
+  min-width: 0;
+}
+.cmd-search-wrap input::placeholder { color: rgba(232,228,220,0.32); font-style: italic; }
+.cmd-go {
+  padding: 8px 18px; background: var(--accent); color: #0c0c0e;
+  border: none; border-radius: 9px; font-family: 'DM Sans', sans-serif;
+  font-size: 12px; font-weight: 500; cursor: pointer; flex-shrink: 0;
+  transition: opacity 0.15s;
+}
+.cmd-go:hover { opacity: 0.85; }
+
+/* Inline date editor (slides down from cmd bar) */
+.cmd-date-tray {
+  display: none; border-top: 1px solid var(--border);
+  padding: 14px 0; animation: fadeSlide 0.18s ease;
+}
+.cmd-date-tray.open { display: block; }
+.cmd-date-inner {
+  max-width: var(--max-w); margin: 0 auto;
+  display: flex; gap: 12px; align-items: flex-end; flex-wrap: wrap;
+}
+.cmd-date-inner .date-field { flex: 1; min-width: 140px; }
+@keyframes fadeSlide { from { opacity:0; transform: translateY(-6px); } to { opacity:1; transform: translateY(0); } }
+
+/* Results grid */
+.results-wrap { padding: 24px var(--page-gutter) 60px; max-width: var(--max-w); margin: 0 auto; }
+.results-meta {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 16px; gap: 12px; flex-wrap: wrap;
+}
+.results-meta-left { font-size: 13px; color: var(--muted); }
+.results-meta-left strong { color: var(--text); }
+.results-active-filters { display: flex; gap: 6px; flex-wrap: wrap; }
+.filter-chip {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 5px 10px; border-radius: 16px; font-size: 11px;
+  background: rgba(201,169,110,0.1); border: 1px solid rgba(201,169,110,0.3);
+  color: var(--accent);
+}
+.filter-chip-x { cursor: pointer; opacity: 0.6; }
+.filter-chip-x:hover { opacity: 1; }
+
+/* Hotel cards in results */
+.hotel-grid { display: flex; flex-direction: column; gap: 1px; }
+.hotel-card {
+  background: var(--card); border-radius: var(--radius);
+  overflow: hidden; margin-bottom: 10px;
+  border: 1px solid var(--border); transition: border-color 0.2s;
+}
+.hotel-card:hover { border-color: rgba(255,255,255,0.12); }
+.hotel-card-header {
+  padding: 14px 16px; display: flex; align-items: center; gap: 14px; cursor: pointer;
+}
+.hotel-thumb {
+  width: 76px; height: 60px; border-radius: 8px; flex-shrink: 0; overflow: hidden;
+}
+.hotel-thumb div { width: 100%; height: 100%; }
+.hotel-info { flex: 1; min-width: 0; }
+.hotel-name { font-size: 14px; font-weight: 500; margin-bottom: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.hotel-meta { font-size: 12px; color: var(--muted); }
+.hotel-score-block { text-align: right; flex-shrink: 0; }
+.hotel-score { font-size: 22px; font-weight: 500; color: var(--accent); line-height: 1; }
+.hotel-score-label { font-size: 10px; color: var(--muted); margin-top: 2px; }
+.hotel-price {
+  font-size: 13px; font-weight: 500; color: var(--green); margin-top: 3px;
+}
+.hotel-price.no-dates {
+  font-size: 11px; color: rgba(201,169,110,0.55); font-weight: 400;
+  cursor: pointer; text-decoration: underline; text-decoration-color: rgba(201,169,110,0.25);
+}
+/* Photo strip */
+.photo-strip { display: flex; gap: 4px; padding: 0 16px 14px; overflow-x: auto; }
+.photo-strip::-webkit-scrollbar { height: 0; }
+.photo-thumb {
+  flex-shrink: 0; width: 120px; height: 78px; border-radius: 8px; overflow: hidden;
+}
+.photo-thumb div { width: 100%; height: 100%; transition: transform 0.2s; }
+.photo-thumb:hover div { transform: scale(1.04); }
+.match-badge {
+  display: inline-block; padding: 2px 7px; border-radius: 8px; font-size: 10px; margin-top: 2px;
+  background: rgba(109,186,138,0.12); color: var(--green); border: 1px solid rgba(109,186,138,0.25);
+}
+
+/* ═══════════════════════════════════
+   Notes panel
+════════════════════════════════════ */
+.notes-screen { padding: 40px var(--page-gutter) 80px; max-width: 900px; margin: 0 auto; }
+.notes-screen h2 {
+  font-family: 'Cormorant Garamond', serif; font-size: 32px; font-weight: 300; margin-bottom: 6px;
+}
+.notes-screen p { font-size: 13px; color: var(--muted); margin-bottom: 32px; line-height: 1.7; }
+.notes-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 14px; }
+.note-card {
+  background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px;
+}
+.note-card h3 { font-size: 13px; font-weight: 500; color: var(--accent2); margin-bottom: 12px; letter-spacing: 0.02em; }
+.note-card ul { list-style: none; display: flex; flex-direction: column; gap: 8px; }
+.note-card li { font-size: 12px; color: var(--muted); padding-left: 16px; position: relative; line-height: 1.55; }
+.note-card li::before { content: '–'; position: absolute; left: 0; color: rgba(255,255,255,0.2); }
+.note-card li.good { color: var(--green); }
+.note-card li.good::before { content: '✓'; color: var(--green); }
+.note-card li.bad  { color: #e07070; }
+.note-card li.bad::before  { content: '✗'; color: #e07070; }
+.note-card li.key  { color: var(--accent2); }
+.note-card li.key::before  { content: '★'; color: var(--accent); }
+.change-pill {
+  display: inline-block; font-size: 10px; padding: 2px 8px; border-radius: 8px; margin-right: 4px; margin-bottom: 4px;
+  background: rgba(201,169,110,0.1); border: 1px solid rgba(201,169,110,0.25); color: var(--accent);
+}
+.change-pill.new { background: rgba(109,186,138,0.1); border-color: rgba(109,186,138,0.25); color: var(--green); }
+
+/* ═══════════════════════════════════
+   Responsive
+════════════════════════════════════ */
+@media (max-width: 640px) {
+  .nbhd-grid  { grid-template-columns: repeat(2, 1fr); gap: 8px; }
+  .style-grid { grid-template-columns: repeat(2, 1fr); gap: 8px; }
+  .story-seg-val { max-width: 80px; }
+  .story-arrow { padding: 0 2px; }
+  .story-bar { padding: 0 16px; }
+  .cmd-seg { padding-right: 10px; margin-right: 10px; }
+  .cmd-val { font-size: 12px; }
+  .hotel-card-header { gap: 10px; }
+  .hotel-thumb { width: 60px; height: 48px; }
+  .dates-row { grid-template-columns: 1fr; }
+}
+@media (max-width: 420px) {
+  .style-grid { grid-template-columns: 1fr 1fr; }
+  .nbhd-grid  { grid-template-columns: 1fr 1fr; }
+  .screen-heading { font-size: clamp(24px, 7vw, 36px); }
+}
+</style>
+</head>
+<body>
+
+<!-- ══════════════════════════════════
+     Canvas chrome
+═══════════════════════════════════ -->
+<div class="canvas-bar">
+  <span class="canvas-label">v2 · Refined</span>
+  <div class="canvas-tabs">
+    <button class="ctab active" onclick="showPanel('flow')">Full Flow</button>
+    <button class="ctab" onclick="showPanel('notes')">Design Notes</button>
+  </div>
+  <div class="dev-grp">
+    <button class="dbtn active" onclick="setDevice('desktop',this)">🖥 Desktop</button>
+    <button class="dbtn" onclick="setDevice('mobile',this)">📱 Mobile</button>
+  </div>
+</div>
+
+<div class="frame-wrap">
+<div class="frame" id="frame">
+
+<!-- ════════════════════════════════════════════
+     PANEL: Full Flow
+═══════════════════════════════════════════════ -->
+<div class="panel active" id="panel-flow">
+
+  <!-- App header (always shown) -->
+  <div class="app-header">
+    <div class="logo">travelboop<span>.</span></div>
+  </div>
+
+  <!-- ★ Sticky Search Story Bar ★ -->
+  <div class="story-bar" id="story-bar">
+    <div class="story-seg" id="story-city-seg" onclick="navToState('city')">
+      <div>
+        <div class="story-seg-label">City</div>
+        <div class="story-seg-val pending" id="story-city-val">Where to?</div>
+      </div>
+      <div class="story-edit-dot"></div>
+    </div>
+    <div class="story-arrow">›</div>
+    <div class="story-seg" id="story-nbhd-seg" onclick="navToState('nbhd')">
+      <div>
+        <div class="story-seg-label">Area</div>
+        <div class="story-seg-val pending" id="story-nbhd-val">Choose area</div>
+      </div>
+      <div class="story-edit-dot"></div>
+    </div>
+    <div class="story-arrow">›</div>
+    <div class="story-seg" id="story-style-seg" onclick="navToState('style')">
+      <div>
+        <div class="story-seg-label">Room Style</div>
+        <div class="story-seg-val pending" id="story-style-val">Pick a vibe</div>
+      </div>
+      <div class="story-edit-dot"></div>
+    </div>
+    <div class="story-dates-cta" id="story-dates-btn" onclick="navToState('dates')">+ Add dates</div>
+  </div>
+
+  <!-- ─────────────── STATE: CITY ─────────────── -->
+  <div id="state-city">
+    <div class="screen screen-sm">
+      <div class="screen-eyebrow"><div class="screen-eyebrow-dot"></div>Step 1 of 4</div>
+      <h1 class="screen-heading">Where are you<br><em>headed?</em></h1>
+      <p class="screen-sub">Type a city, or pick from a suggestion below.</p>
+
+      <div class="city-input-wrap">
+        <span class="city-input-icon">⌕</span>
+        <input type="text" id="city-input" placeholder="Paris, Kuala Lumpur, London…"
+          oninput="cityInputChange(this.value)"
+          onkeydown="if(event.key==='Enter'&&this.value.trim()) selectCity(this.value.trim())"/>
+      </div>
+
+      <div style="margin-top: 20px;">
+        <div class="recent-label">Suggested cities</div>
+        <div class="city-suggestions">
+          <div class="city-chip" onclick="selectCity('Paris')">🇫🇷 Paris</div>
+          <div class="city-chip" onclick="selectCity('Kuala Lumpur')">🇲🇾 Kuala Lumpur</div>
+          <div class="city-chip" onclick="selectCity('London')">🇬🇧 London</div>
+          <div class="city-chip" onclick="selectCity('Tokyo')">🇯🇵 Tokyo</div>
+          <div class="city-chip" onclick="selectCity('New York')">🇺🇸 New York</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ─────────────── STATE: NEIGHBOURHOOD ─────────────── -->
+  <div id="state-nbhd" style="display:none;">
+    <div class="screen">
+      <div class="screen-eyebrow"><div class="screen-eyebrow-dot"></div>Step 2 of 4</div>
+      <h1 class="screen-heading">Which <em>neighbourhood</em><br>feels right?</h1>
+      <p class="screen-sub" id="nbhd-sub">Pick an area to focus your search — or browse the whole city.</p>
+
+      <div class="nbhd-grid" id="nbhd-grid">
+        <!-- populated by JS -->
+      </div>
+    </div>
+  </div>
+
+  <!-- ─────────────── STATE: ROOM STYLE (hero moment) ─────────────── -->
+  <div id="state-style" style="display:none;">
+    <div class="screen">
+      <div class="screen-eyebrow"><div class="screen-eyebrow-dot"></div>Step 3 of 4 · Your differentiator</div>
+      <h1 class="screen-heading">What's your<br><em>room vibe?</em></h1>
+      <p class="screen-sub" id="style-sub">This is how we find rooms that actually match your taste — tap a style, or describe it yourself.</p>
+
+      <div class="style-grid" id="style-grid">
+
+        <!-- 1. Bright & Airy -->
+        <div class="style-card bg-bright" onclick="selectStyle('Bright & Airy', 'bright airy room large windows natural light')">
+          <div class="style-deco">
+            <svg width="200" height="200" style="right:-20px;top:-20px;"><circle cx="150" cy="50" r="80" fill="rgba(180,210,240,0.15)"/></svg>
+          </div>
+          <div class="style-overlay-grad"></div>
+          <div class="style-overlay">
+            <div class="style-tag-top">Bedroom · Bathroom</div>
+            <div class="style-bottom">
+              <div class="style-name">Bright &amp; Airy</div>
+              <div class="style-desc">Flooded with natural light, open views, effortless calm</div>
+              <div class="style-keywords">
+                <span class="style-kw">large windows</span>
+                <span class="style-kw">white &amp; neutral</span>
+                <span class="style-kw">open plan</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 2. Dark & Moody -->
+        <div class="style-card bg-moody" onclick="selectStyle('Dark & Moody', 'dark moody romantic room velvet rich colour')">
+          <div class="style-deco">
+            <svg width="200" height="200" style="left:-30px;top:20px;"><circle cx="60" cy="100" r="70" fill="rgba(140,80,180,0.12)"/></svg>
+          </div>
+          <div class="style-overlay-grad"></div>
+          <div class="style-overlay">
+            <div class="style-tag-top">Bedroom · Suite</div>
+            <div class="style-bottom">
+              <div class="style-name">Dark &amp; Moody</div>
+              <div class="style-desc">Drama, velvet textures, the kind of room you don't leave</div>
+              <div class="style-keywords">
+                <span class="style-kw">deep tones</span>
+                <span class="style-kw">dramatic</span>
+                <span class="style-kw">romantic</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 3. Minimalist -->
+        <div class="style-card bg-minimal" onclick="selectStyle('Minimalist Modern', 'minimalist modern room clean design calm')">
+          <div class="style-deco">
+            <svg width="200" height="200" style="right:10px;bottom:10px;"><rect x="100" y="80" width="90" height="90" rx="8" fill="rgba(200,200,220,0.08)"/></svg>
+          </div>
+          <div class="style-overlay-grad"></div>
+          <div class="style-overlay">
+            <div class="style-tag-top">Bedroom · All rooms</div>
+            <div class="style-bottom">
+              <div class="style-name">Minimalist Modern</div>
+              <div class="style-desc">Nothing extra. Clean lines, quiet confidence, Zen-like calm</div>
+              <div class="style-keywords">
+                <span class="style-kw">clean lines</span>
+                <span class="style-kw">neutral palette</span>
+                <span class="style-kw">calm</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 4. Luxury Suite -->
+        <div class="style-card bg-luxury" onclick="selectStyle('Luxury Suite', 'luxury suite marble bathroom grand opulent')">
+          <div class="style-deco">
+            <svg width="200" height="200" style="right:-10px;top:-10px;"><polygon points="150,0 200,100 100,100" fill="rgba(201,169,110,0.1)"/></svg>
+          </div>
+          <div class="style-overlay-grad"></div>
+          <div class="style-overlay">
+            <div class="style-tag-top">Suite · Bathroom</div>
+            <div class="style-bottom">
+              <div class="style-name">Luxury Suite</div>
+              <div class="style-desc">Marble, space, and the kind of bathroom you photograph</div>
+              <div class="style-keywords">
+                <span class="style-kw">marble</span>
+                <span class="style-kw">soaking tub</span>
+                <span class="style-kw">opulent</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 5. Cozy & Warm -->
+        <div class="style-card bg-cozy" onclick="selectStyle('Cozy & Warm', 'cozy warm boutique room textures fireplace soft')">
+          <div class="style-deco">
+            <svg width="200" height="200" style="left:10px;bottom:-20px;"><circle cx="80" cy="150" r="70" fill="rgba(200,120,60,0.1)"/></svg>
+          </div>
+          <div class="style-overlay-grad"></div>
+          <div class="style-overlay">
+            <div class="style-tag-top">Boutique · Bedroom</div>
+            <div class="style-bottom">
+              <div class="style-name">Cozy &amp; Warm</div>
+              <div class="style-desc">Layered textures, warm tones, the feeling of being wrapped up</div>
+              <div class="style-keywords">
+                <span class="style-kw">warm tones</span>
+                <span class="style-kw">textures</span>
+                <span class="style-kw">intimate</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 6. Industrial Loft -->
+        <div class="style-card bg-indust" onclick="selectStyle('Industrial Loft', 'industrial loft exposed brick concrete raw design')">
+          <div class="style-deco">
+            <svg width="200" height="200" style="right:0;top:30px;"><line x1="120" y1="0" x2="200" y2="160" stroke="rgba(180,180,200,0.08)" stroke-width="2"/><line x1="140" y1="0" x2="220" y2="160" stroke="rgba(180,180,200,0.06)" stroke-width="2"/></svg>
+          </div>
+          <div class="style-overlay-grad"></div>
+          <div class="style-overlay">
+            <div class="style-tag-top">Loft · Bedroom</div>
+            <div class="style-bottom">
+              <div class="style-name">Industrial Loft</div>
+              <div class="style-desc">Exposed concrete, raw edges, surprisingly liveable</div>
+              <div class="style-keywords">
+                <span class="style-kw">exposed brick</span>
+                <span class="style-kw">concrete</span>
+                <span class="style-kw">raw</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 7. Panoramic Views -->
+        <div class="style-card bg-views" onclick="selectStyle('City Views', 'panoramic view city lights skyline floor to ceiling windows')">
+          <div class="style-deco">
+            <svg width="200" height="200" style="bottom:0;right:0;"><rect x="60" y="100" width="140" height="100" fill="rgba(80,150,200,0.08)"/></svg>
+          </div>
+          <div class="style-overlay-grad"></div>
+          <div class="style-overlay">
+            <div class="style-tag-top">View · High floor</div>
+            <div class="style-bottom">
+              <div class="style-name">City Views</div>
+              <div class="style-desc">Floor-to-ceiling windows, the city below, skyline as wallpaper</div>
+              <div class="style-keywords">
+                <span class="style-kw">floor-to-ceiling</span>
+                <span class="style-kw">high floor</span>
+                <span class="style-kw">panoramic</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 8. Custom (describe yourself) -->
+        <div class="style-custom" onclick="selectStyleCustom()">
+          <div class="style-custom-inner">
+            <div class="style-custom-icon">✦</div>
+            <div class="style-custom-label">Describe it yourself</div>
+            <div class="style-custom-sub">Type anything — AI understands</div>
+          </div>
+        </div>
+
+      </div><!-- /style-grid -->
+
+      <!-- Custom text input (hidden until clicked) -->
+      <div id="custom-style-input" style="display:none; margin-top:16px; max-width:520px;">
+        <div style="display:flex; gap:0; overflow:hidden; border-radius:14px; border:1px solid rgba(201,169,110,0.38); background:var(--card);">
+          <div style="flex:1; position:relative;">
+            <span style="position:absolute;left:14px;top:50%;transform:translateY(-50%);color:var(--accent2);opacity:0.7;font-size:14px;">✦</span>
+            <input id="custom-style-text" style="width:100%;background:transparent;border:none;outline:none;padding:14px 14px 14px 38px;font-family:DM Sans,sans-serif;font-size:14px;color:var(--text);" type="text" placeholder="e.g. calm Japanese-inspired room with hinoki bath…"/>
+          </div>
+          <button onclick="submitCustomStyle()" style="padding:0 22px;background:var(--accent);color:#0c0c0e;border:none;font-family:DM Sans,sans-serif;font-size:13px;font-weight:500;cursor:pointer;">Next →</button>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ─────────────── STATE: DATES (lightweight) ─────────────── -->
+  <div id="state-dates" style="display:none;">
+    <div class="screen screen-sm">
+      <div class="screen-eyebrow"><div class="screen-eyebrow-dot"></div>Step 4 of 4 · Optional</div>
+      <h1 class="screen-heading">When are you<br><em>travelling?</em></h1>
+      <p class="screen-sub">Dates unlock live pricing. You can always add them later.</p>
+
+      <div class="dates-card">
+        <h3>Add your dates</h3>
+        <p>We'll show you live pricing and available rooms for your nights.</p>
+        <div class="dates-row">
+          <div class="date-field">
+            <label>Check-in</label>
+            <input type="date" id="date-checkin" onchange="datesChanged()" style="color-scheme:dark;"/>
+          </div>
+          <div class="date-field">
+            <label>Check-out</label>
+            <input type="date" id="date-checkout" onchange="datesChanged()" style="color-scheme:dark;"/>
+          </div>
+        </div>
+        <div class="dates-actions">
+          <button class="btn-primary" onclick="confirmDates()">Show results with prices</button>
+          <button class="btn-skip" onclick="skipDates()">Browse without dates</button>
+        </div>
+        <div class="dates-soft-gate">
+          <strong>No dates?</strong> You'll still see all rooms ranked by how well they match your style. We'll add a "select dates" nudge where prices would appear.
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ─────────────── STATE: RESULTS (+ Command Bar) ─────────────── -->
+  <div id="state-results" style="display:none;">
+
+    <!-- Command Bar — replaces story bar in results mode -->
+    <div class="cmd-bar" id="cmd-bar">
+      <div class="cmd-row">
+        <div class="cmd-seg" onclick="navToState('city')">
+          <div class="cmd-lbl">City</div>
+          <div class="cmd-val" id="cmd-city">Paris</div>
+        </div>
+        <div class="cmd-seg" onclick="navToState('nbhd')">
+          <div class="cmd-lbl">Area</div>
+          <div class="cmd-val" id="cmd-nbhd">Le Marais</div>
+        </div>
+        <div class="cmd-seg" onclick="cmdToggleDates()">
+          <div class="cmd-lbl">Dates</div>
+          <div class="cmd-val ph" id="cmd-dates">Add dates</div>
+        </div>
+        <div class="cmd-search-wrap">
+          <span class="cmd-search-icon">✦</span>
+          <input type="text" id="cmd-query-input" placeholder="Refine your search…"/>
+        </div>
+        <button class="cmd-go" onclick="cmdSearch()">Search</button>
+      </div>
+      <!-- Inline dates tray -->
+      <div class="cmd-date-tray" id="cmd-date-tray">
+        <div class="cmd-date-inner">
+          <div class="date-field">
+            <label>Check-in</label>
+            <input type="date" id="cmd-date-ci" style="color-scheme:dark;" onchange="cmdDatesChanged()"/>
+          </div>
+          <div class="date-field">
+            <label>Check-out</label>
+            <input type="date" id="cmd-date-co" style="color-scheme:dark;" onchange="cmdDatesChanged()"/>
+          </div>
+          <button class="btn-primary" onclick="cmdConfirmDates()" style="align-self:flex-end;padding:11px 20px;">Update prices</button>
+          <button class="btn-skip" onclick="cmdToggleDates()" style="align-self:flex-end;padding:11px 16px;">Close</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Results -->
+    <div class="results-wrap">
+      <div class="results-meta">
+        <div class="results-meta-left">
+          Showing <strong id="results-count">—</strong> hotels · ranked by room match
+        </div>
+        <div class="results-active-filters" id="results-filters">
+          <!-- chips injected by JS -->
+        </div>
+      </div>
+
+      <!-- Soft gate banner (shown when no dates set) -->
+      <div id="results-soft-gate" style="display:none; margin-bottom:14px; padding:12px 16px; border-radius:10px; background:rgba(201,169,110,0.06); border:1px solid rgba(201,169,110,0.15); font-size:13px; color:var(--muted); display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
+        <span style="flex:1; min-width:200px;">💡 <strong style="color:var(--accent2);">Add dates</strong> to unlock live pricing and available rooms only.</span>
+        <button onclick="navToState('dates')" style="padding:7px 16px; background:rgba(201,169,110,0.12); border:1px solid rgba(201,169,110,0.35); border-radius:8px; color:var(--accent); font-family:DM Sans,sans-serif; font-size:12px; font-weight:500; cursor:pointer; white-space:nowrap;">Add dates →</button>
+      </div>
+
+      <div class="hotel-grid" id="hotel-grid">
+        <!-- populated by JS -->
+      </div>
+    </div>
+  </div>
+
+</div><!-- /panel-flow -->
+
+
+<!-- ════════════════════════════════════════════
+     PANEL: Design Notes
+═══════════════════════════════════════════════ -->
+<div class="panel" id="panel-notes">
+  <div class="app-header"><div class="logo">travelboop<span>.</span></div></div>
+  <div class="notes-screen">
+    <h2>v2 Design Rationale</h2>
+    <p>Synthesis of ChatGPT feedback + design exploration v1. The goal: one dominant experience built for "guided discovery → efficient booking."</p>
+
+    <div style="margin-bottom:24px; display:flex; flex-wrap:wrap; gap:6px;">
+      <span class="change-pill new">New: Room Style step</span>
+      <span class="change-pill new">New: Search Story Bar</span>
+      <span class="change-pill new">New: Command Bar (results only)</span>
+      <span class="change-pill new">New: Soft date gating</span>
+      <span class="change-pill">Flow reordered</span>
+      <span class="change-pill">Dates moved to step 4</span>
+      <span class="change-pill">Options A/B removed</span>
+    </div>
+
+    <div class="notes-grid">
+
+      <div class="note-card">
+        <h3>What changed from v1</h3>
+        <ul>
+          <li class="good">4 competing patterns → 1 dominant experience</li>
+          <li class="good">Room Style elevated to a full "moment" (not a filter row)</li>
+          <li class="good">Dates moved to step 4 (after emotional investment)</li>
+          <li class="good">Sticky "Search Story" bar replaces breadcrumbs</li>
+          <li class="good">Command Bar now appears only in results (not entry)</li>
+          <li class="good">Soft gating: browse without dates, nudge to add them</li>
+          <li class="bad">Options A (accordion) and B (context strip) removed from flow</li>
+        </ul>
+      </div>
+
+      <div class="note-card">
+        <h3>The new flow order &amp; why</h3>
+        <ul>
+          <li>City → Neighborhood → <strong style="color:var(--accent2)">Room Style</strong> → Dates → Results</li>
+          <li class="key">Emotional before rational: fall in love before logistics</li>
+          <li>Neighborhoods = visual + vibe (kept from v1)</li>
+          <li class="key">Room Style = full-page visual moment (the differentiator)</li>
+          <li>Dates = lightweight, optional, always skippable</li>
+          <li>Results = Command Bar for fast refinement</li>
+        </ul>
+      </div>
+
+      <div class="note-card">
+        <h3>Search Story Bar (sticky)</h3>
+        <ul>
+          <li class="key">Always visible once journey starts — solves context loss</li>
+          <li>Shows: Paris › Le Marais › Luxury Suite › Add dates</li>
+          <li>Each segment clickable to jump back and edit</li>
+          <li>Dates segment = call-to-action style until set</li>
+          <li>Replaces wizard-style progress indicators</li>
+          <li>On mobile: bar wraps or abbreviates values, still readable</li>
+        </ul>
+      </div>
+
+      <div class="note-card">
+        <h3>Room Style cards — design intent</h3>
+        <ul>
+          <li class="key">Same visual weight as neighborhood cards — a "moment," not a filter</li>
+          <li>8 styles + "describe yourself" custom option</li>
+          <li>Each card: name, desc, keywords, room-type badge</li>
+          <li>Tapping a card sets the AI query automatically</li>
+          <li>Custom option opens inline text input (no modal)</li>
+          <li>On mobile: 2-column grid, large tap targets, horizontal scroll option</li>
+        </ul>
+      </div>
+
+      <div class="note-card">
+        <h3>Command Bar (results only)</h3>
+        <ul>
+          <li>Only appears once user reaches results</li>
+          <li class="key">Optimized for "decision mode" — speed and clarity</li>
+          <li>Shows City / Area / Dates as compact editable chips</li>
+          <li>Dates → inline tray, no navigation away from results</li>
+          <li>Text search always visible for quick re-querying</li>
+          <li>Does NOT appear at entry — removes that confusion from v1</li>
+        </ul>
+      </div>
+
+      <div class="note-card">
+        <h3>Soft date gating</h3>
+        <ul>
+          <li class="key">Core principle: let users fall in love first</li>
+          <li>Dates are step 4, not step 3</li>
+          <li>Skip is equally prominent as Confirm</li>
+          <li>In results: price badge shows "Add dates" instead of a number</li>
+          <li>Banner at top of results with single CTA to add dates</li>
+          <li>Prevents "I can't find good dates" from blocking discovery</li>
+        </ul>
+      </div>
+
+      <div class="note-card">
+        <h3>Mobile strategy</h3>
+        <ul>
+          <li class="good">Each step = full-width, vertical scroll section (not a modal)</li>
+          <li class="good">Story bar: abbreviated values, stays compact</li>
+          <li class="good">Neighborhood grid: 2-column on small screens</li>
+          <li class="good">Style cards: 2-column grid, large tap targets</li>
+          <li class="good">Dates: stacked single column</li>
+          <li>No popups, no "Next" buttons, no multi-step modals</li>
+        </ul>
+      </div>
+
+      <div class="note-card">
+        <h3>Open questions for next iteration</h3>
+        <ul>
+          <li>Should neighborhood be skippable from the story bar directly?</li>
+          <li>Multi-select styles: allow 2+ selections for blended queries?</li>
+          <li>Photo-tap vibes from v1 — where do they live? Below style grid?</li>
+          <li>Story bar on desktop: does it need a "Start over" option?</li>
+          <li>Results page: should style cards reappear as a filter row?</li>
+          <li>Animation between states: cross-fade vs slide-up?</li>
+        </ul>
+      </div>
+
+    </div>
+  </div>
+</div><!-- /panel-notes -->
+
+</div><!-- /frame -->
+</div><!-- /frame-wrap -->
+
+<script>
+// ── State ──
+const S = { city: null, nbhd: null, style: null, styleQuery: null, dates: null, hasDates: false };
+
+// ── Canvas controls ──
+function showPanel(id) {
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.ctab').forEach(b => b.classList.remove('active'));
+  document.getElementById('panel-' + id).classList.add('active');
+  event.target.classList.add('active');
+  window.scrollTo(0,0);
+}
+function setDevice(mode, btn) {
+  document.querySelectorAll('.dbtn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  const f = document.getElementById('frame');
+  if (mode === 'mobile') f.classList.add('mobile');
+  else f.classList.remove('mobile');
+}
+
+// ── Story Bar ──
+function showStoryBar() {
+  document.getElementById('story-bar').classList.add('visible');
+}
+function updateStoryBar() {
+  const cityVal  = document.getElementById('story-city-val');
+  const nbhdVal  = document.getElementById('story-nbhd-val');
+  const styleVal = document.getElementById('story-style-val');
+  const dateBtn  = document.getElementById('story-dates-btn');
+
+  const citySeg  = document.getElementById('story-city-seg');
+  const nbhdSeg  = document.getElementById('story-nbhd-seg');
+  const styleSeg = document.getElementById('story-style-seg');
+
+  // City
+  if (S.city) {
+    cityVal.textContent = S.city; cityVal.className = 'story-seg-val set';
+    citySeg.classList.add('done'); citySeg.classList.remove('current');
+  }
+  // Nbhd
+  if (S.nbhd) {
+    const short = S.nbhd.length > 16 ? S.nbhd.slice(0,14)+'…' : S.nbhd;
+    nbhdVal.textContent = short; nbhdVal.className = 'story-seg-val set';
+    nbhdSeg.classList.add('done'); nbhdSeg.classList.remove('current');
+  }
+  // Style
+  if (S.style) {
+    styleVal.textContent = S.style; styleVal.className = 'story-seg-val set';
+    styleSeg.classList.add('done'); styleSeg.classList.remove('current');
+  }
+  // Dates
+  if (S.hasDates && S.dates) {
+    dateBtn.textContent = S.dates;
+    dateBtn.classList.add('set');
+    // Also update cmd bar
+    const cmdDates = document.getElementById('cmd-dates');
+    if (cmdDates) { cmdDates.textContent = S.dates; cmdDates.classList.remove('ph'); }
+  }
+}
+function markCurrent(step) {
+  ['city','nbhd','style'].forEach(s => {
+    document.getElementById('story-' + s + '-seg')?.classList.remove('current');
+  });
+  const el = document.getElementById('story-' + step + '-seg');
+  if (el) el.classList.add('current');
+}
+
+// ── State navigation ──
+const ALL_STATES = ['city','nbhd','style','dates','results'];
+function showState(id) {
+  ALL_STATES.forEach(s => {
+    const el = document.getElementById('state-' + s);
+    if (el) el.style.display = s === id ? 'block' : 'none';
+  });
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+function navToState(id) {
+  // If trying to go to a state we haven't unlocked yet, ignore
+  if (id === 'nbhd'    && !S.city)   return;
+  if (id === 'style'   && !S.nbhd)   return;
+  if (id === 'dates'   && !S.style)  return;
+  if (id === 'results' && !S.style)  return;
+  showState(id);
+  markCurrent({ city:'city', nbhd:'nbhd', style:'style', dates:'style', results:null }[id]);
+  if (id !== 'results') showStoryBar();
+  updateStoryBar();
+}
+
+// ── STEP 1: City ──
+const NBHD_DATA = {
+  'Paris':        [
+    { name:'Le Marais',          vibe:'Historic, artsy, buzzing',     tags:['walkable','historic','artsy'],   hotels:30, bg:'linear-gradient(160deg,#1e1210 0%,#120c0a 100%)' },
+    { name:'Saint-Germain',      vibe:'Chic, literary, café culture', tags:['romantic','walkable','foodie'],  hotels:25, bg:'linear-gradient(160deg,#121020 0%,#0c0a18 100%)' },
+    { name:'Montmartre',         vibe:'Bohemian, hilltop, painters',  tags:['artsy','local-feel','romantic'], hotels:19, bg:'linear-gradient(160deg,#101810 0%,#0a1008 100%)' },
+    { name:'Champs-Élysées',     vibe:'Grand, iconic, well-located',  tags:['luxury','shopping','central'],   hotels:74, bg:'linear-gradient(160deg,#1a1608 0%,#120e06 100%)' },
+    { name:'Canal Saint-Martin', vibe:'Emerging, creative, local',   tags:['local-feel','nightlife','artsy'],hotels:15, bg:'linear-gradient(160deg,#081614 0%,#060e0c 100%)' },
+    { name:'Opéra / Grands Blvd',vibe:'Central, lively, convenience',tags:['central','business','shopping'], hotels:60, bg:'linear-gradient(160deg,#160e18 0%,#0e0a10 100%)' },
+  ],
+  'Kuala Lumpur': [
+    { name:'KLCC',         vibe:'Glass towers, luxury, modern', tags:['luxury','business','modern'],     hotels:45, bg:'linear-gradient(160deg,#0e1220 0%,#080c18 100%)' },
+    { name:'Bukit Bintang',vibe:'Vibrant, shopping, nightlife', tags:['nightlife','shopping','lively'],  hotels:38, bg:'linear-gradient(160deg,#180e08 0%,#100a06 100%)' },
+    { name:'Bangsar',      vibe:'Expat enclave, café culture',  tags:['local-feel','foodie','calm'],     hotels:22, bg:'linear-gradient(160deg,#0c1410 0%,#080e0c 100%)' },
+    { name:'Chow Kit',     vibe:'Gritty, authentic, markets',   tags:['local-feel','budget','markets'],  hotels:18, bg:'linear-gradient(160deg,#141008 0%,#0c0c06 100%)' },
+  ],
+  'London': [
+    { name:'Mayfair',          vibe:'Luxury, hushed, white-glove', tags:['luxury','quiet','shopping'],    hotels:35, bg:'linear-gradient(160deg,#161010 0%,#0e0c0c 100%)' },
+    { name:'Shoreditch',       vibe:'Creative, gritty, electric', tags:['artsy','nightlife','local-feel'],hotels:28, bg:'linear-gradient(160deg,#0c0c18 0%,#080810 100%)' },
+    { name:'Covent Garden',    vibe:'Central, theatrical, touristy',tags:['central','walkable','culture'],hotels:42, bg:'linear-gradient(160deg,#121008 0%,#0a0c06 100%)' },
+    { name:'South Bank',       vibe:'Cultural, riverside, open',   tags:['culture','walkable','views'],   hotels:31, bg:'linear-gradient(160deg,#080e16 0%,#060a10 100%)' },
+  ],
+  'Tokyo': [
+    { name:'Shinjuku',    vibe:'Neon, electric, never sleeps', tags:['nightlife','shopping','intense'], hotels:80, bg:'linear-gradient(160deg,#0e0818 0%,#080610 100%)' },
+    { name:'Shibuya',     vibe:'Youth culture, fashion, chaos',tags:['shopping','nightlife','trendy'],  hotels:65, bg:'linear-gradient(160deg,#180808 0%,#100606 100%)' },
+    { name:'Ginza',       vibe:'Upscale, polished, serene',   tags:['luxury','shopping','calm'],       hotels:40, bg:'linear-gradient(160deg,#12100a 0%,#0c0c08 100%)' },
+    { name:'Asakusa',     vibe:'Old Tokyo, temples, calm',    tags:['historic','culture','quiet'],      hotels:35, bg:'linear-gradient(160deg,#0c1008 0%,#080c06 100%)' },
+  ],
+  'New York': [
+    { name:'Manhattan Midtown', vibe:'Central, iconic, busy',      tags:['central','business','iconic'],  hotels:120, bg:'linear-gradient(160deg,#0e0e18 0%,#080810 100%)' },
+    { name:'SoHo',              vibe:'Fashion, loft living, art',   tags:['artsy','shopping','trendy'],   hotels:45,  bg:'linear-gradient(160deg,#181008 0%,#100c06 100%)' },
+    { name:'Brooklyn',          vibe:'Local, diverse, emerging',    tags:['local-feel','foodie','artsy'], hotels:38,  bg:'linear-gradient(160deg,#0c1008 0%,#080c06 100%)' },
+    { name:'Lower East Side',   vibe:'Gritty cool, nightlife',      tags:['nightlife','artsy','local-feel'],hotels:28, bg:'linear-gradient(160deg,#140a0e 0%,#0c0808 100%)' },
+  ],
+};
+
+function cityInputChange(val) {
+  const pills = document.querySelector('.city-suggestions');
+  if (!val) {
+    pills.innerHTML = ['🇫🇷 Paris','🇲🇾 Kuala Lumpur','🇬🇧 London','🇯🇵 Tokyo','🇺🇸 New York'].map(c => {
+      const city = c.split(' ').slice(1).join(' ');
+      return `<div class="city-chip" onclick="selectCity('${city}')">${c}</div>`;
+    }).join('');
+    return;
+  }
+  const matches = Object.keys(NBHD_DATA).filter(c => c.toLowerCase().includes(val.toLowerCase()));
+  pills.innerHTML = matches.map(c => `<div class="city-chip" onclick="selectCity('${c}')">${c}</div>`).join('');
+}
+function selectCity(city) {
+  S.city = city;
+  document.getElementById('city-input').value = city;
+  showStoryBar();
+  updateStoryBar();
+  renderNbhdGrid(city);
+  setTimeout(() => showState('nbhd'), 80);
+}
+
+// ── STEP 2: Neighbourhood ──
+function renderNbhdGrid(city) {
+  const nbhds = NBHD_DATA[city] || [];
+  document.getElementById('nbhd-sub').textContent = city + ' · Pick an area or browse the whole city.';
+  const grid = document.getElementById('nbhd-grid');
+  grid.innerHTML = nbhds.map(n => `
+    <div class="nbhd-card" onclick="selectNbhd('${n.name}', ${n.hotels})" style="background:${n.bg};">
+      <div class="nbhd-overlay">
+        <div class="nbhd-name">${n.name}</div>
+        <div class="nbhd-vibe">${n.vibe}</div>
+        <div class="nbhd-tags">
+          ${n.tags.map(t => `<span class="nbhd-tag">${t}</span>`).join('')}
+          <span class="nbhd-tag">${n.hotels} hotels</span>
+        </div>
+      </div>
+    </div>
+  `).join('') + `
+    <div class="nbhd-card-skip" onclick="selectNbhd('All of ${city}', null)">
+      <div class="nbhd-skip-inner">
+        <div class="nbhd-skip-icon">◎</div>
+        <div class="nbhd-skip-label">All of ${city}</div>
+        <div class="nbhd-skip-sub">No area filter</div>
+      </div>
+    </div>`;
+}
+function selectNbhd(name, hotels) {
+  S.nbhd = name;
+  updateStoryBar();
+  // Update cmd bar
+  const el = document.getElementById('cmd-nbhd');
+  if (el) el.textContent = name.length > 18 ? name.slice(0,16)+'…' : name;
+  setTimeout(() => showState('style'), 80);
+}
+
+// ── STEP 3: Room Style ──
+function selectStyle(name, query) {
+  S.style = name;
+  S.styleQuery = query;
+  // visual feedback
+  document.querySelectorAll('.style-card').forEach(c => c.classList.remove('selected'));
+  event.currentTarget.classList.add('selected');
+  updateStoryBar();
+  const el = document.getElementById('cmd-query-input');
+  if (el) el.value = query;
+  setTimeout(() => showState('dates'), 200);
+}
+function selectStyleCustom() {
+  const wrap = document.getElementById('custom-style-input');
+  wrap.style.display = wrap.style.display === 'none' ? 'block' : 'none';
+  if (wrap.style.display === 'block') document.getElementById('custom-style-text').focus();
+}
+function submitCustomStyle() {
+  const val = document.getElementById('custom-style-text').value.trim();
+  if (!val) return;
+  S.style = val.length > 22 ? val.slice(0,20)+'…' : val;
+  S.styleQuery = val;
+  updateStoryBar();
+  const el = document.getElementById('cmd-query-input');
+  if (el) el.value = val;
+  showState('dates');
+}
+
+// ── STEP 4: Dates ──
+function datesChanged() {}
+function confirmDates() {
+  const ci = document.getElementById('date-checkin').value;
+  const co = document.getElementById('date-checkout').value;
+  if (!ci || !co) { alert('Please pick both check-in and check-out dates.'); return; }
+  S.hasDates = true;
+  S.dates = fmtDate(ci) + ' – ' + fmtDate(co);
+  updateStoryBar();
+  goToResults(true);
+}
+function skipDates() {
+  S.hasDates = false;
+  S.dates = null;
+  goToResults(false);
+}
+function fmtDate(d) {
+  if (!d) return '';
+  const dt = new Date(d + 'T12:00:00');
+  return dt.toLocaleDateString('en-US', { month:'short', day:'numeric' });
+}
+
+// ── Results ──
+const MOCK_HOTELS = [
+  { name:'Le Pavillon Marais',       area:'Le Marais',        stars:'★★★★★', score:94, price:320, priceLabel:'€320/night', matchedStyle:'Luxury Suite',  rooms:3 },
+  { name:'Hôtel du Petit Moulin',    area:'Le Marais',        stars:'★★★★',  score:88, price:185, priceLabel:'€185/night', matchedStyle:'Dark & Moody',   rooms:4 },
+  { name:'Les Bains Paris',          area:'Le Marais',        stars:'★★★★★', score:85, price:410, priceLabel:'€410/night', matchedStyle:'Industrial Loft',rooms:5 },
+  { name:'Saint-Germain Résidence',  area:'Saint-Germain',    stars:'★★★★',  score:81, price:210, priceLabel:'€210/night', matchedStyle:'Bright & Airy',  rooms:3 },
+  { name:'Hôtel Fabric',             area:'Canal St-Martin',  stars:'★★★★',  score:77, price:155, priceLabel:'€155/night', matchedStyle:'Industrial Loft',rooms:4 },
+];
+const ROOM_BG_PALETTES = [
+  'linear-gradient(135deg,#1a1408 0%,#0e0c06 100%)',
+  'linear-gradient(135deg,#0e101a 0%,#080a10 100%)',
+  'linear-gradient(135deg,#141018 0%,#0c0a10 100%)',
+  'linear-gradient(135deg,#101610 0%,#0a100a 100%)',
+  'linear-gradient(135deg,#181210 0%,#100e0c 100%)',
+];
+
+function goToResults(hasDates) {
+  // Update cmd bar labels
+  document.getElementById('cmd-city').textContent = S.city || '—';
+  const nbhdEl = document.getElementById('cmd-nbhd');
+  if (nbhdEl) {
+    const n = S.nbhd || '—';
+    nbhdEl.textContent = n.length > 16 ? n.slice(0,14)+'…' : n;
+  }
+  const qEl = document.getElementById('cmd-query-input');
+  if (qEl && S.styleQuery) qEl.value = S.styleQuery;
+
+  renderResults(hasDates);
+  document.getElementById('state-results').style.display = 'block';
+  ALL_STATES.filter(s => s !== 'results').forEach(s => {
+    const el = document.getElementById('state-' + s);
+    if (el) el.style.display = 'none';
+  });
+  // Hide story bar — cmd bar takes over
+  document.getElementById('story-bar').classList.remove('visible');
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function renderResults(hasDates) {
+  const nbhd = S.nbhd || 'Paris';
+  const filtered = MOCK_HOTELS.filter(h => {
+    if (nbhd && !nbhd.startsWith('All of')) return h.area === nbhd || true; // mock: show all
+    return true;
+  });
+
+  document.getElementById('results-count').textContent = filtered.length;
+
+  // Active filter chips
+  const chips = [];
+  if (S.nbhd && !S.nbhd.startsWith('All')) chips.push({ label: S.nbhd, key:'nbhd' });
+  if (S.style) chips.push({ label: S.style, key:'style' });
+  document.getElementById('results-filters').innerHTML = chips.map(c =>
+    `<div class="filter-chip">${c.label} <span class="filter-chip-x" onclick="removeFilter('${c.key}')">✕</span></div>`
+  ).join('');
+
+  // Soft gate
+  const gateEl = document.getElementById('results-soft-gate');
+  gateEl.style.display = hasDates ? 'none' : 'flex';
+
+  // Hotel cards
+  const grid = document.getElementById('hotel-grid');
+  grid.innerHTML = filtered.map((h, i) => {
+    const priceHtml = hasDates
+      ? `<div class="hotel-price">${h.priceLabel}</div>`
+      : `<div class="hotel-price no-dates" onclick="navToState('dates')" title="Add dates to see pricing">Add dates for pricing</div>`;
+    const roomPreviews = Array.from({length: h.rooms}, (_, ri) =>
+      `<div class="photo-thumb"><div style="background:${ROOM_BG_PALETTES[(i+ri)%ROOM_BG_PALETTES.length]};"></div></div>`
+    ).join('');
+    return `
+      <div class="hotel-card">
+        <div class="hotel-card-header">
+          <div class="hotel-thumb"><div style="background:${ROOM_BG_PALETTES[i % ROOM_BG_PALETTES.length]};border-radius:8px;"></div></div>
+          <div class="hotel-info">
+            <div class="hotel-name">${h.name}</div>
+            <div class="hotel-meta">${h.area} · ${h.stars}</div>
+            <div class="match-badge">Matches ${h.matchedStyle}</div>
+          </div>
+          <div class="hotel-score-block">
+            <div class="hotel-score">${h.score}%</div>
+            <div class="hotel-score-label">match</div>
+            ${priceHtml}
+          </div>
+        </div>
+        <div class="photo-strip">${roomPreviews}</div>
+      </div>`;
+  }).join('');
+}
+
+function removeFilter(key) {
+  if (key === 'nbhd') { S.nbhd = null; document.getElementById('cmd-nbhd').textContent = 'Any area'; }
+  if (key === 'style') { S.style = null; S.styleQuery = null; document.getElementById('cmd-query-input').value = ''; }
+  renderResults(S.hasDates);
+}
+function cmdSearch() {
+  const q = document.getElementById('cmd-query-input').value;
+  if (q && q !== S.styleQuery) { S.style = q.slice(0,22) + (q.length>22?'…':''); S.styleQuery = q; }
+  renderResults(S.hasDates);
+}
+function cmdToggleDates() {
+  const tray = document.getElementById('cmd-date-tray');
+  tray.classList.toggle('open');
+}
+function cmdDatesChanged() {}
+function cmdConfirmDates() {
+  const ci = document.getElementById('cmd-date-ci').value;
+  const co = document.getElementById('cmd-date-co').value;
+  if (!ci || !co) return;
+  S.hasDates = true;
+  S.dates = fmtDate(ci) + ' – ' + fmtDate(co);
+  document.getElementById('cmd-dates').textContent = S.dates;
+  document.getElementById('cmd-dates').classList.remove('ph');
+  document.getElementById('story-dates-btn').textContent = S.dates;
+  document.getElementById('story-dates-btn').classList.add('set');
+  document.getElementById('cmd-date-tray').classList.remove('open');
+  renderResults(true);
+}
+</script>
+</body>
+</html>

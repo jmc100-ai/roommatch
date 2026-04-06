@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Hero + Describe — Options</title>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;1,300;1,400&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:#0c0c0e; --card:#111114; --surface:#18181c;
+    --text:#e8e4dc; --muted:rgba(232,228,220,.45);
+    --accent:#c9a96e; --accent2:#d4b896;
+    --border:rgba(201,169,110,.2);
+  }
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body { background:var(--bg); color:var(--text); font-family:'DM Sans',sans-serif; padding:40px 24px 80px; }
+  h2 { font-family:'Cormorant Garamond',serif; font-size:28px; font-weight:300; margin-bottom:6px; color:var(--accent); }
+  .page-title { font-family:'Cormorant Garamond',serif; font-size:42px; font-weight:300; text-align:center; margin-bottom:8px; }
+  .page-sub { text-align:center; color:var(--muted); font-size:14px; margin-bottom:56px; }
+  .options { display:grid; grid-template-columns:repeat(3,1fr); gap:32px; max-width:1200px; margin:0 auto; }
+  .option { display:flex; flex-direction:column; gap:16px; }
+  .option-label { font-size:11px; letter-spacing:.18em; text-transform:uppercase; color:var(--accent); }
+  .option-title { font-family:'Cormorant Garamond',serif; font-size:20px; font-weight:300; }
+  .option-desc { font-size:12px; color:var(--muted); line-height:1.6; }
+
+  /* ── Shared hero shell ─────────────────────────── */
+  .hero {
+    border-radius:20px; overflow:hidden; position:relative;
+    height:480px; cursor:pointer;
+    background:linear-gradient(160deg,#2a1f10 0%,#0e0a06 100%);
+  }
+  .hero-img {
+    position:absolute; inset:0; width:100%; height:100%;
+    object-fit:cover; opacity:.75;
+    background:linear-gradient(160deg,#3d2a14 0%,#1a0e06 50%,#0d0808 100%);
+  }
+  /* fake photo bg */
+  .hero-photo {
+    position:absolute; inset:0;
+    background:
+      radial-gradient(ellipse at 70% 30%, rgba(220,180,120,.12) 0%, transparent 60%),
+      radial-gradient(ellipse at 20% 80%, rgba(180,120,60,.08) 0%, transparent 50%),
+      linear-gradient(160deg,#2e1e0a 0%,#130d06 60%,#0c0808 100%);
+  }
+  .hero-badge {
+    position:absolute; top:20px; left:20px;
+    background:rgba(201,169,110,.18); border:1px solid rgba(201,169,110,.3);
+    border-radius:20px; padding:4px 12px; font-size:11px; letter-spacing:.1em;
+    text-transform:uppercase; color:var(--accent2);
+  }
+  .hero-body {
+    position:absolute; left:0; right:0; bottom:0;
+    padding:0 22px 22px;
+    background:linear-gradient(to top, rgba(0,0,0,.95) 0%, rgba(0,0,0,.7) 50%, transparent 100%);
+  }
+  .hero-title { font-family:'Cormorant Garamond',serif; font-size:24px; font-weight:300; margin-bottom:4px; }
+  .hero-sub { font-size:12px; color:rgba(232,228,220,.6); margin-bottom:14px; }
+
+  /* ── OPTION A — Inline row inside hero ─────────── */
+  .optA-row {
+    display:flex; align-items:center; gap:10px;
+  }
+  .optA-cta {
+    flex-shrink:0;
+    padding:10px 18px; background:var(--accent); color:#0c0c0e;
+    border:none; border-radius:10px; font-family:'DM Sans',sans-serif;
+    font-size:13px; font-weight:500; cursor:pointer; white-space:nowrap;
+  }
+  .optA-divider { flex-shrink:0; font-size:11px; color:rgba(232,228,220,.35); }
+  .optA-input-wrap {
+    flex:1; display:flex; align-items:center; gap:8px;
+    background:rgba(255,255,255,.07); border:1px solid rgba(201,169,110,.25);
+    border-radius:10px; padding:8px 12px;
+  }
+  .optA-input-wrap input {
+    flex:1; background:transparent; border:none; outline:none;
+    font-family:'DM Sans',sans-serif; font-size:13px; color:var(--text); min-width:0;
+  }
+  .optA-input-wrap input::placeholder { color:rgba(232,228,220,.3); font-style:italic; }
+  .optA-go { flex-shrink:0; background:transparent; border:1px solid rgba(201,169,110,.4);
+    color:var(--accent); border-radius:8px; padding:4px 10px; font-size:12px; cursor:pointer; }
+
+  /* ── OPTION B — Overlap card below hero ────────── */
+  .optB-wrap { position:relative; }
+  .optB-cta {
+    width:100%; padding:12px 20px; background:var(--accent); color:#0c0c0e;
+    border:none; border-radius:10px; font-family:'DM Sans',sans-serif;
+    font-size:13px; font-weight:500; cursor:pointer; text-align:center;
+    display:flex; align-items:center; justify-content:space-between;
+  }
+  .optB-card {
+    position:relative; margin-top:-28px; margin-left:16px; margin-right:16px;
+    background:var(--surface); border:1px solid rgba(201,169,110,.2);
+    border-radius:16px; padding:16px 18px;
+    box-shadow:0 8px 32px rgba(0,0,0,.6);
+    display:flex; flex-direction:column; gap:10px;
+  }
+  .optB-or { font-size:11px; color:var(--muted); letter-spacing:.08em; display:flex; align-items:center; gap:8px; }
+  .optB-or::before, .optB-or::after { content:''; flex:1; height:1px; background:rgba(201,169,110,.15); }
+  .optB-input-row {
+    display:flex; align-items:center; gap:10px;
+    background:rgba(255,255,255,.05); border:1px solid rgba(201,169,110,.25);
+    border-radius:10px; padding:10px 14px;
+  }
+  .optB-input-row input {
+    flex:1; background:transparent; border:none; outline:none;
+    font-family:'DM Sans',sans-serif; font-size:13px; color:var(--text); min-width:0;
+  }
+  .optB-input-row input::placeholder { color:rgba(232,228,220,.3); font-style:italic; }
+  .optB-go { flex-shrink:0; background:var(--accent); color:#0c0c0e;
+    border:none; border-radius:7px; padding:5px 12px; font-size:12px;
+    font-weight:500; cursor:pointer; }
+
+  /* ── OPTION C — Tab switcher inside hero ────────── */
+  .optC-tabs {
+    display:flex; gap:6px; margin-bottom:12px;
+  }
+  .optC-tab {
+    padding:7px 14px; border-radius:20px; font-size:12px; cursor:pointer;
+    border:1px solid rgba(201,169,110,.3); background:transparent;
+    color:rgba(232,228,220,.6); font-family:'DM Sans',sans-serif;
+    transition:all .2s;
+  }
+  .optC-tab.active {
+    background:var(--accent); color:#0c0c0e; border-color:var(--accent); font-weight:500;
+  }
+  .optC-panel { display:none; }
+  .optC-panel.active { display:block; }
+  .optC-cta {
+    width:100%; padding:11px 20px; background:var(--accent); color:#0c0c0e;
+    border:none; border-radius:10px; font-family:'DM Sans',sans-serif;
+    font-size:13px; font-weight:500; cursor:pointer;
+    display:flex; align-items:center; justify-content:space-between;
+  }
+  .optC-input-area { display:flex; flex-direction:column; gap:8px; }
+  .optC-input-row {
+    display:flex; align-items:center; gap:8px;
+    background:rgba(255,255,255,.07); border:1px solid rgba(201,169,110,.3);
+    border-radius:10px; padding:10px 14px;
+  }
+  .optC-input-row input {
+    flex:1; background:transparent; border:none; outline:none;
+    font-family:'DM Sans',sans-serif; font-size:13px; color:var(--text); min-width:0;
+  }
+  .optC-input-row input::placeholder { color:rgba(232,228,220,.3); font-style:italic; }
+  .optC-go {
+    width:100%; padding:10px; background:rgba(201,169,110,.15);
+    border:1px solid rgba(201,169,110,.4); color:var(--accent);
+    border-radius:10px; font-family:'DM Sans',sans-serif;
+    font-size:13px; cursor:pointer; font-weight:500;
+  }
+
+  /* ── OPTION D — Full-width glass bar at bottom ─── */
+  .optD-bar {
+    display:flex; align-items:center; gap:0;
+    background:rgba(10,8,5,.75); backdrop-filter:blur(12px);
+    border-top:1px solid rgba(201,169,110,.15);
+    border-radius:0 0 20px 20px;
+  }
+  .optD-cta {
+    flex-shrink:0; padding:14px 20px; background:var(--accent); color:#0c0c0e;
+    border:none; font-family:'DM Sans',sans-serif;
+    font-size:13px; font-weight:500; cursor:pointer; white-space:nowrap;
+    border-radius:0 0 0 20px;
+  }
+  .optD-sep { width:1px; height:32px; background:rgba(201,169,110,.2); flex-shrink:0; }
+  .optD-input-side {
+    flex:1; display:flex; align-items:center; gap:10px; padding:0 16px;
+  }
+  .optD-icon { color:var(--accent); opacity:.6; font-size:15px; flex-shrink:0; }
+  .optD-input-side input {
+    flex:1; background:transparent; border:none; outline:none;
+    font-family:'DM Sans',sans-serif; font-size:13px; color:var(--text); min-width:0;
+  }
+  .optD-input-side input::placeholder { color:rgba(232,228,220,.28); font-style:italic; }
+  .optD-send { flex-shrink:0; background:transparent; border:1px solid rgba(201,169,110,.35);
+    color:var(--accent); border-radius:7px; padding:5px 11px; font-size:12px; cursor:pointer; }
+
+  @media(max-width:900px){
+    .options { grid-template-columns:1fr; max-width:480px; }
+  }
+</style>
+</head>
+<body>
+
+<p class="page-title">Hero + Describe — Layout Options</p>
+<p class="page-sub">4 ways to combine "Choose this vibe" and "describe it" inside/below the hero card</p>
+
+<div class="options">
+
+  <!-- ── OPTION A ── Inline row, single bottom bar -->
+  <div class="option">
+    <div class="option-label">Option A</div>
+    <div class="option-title">Inline bar — CTA + input in one row</div>
+    <div class="option-desc">Single row at the bottom of the hero. Button on the left, text field fills the rest. Compact, feels integrated.</div>
+    <div class="hero">
+      <div class="hero-photo"></div>
+      <div class="hero-badge">Bedroom · Bathroom</div>
+      <div class="hero-body">
+        <div class="hero-title">☀️ Bright &amp; Airy Retreat</div>
+        <div class="hero-sub">"Sun-filled rooms, large windows, open bathrooms"</div>
+        <div class="optA-row">
+          <button class="optA-cta">Choose this vibe →</button>
+          <span class="optA-divider">or</span>
+          <div class="optA-input-wrap">
+            <input placeholder="describe your own…" />
+            <button class="optA-go">→</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── OPTION B ── Overlap card below hero -->
+  <div class="option">
+    <div class="option-label">Option B</div>
+    <div class="option-title">Overlap card — floats below the hero</div>
+    <div class="option-desc">Hero keeps its CTA. A card overlaps the bottom edge, slightly lifting off. Feels like a natural extension of the hero.</div>
+    <div class="optB-wrap">
+      <div class="hero" style="border-radius:20px 20px 8px 8px">
+        <div class="hero-photo"></div>
+        <div class="hero-badge">Bedroom · Bathroom</div>
+        <div class="hero-body">
+          <div class="hero-title">☀️ Bright &amp; Airy Retreat</div>
+          <div class="hero-sub">"Sun-filled rooms, large windows, open bathrooms"</div>
+          <button class="optB-cta"><span>Choose this vibe</span><span>→</span></button>
+        </div>
+      </div>
+      <div class="optB-card">
+        <div class="optB-or">or describe it yourself</div>
+        <div class="optB-input-row">
+          <input placeholder="e.g. dark moody suite with rain shower…" />
+          <button class="optB-go">Go →</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── OPTION C ── Tab switcher inside hero -->
+  <div class="option">
+    <div class="option-label">Option C</div>
+    <div class="option-title">Tab switcher — choose or describe</div>
+    <div class="option-desc">Two tabs at the bottom of the hero. "Choose this vibe" is selected by default. Tap "Describe it" to reveal the input. Clean, progressive.</div>
+    <div class="hero">
+      <div class="hero-photo"></div>
+      <div class="hero-badge">Bedroom · Bathroom</div>
+      <div class="hero-body">
+        <div class="hero-title">☀️ Bright &amp; Airy Retreat</div>
+        <div class="hero-sub">"Sun-filled rooms, large windows, open bathrooms"</div>
+        <div class="optC-tabs">
+          <button class="optC-tab active" onclick="switchTab(this,'c-choose')">Choose this vibe</button>
+          <button class="optC-tab" onclick="switchTab(this,'c-describe')">✦ Describe it</button>
+        </div>
+        <div id="c-choose" class="optC-panel active">
+          <button class="optC-cta"><span>Select — Bright &amp; Airy Retreat</span><span>→</span></button>
+        </div>
+        <div id="c-describe" class="optC-panel">
+          <div class="optC-input-area">
+            <div class="optC-input-row">
+              <input placeholder="e.g. dark moody suite with rain shower…" autofocus />
+            </div>
+            <button class="optC-go">Find rooms →</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── OPTION D ── Full-width glass bar -->
+  <div class="option">
+    <div class="option-label">Option D</div>
+    <div class="option-title">Glass bar — full-width dock at bottom</div>
+    <div class="option-desc">A frosted glass bar spans the full hero width. CTA button on the left, text input fills the right. The whole bottom edge is interactive.</div>
+    <div class="hero" style="display:flex; flex-direction:column;">
+      <div class="hero-photo" style="flex:1"></div>
+      <div class="hero-badge">Bedroom · Bathroom</div>
+      <div style="position:absolute; left:20px; bottom:58px">
+        <div class="hero-title">☀️ Bright &amp; Airy Retreat</div>
+        <div class="hero-sub">"Sun-filled rooms, large windows, open bathrooms"</div>
+      </div>
+      <div class="optD-bar" style="position:absolute; bottom:0; left:0; right:0;">
+        <button class="optD-cta">Choose this vibe →</button>
+        <div class="optD-sep"></div>
+        <div class="optD-input-side">
+          <span class="optD-icon">✦</span>
+          <input placeholder="or describe your own room…" />
+          <button class="optD-send">→</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+  function switchTab(btn, panelId) {
+    const hero = btn.closest('.hero');
+    hero.querySelectorAll('.optC-tab').forEach(t => t.classList.remove('active'));
+    hero.querySelectorAll('.optC-panel').forEach(p => p.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById(panelId).classList.add('active');
+    if (panelId === 'c-describe') {
+      setTimeout(() => document.querySelector('#c-describe input').focus(), 50);
+    }
+  }
+</script>
+</body>
+</html>

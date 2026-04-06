@@ -1,0 +1,1381 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>RoomMatch — Flow Design Exploration</title>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet"/>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  /* ── Design tokens (matches production) ── */
+  :root {
+    --bg:      #0c0c0e;
+    --surface: #131316;
+    --card:    #18181c;
+    --row:     #1c1c21;
+    --border:  rgba(255,255,255,0.07);
+    --text:    #e8e4dc;
+    --muted:   #9a9590;
+    --accent:  #c9a96e;
+    --accent2: #e8d5b0;
+    --green:   #6dba8a;
+    --radius:  14px;
+    --step-locked: rgba(255,255,255,0.03);
+  }
+
+  body {
+    font-family: 'DM Sans', sans-serif;
+    background: #080809;
+    color: var(--text);
+    min-height: 100vh;
+    padding: 0;
+  }
+
+  /* ── Canvas chrome ── */
+  .canvas-header {
+    background: #0f0f12;
+    border-bottom: 1px solid rgba(255,255,255,0.06);
+    padding: 16px 28px;
+    display: flex; align-items: center; gap: 20px;
+    position: sticky; top: 0; z-index: 100;
+  }
+  .canvas-title { font-size: 13px; font-weight: 500; color: var(--muted); letter-spacing: 0.08em; text-transform: uppercase; }
+  .canvas-tabs { display: flex; gap: 6px; margin-left: auto; flex-wrap: wrap; }
+  .tab-btn {
+    padding: 7px 16px; border-radius: 8px; font-size: 12px; font-weight: 500; cursor: pointer;
+    background: transparent; border: 1px solid rgba(255,255,255,0.1); color: var(--muted);
+    font-family: 'DM Sans', sans-serif; transition: all 0.15s; white-space: nowrap;
+  }
+  .tab-btn:hover { border-color: rgba(201,169,110,0.4); color: var(--accent2); }
+  .tab-btn.active { background: rgba(201,169,110,0.12); border-color: rgba(201,169,110,0.5); color: var(--accent); }
+  .device-toggle { display: flex; gap: 4px; }
+  .dev-btn {
+    padding: 7px 12px; border-radius: 8px; font-size: 12px; cursor: pointer;
+    background: transparent; border: 1px solid rgba(255,255,255,0.1); color: var(--muted);
+    font-family: 'DM Sans', sans-serif; transition: all 0.15s;
+  }
+  .dev-btn.active { background: rgba(255,255,255,0.06); color: var(--text); }
+
+  /* ── Viewport frame ── */
+  .viewport-wrapper {
+    display: flex; justify-content: center; padding: 32px 20px 60px;
+  }
+  .viewport {
+    width: 100%; max-width: 1180px;
+    background: var(--bg);
+    border-radius: 16px;
+    overflow: hidden;
+    border: 1px solid rgba(255,255,255,0.06);
+    transition: max-width 0.3s ease;
+    box-shadow: 0 40px 80px rgba(0,0,0,0.6);
+  }
+  .viewport.mobile { max-width: 390px; }
+
+  /* ── Panels ── */
+  .panel { display: none; }
+  .panel.active { display: block; }
+
+  /* ── Shared mock app chrome ── */
+  .mock-header {
+    padding: 20px 40px; display: flex; align-items: center; gap: 12px;
+    border-bottom: 1px solid var(--border);
+  }
+  .mock-header .logo { font-family: 'DM Sans', sans-serif; font-size: 16px; font-weight: 500; color: var(--text); }
+  .mock-header .logo span { color: var(--accent); }
+  .mock-hero { padding: 40px 40px 0; max-width: 700px; }
+  .mock-hero h1 {
+    font-family: 'Cormorant Garamond', serif; font-size: clamp(28px, 3vw, 44px);
+    font-weight: 300; line-height: 1.12; margin-bottom: 10px;
+  }
+  .mock-hero h1 em { font-style: italic; color: var(--accent); }
+  .mock-hero p { font-size: 13px; color: var(--muted); line-height: 1.7; }
+
+  /* ── Shared step pill ── */
+  .step-num {
+    width: 22px; height: 22px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 10px; font-weight: 500; flex-shrink: 0;
+    border: 1px solid rgba(255,255,255,0.15); color: var(--muted);
+    background: transparent;
+  }
+  .step-num.done { background: rgba(109,186,138,0.15); border-color: rgba(109,186,138,0.4); color: var(--green); }
+  .step-num.active { background: rgba(201,169,110,0.15); border-color: rgba(201,169,110,0.5); color: var(--accent); }
+
+  /* ─────────────────────────────────────────────
+     OPTION A — Stacked Accordion Steps
+  ───────────────────────────────────────────── */
+  .accordion-wrap { padding: 32px 40px 60px; display: flex; flex-direction: column; gap: 10px; }
+
+  .acc-step {
+    border-radius: var(--radius);
+    border: 1px solid var(--border);
+    background: var(--card);
+    overflow: hidden;
+    transition: border-color 0.2s, box-shadow 0.2s;
+  }
+  .acc-step.is-active {
+    border-color: rgba(201,169,110,0.35);
+    box-shadow: 0 0 0 1px rgba(201,169,110,0.1), 0 8px 24px rgba(0,0,0,0.3);
+  }
+  .acc-step.is-locked { opacity: 0.42; pointer-events: none; }
+  .acc-step.is-done { border-color: rgba(109,186,138,0.2); }
+
+  .acc-header {
+    padding: 16px 20px; display: flex; align-items: center; gap: 14px; cursor: pointer;
+    user-select: none;
+  }
+  .acc-header-text { flex: 1; }
+  .acc-header-label { font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); margin-bottom: 2px; }
+  .acc-header-value { font-size: 14px; font-weight: 400; color: var(--text); }
+  .acc-header-value.placeholder { color: var(--muted); font-weight: 300; font-style: italic; }
+  .acc-edit { font-size: 11px; color: var(--accent); letter-spacing: 0.06em; cursor: pointer; padding: 4px 0; }
+
+  .acc-body { display: none; padding: 0 20px 20px; border-top: 1px solid var(--border); }
+  .acc-step.is-active .acc-body { display: block; padding-top: 18px; }
+
+  /* City field */
+  .mock-input {
+    background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+    color: var(--text); font-family: 'DM Sans', sans-serif; font-size: 14px; font-weight: 300;
+    padding: 13px 16px; width: 100%; outline: none;
+  }
+  .mock-input.focused { border-color: rgba(201,169,110,0.5); box-shadow: 0 0 0 3px rgba(201,169,110,0.08); }
+
+  /* Neighborhood mini-cards */
+  .nbhd-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px; margin-top: 14px; }
+  .nbhd-mini {
+    border-radius: 10px; overflow: hidden; cursor: pointer; position: relative;
+    aspect-ratio: 4/3; transition: transform 0.15s, box-shadow 0.15s;
+  }
+  .nbhd-mini:hover { transform: translateY(-2px); box-shadow: 0 8px 20px rgba(0,0,0,0.4); }
+  .nbhd-mini.selected { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .nbhd-mini img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .nbhd-mini-overlay {
+    position: absolute; inset: 0; background: linear-gradient(to top, rgba(0,0,0,0.72) 0%, transparent 50%);
+    display: flex; flex-direction: column; justify-content: flex-end; padding: 10px;
+  }
+  .nbhd-mini-name { font-size: 12px; font-weight: 500; line-height: 1.2; }
+  .nbhd-mini-hotels { font-size: 10px; color: rgba(255,255,255,0.6); margin-top: 2px; }
+
+  /* Date row */
+  .date-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .date-field label { font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); display: block; margin-bottom: 6px; }
+
+  /* Room type pills */
+  .room-pills { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px; }
+  .room-pill {
+    padding: 8px 14px; border-radius: 20px; font-size: 12px; cursor: pointer;
+    border: 1px solid var(--border); color: var(--muted); background: var(--surface);
+    transition: all 0.15s;
+  }
+  .room-pill:hover { border-color: rgba(201,169,110,0.4); color: var(--accent2); }
+  .room-pill.selected { background: rgba(201,169,110,0.12); border-color: rgba(201,169,110,0.5); color: var(--accent); }
+  .room-pill-sub { font-size: 10px; color: var(--muted); display: block; margin-top: 2px; }
+
+  /* Search prompt */
+  .search-bar-acc {
+    display: flex; align-items: center; gap: 10px;
+    background: linear-gradient(180deg, rgba(24,24,28,0.98), rgba(19,19,22,0.98));
+    border: 1px solid rgba(201,169,110,0.42); border-radius: var(--radius);
+    padding: 9px 14px;
+    box-shadow: 0 0 0 1px rgba(201,169,110,0.14), 0 0 34px rgba(201,169,110,0.1);
+    margin-top: 4px;
+  }
+  .search-bar-acc input {
+    flex: 1; background: transparent; border: none; outline: none;
+    font-family: 'DM Sans', sans-serif; font-size: 14px; color: var(--text); font-weight: 300;
+  }
+  .search-bar-acc input::placeholder { color: rgba(232,228,220,0.5); font-style: italic; }
+  .search-btn-acc {
+    padding: 9px 20px; background: var(--accent); color: #0c0c0e;
+    border: none; border-radius: 10px; font-family: 'DM Sans', sans-serif;
+    font-size: 13px; font-weight: 500; cursor: pointer; transition: opacity 0.15s; white-space: nowrap;
+  }
+  .search-btn-acc:hover { opacity: 0.88; }
+
+  /* Progress connector */
+  .acc-connector { display: flex; justify-content: center; height: 10px; }
+  .acc-connector-line { width: 1px; background: var(--border); height: 100%; }
+
+  /* ─────────────────────────────────────────────
+     OPTION B — Contextual Strip (inline reveal)
+  ───────────────────────────────────────────── */
+  .strip-wrap { padding: 28px 40px 60px; }
+
+  .strip-context-bar {
+    display: flex; align-items: center; gap: 0;
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: var(--radius); overflow: hidden; margin-bottom: 28px;
+  }
+  .strip-seg {
+    flex: 1; padding: 14px 18px; cursor: pointer;
+    border-right: 1px solid var(--border); transition: background 0.15s;
+    position: relative; min-width: 0;
+  }
+  .strip-seg:last-child { border-right: none; }
+  .strip-seg:hover { background: rgba(255,255,255,0.03); }
+  .strip-seg.active-seg { background: rgba(201,169,110,0.07); }
+  .strip-seg-label { font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); margin-bottom: 3px; }
+  .strip-seg-value { font-size: 14px; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .strip-seg-value.ph { color: rgba(232,228,220,0.35); font-style: italic; font-size: 13px; font-weight: 300; }
+  .strip-seg-underline {
+    position: absolute; bottom: 0; left: 10%; right: 10%; height: 2px;
+    background: var(--accent); border-radius: 2px; opacity: 0;
+    transition: opacity 0.2s;
+  }
+  .strip-seg.active-seg .strip-seg-underline { opacity: 1; }
+
+  /* Panel below the strip */
+  .strip-panel {
+    background: var(--card); border: 1px solid rgba(201,169,110,0.2);
+    border-radius: var(--radius); padding: 24px;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+    animation: slideDown 0.18s ease;
+  }
+  @keyframes slideDown { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: translateY(0); } }
+  .strip-panel h3 { font-family: 'Cormorant Garamond', serif; font-size: 20px; font-weight: 400; margin-bottom: 16px; }
+
+  /* Results stub */
+  .results-stub { margin-top: 24px; }
+  .results-stub-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+  .results-stub-header h3 { font-size: 13px; color: var(--muted); }
+  .hotel-card-stub {
+    background: var(--card); border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 16px; display: flex; gap: 14px; align-items: flex-start; margin-bottom: 8px;
+  }
+  .hotel-card-img {
+    width: 80px; height: 64px; border-radius: 8px; object-fit: cover; flex-shrink: 0;
+    background: var(--row);
+  }
+  .hotel-card-info { flex: 1; min-width: 0; }
+  .hotel-card-name { font-size: 14px; font-weight: 500; margin-bottom: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .hotel-card-meta { font-size: 12px; color: var(--muted); }
+  .hotel-card-score { font-size: 20px; font-weight: 500; color: var(--accent); flex-shrink: 0; }
+
+  /* ─────────────────────────────────────────────
+     OPTION C — Floating Command Bar
+  ───────────────────────────────────────────── */
+  .cmd-wrap { padding: 28px 40px 60px; position: relative; }
+  .cmd-results-bg { /* simulated results blurred behind */ }
+  .cmd-bar-container {
+    position: sticky; top: 20px; z-index: 10; margin-bottom: 28px;
+  }
+  .cmd-bar {
+    background: rgba(24,24,28,0.96);
+    border: 1px solid rgba(201,169,110,0.38);
+    border-radius: 18px; overflow: hidden;
+    backdrop-filter: blur(20px);
+    box-shadow: 0 0 0 1px rgba(201,169,110,0.1), 0 20px 60px rgba(0,0,0,0.5);
+  }
+  .cmd-bar-top {
+    display: flex; align-items: center; gap: 0;
+  }
+  .cmd-seg {
+    flex: 1; padding: 16px 18px; cursor: pointer; position: relative;
+    border-right: 1px solid rgba(255,255,255,0.06); transition: background 0.15s;
+    min-width: 0;
+  }
+  .cmd-seg:last-of-type { border-right: none; }
+  .cmd-seg:hover { background: rgba(255,255,255,0.03); }
+  .cmd-seg.cmd-active { background: rgba(201,169,110,0.08); }
+  .cmd-seg-label { font-size: 9px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); margin-bottom: 3px; }
+  .cmd-seg-value { font-size: 14px; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .cmd-seg-value.ph { color: rgba(232,228,220,0.3); font-style: italic; font-size: 13px; }
+  .cmd-search-btn {
+    margin: 10px; padding: 10px 22px; background: var(--accent); color: #0c0c0e;
+    border: none; border-radius: 12px; font-family: 'DM Sans', sans-serif;
+    font-size: 13px; font-weight: 500; cursor: pointer; transition: opacity 0.15s;
+    white-space: nowrap; flex-shrink: 0;
+  }
+  .cmd-search-btn:hover { opacity: 0.85; }
+  /* Dropdown under active segment */
+  .cmd-dropdown {
+    border-top: 1px solid rgba(255,255,255,0.06);
+    padding: 20px; animation: slideDown 0.18s ease;
+  }
+  .cmd-dropdown h4 { font-family: 'Cormorant Garamond', serif; font-size: 18px; font-weight: 400; margin-bottom: 14px; }
+
+  /* text search inside cmd bar */
+  .cmd-search-row {
+    display: flex; align-items: center; gap: 10px;
+    border-top: 1px solid rgba(255,255,255,0.06); padding: 12px 16px;
+  }
+  .cmd-search-row input {
+    flex: 1; background: transparent; border: none; outline: none;
+    font-family: 'DM Sans', sans-serif; font-size: 14px; color: var(--text); font-weight: 300;
+  }
+  .cmd-search-row input::placeholder { color: rgba(232,228,220,0.35); font-style: italic; }
+  .cmd-search-row .cmd-search-icon { color: var(--accent2); opacity: 0.7; font-size: 14px; }
+
+  /* ─────────────────────────────────────────────
+     OPTION D — Full-Page Neighborhood First
+  ───────────────────────────────────────────── */
+  .fullpg-wrap { }
+  .fullpg-hero {
+    padding: 48px 40px 32px; position: relative; overflow: hidden;
+    background: linear-gradient(to bottom, rgba(201,169,110,0.04) 0%, transparent 60%);
+  }
+  .fullpg-step-trail {
+    display: flex; align-items: center; gap: 8px; margin-bottom: 28px; font-size: 12px; color: var(--muted);
+  }
+  .fullpg-crumb { cursor: pointer; }
+  .fullpg-crumb:hover { color: var(--accent2); }
+  .fullpg-crumb.current { color: var(--text); font-weight: 500; }
+  .fullpg-sep { color: rgba(255,255,255,0.15); }
+  .fullpg-city-input-wrap {
+    max-width: 480px;
+    background: var(--card); border: 1px solid rgba(201,169,110,0.35); border-radius: 18px;
+    padding: 10px 16px; display: flex; align-items: center; gap: 12px;
+    box-shadow: 0 0 0 1px rgba(201,169,110,0.1), 0 0 40px rgba(201,169,110,0.08), 0 8px 24px rgba(0,0,0,0.3);
+  }
+  .fullpg-city-input-wrap input {
+    flex: 1; background: transparent; border: none; outline: none;
+    font-family: 'DM Sans', sans-serif; font-size: 16px; color: var(--text); font-weight: 300;
+  }
+  .fullpg-city-input-wrap input::placeholder { color: rgba(232,228,220,0.4); font-style: italic; }
+  .fullpg-nbhd-section { padding: 0 40px 40px; }
+  .fullpg-section-label { font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); margin-bottom: 14px; }
+  .fullpg-nbhd-grid {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px;
+  }
+  .fullpg-nbhd-card {
+    border-radius: var(--radius); overflow: hidden; cursor: pointer; position: relative;
+    aspect-ratio: 5/4; transition: transform 0.2s, box-shadow 0.2s;
+    background: var(--card);
+  }
+  .fullpg-nbhd-card:hover { transform: translateY(-3px); box-shadow: 0 12px 32px rgba(0,0,0,0.5); }
+  .fullpg-nbhd-card.selected { outline: 2px solid var(--accent); outline-offset: 3px; }
+  .fullpg-nbhd-card img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .fullpg-card-overlay {
+    position: absolute; inset: 0;
+    background: linear-gradient(to top, rgba(0,0,0,0.82) 0%, rgba(0,0,0,0.1) 50%, transparent 100%);
+    padding: 14px; display: flex; flex-direction: column; justify-content: flex-end;
+  }
+  .fullpg-card-name { font-size: 15px; font-weight: 500; margin-bottom: 3px; }
+  .fullpg-card-vibe { font-size: 11px; color: rgba(255,255,255,0.65); font-style: italic; margin-bottom: 6px; }
+  .fullpg-card-tags { display: flex; gap: 4px; flex-wrap: wrap; }
+  .fullpg-tag {
+    font-size: 10px; padding: 2px 7px; border-radius: 10px;
+    background: rgba(255,255,255,0.1); color: rgba(255,255,255,0.7);
+  }
+  .fullpg-skip { font-size: 12px; color: var(--muted); cursor: pointer; text-decoration: underline; margin-top: 12px; display: inline-block; }
+  .fullpg-skip:hover { color: var(--accent2); }
+
+  /* After neighborhood picked — floating search bar appears */
+  .fullpg-search-tray {
+    margin: 0 40px; padding: 20px 24px;
+    background: var(--card); border: 1px solid rgba(201,169,110,0.25);
+    border-radius: var(--radius);
+    box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+    animation: slideDown 0.22s ease;
+  }
+  .fullpg-tray-header { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; }
+  .fullpg-nbhd-chip {
+    display: inline-flex; align-items: center; gap: 6px;
+    background: rgba(201,169,110,0.12); border: 1px solid rgba(201,169,110,0.35);
+    border-radius: 20px; padding: 5px 12px; font-size: 12px; color: var(--accent);
+  }
+  .fullpg-nbhd-chip-x { cursor: pointer; opacity: 0.6; font-size: 14px; }
+  .fullpg-nbhd-chip-x:hover { opacity: 1; }
+  .fullpg-tray-dates { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 14px; }
+  .fullpg-tray-date-field label { font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); display: block; margin-bottom: 5px; }
+  .fullpg-tray-date-field input {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+    color: var(--text); font-family: 'DM Sans', sans-serif; font-size: 14px;
+    padding: 10px 14px; width: 100%; outline: none; color-scheme: dark;
+  }
+  .fullpg-tray-date-field input:focus { border-color: rgba(201,169,110,0.4); }
+
+  /* Mobile section */
+  .mobile-note {
+    background: rgba(201,169,110,0.06); border: 1px solid rgba(201,169,110,0.15);
+    border-radius: 10px; padding: 12px 16px; margin: 16px 40px 0;
+    font-size: 12px; color: var(--muted); line-height: 1.6;
+  }
+  .mobile-note strong { color: var(--accent2); }
+
+  /* ── Notes panel ── */
+  .notes-panel {
+    padding: 28px 40px 60px;
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 16px;
+  }
+  .note-card {
+    background: var(--card); border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 20px;
+  }
+  .note-card h3 { font-size: 14px; font-weight: 500; margin-bottom: 10px; color: var(--accent2); }
+  .note-card ul { list-style: none; display: flex; flex-direction: column; gap: 7px; }
+  .note-card li { font-size: 13px; color: var(--muted); padding-left: 14px; position: relative; line-height: 1.5; }
+  .note-card li::before { content: '→'; position: absolute; left: 0; color: var(--accent); opacity: 0.6; font-size: 11px; top: 1px; }
+  .note-card li.pro { color: var(--green); }
+  .note-card li.pro::before { content: '✓'; color: var(--green); }
+  .note-card li.con { color: #e07070; }
+  .note-card li.con::before { content: '✗'; color: #e07070; }
+
+  /* ── Helpers ── */
+  .sep { height: 1px; background: var(--border); margin: 0 20px; }
+  .mt8 { margin-top: 8px; }
+  .mt12 { margin-top: 12px; }
+  .mt16 { margin-top: 16px; }
+  .btn-primary {
+    padding: 11px 22px; background: var(--accent); color: #0c0c0e;
+    border: none; border-radius: 10px; font-family: 'DM Sans', sans-serif;
+    font-size: 13px; font-weight: 500; cursor: pointer;
+  }
+  .btn-ghost {
+    padding: 11px 22px; background: transparent; color: var(--muted);
+    border: 1px solid var(--border); border-radius: 10px;
+    font-family: 'DM Sans', sans-serif; font-size: 13px; cursor: pointer;
+  }
+
+  /* ── Noise overlay ── */
+  body::before {
+    content: '';
+    position: fixed; inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.03'/%3E%3C/svg%3E");
+    pointer-events: none; z-index: 9999; opacity: 0.4;
+  }
+
+  /* ── Responsive ── */
+  @media (max-width: 600px) {
+    .mock-header { padding: 16px 20px; }
+    .mock-hero { padding: 24px 20px 0; }
+    .accordion-wrap { padding: 20px; }
+    .strip-wrap { padding: 20px; }
+    .cmd-wrap { padding: 20px; }
+    .fullpg-hero { padding: 32px 20px 20px; }
+    .fullpg-nbhd-section { padding: 0 20px 32px; }
+    .fullpg-search-tray { margin: 0 20px; }
+    .fullpg-nbhd-grid { grid-template-columns: repeat(2, 1fr); }
+    .notes-panel { padding: 20px; }
+    .strip-context-bar { flex-wrap: wrap; }
+    .strip-seg { flex: 1 1 45%; border-bottom: 1px solid var(--border); }
+    .cmd-bar-top { flex-wrap: wrap; }
+    .cmd-seg { flex: 1 1 45%; border-bottom: 1px solid rgba(255,255,255,0.06); }
+    .canvas-header { flex-wrap: wrap; gap: 12px; }
+    .canvas-tabs { margin-left: 0; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ── Canvas chrome ── -->
+<div class="canvas-header">
+  <div class="canvas-title">RoomMatch · Flow Exploration</div>
+  <div class="canvas-tabs">
+    <button class="tab-btn active" onclick="showPanel('a')">A · Stacked Accordion</button>
+    <button class="tab-btn" onclick="showPanel('b')">B · Context Strip</button>
+    <button class="tab-btn" onclick="showPanel('c')">C · Command Bar</button>
+    <button class="tab-btn" onclick="showPanel('d')">D · Neighborhood First</button>
+    <button class="tab-btn" onclick="showPanel('notes')">Notes</button>
+  </div>
+  <div class="device-toggle">
+    <button class="dev-btn active" onclick="setDevice('desktop')">🖥</button>
+    <button class="dev-btn" onclick="setDevice('mobile')">📱</button>
+  </div>
+</div>
+
+<div class="viewport-wrapper">
+<div class="viewport" id="viewport">
+
+<!-- ══════════════════════════════════════════
+     PANEL A — Stacked Accordion Steps
+════════════════════════════════════════════ -->
+<div class="panel active" id="panel-a">
+  <div class="mock-header">
+    <div class="logo">travelboop<span>.</span></div>
+  </div>
+  <div class="mock-hero">
+    <h1>Find a room you'll <em>actually love</em></h1>
+    <p>Step through the details. We'll match the room to your taste.</p>
+  </div>
+
+  <div class="accordion-wrap">
+
+    <!-- Step 1: City -->
+    <div class="acc-step is-active" id="acc-s1">
+      <div class="acc-header" onclick="accToggle(1)">
+        <div class="step-num active">1</div>
+        <div class="acc-header-text">
+          <div class="acc-header-label">Where</div>
+          <div class="acc-header-value placeholder" id="acc-v1">Pick a city to search in…</div>
+        </div>
+      </div>
+      <div class="acc-body">
+        <input class="mock-input focused" type="text" placeholder="Paris, Kuala Lumpur, London…" id="acc-city-input" oninput="accCityInput(this.value)"/>
+        <div style="margin-top:10px; display:flex; gap:8px; flex-wrap:wrap;" id="acc-city-suggestions">
+          <span class="room-pill" onclick="accSelectCity('Paris')">Paris</span>
+          <span class="room-pill" onclick="accSelectCity('Kuala Lumpur')">Kuala Lumpur</span>
+          <span class="room-pill" onclick="accSelectCity('London')">London</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="acc-connector"><div class="acc-connector-line"></div></div>
+
+    <!-- Step 2: Neighborhood -->
+    <div class="acc-step is-locked" id="acc-s2">
+      <div class="acc-header" onclick="accToggle(2)">
+        <div class="step-num" id="acc-n2">2</div>
+        <div class="acc-header-text">
+          <div class="acc-header-label">Area</div>
+          <div class="acc-header-value placeholder" id="acc-v2">Choose a neighborhood</div>
+        </div>
+        <span class="acc-edit" id="acc-e2" style="display:none" onclick="accEdit(2)">Change</span>
+      </div>
+      <div class="acc-body">
+        <div style="font-size:12px; color:var(--muted); margin-bottom:12px;">Or <span style="color:var(--accent); cursor:pointer;" onclick="accSkipNeighborhood()">skip to search the whole city</span></div>
+        <div class="nbhd-grid" id="acc-nbhd-grid">
+          <!-- populated by JS -->
+        </div>
+      </div>
+    </div>
+
+    <div class="acc-connector"><div class="acc-connector-line"></div></div>
+
+    <!-- Step 3: Dates -->
+    <div class="acc-step is-locked" id="acc-s3">
+      <div class="acc-header" onclick="accToggle(3)">
+        <div class="step-num" id="acc-n3">3</div>
+        <div class="acc-header-text">
+          <div class="acc-header-label">Dates</div>
+          <div class="acc-header-value placeholder" id="acc-v3">Check-in → check-out</div>
+        </div>
+        <span class="acc-edit" id="acc-e3" style="display:none" onclick="accEdit(3)">Change</span>
+      </div>
+      <div class="acc-body">
+        <div style="font-size:12px; color:var(--muted); margin-bottom:12px;">Skip dates to browse without pricing.</div>
+        <div class="date-row">
+          <div class="date-field">
+            <label>Check-in</label>
+            <input class="mock-input" type="date" id="acc-checkin" onchange="accCheckDate()"/>
+          </div>
+          <div class="date-field">
+            <label>Check-out</label>
+            <input class="mock-input" type="date" id="acc-checkout" onchange="accCheckDate()"/>
+          </div>
+        </div>
+        <div style="margin-top:14px; display:flex; gap:10px;">
+          <button class="btn-primary" onclick="accConfirmDates()">Confirm dates</button>
+          <button class="btn-ghost" onclick="accSkipDates()">Skip for now</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="acc-connector"><div class="acc-connector-line"></div></div>
+
+    <!-- Step 4: Room type / style -->
+    <div class="acc-step is-locked" id="acc-s4">
+      <div class="acc-header" onclick="accToggle(4)">
+        <div class="step-num" id="acc-n4">4</div>
+        <div class="acc-header-text">
+          <div class="acc-header-label">Room Style</div>
+          <div class="acc-header-value placeholder" id="acc-v4">What matters most to you?</div>
+        </div>
+        <span class="acc-edit" id="acc-e4" style="display:none" onclick="accEdit(4)">Change</span>
+      </div>
+      <div class="acc-body">
+        <div style="font-size:12px; color:var(--muted); margin-bottom:12px;">Pick one or more — or skip to type your own description.</div>
+        <div class="room-pills">
+          <span class="room-pill" onclick="togglePill(this)">🛁 Soaking tub</span>
+          <span class="room-pill" onclick="togglePill(this)">🚿 Rain shower</span>
+          <span class="room-pill" onclick="togglePill(this)">👥 Double sinks</span>
+          <span class="room-pill" onclick="togglePill(this)">🪟 City views</span>
+          <span class="room-pill" onclick="togglePill(this)">🌅 Balcony</span>
+          <span class="room-pill" onclick="togglePill(this)">✨ Luxury suite</span>
+          <span class="room-pill" onclick="togglePill(this)">🌿 Bright & airy</span>
+          <span class="room-pill" onclick="togglePill(this)">🌙 Dark & moody</span>
+        </div>
+        <div style="margin-top:16px; display:flex; gap:10px;">
+          <button class="btn-primary" onclick="accConfirmRoom()">Find rooms →</button>
+          <button class="btn-ghost" onclick="accConfirmRoom()">Skip</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="acc-connector"><div class="acc-connector-line"></div></div>
+
+    <!-- Step 5: Search -->
+    <div class="acc-step is-locked" id="acc-s5">
+      <div class="acc-header">
+        <div class="step-num" id="acc-n5">5</div>
+        <div class="acc-header-text">
+          <div class="acc-header-label">Describe Your Dream Room</div>
+          <div class="acc-header-value placeholder" id="acc-v5">Type anything — we'll find matching photos</div>
+        </div>
+      </div>
+      <div class="acc-body">
+        <div class="search-bar-acc">
+          <span style="color:var(--accent2); font-size:14px; opacity:0.8">✦</span>
+          <input type="text" placeholder="e.g. modern bathroom with double sinks and soaking tub…" id="acc-query"/>
+          <button class="search-btn-acc" onclick="accSearch()">Search</button>
+        </div>
+        <div style="margin-top:10px; font-size:11px; color:var(--muted);">
+          Your context: <span id="acc-context-summary" style="color:var(--accent2)">—</span>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /accordion-wrap -->
+</div><!-- /panel-a -->
+
+
+<!-- ══════════════════════════════════════════
+     PANEL B — Context Strip (always-visible)
+════════════════════════════════════════════ -->
+<div class="panel" id="panel-b">
+  <div class="mock-header">
+    <div class="logo">travelboop<span>.</span></div>
+  </div>
+  <div class="mock-hero" style="padding-bottom:24px;">
+    <h1>Find a room you'll <em>actually love</em></h1>
+  </div>
+
+  <div class="strip-wrap">
+    <!-- Always-visible context bar -->
+    <div class="strip-context-bar">
+      <div class="strip-seg active-seg" onclick="stripFocus('city')" id="strip-seg-city">
+        <div class="strip-seg-label">City</div>
+        <div class="strip-seg-value ph" id="strip-city-val">Where to?</div>
+        <div class="strip-seg-underline"></div>
+      </div>
+      <div class="strip-seg" onclick="stripFocus('area')" id="strip-seg-area">
+        <div class="strip-seg-label">Area</div>
+        <div class="strip-seg-value ph" id="strip-area-val">Any area</div>
+        <div class="strip-seg-underline"></div>
+      </div>
+      <div class="strip-seg" onclick="stripFocus('dates')" id="strip-seg-dates">
+        <div class="strip-seg-label">Dates</div>
+        <div class="strip-seg-value ph" id="strip-dates-val">Any dates</div>
+        <div class="strip-seg-underline"></div>
+      </div>
+      <div class="strip-seg" onclick="stripFocus('style')" id="strip-seg-style">
+        <div class="strip-seg-label">Style</div>
+        <div class="strip-seg-value ph" id="strip-style-val">Any style</div>
+        <div class="strip-seg-underline"></div>
+      </div>
+    </div>
+
+    <!-- Dynamic panel for whichever segment is active -->
+    <div class="strip-panel" id="strip-panel">
+      <h3>Where are you headed?</h3>
+      <input class="mock-input focused" type="text" placeholder="Paris, Kuala Lumpur…" id="strip-city-input" oninput="stripCityInput(this.value)"/>
+      <div style="margin-top:10px; display:flex; gap:8px; flex-wrap:wrap;" id="strip-city-pills">
+        <span class="room-pill" onclick="stripSelectCity('Paris')">Paris</span>
+        <span class="room-pill" onclick="stripSelectCity('Kuala Lumpur')">Kuala Lumpur</span>
+        <span class="room-pill" onclick="stripSelectCity('London')">London</span>
+      </div>
+    </div>
+
+    <!-- Search bar always at bottom of strip panel -->
+    <div style="margin-top:16px; display:flex; gap:0; overflow:hidden; border-radius:var(--radius); border:1px solid rgba(201,169,110,0.3); background:var(--card);">
+      <div style="flex:1; position:relative;">
+        <span style="position:absolute; left:14px; top:50%; transform:translateY(-50%); color:var(--accent2); opacity:0.7; font-size:14px;">✦</span>
+        <input style="width:100%; background:transparent; border:none; outline:none; padding:13px 14px 13px 38px; font-family:DM Sans,sans-serif; font-size:14px; color:var(--text);" type="text" placeholder="Describe your ideal room…" id="strip-query"/>
+      </div>
+      <button onclick="stripSearch()" style="padding:0 22px; background:var(--accent); color:#0c0c0e; border:none; font-family:DM Sans,sans-serif; font-size:13px; font-weight:500; cursor:pointer;">Search</button>
+    </div>
+
+  </div><!-- /strip-wrap -->
+</div><!-- /panel-b -->
+
+
+<!-- ══════════════════════════════════════════
+     PANEL C — Floating Command Bar
+════════════════════════════════════════════ -->
+<div class="panel" id="panel-c">
+  <div class="mock-header">
+    <div class="logo">travelboop<span>.</span></div>
+  </div>
+
+  <div class="cmd-wrap">
+    <!-- Floating command bar — scrolls with page but stays sticky when results appear -->
+    <div class="cmd-bar-container">
+      <div class="cmd-bar">
+        <div class="cmd-bar-top">
+          <div class="cmd-seg cmd-active" onclick="cmdFocus('city')" id="cmd-seg-city">
+            <div class="cmd-seg-label">City</div>
+            <div class="cmd-seg-value ph" id="cmd-city-val">Where to?</div>
+          </div>
+          <div class="cmd-seg" onclick="cmdFocus('area')" id="cmd-seg-area">
+            <div class="cmd-seg-label">Neighborhood</div>
+            <div class="cmd-seg-value ph" id="cmd-area-val">Any area</div>
+          </div>
+          <div class="cmd-seg" onclick="cmdFocus('dates')" id="cmd-seg-dates">
+            <div class="cmd-seg-label">Dates</div>
+            <div class="cmd-seg-value ph" id="cmd-dates-val">Anytime</div>
+          </div>
+          <div class="cmd-seg" onclick="cmdFocus('style')" id="cmd-seg-style">
+            <div class="cmd-seg-label">Style</div>
+            <div class="cmd-seg-value ph" id="cmd-style-val">Any style</div>
+          </div>
+          <button class="cmd-search-btn" onclick="cmdSearch()">Search</button>
+        </div>
+
+        <!-- Inline dropdown for active segment -->
+        <div class="cmd-dropdown" id="cmd-dropdown">
+          <h4>Which city?</h4>
+          <input class="mock-input focused" type="text" placeholder="Paris, Kuala Lumpur…" id="cmd-city-input" oninput="cmdCityInput(this.value)"/>
+          <div style="margin-top:10px; display:flex; gap:8px; flex-wrap:wrap;" id="cmd-city-pills">
+            <span class="room-pill" onclick="cmdSelectCity('Paris')">Paris</span>
+            <span class="room-pill" onclick="cmdSelectCity('Kuala Lumpur')">Kuala Lumpur</span>
+            <span class="room-pill" onclick="cmdSelectCity('London')">London</span>
+          </div>
+        </div>
+
+        <!-- Text search always in bar -->
+        <div class="cmd-search-row">
+          <span class="cmd-search-icon">✦</span>
+          <input type="text" placeholder="Describe your ideal room — e.g. bright suite with city views and rain shower…" id="cmd-query"/>
+        </div>
+      </div>
+    </div>
+
+    <!-- Simulated results below (blurred when bar is active) -->
+    <div id="cmd-results-area">
+      <div style="font-size:11px; color:var(--muted); letter-spacing:0.1em; text-transform:uppercase; margin-bottom:12px;">Results appear here after search</div>
+      <div class="hotel-card-stub">
+        <div class="hotel-card-img" style="background: linear-gradient(135deg, #2a2a30, #1a1a20);"></div>
+        <div class="hotel-card-info"><div class="hotel-card-name">Hotel du Marais</div><div class="hotel-card-meta">Le Marais · Paris · ★★★★</div></div>
+        <div class="hotel-card-score">94%</div>
+      </div>
+      <div class="hotel-card-stub">
+        <div class="hotel-card-img" style="background: linear-gradient(135deg, #252530, #181820);"></div>
+        <div class="hotel-card-info"><div class="hotel-card-name">Hôtel Saint-Germain</div><div class="hotel-card-meta">Saint-Germain · Paris · ★★★★★</div></div>
+        <div class="hotel-card-score">89%</div>
+      </div>
+      <div class="hotel-card-stub">
+        <div class="hotel-card-img" style="background: linear-gradient(135deg, #202028, #15151c);"></div>
+        <div class="hotel-card-info"><div class="hotel-card-name">Montmartre Boutique</div><div class="hotel-card-meta">Montmartre · Paris · ★★★★</div></div>
+        <div class="hotel-card-score">85%</div>
+      </div>
+    </div>
+  </div><!-- /cmd-wrap -->
+</div><!-- /panel-c -->
+
+
+<!-- ══════════════════════════════════════════
+     PANEL D — Neighborhood-First Full Page
+════════════════════════════════════════════ -->
+<div class="panel" id="panel-d">
+  <!-- State 1: City entry -->
+  <div id="fullpg-state-city">
+    <div class="mock-header">
+      <div class="logo">travelboop<span>.</span></div>
+    </div>
+    <div class="fullpg-hero">
+      <div class="fullpg-step-trail">
+        <span class="fullpg-crumb current">City</span>
+        <span class="fullpg-sep">›</span>
+        <span class="fullpg-crumb" style="opacity:0.3">Area</span>
+        <span class="fullpg-sep" style="opacity:0.3">›</span>
+        <span class="fullpg-crumb" style="opacity:0.3">Dates</span>
+        <span class="fullpg-sep" style="opacity:0.3">›</span>
+        <span class="fullpg-crumb" style="opacity:0.3">Rooms</span>
+      </div>
+      <h1 style="font-family:'Cormorant Garamond',serif; font-size:clamp(26px,2.8vw,42px); font-weight:300; margin-bottom:20px; line-height:1.1;">
+        Where are you<br><em style="font-style:italic; color:var(--accent)">headed?</em>
+      </h1>
+      <div class="fullpg-city-input-wrap">
+        <span style="color:var(--accent2); font-size:16px; opacity:0.7">⌕</span>
+        <input type="text" placeholder="City — Paris, Kuala Lumpur, London…" id="fullpg-city-input" oninput="fullpgCityInput(this.value)" onkeydown="if(event.key==='Enter') fullpgSelectCity(this.value)"/>
+      </div>
+      <div style="margin-top:14px; display:flex; gap:8px; flex-wrap:wrap;" id="fullpg-city-pills">
+        <span class="room-pill" onclick="fullpgSelectCity('Paris')">Paris</span>
+        <span class="room-pill" onclick="fullpgSelectCity('Kuala Lumpur')">Kuala Lumpur</span>
+        <span class="room-pill" onclick="fullpgSelectCity('London')">London</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- State 2: Neighborhood grid (revealed after city) -->
+  <div id="fullpg-state-nbhd" style="display:none;">
+    <div class="mock-header">
+      <div class="logo">travelboop<span>.</span></div>
+    </div>
+    <div class="fullpg-hero">
+      <div class="fullpg-step-trail">
+        <span class="fullpg-crumb" onclick="fullpgBack('city')" style="cursor:pointer;">City</span>
+        <span class="fullpg-sep">›</span>
+        <span class="fullpg-crumb current">Area</span>
+        <span class="fullpg-sep">›</span>
+        <span class="fullpg-crumb" style="opacity:0.3">Dates</span>
+        <span class="fullpg-sep">›</span>
+        <span class="fullpg-crumb" style="opacity:0.3">Rooms</span>
+      </div>
+      <h1 style="font-family:'Cormorant Garamond',serif; font-size:clamp(24px,2.6vw,38px); font-weight:300; line-height:1.1; margin-bottom:6px;">
+        Which <em style="font-style:italic; color:var(--accent)">neighbourhood</em><br>feels right?
+      </h1>
+      <p style="font-size:13px; color:var(--muted); margin-bottom:0;">
+        <span id="fullpg-city-display" style="color:var(--accent2)">Paris</span> · Tap to explore, or <span style="color:var(--accent); cursor:pointer;" onclick="fullpgSkipNbhd()">skip to search the whole city</span>
+      </p>
+    </div>
+    <div class="fullpg-nbhd-section">
+      <div class="fullpg-nbhd-grid" id="fullpg-nbhd-grid">
+        <!-- populated by JS -->
+      </div>
+    </div>
+  </div>
+
+  <!-- State 3: After neighborhood chosen — search tray -->
+  <div id="fullpg-state-search" style="display:none;">
+    <div class="mock-header">
+      <div class="logo">travelboop<span>.</span></div>
+    </div>
+    <div class="fullpg-hero" style="padding-bottom:20px;">
+      <div class="fullpg-step-trail">
+        <span class="fullpg-crumb" onclick="fullpgBack('city')" style="cursor:pointer;">City</span>
+        <span class="fullpg-sep">›</span>
+        <span class="fullpg-crumb" onclick="fullpgBack('nbhd')" style="cursor:pointer;">Area</span>
+        <span class="fullpg-sep">›</span>
+        <span class="fullpg-crumb current">Search</span>
+      </div>
+      <h1 style="font-family:'Cormorant Garamond',serif; font-size:clamp(22px,2.4vw,36px); font-weight:300; line-height:1.1; margin-bottom:0;">
+        Find your <em style="font-style:italic; color:var(--accent)">perfect room</em>
+      </h1>
+    </div>
+    <div class="fullpg-search-tray">
+      <div class="fullpg-tray-header">
+        <div class="fullpg-nbhd-chip">
+          <span id="fullpg-selected-nbhd-name">Le Marais</span>
+          <span class="fullpg-nbhd-chip-x" onclick="fullpgBack('nbhd')">✕</span>
+        </div>
+        <span style="font-size:12px; color:var(--muted); margin-left:8px;" id="fullpg-hotel-count">30 hotels in area</span>
+      </div>
+      <div class="fullpg-tray-dates">
+        <div class="fullpg-tray-date-field">
+          <label>Check-in</label>
+          <input type="date" id="fullpg-checkin" style="color-scheme:dark;"/>
+        </div>
+        <div class="fullpg-tray-date-field">
+          <label>Check-out</label>
+          <input type="date" id="fullpg-checkout" style="color-scheme:dark;"/>
+        </div>
+      </div>
+      <!-- Style presets -->
+      <div style="margin-bottom:12px;">
+        <div style="font-size:10px; letter-spacing:0.1em; text-transform:uppercase; color:var(--muted); margin-bottom:8px;">Quick styles</div>
+        <div class="room-pills">
+          <span class="room-pill" onclick="togglePill(this); fullpgBuildQuery()">🛁 Soaking tub</span>
+          <span class="room-pill" onclick="togglePill(this); fullpgBuildQuery()">🚿 Rain shower</span>
+          <span class="room-pill" onclick="togglePill(this); fullpgBuildQuery()">🪟 City views</span>
+          <span class="room-pill" onclick="togglePill(this); fullpgBuildQuery()">✨ Luxury suite</span>
+        </div>
+      </div>
+      <!-- Text search -->
+      <div style="display:flex; gap:0; overflow:hidden; border-radius:12px; border:1px solid rgba(201,169,110,0.35); background:var(--surface);">
+        <div style="flex:1; position:relative;">
+          <span style="position:absolute; left:14px; top:50%; transform:translateY(-50%); color:var(--accent2); opacity:0.7; font-size:14px;">✦</span>
+          <input style="width:100%; background:transparent; border:none; outline:none; padding:13px 14px 13px 38px; font-family:DM Sans,sans-serif; font-size:14px; color:var(--text);" type="text" placeholder="Or describe in your own words…" id="fullpg-query"/>
+        </div>
+        <button onclick="fullpgSearch()" style="padding:0 22px; background:var(--accent); color:#0c0c0e; border:none; font-family:DM Sans,sans-serif; font-size:13px; font-weight:500; cursor:pointer;">Search</button>
+      </div>
+    </div>
+    <!-- Photo-tap vibes -->
+    <div style="padding:20px 40px 0;" id="fullpg-vibe-section">
+      <div style="font-size:10px; letter-spacing:0.1em; text-transform:uppercase; color:var(--muted); margin-bottom:10px;">Or tap a vibe to search instantly</div>
+      <div style="display:flex; gap:8px; overflow-x:auto; padding-bottom:4px;">
+        <div style="flex-shrink:0; width:90px; height:90px; border-radius:10px; background:linear-gradient(135deg,#2a2420,#1a1210); position:relative; cursor:pointer; overflow:hidden; border:1px solid var(--border);" onclick="fullpgVibeSearch('Bright airy room large windows')">
+          <div style="position:absolute; inset:0; background:linear-gradient(to top, rgba(0,0,0,0.7) 0%, transparent 50%); display:flex; align-items:flex-end; padding:8px;">
+            <span style="font-size:10px; font-weight:500;">Bright & Airy</span>
+          </div>
+        </div>
+        <div style="flex-shrink:0; width:90px; height:90px; border-radius:10px; background:linear-gradient(135deg,#1a1820,#0e0c12); position:relative; cursor:pointer; overflow:hidden; border:1px solid var(--border);" onclick="fullpgVibeSearch('Dark moody romantic room')">
+          <div style="position:absolute; inset:0; background:linear-gradient(to top, rgba(0,0,0,0.7) 0%, transparent 50%); display:flex; align-items:flex-end; padding:8px;">
+            <span style="font-size:10px; font-weight:500;">Dark & Moody</span>
+          </div>
+        </div>
+        <div style="flex-shrink:0; width:90px; height:90px; border-radius:10px; background:linear-gradient(135deg,#1c1c20,#141418); position:relative; cursor:pointer; overflow:hidden; border:1px solid var(--border);" onclick="fullpgVibeSearch('Minimalist modern design')">
+          <div style="position:absolute; inset:0; background:linear-gradient(to top, rgba(0,0,0,0.7) 0%, transparent 50%); display:flex; align-items:flex-end; padding:8px;">
+            <span style="font-size:10px; font-weight:500;">Minimalist</span>
+          </div>
+        </div>
+        <div style="flex-shrink:0; width:90px; height:90px; border-radius:10px; background:linear-gradient(135deg,#201c14,#151008); position:relative; cursor:pointer; overflow:hidden; border:1px solid var(--border);" onclick="fullpgVibeSearch('Luxury suite marble bathroom')">
+          <div style="position:absolute; inset:0; background:linear-gradient(to top, rgba(0,0,0,0.7) 0%, transparent 50%); display:flex; align-items:flex-end; padding:8px;">
+            <span style="font-size:10px; font-weight:500;">Luxury Suite</span>
+          </div>
+        </div>
+        <div style="flex-shrink:0; width:90px; height:90px; border-radius:10px; background:linear-gradient(135deg,#141c14,#0c1410); position:relative; cursor:pointer; overflow:hidden; border:1px solid var(--border);" onclick="fullpgVibeSearch('Cozy warm traditional room')">
+          <div style="position:absolute; inset:0; background:linear-gradient(to top, rgba(0,0,0,0.7) 0%, transparent 50%); display:flex; align-items:flex-end; padding:8px;">
+            <span style="font-size:10px; font-weight:500;">Cozy & Warm</span>
+          </div>
+        </div>
+        <div style="flex-shrink:0; width:90px; height:90px; border-radius:10px; background:linear-gradient(135deg,#1c1418,#140c10); position:relative; cursor:pointer; overflow:hidden; border:1px solid var(--border);" onclick="fullpgVibeSearch('Panoramic view city lights')">
+          <div style="position:absolute; inset:0; background:linear-gradient(to top, rgba(0,0,0,0.7) 0%, transparent 50%); display:flex; align-items:flex-end; padding:8px;">
+            <span style="font-size:10px; font-weight:500;">City Views</span>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div style="padding-bottom:40px;"></div>
+  </div>
+
+</div><!-- /panel-d -->
+
+
+<!-- ══════════════════════════════════════════
+     Notes Panel
+════════════════════════════════════════════ -->
+<div class="panel" id="panel-notes">
+  <div class="mock-header">
+    <div class="logo">travelboop<span>.</span></div>
+  </div>
+  <div style="padding:28px 40px 8px;">
+    <h2 style="font-family:'Cormorant Garamond',serif; font-size:28px; font-weight:300; margin-bottom:6px;">Design Options — Trade-offs</h2>
+    <p style="font-size:13px; color:var(--muted);">Click each tab to interact with the prototype, then come back here for a comparison.</p>
+  </div>
+  <div class="notes-panel">
+
+    <div class="note-card">
+      <h3>A · Stacked Accordion</h3>
+      <ul>
+        <li class="pro">Always shows all 5 steps — no surprises</li>
+        <li class="pro">Locked steps provide a visual "roadmap"</li>
+        <li class="pro">Edit any previous step inline — great for iteration</li>
+        <li class="pro">Mobile: naturally a single column, works great</li>
+        <li>Best for: users who want to review their choices before searching</li>
+        <li class="con">Taller page — requires more scrolling on mobile</li>
+        <li class="con">Can feel form-like if not carefully styled</li>
+      </ul>
+    </div>
+
+    <div class="note-card">
+      <h3>B · Context Strip</h3>
+      <ul>
+        <li class="pro">Compact — shows all context in one persistent bar</li>
+        <li class="pro">Search box always visible — minimal friction</li>
+        <li class="pro">Familiar pattern (similar to Google Flights, Airbnb)</li>
+        <li>Best for: returning users who know what they want</li>
+        <li class="con">The 5 segments can feel cramped on mobile</li>
+        <li class="con">Less visual narrative — neighborhood feels like just another field</li>
+        <li class="con">Hard to surface neighborhood photos in this compact space</li>
+      </ul>
+    </div>
+
+    <div class="note-card">
+      <h3>C · Command Bar</h3>
+      <ul>
+        <li class="pro">Feels very modern and premium — like a "control center"</li>
+        <li class="pro">Sticky/floating — always accessible once results appear</li>
+        <li class="pro">Results visible immediately below — great feedback loop</li>
+        <li class="pro">Natural for power users who want to tweak filters mid-results</li>
+        <li class="con">Neighborhoods feel like a filter, not a discovery experience</li>
+        <li class="con">Complex to handle gracefully on mobile</li>
+        <li class="con">Room description (free text) and neighborhood compete for bar space</li>
+      </ul>
+    </div>
+
+    <div class="note-card">
+      <h3>D · Neighborhood First</h3>
+      <ul>
+        <li class="pro">Neighborhood is the hero — gets the visual treatment it deserves</li>
+        <li class="pro">Breadcrumb trail keeps progress clear without a wizard</li>
+        <li class="pro">Most cinematic feel — matches the premium brand</li>
+        <li class="pro">Photo-tap vibes feel natural here alongside neighborhood cards</li>
+        <li class="pro">Clean mobile experience — each step is a full screen "moment"</li>
+        <li class="con">More steps before reaching results — slightly higher commitment</li>
+        <li class="con">Dates step currently squeezed into the search tray</li>
+      </ul>
+    </div>
+
+    <div class="note-card">
+      <h3>Recommendation</h3>
+      <ul>
+        <li><strong style="color:var(--accent2)">D + C hybrid</strong> — Neighborhood-First page (Option D) for new searches, with a compact sticky Command Bar (Option C style) once results are showing</li>
+        <li>Dates and style can collapse into the search tray below the neighborhood chip</li>
+        <li>On mobile: Option D flows naturally as a series of "moments" — city → area → search</li>
+        <li>On desktop: wider neighborhood grid (3-4 columns), search tray beside the hero text</li>
+        <li>Option A (Accordion) is the simplest to build and the safest for launch if speed matters</li>
+      </ul>
+    </div>
+
+    <div class="note-card">
+      <h3>Mobile Notes</h3>
+      <ul>
+        <li>All 4 options are responsive — toggle 📱 in the top bar to preview</li>
+        <li>Option D: neighborhood grid collapses to 2 columns on mobile</li>
+        <li>Option B/C: the horizontal segment bar wraps to 2×2 grid on mobile</li>
+        <li>Dates: native date pickers work best on mobile — avoid custom pickers</li>
+        <li>Vibe presets: horizontal scroll row works perfectly on mobile touch</li>
+      </ul>
+    </div>
+
+  </div>
+</div><!-- /panel-notes -->
+
+</div><!-- /viewport -->
+</div><!-- /viewport-wrapper -->
+
+<script>
+// ── Canvas controls ──
+function showPanel(id) {
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('panel-' + id).classList.add('active');
+  event.target.classList.add('active');
+}
+function setDevice(mode) {
+  document.querySelectorAll('.dev-btn').forEach(b => b.classList.remove('active'));
+  event.target.classList.add('active');
+  const vp = document.getElementById('viewport');
+  if (mode === 'mobile') vp.classList.add('mobile');
+  else vp.classList.remove('mobile');
+}
+
+// ─────────────────────────────────
+// OPTION A — Accordion logic
+// ─────────────────────────────────
+const ACC_STATE = { city: null, nbhd: null, dates: null, style: [] };
+const NBHD_DATA = {
+  Paris: [
+    { name: 'Le Marais', vibe: 'Historic, artsy', hotels: 30, color: '#2a1a10' },
+    { name: 'Saint-Germain', vibe: 'Chic, literary', hotels: 25, color: '#1a1a2a' },
+    { name: 'Montmartre', vibe: 'Bohemian, hilltop', hotels: 19, color: '#1a2a1a' },
+    { name: 'Champs-Élysées', vibe: 'Iconic, grand', hotels: 74, color: '#2a2010' },
+    { name: 'Canal St-Martin', vibe: 'Local, creative', hotels: 15, color: '#102020' },
+    { name: 'Opéra / Grands Boulevards', vibe: 'Central, lively', hotels: 60, color: '#201020' },
+  ],
+  'Kuala Lumpur': [
+    { name: 'KLCC', vibe: 'Modern, towers', hotels: 45, color: '#1a1a2a' },
+    { name: 'Bukit Bintang', vibe: 'Vibrant, shopping', hotels: 38, color: '#2a1a10' },
+    { name: 'Bangsar', vibe: 'Expat, café culture', hotels: 22, color: '#1a2a1a' },
+    { name: 'Chow Kit', vibe: 'Gritty, authentic', hotels: 18, color: '#201a10' },
+  ],
+  London: [
+    { name: 'Mayfair', vibe: 'Luxury, quiet', hotels: 35, color: '#2a2020' },
+    { name: 'Shoreditch', vibe: 'Creative, trendy', hotels: 28, color: '#1a1a2a' },
+    { name: 'Covent Garden', vibe: 'Central, touristy', hotels: 42, color: '#201a10' },
+  ],
+};
+
+function accSelectCity(city) {
+  ACC_STATE.city = city;
+  document.getElementById('acc-city-input').value = city;
+  document.getElementById('acc-v1').textContent = city;
+  document.getElementById('acc-v1').classList.remove('placeholder');
+
+  // Unlock + expand neighborhood step
+  const s1 = document.getElementById('acc-s1');
+  s1.classList.remove('is-active'); s1.classList.add('is-done');
+  document.getElementById('acc-n1')?.classList.replace('active','done');
+
+  const s2 = document.getElementById('acc-s2');
+  s2.classList.remove('is-locked'); s2.classList.add('is-active');
+  document.getElementById('acc-n2').classList.add('active');
+
+  // Populate neighborhood grid
+  const grid = document.getElementById('acc-nbhd-grid');
+  const nbhds = NBHD_DATA[city] || [];
+  grid.innerHTML = nbhds.map(n => `
+    <div class="nbhd-mini" onclick="accSelectNbhd('${n.name}', ${n.hotels})"
+      style="background:${n.color}; cursor:pointer;">
+      <div class="nbhd-mini-overlay">
+        <div class="nbhd-mini-name">${n.name}</div>
+        <div class="nbhd-mini-hotels">${n.hotels} hotels</div>
+      </div>
+    </div>
+  `).join('');
+}
+function accCityInput(val) {
+  if (val.length < 2) return;
+  const matches = Object.keys(NBHD_DATA).filter(c => c.toLowerCase().startsWith(val.toLowerCase()));
+  const pils = document.getElementById('acc-city-suggestions');
+  pils.innerHTML = matches.map(c => `<span class="room-pill" onclick="accSelectCity('${c}')">${c}</span>`).join('');
+}
+function accSelectNbhd(name, hotels) {
+  ACC_STATE.nbhd = name;
+  document.querySelectorAll('#acc-nbhd-grid .nbhd-mini').forEach(el => el.classList.remove('selected'));
+  event.currentTarget.classList.add('selected');
+
+  const s2 = document.getElementById('acc-s2');
+  s2.classList.remove('is-active'); s2.classList.add('is-done');
+  document.getElementById('acc-n2').classList.replace('active','done');
+  document.getElementById('acc-v2').textContent = name + ' (' + hotels + ' hotels)';
+  document.getElementById('acc-v2').classList.remove('placeholder');
+  document.getElementById('acc-e2').style.display = 'inline';
+
+  const s3 = document.getElementById('acc-s3');
+  s3.classList.remove('is-locked'); s3.classList.add('is-active');
+  document.getElementById('acc-n3').classList.add('active');
+  updateContextSummary();
+}
+function accSkipNeighborhood() {
+  accSelectNbhd('Whole city', '—');
+}
+function accConfirmDates() {
+  const ci = document.getElementById('acc-checkin').value;
+  const co = document.getElementById('acc-checkout').value;
+  if (!ci || !co) return;
+  ACC_STATE.dates = ci + ' → ' + co;
+  const s3 = document.getElementById('acc-s3');
+  s3.classList.remove('is-active'); s3.classList.add('is-done');
+  document.getElementById('acc-n3').classList.replace('active','done');
+  document.getElementById('acc-v3').textContent = formatDate(ci) + ' → ' + formatDate(co);
+  document.getElementById('acc-v3').classList.remove('placeholder');
+  document.getElementById('acc-e3').style.display = 'inline';
+  unlockStep4();
+}
+function accSkipDates() {
+  ACC_STATE.dates = 'no dates';
+  const s3 = document.getElementById('acc-s3');
+  s3.classList.remove('is-active'); s3.classList.add('is-done');
+  document.getElementById('acc-n3').classList.replace('active','done');
+  document.getElementById('acc-v3').textContent = 'No dates selected';
+  document.getElementById('acc-v3').classList.remove('placeholder');
+  unlockStep4();
+}
+function accCheckDate() {}
+function unlockStep4() {
+  const s4 = document.getElementById('acc-s4');
+  s4.classList.remove('is-locked'); s4.classList.add('is-active');
+  document.getElementById('acc-n4').classList.add('active');
+  updateContextSummary();
+}
+function accConfirmRoom() {
+  const selected = [...document.querySelectorAll('#acc-s4 .room-pill.selected')].map(p => p.textContent.trim());
+  ACC_STATE.style = selected;
+  const s4 = document.getElementById('acc-s4');
+  s4.classList.remove('is-active'); s4.classList.add('is-done');
+  document.getElementById('acc-n4').classList.replace('active','done');
+  document.getElementById('acc-v4').textContent = selected.length ? selected.join(', ') : 'Any style';
+  document.getElementById('acc-v4').classList.remove('placeholder');
+  document.getElementById('acc-e4').style.display = 'inline';
+  const s5 = document.getElementById('acc-s5');
+  s5.classList.remove('is-locked'); s5.classList.add('is-active');
+  document.getElementById('acc-n5').classList.add('active');
+  // Auto-fill query from selected styles
+  if (selected.length) {
+    document.getElementById('acc-query').value = selected.map(s => s.replace(/^[^\w]+/, '')).join(', ');
+  }
+  updateContextSummary();
+}
+function accEdit(step) {
+  event.stopPropagation();
+  const s = document.getElementById('acc-s' + step);
+  const wasActive = s.classList.contains('is-active');
+  // Toggle: if was done and not active, re-open it
+  if (!wasActive) {
+    s.classList.remove('is-done'); s.classList.add('is-active');
+  }
+}
+function accToggle(step) {
+  const s = document.getElementById('acc-s' + step);
+  if (s.classList.contains('is-locked')) return;
+  if (s.classList.contains('is-active')) {
+    // Only close if done
+    if (s.classList.contains('is-done')) s.classList.remove('is-active');
+  } else {
+    s.classList.add('is-active');
+  }
+}
+function accSearch() {
+  const q = document.getElementById('acc-query').value;
+  alert('🔍 Searching for: "' + q + '"\nCity: ' + ACC_STATE.city + '\nArea: ' + ACC_STATE.nbhd + '\nDates: ' + ACC_STATE.dates);
+}
+function updateContextSummary() {
+  const parts = [];
+  if (ACC_STATE.city) parts.push(ACC_STATE.city);
+  if (ACC_STATE.nbhd && ACC_STATE.nbhd !== 'Whole city') parts.push(ACC_STATE.nbhd);
+  if (ACC_STATE.dates && ACC_STATE.dates !== 'no dates') parts.push(ACC_STATE.dates);
+  document.getElementById('acc-context-summary').textContent = parts.join(' · ') || '—';
+}
+function formatDate(d) {
+  if (!d) return '';
+  const dt = new Date(d + 'T12:00:00');
+  return dt.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+}
+
+// ─────────────────────────────────
+// OPTION B — Strip logic
+// ─────────────────────────────────
+const STRIP_STATE = { city: null, area: null, dates: null, style: null };
+const STRIP_PANELS = {
+  city: {
+    title: 'Where are you headed?',
+    html: `<input class="mock-input focused" type="text" placeholder="Paris, Kuala Lumpur…" oninput="stripCityInput(this.value)"/>
+<div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;">
+<span class="room-pill" onclick="stripSelectCity('Paris')">Paris</span>
+<span class="room-pill" onclick="stripSelectCity('Kuala Lumpur')">Kuala Lumpur</span>
+<span class="room-pill" onclick="stripSelectCity('London')">London</span>
+</div>`
+  },
+  area: {
+    title: 'Pick a neighbourhood',
+    html: `<div id="strip-nbhd-content" style="margin-top:4px;"></div>`
+  },
+  dates: {
+    title: 'When are you travelling?',
+    html: `<div class="date-row"><div class="date-field"><label>Check-in</label><input class="mock-input" type="date" onchange="stripSetDates()" id="strip-ci"/></div><div class="date-field"><label>Check-out</label><input class="mock-input" type="date" onchange="stripSetDates()" id="strip-co"/></div></div><div style="margin-top:12px;display:flex;gap:10px;"><button class="btn-ghost" onclick="stripSetDates()">Skip dates</button></div>`
+  },
+  style: {
+    title: 'Any room preferences?',
+    html: `<div class="room-pills" style="margin-top:4px;">
+<span class="room-pill" onclick="togglePill(this)">🛁 Soaking tub</span>
+<span class="room-pill" onclick="togglePill(this)">🚿 Rain shower</span>
+<span class="room-pill" onclick="togglePill(this)">👥 Double sinks</span>
+<span class="room-pill" onclick="togglePill(this)">🪟 City views</span>
+<span class="room-pill" onclick="togglePill(this)">🌅 Balcony</span>
+<span class="room-pill" onclick="togglePill(this)">✨ Luxury suite</span>
+</div><div style="margin-top:12px;"><button class="btn-primary" onclick="stripSearch()">Ready → Search</button></div>`
+  },
+};
+let stripActive = 'city';
+function stripFocus(seg) {
+  stripActive = seg;
+  document.querySelectorAll('.strip-seg').forEach(s => s.classList.remove('active-seg'));
+  document.getElementById('strip-seg-' + seg).classList.add('active-seg');
+  const p = STRIP_PANELS[seg];
+  const panel = document.getElementById('strip-panel');
+  panel.innerHTML = `<h3>${p.title}</h3>` + p.html;
+  if (seg === 'area' && STRIP_STATE.city) {
+    const nbhds = NBHD_DATA[STRIP_STATE.city] || [];
+    const div = document.getElementById('strip-nbhd-content');
+    if (div) div.innerHTML = `<div class="nbhd-grid">${nbhds.map(n => `<div class="nbhd-mini" onclick="stripSelectArea('${n.name}')" style="background:${n.color};"><div class="nbhd-mini-overlay"><div class="nbhd-mini-name">${n.name}</div><div class="nbhd-mini-hotels">${n.hotels} hotels</div></div></div>`).join('')}</div>`;
+  }
+}
+function stripCityInput(val) {}
+function stripSelectCity(c) {
+  STRIP_STATE.city = c;
+  document.getElementById('strip-city-val').textContent = c;
+  document.getElementById('strip-city-val').classList.remove('ph');
+  stripFocus('area');
+}
+function stripSelectArea(name) {
+  STRIP_STATE.area = name;
+  document.getElementById('strip-area-val').textContent = name;
+  document.getElementById('strip-area-val').classList.remove('ph');
+  stripFocus('dates');
+}
+function stripSetDates() {
+  const ci = document.getElementById('strip-ci')?.value;
+  const co = document.getElementById('strip-co')?.value;
+  const label = (ci && co) ? formatDate(ci) + ' – ' + formatDate(co) : 'Any dates';
+  STRIP_STATE.dates = label;
+  document.getElementById('strip-dates-val').textContent = label;
+  document.getElementById('strip-dates-val').classList.remove('ph');
+  stripFocus('style');
+}
+function stripSearch() {
+  const q = document.getElementById('strip-query')?.value || '(no query)';
+  alert('🔍 Searching for: "' + q + '"\nCity: ' + STRIP_STATE.city + '\nArea: ' + STRIP_STATE.area + '\nDates: ' + STRIP_STATE.dates);
+}
+
+// ─────────────────────────────────
+// OPTION C — Command Bar logic
+// ─────────────────────────────────
+const CMD_STATE = { city: null, area: null, dates: null, style: null };
+const CMD_DROPDOWNS = {
+  city: { title: 'Which city?', html: `<input class="mock-input focused" type="text" placeholder="Paris, KL…" oninput="cmdCityInput(this.value)"/><div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;"><span class="room-pill" onclick="cmdSelectCity('Paris')">Paris</span><span class="room-pill" onclick="cmdSelectCity('Kuala Lumpur')">KL</span><span class="room-pill" onclick="cmdSelectCity('London')">London</span></div>` },
+  area: { title: 'Choose a neighbourhood', html: `<div id="cmd-nbhd-content"></div>` },
+  dates: { title: 'Travel dates', html: `<div class="date-row"><div class="date-field"><label>Check-in</label><input class="mock-input" type="date" id="cmd-ci"/></div><div class="date-field"><label>Check-out</label><input class="mock-input" type="date" id="cmd-co"/></div></div><div style="margin-top:10px;"><button class="btn-primary" onclick="cmdSetDates()">Set dates</button> <button class="btn-ghost" onclick="cmdSetDates()">Skip</button></div>` },
+  style: { title: 'Room preferences', html: `<div class="room-pills" style="margin-top:4px;"><span class="room-pill" onclick="togglePill(this)">🛁 Soaking tub</span><span class="room-pill" onclick="togglePill(this)">🚿 Rain shower</span><span class="room-pill" onclick="togglePill(this)">👥 Double sinks</span><span class="room-pill" onclick="togglePill(this)">✨ Luxury</span></div><div style="margin-top:10px;"><button class="btn-primary" onclick="cmdDismissDropdown()">Done</button></div>` },
+};
+let cmdActiveDropdown = null;
+function cmdFocus(seg) {
+  if (cmdActiveDropdown === seg) { cmdDismissDropdown(); return; }
+  cmdActiveDropdown = seg;
+  document.querySelectorAll('.cmd-seg').forEach(s => s.classList.remove('cmd-active'));
+  document.getElementById('cmd-seg-' + seg).classList.add('cmd-active');
+  const d = CMD_DROPDOWNS[seg];
+  const dd = document.getElementById('cmd-dropdown');
+  dd.innerHTML = `<h4>${d.title}</h4>` + d.html;
+  dd.style.display = 'block';
+  if (seg === 'area' && CMD_STATE.city) {
+    const nbhds = NBHD_DATA[CMD_STATE.city] || [];
+    const div = document.getElementById('cmd-nbhd-content');
+    if (div) div.innerHTML = `<div class="nbhd-grid">${nbhds.map(n => `<div class="nbhd-mini" onclick="cmdSelectArea('${n.name}')" style="background:${n.color};"><div class="nbhd-mini-overlay"><div class="nbhd-mini-name">${n.name}</div><div class="nbhd-mini-hotels">${n.hotels} hotels</div></div></div>`).join('')}</div>`;
+  }
+}
+function cmdDismissDropdown() {
+  cmdActiveDropdown = null;
+  document.querySelectorAll('.cmd-seg').forEach(s => s.classList.remove('cmd-active'));
+  document.getElementById('cmd-dropdown').style.display = 'none';
+}
+function cmdCityInput(v) {}
+function cmdSelectCity(c) { CMD_STATE.city = c; document.getElementById('cmd-city-val').textContent = c; document.getElementById('cmd-city-val').classList.remove('ph'); cmdFocus('area'); }
+function cmdSelectArea(name) { CMD_STATE.area = name; document.getElementById('cmd-area-val').textContent = name; document.getElementById('cmd-area-val').classList.remove('ph'); cmdFocus('dates'); }
+function cmdSetDates() {
+  const ci = document.getElementById('cmd-ci')?.value;
+  const co = document.getElementById('cmd-co')?.value;
+  const label = (ci && co) ? formatDate(ci) + '–' + formatDate(co) : 'Anytime';
+  CMD_STATE.dates = label;
+  document.getElementById('cmd-dates-val').textContent = label;
+  document.getElementById('cmd-dates-val').classList.remove('ph');
+  cmdDismissDropdown();
+}
+function cmdSearch() {
+  const q = document.getElementById('cmd-query')?.value || '(no query)';
+  alert('🔍 Searching:\n"' + q + '"\nCity: ' + CMD_STATE.city + '\nArea: ' + CMD_STATE.area);
+}
+
+// ─────────────────────────────────
+// OPTION D — Neighborhood First
+// ─────────────────────────────────
+const FULLPG_STATE = { city: null, nbhd: null };
+function fullpgCityInput(val) {}
+function fullpgSelectCity(city) {
+  FULLPG_STATE.city = city;
+  document.getElementById('fullpg-state-city').style.display = 'none';
+  document.getElementById('fullpg-state-nbhd').style.display = 'block';
+  document.getElementById('fullpg-city-display').textContent = city;
+  // Populate grid
+  const nbhds = NBHD_DATA[city] || [];
+  const grid = document.getElementById('fullpg-nbhd-grid');
+  grid.innerHTML = nbhds.map(n => `
+    <div class="fullpg-nbhd-card" onclick="fullpgSelectNbhd('${n.name}', ${n.hotels})" style="background:${n.color};">
+      <div class="fullpg-card-overlay">
+        <div class="fullpg-card-name">${n.name}</div>
+        <div class="fullpg-card-vibe">${n.vibe}</div>
+        <div class="fullpg-card-tags"><span class="fullpg-tag">${n.hotels} hotels</span></div>
+      </div>
+    </div>
+  `).join('') + `<div class="fullpg-nbhd-card" onclick="fullpgSkipNbhd()" style="background:var(--surface); display:flex; align-items:center; justify-content:center; border:1px dashed rgba(255,255,255,0.1);">
+      <div style="text-align:center; padding:20px;">
+        <div style="font-size:20px; margin-bottom:8px; opacity:0.4">⊕</div>
+        <div style="font-size:13px; color:var(--muted);">All of ${city}</div>
+        <div style="font-size:11px; color:var(--muted); margin-top:3px; opacity:0.7;">No area filter</div>
+      </div>
+    </div>`;
+}
+function fullpgSelectNbhd(name, hotels) {
+  FULLPG_STATE.nbhd = name;
+  document.getElementById('fullpg-state-nbhd').style.display = 'none';
+  document.getElementById('fullpg-state-search').style.display = 'block';
+  document.getElementById('fullpg-selected-nbhd-name').textContent = name;
+  document.getElementById('fullpg-hotel-count').textContent = hotels + ' hotels in area';
+  document.getElementById('fullpg-query').focus();
+}
+function fullpgSkipNbhd() {
+  fullpgSelectNbhd('All of ' + FULLPG_STATE.city, '—');
+}
+function fullpgBack(to) {
+  if (to === 'city') {
+    document.getElementById('fullpg-state-nbhd').style.display = 'none';
+    document.getElementById('fullpg-state-search').style.display = 'none';
+    document.getElementById('fullpg-state-city').style.display = 'block';
+  } else if (to === 'nbhd') {
+    document.getElementById('fullpg-state-search').style.display = 'none';
+    document.getElementById('fullpg-state-nbhd').style.display = 'block';
+  }
+}
+function fullpgBuildQuery() {
+  const selected = [...document.querySelectorAll('#fullpg-state-search .room-pill.selected')].map(p => p.textContent.replace(/^[^\w]+/, '').trim());
+  if (selected.length) document.getElementById('fullpg-query').value = selected.join(', ');
+}
+function fullpgSearch() {
+  const q = document.getElementById('fullpg-query').value;
+  alert('🔍 Searching for: "' + q + '"\nCity: ' + FULLPG_STATE.city + '\nArea: ' + FULLPG_STATE.nbhd);
+}
+function fullpgVibeSearch(q) {
+  document.getElementById('fullpg-query').value = q;
+  alert('🔍 Vibe search: "' + q + '"\nCity: ' + FULLPG_STATE.city + '\nArea: ' + FULLPG_STATE.nbhd);
+}
+
+// ─────────────────────────────────
+// Shared helpers
+// ─────────────────────────────────
+function togglePill(el) { el.classList.toggle('selected'); }
+</script>
+</body>
+</html>

@@ -1,0 +1,1169 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>RoomMatch · Flow v3</title>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet"/>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --bg:      #0c0c0e;
+  --surface: #131316;
+  --card:    #18181c;
+  --border:  rgba(255,255,255,0.07);
+  --text:    #e8e4dc;
+  --muted:   #9a9590;
+  --accent:  #c9a96e;
+  --accent2: #e8d5b0;
+  --green:   #6dba8a;
+  --r:       14px;
+  --gutter:  clamp(20px,5vw,52px);
+}
+html { scroll-behavior: smooth; }
+body { font-family:'DM Sans',sans-serif; background:var(--bg); color:var(--text); min-height:100vh; overflow-x:hidden; }
+body::before {
+  content:''; position:fixed; inset:0; pointer-events:none; z-index:9999; opacity:.4;
+  background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.03'/%3E%3C/svg%3E");
+}
+
+/* ═══════ Canvas chrome ════════════════════════════ */
+.cbar {
+  position:fixed; top:0; left:0; right:0; z-index:3000;
+  background:rgba(8,8,10,.96); backdrop-filter:blur(12px);
+  border-bottom:1px solid rgba(255,255,255,.06);
+  padding:9px 20px; display:flex; align-items:center; gap:10px; flex-wrap:wrap;
+}
+.clabel { font-size:11px; color:var(--muted); letter-spacing:.1em; text-transform:uppercase; white-space:nowrap; }
+.ctabs { display:flex; gap:5px; flex-wrap:wrap; }
+.ctab {
+  padding:5px 12px; border-radius:6px; font-size:11px; font-weight:500; cursor:pointer;
+  border:1px solid rgba(255,255,255,.1); color:var(--muted); background:transparent;
+  font-family:'DM Sans',sans-serif; transition:all .15s; white-space:nowrap;
+}
+.ctab:hover { border-color:rgba(201,169,110,.4); color:var(--accent2); }
+.ctab.active { background:rgba(201,169,110,.12); border-color:rgba(201,169,110,.5); color:var(--accent); }
+.devgrp { display:flex; gap:4px; margin-left:auto; }
+.dbtn {
+  padding:5px 11px; border-radius:6px; font-size:12px; cursor:pointer;
+  background:transparent; border:1px solid rgba(255,255,255,.1); color:var(--muted);
+  font-family:'DM Sans',sans-serif; transition:all .15s;
+}
+.dbtn.on { background:rgba(255,255,255,.06); color:var(--text); border-color:rgba(255,255,255,.15); }
+
+/* ═══════ Frame ════════════════════════════════════ */
+.frame-wrap { padding-top:44px; min-height:100vh; display:flex; justify-content:center; }
+.frame { width:100%; max-width:100%; background:var(--bg); transition:max-width .35s cubic-bezier(.4,0,.2,1); }
+.frame.mobile { max-width:390px; box-shadow:0 0 0 1px rgba(255,255,255,.05); }
+
+/* ═══════ Panels ══════════════════════════════════ */
+.panel { display:none; }
+.panel.active { display:block; }
+
+/* ═══════ App header ══════════════════════════════ */
+.app-hdr { padding:16px var(--gutter); display:flex; align-items:center; }
+.logo { font-size:15px; font-weight:500; color:var(--text); letter-spacing:.01em; }
+.logo span { color:var(--accent); }
+
+/* ═══════════════════════════════════════════════════
+   STORY BAR v3 — prominent, chip-based
+═══════════════════════════════════════════════════ */
+.story {
+  position:sticky; top:44px; z-index:500;
+  background:rgba(12,12,14,.97); backdrop-filter:blur(20px);
+  border-bottom:1px solid rgba(255,255,255,.07);
+  padding:0 var(--gutter);
+  opacity:0; pointer-events:none; transform:translateY(-4px);
+  transition:opacity .25s, transform .25s;
+}
+.story.show { opacity:1; pointer-events:auto; transform:translateY(0); }
+.story-inner {
+  max-width:1100px; margin:0 auto;
+  display:flex; align-items:center; gap:0; height:52px;
+}
+/* Each chip */
+.s-chip {
+  display:flex; align-items:center; gap:7px; height:52px;
+  padding:0 14px 0 0; cursor:pointer; position:relative;
+  transition:opacity .15s; flex-shrink:0; min-width:0;
+}
+.s-chip:hover .s-val { color:var(--accent2); }
+.s-chip-inner {
+  display:flex; flex-direction:column; justify-content:center;
+  background:transparent; border-radius:8px; padding:5px 10px;
+  border:1px solid transparent; transition:all .2s; min-width:0;
+}
+/* Filled chip when step is done */
+.s-chip.done .s-chip-inner {
+  background:rgba(255,255,255,.05);
+  border-color:rgba(255,255,255,.1);
+}
+.s-chip.current .s-chip-inner {
+  background:rgba(201,169,110,.08);
+  border-color:rgba(201,169,110,.3);
+}
+.s-lbl { font-size:9px; letter-spacing:.15em; text-transform:uppercase; color:var(--muted); white-space:nowrap; }
+.s-val {
+  font-size:13px; font-weight:400; white-space:nowrap; overflow:hidden;
+  text-overflow:ellipsis; max-width:160px; transition:color .15s;
+  color:rgba(232,228,220,.4); font-style:italic;
+}
+.s-chip.done .s-val  { color:var(--text); font-style:normal; }
+.s-chip.current .s-val { color:var(--accent); font-style:normal; }
+.s-arrow { color:rgba(255,255,255,.15); font-size:12px; flex-shrink:0; }
+/* Pulsing "pending" animation on the next-up chip */
+@keyframes pulse-border {
+  0%,100% { border-color:rgba(201,169,110,.15); }
+  50%      { border-color:rgba(201,169,110,.45); }
+}
+.s-chip.next-up .s-chip-inner {
+  animation:pulse-border 2s ease infinite;
+  border-color:rgba(201,169,110,.15);
+}
+.s-chip.next-up .s-val { color:rgba(201,169,110,.5); font-style:italic; }
+/* Dates = CTA pill */
+.s-dates-cta {
+  margin-left:auto; flex-shrink:0;
+  background:rgba(201,169,110,.1); border:1px solid rgba(201,169,110,.35);
+  border-radius:20px; padding:7px 16px; font-size:12px; font-weight:500;
+  color:var(--accent); cursor:pointer; white-space:nowrap;
+  transition:all .2s;
+}
+.s-dates-cta:hover { background:rgba(201,169,110,.18); border-color:rgba(201,169,110,.6); }
+.s-dates-cta.set { background:rgba(255,255,255,.05); border-color:rgba(255,255,255,.12); color:var(--text); font-weight:400; }
+
+/* ═══════════════════════════════════════════════════
+   Shared screen layout
+═══════════════════════════════════════════════════ */
+/* Full-screen "chapter" feel */
+.chapter { min-height:calc(100vh - 44px - 52px); display:flex; flex-direction:column; }
+.chapter-top { padding:32px var(--gutter) 0; max-width:700px; }
+.chapter-top .eyebrow {
+  font-size:10px; letter-spacing:.16em; text-transform:uppercase;
+  color:var(--muted); margin-bottom:14px; display:flex; align-items:center; gap:8px;
+}
+.eyebrow-dot { width:4px; height:4px; border-radius:50%; background:var(--accent); flex-shrink:0; }
+.chapter-top h1 {
+  font-family:'Cormorant Garamond',serif;
+  font-size:clamp(30px,4.5vw,58px); font-weight:300; line-height:1.06; margin-bottom:10px;
+}
+.chapter-top h1 em { font-style:italic; color:var(--accent); }
+.chapter-top p { font-size:14px; color:var(--muted); line-height:1.7; max-width:420px; }
+.chapter-body { flex:1; padding:24px var(--gutter) 60px; }
+
+/* ═══════════════════════════════════════════════════
+   STEP 1 — City
+═══════════════════════════════════════════════════ */
+.city-box {
+  max-width:520px;
+  background:var(--card); border:1px solid rgba(201,169,110,.4); border-radius:20px;
+  display:flex; align-items:center; gap:12px; padding:16px 20px;
+  box-shadow:0 0 0 1px rgba(201,169,110,.1), 0 0 60px rgba(201,169,110,.1), 0 16px 40px rgba(0,0,0,.4);
+  transition:box-shadow .2s, border-color .2s;
+}
+.city-box:focus-within {
+  border-color:rgba(201,169,110,.75);
+  box-shadow:0 0 0 2px rgba(201,169,110,.15), 0 0 70px rgba(201,169,110,.16), 0 16px 40px rgba(0,0,0,.45);
+}
+.city-box-icon { color:var(--accent2); font-size:18px; opacity:.75; flex-shrink:0; }
+.city-box input {
+  flex:1; background:transparent; border:none; outline:none;
+  font-family:'DM Sans',sans-serif; font-size:17px; color:var(--text); font-weight:300;
+}
+.city-box input::placeholder { color:rgba(232,228,220,.35); font-style:italic; }
+.city-chips { display:flex; gap:8px; flex-wrap:wrap; margin-top:18px; max-width:520px; }
+.city-chip {
+  padding:10px 20px; border-radius:24px; font-size:13px; cursor:pointer;
+  border:1px solid rgba(255,255,255,.08); color:var(--muted); background:var(--card);
+  transition:all .15s; font-family:'DM Sans',sans-serif;
+}
+.city-chip:hover { border-color:rgba(201,169,110,.45); color:var(--accent2); background:rgba(201,169,110,.06); transform:translateY(-1px); }
+
+/* ═══════════════════════════════════════════════════
+   STEP 2 — Neighbourhood
+═══════════════════════════════════════════════════ */
+.nbhd-grid {
+  display:grid;
+  grid-template-columns:repeat(auto-fill, minmax(220px, 1fr));
+  gap:12px;
+}
+.nbhd-card {
+  border-radius:var(--r); overflow:hidden; cursor:pointer; position:relative;
+  aspect-ratio:5/4; transition:transform .2s, box-shadow .2s;
+}
+.nbhd-card:hover { transform:translateY(-3px); box-shadow:0 16px 40px rgba(0,0,0,.55); }
+.nbhd-card.sel { outline:2px solid var(--accent); outline-offset:3px; }
+.nbhd-overlay {
+  position:absolute; inset:0;
+  background:linear-gradient(to top, rgba(0,0,0,.87) 0%, rgba(0,0,0,.1) 55%, transparent 100%);
+  padding:14px; display:flex; flex-direction:column; justify-content:flex-end;
+}
+.nbhd-name { font-size:15px; font-weight:500; margin-bottom:3px; }
+.nbhd-vibe { font-size:11px; color:rgba(255,255,255,.6); font-style:italic; margin-bottom:8px; }
+.nbhd-tags { display:flex; gap:5px; flex-wrap:wrap; }
+.nbhd-tag { font-size:10px; padding:2px 8px; border-radius:10px; background:rgba(255,255,255,.12); color:rgba(255,255,255,.75); }
+.nbhd-skip {
+  border-radius:var(--r); overflow:hidden; cursor:pointer; position:relative;
+  aspect-ratio:5/4; background:var(--surface); border:1px dashed rgba(255,255,255,.1);
+  display:flex; align-items:center; justify-content:center; transition:border-color .15s;
+}
+.nbhd-skip:hover { border-color:rgba(201,169,110,.35); }
+
+/* Momentum banner — appears briefly after nbhd selected */
+.momentum-banner {
+  position:fixed; bottom:32px; left:50%; transform:translateX(-50%) translateY(20px);
+  background:rgba(24,24,28,.97); backdrop-filter:blur(20px);
+  border:1px solid rgba(201,169,110,.35); border-radius:40px;
+  padding:13px 28px; font-size:14px; color:var(--accent2); white-space:nowrap;
+  box-shadow:0 8px 32px rgba(0,0,0,.5), 0 0 0 1px rgba(201,169,110,.1);
+  opacity:0; pointer-events:none; z-index:1000;
+  transition:opacity .25s, transform .25s;
+}
+.momentum-banner.show { opacity:1; transform:translateX(-50%) translateY(0); }
+
+/* ═══════════════════════════════════════════════════
+   STEP 3 — Room Style (HERO MOMENT — the differentiator)
+═══════════════════════════════════════════════════ */
+
+/* Featured card — large, immersive, single focus */
+.style-featured {
+  border-radius:20px; overflow:hidden; position:relative;
+  /* ~65vh on mobile, ~55vh on desktop */
+  height:clamp(320px, 60vh, 560px);
+  cursor:pointer; transition:box-shadow .3s;
+  margin-bottom:12px;
+}
+.style-featured:hover { box-shadow:0 24px 64px rgba(0,0,0,.6); }
+.style-featured.sel { outline:3px solid var(--accent); outline-offset:4px; }
+.style-featured-bg { position:absolute; inset:0; width:100%; height:100%; transition:transform .5s ease; }
+.style-featured:hover .style-featured-bg { transform:scale(1.02); }
+.style-featured-grad {
+  position:absolute; inset:0;
+  background:linear-gradient(to top, rgba(0,0,0,.9) 0%, rgba(0,0,0,.3) 45%, rgba(0,0,0,.05) 100%);
+}
+.style-featured-content {
+  position:absolute; inset:0; padding:clamp(20px,4vh,36px);
+  display:flex; flex-direction:column; justify-content:flex-end;
+}
+.style-featured-badge {
+  position:absolute; top:20px; left:20px;
+  background:rgba(0,0,0,.5); backdrop-filter:blur(10px);
+  border:1px solid rgba(255,255,255,.12); border-radius:20px;
+  padding:5px 13px; font-size:10px; letter-spacing:.1em; text-transform:uppercase;
+  color:rgba(255,255,255,.65);
+}
+.style-featured-title {
+  font-family:'Cormorant Garamond',serif;
+  font-size:clamp(32px,5vw,56px); font-weight:300; line-height:1.05;
+  margin-bottom:8px; text-shadow:0 2px 20px rgba(0,0,0,.4);
+}
+.style-featured-desc {
+  font-size:15px; color:rgba(255,255,255,.7); line-height:1.6; max-width:480px;
+  margin-bottom:16px; text-shadow:0 1px 8px rgba(0,0,0,.4);
+}
+.style-featured-kws { display:flex; gap:6px; flex-wrap:wrap; margin-bottom:20px; }
+.style-kw {
+  font-size:11px; padding:4px 10px; border-radius:12px;
+  background:rgba(255,255,255,.1); backdrop-filter:blur(6px);
+  color:rgba(255,255,255,.7); border:1px solid rgba(255,255,255,.08);
+}
+.style-featured-cta {
+  align-self:flex-start;
+  padding:12px 28px; background:var(--accent); color:#0c0c0e;
+  border:none; border-radius:12px; font-family:'DM Sans',sans-serif;
+  font-size:14px; font-weight:500; cursor:pointer; transition:opacity .15s;
+  display:flex; align-items:center; gap:8px;
+}
+.style-featured-cta:hover { opacity:.88; }
+
+/* Thumbnail selector row — swipeable */
+.style-thumbs-wrap { position:relative; }
+.style-thumbs {
+  display:flex; gap:10px; overflow-x:auto; padding-bottom:4px; scroll-snap-type:x mandatory;
+}
+.style-thumbs::-webkit-scrollbar { height:0; }
+.style-thumb {
+  flex-shrink:0; width:clamp(110px,20vw,160px); aspect-ratio:4/3;
+  border-radius:10px; overflow:hidden; cursor:pointer; position:relative;
+  scroll-snap-align:start; transition:transform .15s, box-shadow .15s; border:2px solid transparent;
+}
+.style-thumb:hover { transform:scale(1.02); box-shadow:0 8px 20px rgba(0,0,0,.4); }
+.style-thumb.active-thumb { border-color:var(--accent); }
+.style-thumb-bg { width:100%; height:100%; }
+.style-thumb-overlay {
+  position:absolute; inset:0;
+  background:linear-gradient(to top, rgba(0,0,0,.8) 0%, transparent 55%);
+  padding:8px; display:flex; align-items:flex-end;
+}
+.style-thumb-name { font-size:11px; font-weight:500; line-height:1.2; }
+
+/* Custom text input */
+.style-custom-row {
+  margin-top:20px; display:flex; align-items:center; gap:10px;
+  max-width:620px;
+}
+.style-custom-label { font-size:12px; color:var(--muted); white-space:nowrap; }
+.style-custom-box {
+  flex:1; display:flex; overflow:hidden; border-radius:12px;
+  border:1px solid rgba(255,255,255,.1); background:var(--card);
+  transition:border-color .2s;
+}
+.style-custom-box:focus-within { border-color:rgba(201,169,110,.4); }
+.style-custom-box input {
+  flex:1; background:transparent; border:none; outline:none; padding:11px 14px;
+  font-family:'DM Sans',sans-serif; font-size:13px; color:var(--text);
+}
+.style-custom-box input::placeholder { color:rgba(232,228,220,.3); font-style:italic; }
+.style-custom-box button {
+  padding:0 18px; background:rgba(201,169,110,.15); color:var(--accent);
+  border:none; font-family:'DM Sans',sans-serif; font-size:12px;
+  font-weight:500; cursor:pointer; border-left:1px solid rgba(255,255,255,.08);
+}
+
+/* ═══════════════════════════════════════════════════
+   STEP 4 — Dates (Commitment Moment)
+═══════════════════════════════════════════════════ */
+.dates-moment {
+  max-width:520px;
+  background:var(--card); border:1px solid rgba(255,255,255,.09);
+  border-radius:20px; overflow:hidden;
+  box-shadow:0 12px 40px rgba(0,0,0,.35);
+}
+.dates-moment-top {
+  padding:24px 24px 20px;
+  border-bottom:1px solid var(--border);
+}
+.dates-moment-top h3 {
+  font-family:'Cormorant Garamond',serif; font-size:24px; font-weight:400; margin-bottom:6px;
+}
+.dates-moment-top p { font-size:13px; color:var(--muted); line-height:1.6; }
+.dates-row { display:grid; grid-template-columns:1fr 1fr; gap:12px; padding:20px 24px; }
+.date-f label { font-size:10px; letter-spacing:.12em; text-transform:uppercase; color:var(--muted); display:block; margin-bottom:6px; }
+.date-f input {
+  background:var(--surface); border:1px solid var(--border); border-radius:10px;
+  color:var(--text); font-family:'DM Sans',sans-serif; font-size:14px;
+  padding:12px 14px; width:100%; outline:none; color-scheme:dark; transition:border-color .2s;
+}
+.date-f input:focus { border-color:rgba(201,169,110,.45); }
+.dates-actions { padding:0 24px 24px; display:flex; gap:10px; flex-wrap:wrap; }
+.btn-primary {
+  padding:13px 26px; background:var(--accent); color:#0c0c0e;
+  border:none; border-radius:11px; font-family:'DM Sans',sans-serif;
+  font-size:13px; font-weight:500; cursor:pointer; transition:opacity .15s; white-space:nowrap;
+}
+.btn-primary:hover { opacity:.88; }
+.btn-browse {
+  padding:13px 18px; background:transparent; color:var(--muted);
+  border:1px solid var(--border); border-radius:11px;
+  font-family:'DM Sans',sans-serif; font-size:13px; cursor:pointer;
+  transition:border-color .15s, color .15s; white-space:nowrap;
+}
+.btn-browse:hover { border-color:rgba(255,255,255,.18); color:var(--text); }
+.dates-softgate {
+  margin:0 24px 24px; padding:12px 16px; border-radius:10px;
+  background:rgba(201,169,110,.05); border:1px solid rgba(201,169,110,.12);
+  font-size:12px; color:var(--muted); line-height:1.65;
+}
+.dates-softgate strong { color:var(--accent2); }
+
+/* ═══════════════════════════════════════════════════
+   STEP 5 — Results + Command Bar
+═══════════════════════════════════════════════════ */
+.cmd {
+  position:sticky; top:44px; z-index:500;
+  background:rgba(10,10,13,.97); backdrop-filter:blur(20px);
+  border-bottom:1px solid rgba(255,255,255,.07);
+}
+.cmd-inner {
+  padding:0 var(--gutter); max-width:1180px; margin:0 auto;
+  display:flex; align-items:stretch; min-height:52px;
+}
+.cmd-seg {
+  display:flex; flex-direction:column; justify-content:center;
+  padding:10px 16px 10px 0; margin-right:16px;
+  border-right:1px solid rgba(255,255,255,.06); cursor:pointer; flex-shrink:0;
+}
+.cmd-seg:hover .cmd-v { color:var(--accent2); }
+.cmd-l { font-size:9px; letter-spacing:.14em; text-transform:uppercase; color:var(--muted); }
+.cmd-v { font-size:13px; color:var(--text); white-space:nowrap; }
+.cmd-v.ph { color:rgba(201,169,110,.55); font-style:italic; }
+.cmd-search {
+  flex:1; display:flex; align-items:center; gap:10px; padding:8px 0;
+}
+.cmd-search-icon { color:var(--accent2); font-size:14px; opacity:.65; flex-shrink:0; }
+.cmd-search input {
+  flex:1; background:transparent; border:none; outline:none; min-width:0;
+  font-family:'DM Sans',sans-serif; font-size:13px; color:var(--text);
+}
+.cmd-search input::placeholder { color:rgba(232,228,220,.28); font-style:italic; }
+.cmd-go {
+  flex-shrink:0; padding:8px 18px; background:var(--accent); color:#0c0c0e;
+  border:none; border-radius:9px; font-family:'DM Sans',sans-serif;
+  font-size:12px; font-weight:500; cursor:pointer; transition:opacity .15s;
+}
+.cmd-go:hover { opacity:.85; }
+/* Inline date tray */
+.cmd-tray {
+  display:none; border-top:1px solid var(--border); padding:14px var(--gutter);
+}
+.cmd-tray.open { display:block; animation:fd .18s ease; }
+.cmd-tray-inner { max-width:480px; display:flex; gap:12px; flex-wrap:wrap; align-items:flex-end; }
+@keyframes fd { from{opacity:0;transform:translateY(-6px)} to{opacity:1;transform:translateY(0)} }
+
+/* Results body */
+.results-body { padding:20px var(--gutter) 80px; max-width:1180px; margin:0 auto; }
+.results-meta { display:flex; align-items:center; justify-content:space-between; margin-bottom:14px; flex-wrap:wrap; gap:10px; }
+.results-count { font-size:13px; color:var(--muted); }
+.results-count strong { color:var(--text); }
+.filter-chips { display:flex; gap:6px; flex-wrap:wrap; }
+.fc {
+  display:inline-flex; align-items:center; gap:5px; padding:5px 10px; border-radius:16px;
+  font-size:11px; background:rgba(201,169,110,.1); border:1px solid rgba(201,169,110,.3); color:var(--accent);
+}
+.fc-x { cursor:pointer; opacity:.6; } .fc-x:hover { opacity:1; }
+/* Soft gate banner */
+.softgate {
+  margin-bottom:14px; padding:13px 18px; border-radius:12px;
+  background:rgba(201,169,110,.05); border:1px solid rgba(201,169,110,.14);
+  display:flex; align-items:center; gap:14px; flex-wrap:wrap; font-size:13px; color:var(--muted);
+}
+.softgate span { flex:1; min-width:200px; }
+.softgate button {
+  padding:8px 18px; background:rgba(201,169,110,.12); border:1px solid rgba(201,169,110,.35);
+  border-radius:9px; color:var(--accent); font-family:'DM Sans',sans-serif; font-size:12px;
+  font-weight:500; cursor:pointer; white-space:nowrap; transition:background .15s;
+}
+.softgate button:hover { background:rgba(201,169,110,.2); }
+/* Hotel card */
+.hotel {
+  background:var(--card); border:1px solid var(--border); border-radius:var(--r);
+  margin-bottom:10px; overflow:hidden; transition:border-color .2s;
+}
+.hotel:hover { border-color:rgba(255,255,255,.13); }
+.hotel-hdr {
+  padding:14px 16px; display:flex; align-items:center; gap:14px; cursor:pointer;
+}
+.h-thumb {
+  width:80px; height:64px; border-radius:9px; flex-shrink:0; overflow:hidden;
+}
+.h-thumb div { width:100%; height:100%; }
+.h-info { flex:1; min-width:0; }
+.h-name { font-size:14px; font-weight:500; margin-bottom:3px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.h-meta { font-size:12px; color:var(--muted); margin-bottom:3px; }
+.h-match { display:inline-block; padding:2px 8px; border-radius:8px; font-size:10px; background:rgba(109,186,138,.1); color:var(--green); border:1px solid rgba(109,186,138,.22); }
+.h-score-block { text-align:right; flex-shrink:0; }
+.h-score { font-size:22px; font-weight:500; color:var(--accent); line-height:1.1; }
+.h-score-lbl { font-size:10px; color:var(--muted); }
+.h-price { font-size:13px; font-weight:500; color:var(--green); margin-top:2px; }
+.h-price.soft { font-size:11px; color:rgba(201,169,110,.5); font-weight:400; cursor:pointer; text-decoration:underline; text-decoration-color:rgba(201,169,110,.25); }
+.photo-strip { display:flex; gap:4px; padding:0 16px 14px; overflow-x:auto; }
+.photo-strip::-webkit-scrollbar { height:0; }
+.p-thumb { flex-shrink:0; width:130px; height:84px; border-radius:8px; overflow:hidden; }
+.p-thumb div { width:100%; height:100%; transition:transform .2s; }
+.p-thumb:hover div { transform:scale(1.05); }
+
+/* ═══════ Notes panel ═════════════════════════════ */
+.notes-body { padding:40px var(--gutter) 80px; max-width:880px; margin:0 auto; }
+.notes-body h2 { font-family:'Cormorant Garamond',serif; font-size:34px; font-weight:300; margin-bottom:8px; }
+.notes-body > p { font-size:13px; color:var(--muted); margin-bottom:28px; line-height:1.7; max-width:600px; }
+.notes-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(260px,1fr)); gap:14px; }
+.nc { background:var(--card); border:1px solid var(--border); border-radius:var(--r); padding:20px; }
+.nc h3 { font-size:13px; font-weight:500; color:var(--accent2); margin-bottom:11px; }
+.nc ul { list-style:none; display:flex; flex-direction:column; gap:8px; }
+.nc li { font-size:12px; color:var(--muted); padding-left:16px; position:relative; line-height:1.55; }
+.nc li::before { content:'–'; position:absolute; left:0; color:rgba(255,255,255,.2); }
+.nc li.g { color:var(--green); } .nc li.g::before { content:'✓'; color:var(--green); }
+.nc li.k { color:var(--accent2); } .nc li.k::before { content:'★'; color:var(--accent); }
+.nc li.b { color:#e07070; } .nc li.b::before { content:'✗'; color:#e07070; }
+
+/* Change pills */
+.cpill { display:inline-block; font-size:10px; padding:2px 8px; border-radius:8px; margin:2px;
+  background:rgba(201,169,110,.1); border:1px solid rgba(201,169,110,.25); color:var(--accent); }
+.cpill.new { background:rgba(109,186,138,.1); border-color:rgba(109,186,138,.25); color:var(--green); }
+
+/* ═══════ Responsive ══════════════════════════════ */
+@media (max-width:640px) {
+  .nbhd-grid  { grid-template-columns:repeat(2,1fr); gap:8px; }
+  .style-thumb { width:clamp(100px,28vw,140px); }
+  .dates-row  { grid-template-columns:1fr; }
+  .s-val { max-width:90px; }
+  .cmd-seg { padding-right:10px; margin-right:10px; }
+  .cmd-v { font-size:12px; }
+}
+@media (max-width:420px) {
+  .nbhd-grid { grid-template-columns:repeat(2,1fr); }
+  .chapter-top h1 { font-size:clamp(26px,7vw,38px); }
+}
+
+/* Fade-slide transition for state changes */
+@keyframes fadeIn { from{opacity:0; transform:translateY(14px)} to{opacity:1; transform:translateY(0)} }
+.state-in { animation:fadeIn .28s cubic-bezier(.4,0,.2,1); }
+</style>
+</head>
+<body>
+
+<!-- canvas chrome -->
+<div class="cbar">
+  <span class="clabel">v3</span>
+  <div class="ctabs">
+    <button class="ctab active" onclick="showPanel('flow',this)">Flow</button>
+    <button class="ctab" onclick="showPanel('notes',this)">Notes</button>
+  </div>
+  <div class="devgrp">
+    <button class="dbtn on" onclick="setDev('desktop',this)">🖥</button>
+    <button class="dbtn" onclick="setDev('mobile',this)">📱</button>
+  </div>
+</div>
+
+<!-- momentum banner (shared overlay) -->
+<div class="momentum-banner" id="mbanner"></div>
+
+<div class="frame-wrap">
+<div class="frame" id="frame">
+
+<!-- ══════════════════════════════════════════════
+     PANEL: Flow
+══════════════════════════════════════════════ -->
+<div class="panel active" id="panel-flow">
+
+  <div class="app-hdr"><div class="logo">travelboop<span>.</span></div></div>
+
+  <!-- ★ Story Bar ★ -->
+  <div class="story" id="story">
+    <div class="story-inner">
+      <div class="s-chip" id="sc-city" onclick="goTo('city')">
+        <div class="s-chip-inner">
+          <div class="s-lbl">City</div>
+          <div class="s-val" id="sv-city">Where to?</div>
+        </div>
+      </div>
+      <div class="s-arrow">›</div>
+      <div class="s-chip" id="sc-nbhd" onclick="goTo('nbhd')">
+        <div class="s-chip-inner">
+          <div class="s-lbl">Area</div>
+          <div class="s-val" id="sv-nbhd">Choose area</div>
+        </div>
+      </div>
+      <div class="s-arrow">›</div>
+      <div class="s-chip" id="sc-style" onclick="goTo('style')">
+        <div class="s-chip-inner">
+          <div class="s-lbl">Room Vibe</div>
+          <div class="s-val" id="sv-style">Pick a vibe</div>
+        </div>
+      </div>
+      <div class="s-dates-cta" id="s-dates-btn" onclick="goTo('dates')">+ Add dates</div>
+    </div>
+  </div>
+
+  <!-- ─── STATE: CITY ─────────────────────────── -->
+  <div id="st-city">
+    <div class="chapter">
+      <div class="chapter-top">
+        <div class="eyebrow"><div class="eyebrow-dot"></div>Start here</div>
+        <h1>Where are you<br><em>headed?</em></h1>
+        <p>Pick a city and we'll show you its best neighbourhoods to stay in.</p>
+      </div>
+      <div class="chapter-body">
+        <div class="city-box">
+          <span class="city-box-icon">⌕</span>
+          <input id="city-input" type="text" placeholder="Paris, Kuala Lumpur, Tokyo…"
+            oninput="cityFilter(this.value)"
+            onkeydown="if(event.key==='Enter'&&this.value.trim())pickCity(this.value.trim())"/>
+        </div>
+        <div class="city-chips" id="city-chips">
+          <div class="city-chip" onclick="pickCity('Paris')">🇫🇷 Paris</div>
+          <div class="city-chip" onclick="pickCity('Kuala Lumpur')">🇲🇾 Kuala Lumpur</div>
+          <div class="city-chip" onclick="pickCity('London')">🇬🇧 London</div>
+          <div class="city-chip" onclick="pickCity('Tokyo')">🇯🇵 Tokyo</div>
+          <div class="city-chip" onclick="pickCity('New York')">🇺🇸 New York</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ─── STATE: NEIGHBOURHOOD ──────────────────── -->
+  <div id="st-nbhd" style="display:none">
+    <div class="chapter">
+      <div class="chapter-top">
+        <div class="eyebrow"><div class="eyebrow-dot"></div><span id="nbhd-eyebrow">Paris</span> · Step 2</div>
+        <h1>Which <em>neighbourhood</em><br>feels right?</h1>
+        <p>Pick an area to focus your search — or explore the whole city.</p>
+      </div>
+      <div class="chapter-body">
+        <div class="nbhd-grid" id="nbhd-grid"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ─── STATE: ROOM STYLE ────────────────────── -->
+  <div id="st-style" style="display:none">
+    <div class="chapter">
+      <div class="chapter-top">
+        <div class="eyebrow"><div class="eyebrow-dot"></div>Step 3 · <span style="color:var(--accent2)">Your differentiator</span></div>
+        <h1 id="style-heading">What's your<br><em>room vibe?</em></h1>
+        <p>This is how we find rooms that match your taste — not just price range.</p>
+      </div>
+      <div class="chapter-body">
+        <!-- Large featured card -->
+        <div class="style-featured" id="style-featured" onclick="pickStyleFromFeatured()">
+          <div class="style-featured-bg" id="sf-bg"></div>
+          <div class="style-featured-grad"></div>
+          <div class="style-featured-content">
+            <div class="style-featured-badge" id="sf-badge">Bedroom · Suite</div>
+            <div class="style-featured-title" id="sf-title">Dark &amp; Moody</div>
+            <div class="style-featured-desc" id="sf-desc">Drama, velvet textures, the kind of room you don't leave</div>
+            <div class="style-featured-kws" id="sf-kws"></div>
+            <button class="style-featured-cta" id="sf-cta">
+              <span id="sf-cta-text">Select this vibe</span>
+              <span>→</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Thumbnail row -->
+        <div class="style-thumbs-wrap">
+          <div class="style-thumbs" id="style-thumbs"></div>
+        </div>
+
+        <!-- Custom text -->
+        <div class="style-custom-row">
+          <span class="style-custom-label">Or describe it:</span>
+          <div class="style-custom-box">
+            <input id="style-custom-input" type="text" placeholder="e.g. Japanese minimalist with hinoki bath…"/>
+            <button onclick="pickCustomStyle()">Use this →</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ─── STATE: DATES ─────────────────────────── -->
+  <div id="st-dates" style="display:none">
+    <div class="chapter">
+      <div class="chapter-top">
+        <div class="eyebrow"><div class="eyebrow-dot"></div>Almost there</div>
+        <h1>When are you<br><em>going?</em></h1>
+        <p>Add your dates to unlock live pricing and available rooms only.</p>
+      </div>
+      <div class="chapter-body">
+        <div class="dates-moment">
+          <div class="dates-moment-top">
+            <h3>See prices for your nights</h3>
+            <p>We'll rank rooms by how well they match <strong id="dates-style-label" style="color:var(--accent2)">your vibe</strong> and show live nightly rates.</p>
+          </div>
+          <div class="dates-row">
+            <div class="date-f">
+              <label>Check-in</label>
+              <input type="date" id="d-ci" style="color-scheme:dark"/>
+            </div>
+            <div class="date-f">
+              <label>Check-out</label>
+              <input type="date" id="d-co" style="color-scheme:dark"/>
+            </div>
+          </div>
+          <div class="dates-actions">
+            <button class="btn-primary" onclick="confirmDates()">Show rooms with prices →</button>
+            <button class="btn-browse" onclick="skipDates()">Just browsing for now</button>
+          </div>
+          <div class="dates-softgate">
+            <strong>No dates?</strong> You'll still see all rooms ranked by vibe match — just without live pricing or availability filtering.
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ─── STATE: RESULTS ───────────────────────── -->
+  <div id="st-results" style="display:none">
+
+    <!-- Command bar (discovery mode OFF, decision mode ON) -->
+    <div class="cmd" id="cmd">
+      <div class="cmd-inner">
+        <div class="cmd-seg" onclick="goTo('city')">
+          <div class="cmd-l">City</div>
+          <div class="cmd-v" id="cv-city">—</div>
+        </div>
+        <div class="cmd-seg" onclick="goTo('nbhd')">
+          <div class="cmd-l">Area</div>
+          <div class="cmd-v" id="cv-nbhd">—</div>
+        </div>
+        <div class="cmd-seg" onclick="toggleDateTray()">
+          <div class="cmd-l">Dates</div>
+          <div class="cmd-v ph" id="cv-dates">Add dates</div>
+        </div>
+        <div class="cmd-search">
+          <span class="cmd-search-icon">✦</span>
+          <input id="cmd-q" type="text" placeholder="Refine — describe the room you want…"/>
+        </div>
+        <button class="cmd-go" onclick="cmdSearch()">Search</button>
+      </div>
+      <div class="cmd-tray" id="cmd-tray">
+        <div class="cmd-tray-inner">
+          <div class="date-f"><label>Check-in</label><input type="date" id="ct-ci" style="color-scheme:dark"/></div>
+          <div class="date-f"><label>Check-out</label><input type="date" id="ct-co" style="color-scheme:dark"/></div>
+          <button class="btn-primary" onclick="cmdConfirmDates()" style="padding:11px 20px;">Update</button>
+          <button class="btn-browse" onclick="toggleDateTray()" style="padding:11px 14px;">Close</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="results-body">
+      <div class="results-meta">
+        <div class="results-count">Showing <strong id="r-count">—</strong> hotels · ranked by room match</div>
+        <div class="filter-chips" id="r-chips"></div>
+      </div>
+      <div class="softgate" id="r-softgate" style="display:none">
+        <span>💡 <strong style="color:var(--accent2)">Add dates</strong> to see live pricing and filter to available rooms only.</span>
+        <button onclick="goTo('dates')">Add dates →</button>
+      </div>
+      <div id="hotel-list"></div>
+    </div>
+  </div>
+
+</div><!-- /panel-flow -->
+
+<!-- ══════════════════════════════════════════════
+     PANEL: Notes
+══════════════════════════════════════════════ -->
+<div class="panel" id="panel-notes">
+  <div class="app-hdr"><div class="logo">travelboop<span>.</span></div></div>
+  <div class="notes-body">
+    <h2>v3 — What changed &amp; why</h2>
+    <p>Direct response to "the hierarchy still isn't decisive enough." Every change is aimed at momentum, not just layout.</p>
+    <div style="margin-bottom:24px; display:flex; flex-wrap:wrap; gap:6px;">
+      <span class="cpill new">Room Style: full-height hero card</span>
+      <span class="cpill new">Thumbnail swipe row</span>
+      <span class="cpill new">Momentum banner</span>
+      <span class="cpill new">Story bar: filled chips + pulse</span>
+      <span class="cpill new">Dates: "Commitment moment" copy</span>
+      <span class="cpill">CTA copy upgrades throughout</span>
+      <span class="cpill">Chapter-height screens</span>
+      <span class="cpill">Fade-slide transitions</span>
+    </div>
+    <div class="notes-grid">
+      <div class="nc">
+        <h3>Room Style — the big fix</h3>
+        <ul>
+          <li class="g">Now a full-viewport hero card (~60vh), not a grid of equal-weight tiles</li>
+          <li class="k">One card dominates at a time — the featured card is the action</li>
+          <li>Thumbnail row below = navigation tool, not the selection UI itself</li>
+          <li class="g">Style name in Cormorant Garamond at 50px+ — feels editorial</li>
+          <li>CTA reads "Select this vibe →" — direction, not just a checkbox</li>
+          <li class="g">Custom text input is secondary — right-size hierarchy</li>
+        </ul>
+      </div>
+      <div class="nc">
+        <h3>Momentum cues</h3>
+        <ul>
+          <li class="k">After neighbourhood: banner "Now, what's your room vibe?" slides up from bottom</li>
+          <li class="k">After style: heading shifts to "Almost there" + dates section advances</li>
+          <li>Chapter-height screens so each step feels like entering a new space</li>
+          <li>Fade-slide animation (translateY 14px → 0) on state transitions</li>
+          <li class="g">Step eyebrow changes per state: "Step 2", "Your differentiator", "Almost there"</li>
+        </ul>
+      </div>
+      <div class="nc">
+        <h3>Story Bar v3 upgrades</h3>
+        <ul>
+          <li class="k">Completed steps: filled chip (rgba bg + border)</li>
+          <li class="k">Next-up step: pulsing amber border animation</li>
+          <li class="k">Current step: accent color label</li>
+          <li class="g">Dates = persistent amber CTA pill (right-aligned)</li>
+          <li>Each chip is clickable to jump back and edit</li>
+          <li>Bar appears after city is selected, stays for all steps</li>
+        </ul>
+      </div>
+      <div class="nc">
+        <h3>Dates — Commitment Moment</h3>
+        <ul>
+          <li class="k">Heading: "When are you going?" not "Select dates"</li>
+          <li class="k">Card header: "See prices for your nights" — value-focused</li>
+          <li class="k">Primary CTA: "Show rooms with prices →" — implies reward</li>
+          <li>Skip: "Just browsing for now" — lowers resistance vs "Skip"</li>
+          <li class="g">Soft gate copy explains the benefit of adding dates</li>
+          <li>Dates card references the chosen style name (e.g. "Dark &amp; Moody")</li>
+        </ul>
+      </div>
+      <div class="nc">
+        <h3>Stage contrast / chapter feel</h3>
+        <ul>
+          <li class="g">Each state uses min-height: calc(100vh - bars) = full-screen moment</li>
+          <li class="g">Eyebrow line (small uppercase) + large Cormorant heading = clear new chapter</li>
+          <li>No elements bleed between steps — no scroll fatigue</li>
+          <li class="k">Room Style step: hero card fills ~60vh before thumbnails appear</li>
+          <li>Results: command bar takes over — mode change is visually obvious</li>
+        </ul>
+      </div>
+      <div class="nc">
+        <h3>Open questions for v4</h3>
+        <ul>
+          <li>Multi-select styles: allow 2–3? Would power-blend queries</li>
+          <li>Real room photos as card backgrounds vs gradients?</li>
+          <li>Neighbourhood skip from story bar: 1-tap vs full return to step?</li>
+          <li>Results: should style thumbnails reappear as a horizontal filter strip?</li>
+          <li>Animation: cross-fade between featured style cards (like a slow ken burns)?</li>
+          <li>Dates: calendar picker vs text date fields on desktop?</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</div>
+
+</div><!-- /frame -->
+</div><!-- /frame-wrap -->
+
+<script>
+// ── Data ─────────────────────────────────────────
+const NBHDS = {
+  'Paris':        [
+    {name:'Le Marais',          vibe:'Historic, artsy, buzzing',    tags:['walkable','historic','artsy'],   hotels:30, bg:'linear-gradient(160deg,#1e1210 0%,#120c0a 100%)'},
+    {name:'Saint-Germain',      vibe:'Chic, literary, café culture',tags:['romantic','walkable','foodie'],  hotels:25, bg:'linear-gradient(160deg,#121020 0%,#0c0a18 100%)'},
+    {name:'Montmartre',         vibe:'Bohemian, hilltop, painters', tags:['artsy','local-feel','romantic'], hotels:19, bg:'linear-gradient(160deg,#101810 0%,#0a1008 100%)'},
+    {name:'Champs-Élysées',     vibe:'Grand, iconic, well-located', tags:['luxury','shopping','central'],   hotels:74, bg:'linear-gradient(160deg,#1a1608 0%,#120e06 100%)'},
+    {name:'Canal Saint-Martin', vibe:'Emerging, creative, local',   tags:['local-feel','nightlife','artsy'],hotels:15, bg:'linear-gradient(160deg,#081614 0%,#060e0c 100%)'},
+    {name:'Opéra / Grands Blvd',vibe:'Central, lively, convenience',tags:['central','business','shopping'],hotels:60, bg:'linear-gradient(160deg,#160e18 0%,#0e0a10 100%)'},
+  ],
+  'Kuala Lumpur': [
+    {name:'KLCC',         vibe:'Glass towers, luxury, modern',tags:['luxury','business','modern'],    hotels:45, bg:'linear-gradient(160deg,#0e1220 0%,#080c18 100%)'},
+    {name:'Bukit Bintang',vibe:'Vibrant, shopping, nightlife',tags:['nightlife','shopping','lively'], hotels:38, bg:'linear-gradient(160deg,#180e08 0%,#100a06 100%)'},
+    {name:'Bangsar',      vibe:'Expat enclave, café culture', tags:['local-feel','foodie','calm'],    hotels:22, bg:'linear-gradient(160deg,#0c1410 0%,#080e0c 100%)'},
+    {name:'Chow Kit',     vibe:'Gritty, authentic, markets',  tags:['local-feel','budget','markets'], hotels:18, bg:'linear-gradient(160deg,#141008 0%,#0c0c06 100%)'},
+  ],
+  'London': [
+    {name:'Mayfair',       vibe:'Luxury, hushed, white-glove', tags:['luxury','quiet','shopping'],    hotels:35, bg:'linear-gradient(160deg,#161010 0%,#0e0c0c 100%)'},
+    {name:'Shoreditch',    vibe:'Creative, gritty, electric',  tags:['artsy','nightlife','local-feel'],hotels:28, bg:'linear-gradient(160deg,#0c0c18 0%,#080810 100%)'},
+    {name:'Covent Garden', vibe:'Central, theatrical, touristy',tags:['central','walkable','culture'],hotels:42, bg:'linear-gradient(160deg,#121008 0%,#0a0c06 100%)'},
+    {name:'South Bank',    vibe:'Cultural, riverside, open',   tags:['culture','walkable','views'],   hotels:31, bg:'linear-gradient(160deg,#080e16 0%,#060a10 100%)'},
+  ],
+  'Tokyo': [
+    {name:'Shinjuku',    vibe:'Neon, electric, never sleeps',tags:['nightlife','shopping','intense'],hotels:80, bg:'linear-gradient(160deg,#0e0818 0%,#080610 100%)'},
+    {name:'Shibuya',     vibe:'Youth culture, fashion, chaos',tags:['shopping','nightlife','trendy'], hotels:65, bg:'linear-gradient(160deg,#180808 0%,#100606 100%)'},
+    {name:'Ginza',       vibe:'Upscale, polished, serene',   tags:['luxury','shopping','calm'],      hotels:40, bg:'linear-gradient(160deg,#12100a 0%,#0c0c08 100%)'},
+    {name:'Asakusa',     vibe:'Old Tokyo, temples, calm',    tags:['historic','culture','quiet'],    hotels:35, bg:'linear-gradient(160deg,#0c1008 0%,#080c06 100%)'},
+  ],
+  'New York': [
+    {name:'Midtown Manhattan',vibe:'Central, iconic, always on',  tags:['central','business','iconic'], hotels:120,bg:'linear-gradient(160deg,#0e0e18 0%,#080810 100%)'},
+    {name:'SoHo',             vibe:'Fashion, loft living, art',   tags:['artsy','shopping','trendy'],  hotels:45, bg:'linear-gradient(160deg,#181008 0%,#100c06 100%)'},
+    {name:'Brooklyn',         vibe:'Local, diverse, emerging',    tags:['local-feel','foodie','artsy'],hotels:38, bg:'linear-gradient(160deg,#0c1008 0%,#080c06 100%)'},
+    {name:'Lower East Side',  vibe:'Gritty cool, nightlife',      tags:['nightlife','artsy','local-feel'],hotels:28,bg:'linear-gradient(160deg,#140a0e 0%,#0c0808 100%)'},
+  ],
+};
+
+const STYLES = [
+  {name:'Dark & Moody',       query:'dark moody romantic room velvet rich',          desc:'Drama, velvet textures, the kind of room you don\'t leave',           kws:['deep tones','velvet','romantic'],             badge:'Bedroom · Suite',   bg:'linear-gradient(160deg,#1a0e1f 0%,#0c0810 100%)'},
+  {name:'Bright & Airy',      query:'bright airy room large windows natural light',  desc:'Flooded with natural light, open views, effortless calm',             kws:['large windows','white & neutral','open plan'],badge:'Bedroom · Views',   bg:'linear-gradient(160deg,#0e1828 0%,#090f18 100%)'},
+  {name:'Luxury Suite',       query:'luxury suite marble bathroom opulent soaking',  desc:'Marble, space, and the kind of bathroom you photograph',              kws:['marble','soaking tub','grand'],               badge:'Suite · Bathroom',  bg:'linear-gradient(160deg,#1e1808 0%,#0e0e06 100%)'},
+  {name:'Minimalist Modern',  query:'minimalist modern clean design calm neutral',   desc:'Nothing extra. Clean lines, quiet confidence, Zen-like calm',         kws:['clean lines','neutral','Zen'],                badge:'All rooms',         bg:'linear-gradient(160deg,#12121a 0%,#0a0a10 100%)'},
+  {name:'Cozy & Warm',        query:'cozy warm boutique room textures soft amber',   desc:'Layered textures, warm tones, the feeling of being wrapped up',       kws:['warm tones','textures','intimate'],           badge:'Boutique · Bedroom',bg:'linear-gradient(160deg,#1e1410 0%,#0e0908 100%)'},
+  {name:'Industrial Loft',    query:'industrial loft exposed brick concrete raw',    desc:'Exposed concrete, raw edges, surprisingly liveable',                  kws:['exposed brick','concrete','raw'],             badge:'Loft',              bg:'linear-gradient(160deg,#141420 0%,#0a0a12 100%)'},
+  {name:'City Views',         query:'panoramic city view floor ceiling windows high',desc:'Floor-to-ceiling glass, the city below, skyline as wallpaper',        kws:['floor-to-ceiling','high floor','panoramic'],  badge:'View room · High floor',bg:'linear-gradient(160deg,#081420 0%,#060a12 100%)'},
+  {name:'Classic Elegant',    query:'classic elegant traditional room refined warm', desc:'Timeless proportions, antique touches, quiet luxury without flash',   kws:['timeless','antique','refined'],               badge:'Classic · Suite',   bg:'linear-gradient(160deg,#1c1016 0%,#0e0a0c 100%)'},
+];
+
+const MOCK_RESULTS = [
+  {name:'Le Pavillon Marais',      area:'Le Marais',     stars:'★★★★★',score:94,priceLabel:'€320/night'},
+  {name:'Hôtel du Petit Moulin',   area:'Le Marais',     stars:'★★★★', score:88,priceLabel:'€185/night'},
+  {name:'Les Bains Paris',         area:'Le Marais',     stars:'★★★★★',score:85,priceLabel:'€410/night'},
+  {name:'Saint-Germain Résidence', area:'Saint-Germain', stars:'★★★★', score:81,priceLabel:'€210/night'},
+  {name:'Hôtel Fabric',            area:'Canal St-Martin',stars:'★★★★',score:77,priceLabel:'€155/night'},
+];
+const ROOM_PALS = [
+  'linear-gradient(135deg,#1a1408,#0e0c06)',
+  'linear-gradient(135deg,#0e101a,#08080e)',
+  'linear-gradient(135deg,#14101a,#0c0810)',
+  'linear-gradient(135deg,#101610,#0a100a)',
+  'linear-gradient(135deg,#181210,#100e0c)',
+];
+
+// ── State ──────────────────────────────────────
+const S = {city:null,nbhd:null,style:null,styleQuery:null,dates:null,hasDates:false};
+let featuredIdx = 0;
+
+// ── Canvas ─────────────────────────────────────
+function showPanel(id,btn){
+  document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.ctab').forEach(b=>b.classList.remove('active'));
+  document.getElementById('panel-'+id).classList.add('active');
+  btn.classList.add('active');
+  window.scrollTo(0,0);
+}
+function setDev(mode,btn){
+  document.querySelectorAll('.dbtn').forEach(b=>b.classList.remove('on'));
+  btn.classList.add('on');
+  document.getElementById('frame').classList.toggle('mobile', mode==='mobile');
+}
+
+// ── State transitions ──────────────────────────
+const STATES = ['city','nbhd','style','dates','results'];
+function showState(id){
+  STATES.forEach(s=>{
+    const el = document.getElementById('st-'+s);
+    if(el) el.style.display = s===id ? 'block' : 'none';
+    if(s===id && el) el.classList.add('state-in');
+  });
+  window.scrollTo({top:0,behavior:'smooth'});
+}
+function goTo(id){
+  if(id==='nbhd'   && !S.city)  return;
+  if(id==='style'  && !S.nbhd)  return;
+  if(id==='dates'  && !S.style) return;
+  if(id==='results'&& !S.style) return;
+  // Hide story bar when entering results (cmd bar takes over)
+  if(id==='results'){
+    document.getElementById('story').classList.remove('show');
+    document.getElementById('st-results').style.display='block';
+    STATES.filter(s=>s!=='results').forEach(s=>{
+      const el=document.getElementById('st-'+s); if(el) el.style.display='none';
+    });
+    document.getElementById('st-results').classList.add('state-in');
+    window.scrollTo({top:0,behavior:'smooth'});
+    return;
+  }
+  document.getElementById('story').classList.add('show');
+  showState(id);
+  updateStory(id);
+}
+
+// ── Story bar ──────────────────────────────────
+function updateStory(currentId){
+  const chips  = {city:'sc-city', nbhd:'sc-nbhd', style:'sc-style'};
+  const vals   = {city:S.city, nbhd:S.nbhd, style:S.style};
+  const STEP_ORDER = ['city','nbhd','style'];
+  const curIdx = STEP_ORDER.indexOf(currentId);
+
+  STEP_ORDER.forEach((key, i) => {
+    const chip = document.getElementById(chips[key]);
+    const val  = document.getElementById('sv-'+key);
+    chip.className = 's-chip';
+    if(vals[key]){
+      chip.classList.add('done');
+      val.className = 's-val';
+      const short = vals[key].length > 18 ? vals[key].slice(0,16)+'…' : vals[key];
+      val.textContent = short;
+    } else if(i === curIdx){
+      chip.classList.add('current');
+    } else if(i === curIdx+1){
+      chip.classList.add('next-up');
+    }
+  });
+
+  // Dates button
+  const dBtn = document.getElementById('s-dates-btn');
+  if(S.hasDates && S.dates){ dBtn.textContent=S.dates; dBtn.classList.add('set'); }
+  else { dBtn.textContent='+ Add dates'; dBtn.classList.remove('set'); }
+}
+
+// ── Momentum banner ─────────────────────────────
+function flash(msg, duration=2000){
+  const b = document.getElementById('mbanner');
+  b.textContent = msg; b.classList.add('show');
+  setTimeout(()=>b.classList.remove('show'), duration);
+}
+
+// ── CITY ──────────────────────────────────────
+function cityFilter(v){
+  const all = ['🇫🇷 Paris','🇲🇾 Kuala Lumpur','🇬🇧 London','🇯🇵 Tokyo','🇺🇸 New York'];
+  const wrap = document.getElementById('city-chips');
+  const matched = v ? all.filter(c=>c.toLowerCase().includes(v.toLowerCase())) : all;
+  wrap.innerHTML = matched.map(c=>{
+    const city = c.replace(/^[^\s]+ /,'');
+    return `<div class="city-chip" onclick="pickCity('${city}')">${c}</div>`;
+  }).join('');
+}
+function pickCity(city){
+  S.city=city;
+  document.getElementById('city-input').value=city;
+  document.getElementById('story').classList.add('show');
+  buildNbhdGrid(city);
+  updateStory('nbhd');
+  setTimeout(()=>showState('nbhd'),60);
+}
+
+// ── NEIGHBOURHOOD ─────────────────────────────
+function buildNbhdGrid(city){
+  document.getElementById('nbhd-eyebrow').textContent=city;
+  const nbhds = NBHDS[city]||[];
+  const grid  = document.getElementById('nbhd-grid');
+  grid.innerHTML = nbhds.map(n=>`
+    <div class="nbhd-card" onclick="pickNbhd('${n.name}',${n.hotels})" style="background:${n.bg}">
+      <div class="nbhd-overlay">
+        <div class="nbhd-name">${n.name}</div>
+        <div class="nbhd-vibe">${n.vibe}</div>
+        <div class="nbhd-tags">
+          ${n.tags.map(t=>`<span class="nbhd-tag">${t}</span>`).join('')}
+          <span class="nbhd-tag">${n.hotels} hotels</span>
+        </div>
+      </div>
+    </div>`).join('')+`
+    <div class="nbhd-skip" onclick="pickNbhd('All of ${city}',null)">
+      <div style="text-align:center;padding:20px">
+        <div style="font-size:22px;opacity:.3;margin-bottom:8px">◎</div>
+        <div style="font-size:13px;color:var(--muted)">All of ${city}</div>
+        <div style="font-size:11px;color:rgba(154,149,144,.5);margin-top:2px">No area filter</div>
+      </div>
+    </div>`;
+}
+function pickNbhd(name, hotels){
+  S.nbhd=name;
+  updateStory('style');
+  // Momentum cue
+  const label = hotels ? name+' · '+hotels+' hotels' : name;
+  flash('✓ '+label+' · Now, what\'s your room vibe?', 2400);
+  // Update cmd bar
+  const el=document.getElementById('cv-nbhd');
+  if(el) el.textContent = name.length>16 ? name.slice(0,14)+'…' : name;
+  buildStyleSection();
+  setTimeout(()=>showState('style'), 120);
+}
+
+// ── ROOM STYLE ────────────────────────────────
+function buildStyleSection(){
+  // Set initial featured card
+  setFeatured(0);
+  // Build thumb row
+  const row = document.getElementById('style-thumbs');
+  row.innerHTML = STYLES.map((s,i)=>`
+    <div class="style-thumb ${i===0?'active-thumb':''}" id="sthumb-${i}" onclick="setFeatured(${i})">
+      <div class="style-thumb-bg" style="background:${s.bg}"></div>
+      <div class="style-thumb-overlay">
+        <div class="style-thumb-name">${s.name}</div>
+      </div>
+    </div>`).join('');
+}
+function setFeatured(idx){
+  const s = STYLES[idx];
+  featuredIdx = idx;
+  document.getElementById('sf-bg').style.background = s.bg;
+  document.getElementById('sf-title').innerHTML = s.name;
+  document.getElementById('sf-desc').textContent = s.desc;
+  document.getElementById('sf-badge').textContent = s.badge;
+  document.getElementById('sf-kws').innerHTML = s.kws.map(k=>`<span class="style-kw">${k}</span>`).join('');
+  document.getElementById('sf-cta-text').textContent = 'Choose "'+s.name+'"';
+  // Thumb highlights
+  document.querySelectorAll('.style-thumb').forEach((t,i)=>
+    t.classList.toggle('active-thumb', i===idx));
+  // Unmark featured as selected (new hover)
+  document.getElementById('style-featured').classList.remove('sel');
+}
+function pickStyleFromFeatured(){
+  const s = STYLES[featuredIdx];
+  S.style = s.name; S.styleQuery = s.query;
+  document.getElementById('style-featured').classList.add('sel');
+  document.getElementById('dates-style-label').textContent = '"'+s.name+'"';
+  updateStory('dates');
+  // Set cmd bar query
+  const cq = document.getElementById('cmd-q');
+  if(cq) cq.value = s.query;
+  // Momentum: brief flash then transition to dates
+  flash('Great choice — last step: when are you going?', 2000);
+  setTimeout(()=>{showState('dates');}, 300);
+}
+function pickCustomStyle(){
+  const v = document.getElementById('style-custom-input').value.trim();
+  if(!v) return;
+  S.style = v.length>22 ? v.slice(0,20)+'…' : v;
+  S.styleQuery = v;
+  document.getElementById('dates-style-label').textContent = '"'+S.style+'"';
+  updateStory('dates');
+  const cq=document.getElementById('cmd-q'); if(cq) cq.value=v;
+  flash('Great choice — last step: when are you going?', 2000);
+  setTimeout(()=>showState('dates'), 300);
+}
+
+// ── DATES ─────────────────────────────────────
+function confirmDates(){
+  const ci = document.getElementById('d-ci').value;
+  const co = document.getElementById('d-co').value;
+  if(!ci||!co){ alert('Please pick both dates.'); return; }
+  S.hasDates=true; S.dates=fmt(ci)+' – '+fmt(co);
+  updateStory('results');
+  buildResults(true); enterResults();
+}
+function skipDates(){
+  S.hasDates=false; S.dates=null;
+  buildResults(false); enterResults();
+}
+function fmt(d){
+  const dt=new Date(d+'T12:00:00');
+  return dt.toLocaleDateString('en-US',{month:'short',day:'numeric'});
+}
+
+// ── RESULTS ───────────────────────────────────
+function enterResults(){
+  // Update cmd bar
+  document.getElementById('cv-city').textContent  = S.city||'—';
+  const cv = document.getElementById('cv-nbhd');
+  if(cv){ const n=S.nbhd||'—'; cv.textContent = n.length>16?n.slice(0,14)+'…':n; }
+  if(S.hasDates){
+    const cd=document.getElementById('cv-dates');
+    cd.textContent=S.dates; cd.classList.remove('ph');
+  }
+  const cq=document.getElementById('cmd-q'); if(cq&&S.styleQuery) cq.value=S.styleQuery;
+  goTo('results');
+}
+function buildResults(hasDates){
+  document.getElementById('r-count').textContent = MOCK_RESULTS.length;
+  // Chips
+  const chips=[];
+  if(S.nbhd && !S.nbhd.startsWith('All')) chips.push({l:S.nbhd, k:'nbhd'});
+  if(S.style) chips.push({l:S.style, k:'style'});
+  document.getElementById('r-chips').innerHTML = chips.map(c=>
+    `<div class="fc">${c.l} <span class="fc-x" onclick="removeChip('${c.k}')">✕</span></div>`
+  ).join('');
+  // Soft gate
+  document.getElementById('r-softgate').style.display = hasDates?'none':'flex';
+  // Hotels
+  document.getElementById('hotel-list').innerHTML = MOCK_RESULTS.map((h,i)=>{
+    const price = hasDates
+      ? `<div class="h-price">${h.priceLabel}</div>`
+      : `<div class="h-price soft" onclick="goTo('dates')">Add dates for pricing</div>`;
+    const rooms = Array.from({length:3},(_,r)=>
+      `<div class="p-thumb"><div style="background:${ROOM_PALS[(i+r)%ROOM_PALS.length]}"></div></div>`
+    ).join('');
+    return `
+      <div class="hotel">
+        <div class="hotel-hdr">
+          <div class="h-thumb"><div style="background:${ROOM_PALS[i%ROOM_PALS.length]};border-radius:9px"></div></div>
+          <div class="h-info">
+            <div class="h-name">${h.name}</div>
+            <div class="h-meta">${h.area} · ${h.stars}</div>
+            <div class="h-match">Matches ${S.style||'your vibe'}</div>
+          </div>
+          <div class="h-score-block">
+            <div class="h-score">${h.score}%</div>
+            <div class="h-score-lbl">match</div>
+            ${price}
+          </div>
+        </div>
+        <div class="photo-strip">${rooms}</div>
+      </div>`;
+  }).join('');
+}
+function removeChip(k){
+  if(k==='nbhd'){S.nbhd=null; document.getElementById('cv-nbhd').textContent='Any area';}
+  if(k==='style'){S.style=null; S.styleQuery=null; document.getElementById('cmd-q').value='';}
+  buildResults(S.hasDates);
+}
+function toggleDateTray(){
+  document.getElementById('cmd-tray').classList.toggle('open');
+}
+function cmdConfirmDates(){
+  const ci=document.getElementById('ct-ci').value;
+  const co=document.getElementById('ct-co').value;
+  if(!ci||!co) return;
+  S.hasDates=true; S.dates=fmt(ci)+' – '+fmt(co);
+  document.getElementById('cv-dates').textContent=S.dates;
+  document.getElementById('cv-dates').classList.remove('ph');
+  document.getElementById('s-dates-btn').textContent=S.dates;
+  document.getElementById('s-dates-btn').classList.add('set');
+  document.getElementById('cmd-tray').classList.remove('open');
+  buildResults(true);
+}
+function cmdSearch(){
+  const q=document.getElementById('cmd-q').value;
+  if(q&&q!==S.styleQuery){ S.style=q.length>22?q.slice(0,20)+'…':q; S.styleQuery=q; }
+  buildResults(S.hasDates);
+}
+</script>
+</body>
+</html>

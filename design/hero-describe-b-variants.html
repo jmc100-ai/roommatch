@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Option B — Variations</title>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;1,300;1,400&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:#0c0c0e; --card:#111114; --surface:#18181c;
+    --text:#e8e4dc; --muted:rgba(232,228,220,.45);
+    --accent:#c9a96e; --accent2:#d4b896;
+  }
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body { background:var(--bg); color:var(--text); font-family:'DM Sans',sans-serif; padding:40px 24px 100px; }
+  .page-title { font-family:'Cormorant Garamond',serif; font-size:42px; font-weight:300; text-align:center; margin-bottom:6px; }
+  .page-sub { text-align:center; color:var(--muted); font-size:14px; margin-bottom:56px; }
+  .grid { display:grid; grid-template-columns:repeat(2,1fr); gap:48px 40px; max-width:1000px; margin:0 auto; }
+  .variant { display:flex; flex-direction:column; gap:12px; }
+  .v-label { font-size:11px; letter-spacing:.18em; text-transform:uppercase; color:var(--accent); }
+  .v-title { font-family:'Cormorant Garamond',serif; font-size:19px; font-weight:300; }
+  .v-desc { font-size:12px; color:var(--muted); line-height:1.6; max-width:380px; }
+
+  /* ── Shared hero ─────────────────── */
+  .hero {
+    border-radius:20px 20px 8px 8px; overflow:hidden; position:relative;
+    height:360px; cursor:pointer;
+    background:linear-gradient(160deg,#2e1e0a 0%,#130d06 60%,#0c0808 100%);
+  }
+  .hero-photo {
+    position:absolute; inset:0;
+    background:
+      radial-gradient(ellipse at 65% 25%, rgba(220,175,110,.14) 0%, transparent 55%),
+      radial-gradient(ellipse at 25% 75%, rgba(170,110,50,.09) 0%, transparent 50%),
+      linear-gradient(160deg,#2e1e0a 0%,#130d06 60%,#0c0808 100%);
+  }
+  /* subtle room texture overlay */
+  .hero-photo::after {
+    content:''; position:absolute; inset:0;
+    background:repeating-linear-gradient(45deg,transparent,transparent 40px,rgba(255,255,255,.008) 40px,rgba(255,255,255,.008) 41px);
+  }
+  .hero-badge {
+    position:absolute; top:18px; left:18px;
+    background:rgba(201,169,110,.15); border:1px solid rgba(201,169,110,.28);
+    border-radius:20px; padding:4px 12px; font-size:10px; letter-spacing:.12em;
+    text-transform:uppercase; color:var(--accent2);
+  }
+  .hero-body {
+    position:absolute; left:0; right:0; bottom:0;
+    padding:0 20px 20px;
+    background:linear-gradient(to top, rgba(0,0,0,.96) 0%, rgba(0,0,0,.65) 55%, transparent 100%);
+  }
+  .hero-title { font-family:'Cormorant Garamond',serif; font-size:22px; font-weight:300; margin-bottom:3px; }
+  .hero-sub { font-size:12px; color:rgba(232,228,220,.55); margin-bottom:14px; line-height:1.5; }
+
+  /* ── Shared overlap card ─────────── */
+  .overlap-card {
+    margin:-26px 14px 0; position:relative; z-index:2;
+    background:var(--surface); border-radius:0 0 16px 16px;
+    border:1px solid rgba(201,169,110,.18); border-top:none;
+    box-shadow:0 12px 36px rgba(0,0,0,.55);
+    display:flex; flex-direction:column; gap:10px; padding:16px 18px 18px;
+  }
+  .or-divider {
+    display:flex; align-items:center; gap:8px;
+    font-size:11px; color:var(--muted); letter-spacing:.06em;
+  }
+  .or-divider::before,.or-divider::after {
+    content:''; flex:1; height:1px; background:rgba(201,169,110,.12);
+  }
+  .desc-row {
+    display:flex; align-items:center; gap:10px;
+    background:rgba(255,255,255,.05); border:1px solid rgba(201,169,110,.22);
+    border-radius:10px; padding:11px 14px;
+    transition:border-color .2s;
+  }
+  .desc-row:focus-within { border-color:rgba(201,169,110,.55); box-shadow:0 0 0 2px rgba(201,169,110,.08); }
+  .desc-row input {
+    flex:1; background:transparent; border:none; outline:none;
+    font-family:'DM Sans',sans-serif; font-size:13px; color:var(--text); min-width:0;
+  }
+  .desc-row input::placeholder { color:rgba(232,228,220,.28); font-style:italic; }
+  .desc-go {
+    flex-shrink:0; background:rgba(201,169,110,.15); border:1px solid rgba(201,169,110,.35);
+    color:var(--accent); border-radius:7px; padding:5px 12px; font-size:12px;
+    font-weight:500; cursor:pointer; transition:background .15s;
+  }
+  .desc-go:hover { background:rgba(201,169,110,.25); }
+
+  /* ── B1: Bold full-width CTA button ─ */
+  .b1-cta {
+    width:100%; padding:13px 20px;
+    background:var(--accent); color:#0c0c0e;
+    border:none; border-radius:10px;
+    font-family:'DM Sans',sans-serif; font-size:14px; font-weight:600;
+    cursor:pointer; display:flex; align-items:center; justify-content:space-between;
+    transition:opacity .15s;
+  }
+  .b1-cta:hover { opacity:.88; }
+  .b1-cta .arrow { font-size:18px; }
+
+  /* ── B2: Outlined ghost CTA with big icon ─ */
+  .b2-cta {
+    width:100%; padding:12px 18px;
+    background:transparent; color:var(--text);
+    border:1.5px solid rgba(201,169,110,.45); border-radius:10px;
+    font-family:'DM Sans',sans-serif; font-size:14px; font-weight:500;
+    cursor:pointer; display:flex; align-items:center; gap:12px;
+    transition:border-color .2s, background .2s;
+  }
+  .b2-cta:hover { border-color:var(--accent); background:rgba(201,169,110,.07); }
+  .b2-icon {
+    width:34px; height:34px; border-radius:50%;
+    background:var(--accent); color:#0c0c0e;
+    display:flex; align-items:center; justify-content:center;
+    font-size:16px; flex-shrink:0;
+  }
+  .b2-cta-text { flex:1; text-align:left; }
+  .b2-cta-sub { font-size:11px; color:var(--muted); font-weight:300; }
+
+  /* ── B3: Two-tone split button ─────── */
+  .b3-cta {
+    width:100%; padding:0;
+    background:transparent; border:1.5px solid var(--accent);
+    border-radius:10px; overflow:hidden; cursor:pointer;
+    display:flex; align-items:stretch;
+    transition:box-shadow .2s;
+  }
+  .b3-cta:hover { box-shadow:0 0 0 2px rgba(201,169,110,.2); }
+  .b3-main {
+    flex:1; padding:12px 16px;
+    background:var(--accent); color:#0c0c0e;
+    font-family:'DM Sans',sans-serif; font-size:14px; font-weight:600;
+    text-align:left; border:none; cursor:pointer;
+  }
+  .b3-vibe-name { font-size:11px; font-weight:400; opacity:.7; display:block; }
+  .b3-arrow {
+    flex-shrink:0; padding:0 18px;
+    background:rgba(201,169,110,.15); color:var(--accent);
+    display:flex; align-items:center; justify-content:center;
+    font-size:20px; border:none; cursor:pointer;
+    border-left:1px solid rgba(201,169,110,.3);
+  }
+
+  /* ── B4: Checkmark confirm row ─────── */
+  .b4-cta {
+    width:100%; padding:13px 16px;
+    background:rgba(201,169,110,.1); color:var(--text);
+    border:1.5px solid var(--accent); border-radius:10px;
+    font-family:'DM Sans',sans-serif; font-size:13px;
+    cursor:pointer; display:flex; align-items:center; gap:12px;
+    transition:background .2s;
+  }
+  .b4-cta:hover { background:rgba(201,169,110,.18); }
+  .b4-check {
+    width:28px; height:28px; border-radius:50%;
+    background:var(--accent); color:#0c0c0e;
+    display:flex; align-items:center; justify-content:center;
+    font-size:14px; font-weight:700; flex-shrink:0;
+  }
+  .b4-label { flex:1; text-align:left; }
+  .b4-name { font-size:14px; font-weight:500; color:var(--accent2); }
+  .b4-sub { font-size:11px; color:var(--muted); }
+  .b4-arrow { color:var(--accent); font-size:18px; }
+
+  @media(max-width:760px){ .grid { grid-template-columns:1fr; } }
+</style>
+</head>
+<body>
+
+<p class="page-title">Option B — Variations</p>
+<p class="page-sub">Hero keeps its CTA · Describe box overlaps below · 4 button treatments</p>
+
+<div class="grid">
+
+  <!-- B1: Bold amber CTA -->
+  <div class="variant">
+    <div class="v-label">B1</div>
+    <div class="v-title">Bold filled button</div>
+    <div class="v-desc">Full-width amber CTA, high contrast. Unmistakably a button. Describe card floats below.</div>
+    <div>
+      <div class="hero">
+        <div class="hero-photo"></div>
+        <div class="hero-badge">Bedroom · Bathroom</div>
+        <div class="hero-body">
+          <div class="hero-title">☀️ Bright &amp; Airy Retreat</div>
+          <div class="hero-sub">"Sun-filled rooms, large windows, open bathrooms"</div>
+          <button class="b1-cta">
+            <span>Select this vibe</span>
+            <span class="arrow">→</span>
+          </button>
+        </div>
+      </div>
+      <div class="overlap-card">
+        <div class="or-divider">or describe it yourself</div>
+        <div class="desc-row">
+          <input placeholder="e.g. dark moody suite with a rain shower…" />
+          <button class="desc-go">Go →</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- B2: Outlined ghost with circular icon -->
+  <div class="variant">
+    <div class="v-label">B2</div>
+    <div class="v-title">Ghost button with icon</div>
+    <div class="v-desc">Outlined button with circular accent icon. Feels premium, less aggressive. Input box stands equally.</div>
+    <div>
+      <div class="hero">
+        <div class="hero-photo"></div>
+        <div class="hero-badge">Bedroom · Bathroom</div>
+        <div class="hero-body">
+          <div class="hero-title">☀️ Bright &amp; Airy Retreat</div>
+          <div class="hero-sub">"Sun-filled rooms, large windows, open bathrooms"</div>
+          <button class="b2-cta">
+            <span class="b2-icon">→</span>
+            <span class="b2-cta-text">
+              <span style="display:block">Select this vibe</span>
+              <span class="b2-cta-sub">Bright &amp; Airy Retreat</span>
+            </span>
+          </button>
+        </div>
+      </div>
+      <div class="overlap-card">
+        <div class="or-divider">or describe it yourself</div>
+        <div class="desc-row">
+          <input placeholder="e.g. dark moody suite with a rain shower…" />
+          <button class="desc-go">Go →</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- B3: Two-tone split button -->
+  <div class="variant">
+    <div class="v-label">B3</div>
+    <div class="v-title">Split button — label + arrow</div>
+    <div class="v-desc">Left side shows vibe name in amber, right side is a separate arrow zone. Feels like a confirm action.</div>
+    <div>
+      <div class="hero">
+        <div class="hero-photo"></div>
+        <div class="hero-badge">Bedroom · Bathroom</div>
+        <div class="hero-body">
+          <div class="hero-title">☀️ Bright &amp; Airy Retreat</div>
+          <div class="hero-sub">"Sun-filled rooms, large windows, open bathrooms"</div>
+          <button class="b3-cta">
+            <span class="b3-main">
+              Select this vibe
+              <span class="b3-vibe-name">Bright &amp; Airy Retreat</span>
+            </span>
+            <span class="b3-arrow">→</span>
+          </button>
+        </div>
+      </div>
+      <div class="overlap-card">
+        <div class="or-divider">or describe it yourself</div>
+        <div class="desc-row">
+          <input placeholder="e.g. dark moody suite with a rain shower…" />
+          <button class="desc-go">Go →</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- B4: Checkmark confirm row -->
+  <div class="variant">
+    <div class="v-label">B4</div>
+    <div class="v-title">Confirm row with checkmark</div>
+    <div class="v-desc">Amber-tinted confirm row with a circular check. Shows the selected vibe name. Feels like a deliberate choice.</div>
+    <div>
+      <div class="hero">
+        <div class="hero-photo"></div>
+        <div class="hero-badge">Bedroom · Bathroom</div>
+        <div class="hero-body">
+          <div class="hero-title">☀️ Bright &amp; Airy Retreat</div>
+          <div class="hero-sub">"Sun-filled rooms, large windows, open bathrooms"</div>
+          <button class="b4-cta">
+            <span class="b4-check">✓</span>
+            <span class="b4-label">
+              <span class="b4-name">Bright &amp; Airy Retreat</span>
+              <span class="b4-sub" style="display:block">Tap to select this vibe</span>
+            </span>
+            <span class="b4-arrow">→</span>
+          </button>
+        </div>
+      </div>
+      <div class="overlap-card">
+        <div class="or-divider">or describe it yourself</div>
+        <div class="desc-row">
+          <input placeholder="e.g. dark moody suite with a rain shower…" />
+          <button class="desc-go">Go →</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+</body>
+</html>
