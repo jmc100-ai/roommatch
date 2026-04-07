@@ -1525,164 +1525,91 @@
     .back-btn:hover { color:var(--text); }
     .back-btn svg { width:14px; height:14px; flex-shrink:0; }
 
-    /* ── Neighbourhood cards (new design — full-bleed overlay) */
-    .nbhd-grid-new {
-      display:grid;
-      grid-template-columns:repeat(auto-fill,minmax(min(100%,280px),1fr));
-      gap:14px;
-      width:100%;
-      min-width:0;
-    }
+    /* ── Neighbourhood cards (full large-card drilldown) */
+    .nbhd-grid-new { display:flex; flex-direction:column; gap:18px; width:100%; min-width:0; }
     .nbhd-card-new {
-      border-radius:16px; cursor:pointer; position:relative; overflow:hidden;
-      aspect-ratio:4/3; border:1px solid transparent;
-      background:var(--surface);
-      transition:transform .2s, box-shadow .2s, border-color .2s;
+      border-radius:16px; border:2px solid rgba(255,255,255,.16);
+      background:linear-gradient(180deg,#1a1a1f 0%,#15151a 100%);
+      box-shadow:0 10px 36px rgba(0,0,0,.4);
+      overflow:hidden; cursor:pointer; transition:border-color .2s, box-shadow .2s, transform .2s;
     }
-    .nbhd-card-new:hover { transform:translateY(-4px); box-shadow:0 20px 50px rgba(0,0,0,.6); border-color:rgba(201,169,110,.25); }
-    .nbhd-card-media {
-      position:absolute; inset:0; z-index:0;
-      background-size:cover; background-position:center;
-      background-color:#0c0c0e;
-      transition:transform .4s;
+    .nbhd-card-new:hover { transform:translateY(-3px); border-color:rgba(201,169,110,.45); box-shadow:0 14px 44px rgba(0,0,0,.52); }
+    /* Hero section — self-contained, positioned children stay inside */
+    .nbhd-hero-wrap {
+      position:relative; height:300px; overflow:hidden;
+      background-size:cover; background-position:center; background-color:#0c0c0e;
     }
-    .nbhd-card-new:hover .nbhd-card-media { transform:scale(1.04); }
-    .nbhd-card-bg { position:absolute; inset:0; background-size:cover; background-position:center; transition:transform .4s; }
-    .nbhd-card-new:hover .nbhd-card-bg { transform:scale(1.04); }
-    .nbhd-grad-base { position:absolute; inset:0; z-index:1; background:linear-gradient(to top,rgba(0,0,0,.92) 0%,rgba(0,0,0,.18) 55%,transparent 100%); transition:opacity .3s; }
-    .nbhd-grad-hover { position:absolute; inset:0; z-index:2; background:linear-gradient(to top,rgba(0,0,0,.96) 0%,rgba(0,0,0,.72) 50%,rgba(0,0,0,.22) 100%); opacity:0; transition:opacity .3s; }
-    .nbhd-card-new:hover .nbhd-grad-hover { opacity:1; }
-    .nbhd-content-new { position:absolute; inset:0; z-index:3; padding:16px; display:flex; flex-direction:column; justify-content:flex-end; }
-    .nbhd-name-new  { font-size:18px; font-weight:700; margin-bottom:4px; line-height:1.2; color:#faf8f4; text-shadow:0 1px 16px rgba(0,0,0,.55); }
-    .nbhd-vibe-new  { font-size:13px; font-weight:500; color:rgba(255,252,248,.82); font-style:italic; margin-bottom:8px; text-shadow:0 1px 10px rgba(0,0,0,.45); }
-    .nbhd-tags-new  { display:flex; gap:5px; flex-wrap:wrap; }
-    .nbhd-tag-new   { font-size:10px; font-weight:600; padding:4px 10px; border-radius:10px; background:rgba(255,255,255,.16); color:rgba(255,252,248,.9); }
+    .nbhd-hero-grad {
+      position:absolute; inset:0;
+      background:linear-gradient(to bottom,rgba(0,0,0,.08) 0%,rgba(0,0,0,.3) 50%,rgba(0,0,0,.72) 100%);
+      pointer-events:none;
+    }
+    .nbhd-hero-top {
+      position:absolute; top:12px; left:12px; right:12px; z-index:1;
+    }
+    .nbhd-hero-btm {
+      position:absolute; bottom:14px; left:14px; right:14px; z-index:1;
+    }
+    .nbhd-tags-new { display:flex; gap:6px; flex-wrap:wrap; }
+    .nbhd-tag-new {
+      font-size:10px; padding:4px 9px; border-radius:999px;
+      border:1px solid rgba(255,255,255,.14); background:rgba(0,0,0,.5); color:#f6f4ef;
+    }
+    .nbhd-name-new { font-family:'Cormorant Garamond',serif; font-size:30px; font-weight:500; color:#fff; line-height:1.05; text-shadow:0 2px 18px rgba(0,0,0,.75); }
+    .nbhd-vibe-new { font-size:13px; color:rgba(255,255,255,.82); margin-top:4px; max-width:85ch; }
+    /* Detail body — normal document flow, below hero */
     .nbhd-detail-new {
-      max-height:0; overflow:hidden; opacity:0;
-      transition:max-height .35s cubic-bezier(.4,0,.2,1), opacity .3s; margin-top:10px;
+      padding:14px; border-top:1px solid rgba(255,255,255,.12);
+      background:rgba(15,15,19,.92);
     }
-    .nbhd-card-new:hover .nbhd-detail-new { max-height:200px; opacity:1; }
-    .nbhd-detail-desc-new { font-size:13px; font-weight:500; color:rgba(255,252,248,.84); line-height:1.65; margin-bottom:10px; }
-    .nbhd-detail-row-new { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:6px; }
+    .nbhd-detail-desc-new { font-size:13px; color:rgba(232,228,220,.88); line-height:1.6; margin-bottom:8px; }
+    .nbhd-best-for-new { display:flex; gap:5px; flex-wrap:wrap; margin-bottom:10px; }
+    .nbhd-bf-pill-new { font-size:10px; padding:3px 8px; border-radius:10px; border:1px solid rgba(201,169,110,.35); background:rgba(201,169,110,.2); color:#e8d5b0; }
+    .nbhd-el-tabs { display:flex; gap:8px; overflow:auto; margin-bottom:10px; padding-bottom:2px; }
+    .nbhd-el-tabs::-webkit-scrollbar { display:none; }
+    .nbhd-el-tab {
+      border:1px solid rgba(255,255,255,.14); background:var(--row); color:rgba(255,255,255,.78);
+      border-radius:10px; padding:8px 10px; min-width:136px; white-space:nowrap; cursor:pointer; font-size:12px;
+    }
+    .nbhd-el-tab.active { border-color:rgba(201,169,110,.45); background:rgba(201,169,110,.08); color:var(--accent); }
+    .nbhd-el-body { display:grid; grid-template-columns:1.2fr 1fr; gap:12px; margin-bottom:10px; }
+    .nbhd-el-gallery { display:flex; gap:8px; overflow:auto; scrollbar-width:none; }
+    .nbhd-el-gallery::-webkit-scrollbar { display:none; }
+    .nbhd-el-photo { flex:0 0 220px; height:130px; border-radius:12px; overflow:hidden; border:1px solid rgba(255,255,255,.1); background:#0d0d10; }
+    .nbhd-el-photo img { width:100%; height:100%; object-fit:cover; display:block; }
+    .nbhd-el-info { border:1px solid rgba(255,255,255,.09); border-radius:12px; background:var(--row); padding:10px; }
+    .nbhd-el-summary { font-size:12px; line-height:1.5; color:var(--muted); margin-bottom:7px; }
+    .nbhd-el-facts { margin:0 0 8px 14px; color:rgba(232,228,220,.78); font-size:11px; line-height:1.35; }
+    .nbhd-el-bars { display:flex; flex-direction:column; gap:5px; }
+    .nbhd-el-bar-row { display:flex; justify-content:space-between; font-size:10px; color:var(--muted); }
+    .nbhd-el-bar { height:5px; border-radius:99px; background:rgba(255,255,255,.1); overflow:hidden; }
+    .nbhd-el-bar i { display:block; height:100%; background:var(--accent); }
+    .nbhd-el-empty { font-size:11px; color:rgba(255,255,255,.6); }
+    .nbhd-detail-row-new { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px; margin-top:8px; }
     .nbhd-hotel-count-new { font-size:14px; font-weight:600; color:var(--accent2); }
-    .nbhd-hotel-sub-new   { font-size:11px; font-weight:500; color:rgba(255,255,255,.52); }
-    .nbhd-pick-btn-new { padding:7px 16px; background:var(--accent); color:#0c0c0e; border:none; border-radius:9px; font-family:'DM Sans',sans-serif; font-size:12px; font-weight:500; cursor:pointer; transition:opacity .15s; }
-    .nbhd-pick-btn-new:hover { opacity:.88; }
-    .nbhd-best-for-new { display:flex; gap:5px; flex-wrap:wrap; margin-bottom:8px; }
-    .nbhd-bf-pill-new { font-size:10px; font-weight:600; padding:3px 9px; border-radius:10px; background:rgba(201,169,110,.2); color:#e8d5b0; border:1px solid rgba(201,169,110,.35); }
-    .nbhd-credit-new { font-size:9px; color:rgba(255,255,255,.3); margin-top:6px; }
-    .nbhd-credit-new a { color:inherit; text-decoration:none; }
-    .nbhd-credit-new a:hover { color:rgba(255,255,255,.6); }
-    .nbhd-skip-new {
-      border-radius:16px; cursor:pointer; position:relative; aspect-ratio:4/3;
-      background:var(--surface); border:1px dashed rgba(255,255,255,.1);
-      display:flex; align-items:center; justify-content:center; transition:border-color .15s, transform .2s;
+    .nbhd-hotel-sub-new { font-size:11px; color:var(--muted); }
+    .nbhd-pick-btn-new {
+      border:none; background:var(--accent); color:#0c0c0e; border-radius:10px;
+      padding:10px 14px; font-size:13px; font-weight:600; cursor:pointer;
     }
-    .nbhd-skip-new:hover { border-color:rgba(201,169,110,.4); transform:translateY(-3px); }
-    /* Loading skeleton for new nbhd cards */
+    .nbhd-credit-new { font-size:10px; color:rgba(255,255,255,.38); margin-top:8px; }
+    .nbhd-credit-new a { color:inherit; text-decoration:none; }
+    .nbhd-skip-new {
+      border-radius:16px; border:1px dashed rgba(255,255,255,.12); background:var(--surface);
+      min-height:160px; display:flex; align-items:center; justify-content:center; cursor:pointer;
+    }
     .nbhd-skel-new {
-      border-radius:16px; aspect-ratio:4/3;
+      border-radius:16px; min-height:260px;
       background:linear-gradient(90deg,var(--surface) 25%,rgba(255,255,255,.05) 50%,var(--surface) 75%);
       background-size:200% 100%; animation:shimmer 1.5s infinite;
     }
-    .nbhd-gen-hint {
-      grid-column:1/-1; text-align:center; padding:14px 0 4px;
-      font-size:13px; color:var(--accent); opacity:.75;
-      letter-spacing:.04em;
-    }
-    .nbhd-top-new { display:contents; }
-    /* Touch / small screens: title stack at top, long copy + CTA at bottom — clear image in the middle */
+    .nbhd-gen-hint { text-align:center; padding:14px 0 4px; font-size:13px; color:var(--accent); opacity:.75; letter-spacing:.04em; }
     @media(max-width:900px){
-      /* Stack: photo strip (top) → opaque text panel (bottom); no text over image */
-      .nbhd-card-new {
-        aspect-ratio:auto;
-        min-height:0;
-        display:flex;
-        flex-direction:column;
-      }
-      .nbhd-card-new:hover { transform:none; }
-      .nbhd-card-new:hover .nbhd-card-media,
-      .nbhd-card-new:hover .nbhd-card-bg { transform:none; }
-      .nbhd-card-media {
-        position:relative;
-        inset:auto;
-        flex:0 0 auto;
-        height:clamp(152px,42vw,216px);
-        width:100%;
-        border-radius:16px 16px 0 0;
-        -webkit-mask-image:linear-gradient(to bottom,#000 0%,#000 62%,transparent 100%);
-        mask-image:linear-gradient(to bottom,#000 0%,#000 62%,transparent 100%);
-      }
-      .nbhd-grad-base,
-      .nbhd-grad-hover { display:none; }
-      .nbhd-content-new {
-        position:relative;
-        inset:auto;
-        z-index:auto;
-        flex:1 1 auto;
-        min-width:0;
-        padding:14px 16px 16px;
-        justify-content:flex-start;
-        box-sizing:border-box;
-        border-radius:0 0 16px 16px;
-        background:linear-gradient(180deg,#17171c 0%,#121218 55%,#0f0f13 100%);
-        border-top:1px solid rgba(255,255,255,.07);
-        box-shadow:inset 0 1px 0 rgba(255,255,255,.04);
-      }
-      .nbhd-top-new {
-        display:flex;
-        flex-direction:column;
-        align-items:flex-start;
-        gap:8px;
-        flex-shrink:0;
-        padding:0;
-        margin:0;
-        width:100%;
-        background:none;
-        border-radius:0;
-      }
-      .nbhd-name-new {
-        margin-bottom:0;
-        color:var(--text);
-        text-shadow:none;
-        font-size:19px;
-      }
-      .nbhd-vibe-new {
-        margin-bottom:0;
-        color:rgba(232,228,220,.82);
-        text-shadow:none;
-        font-style:italic;
-      }
-      .nbhd-detail-new {
-        max-height:none!important;
-        opacity:1!important;
-        overflow:visible;
-        margin:14px 0 0 0;
-        margin-left:0;
-        margin-right:0;
-        width:100%;
-        padding:0;
-        background:none;
-        border-radius:0;
-      }
-      .nbhd-detail-desc-new {
-        display:-webkit-box;
-        -webkit-line-clamp:5;
-        -webkit-box-orient:vertical;
-        overflow:hidden;
-        color:rgba(232,228,220,.88);
-        line-height:1.55;
-      }
-      .nbhd-detail-row-new { align-items:flex-end; margin-top:4px; }
-      .nbhd-hotel-sub-new { color:var(--muted); }
-      .nbhd-credit-new { color:rgba(255,255,255,.38); margin-top:8px; }
-      .nbhd-skel-new { aspect-ratio:auto; min-height:200px; }
-      .nbhd-card-new .nbhd-tag-new {
-        background:rgba(255,255,255,.08);
-        border:1px solid rgba(255,255,255,.12);
-        color:rgba(252,250,245,.92);
-        text-shadow:none;
-      }
+      .nbhd-hero-wrap { height:240px; }
+      .nbhd-name-new { font-size:24px; }
+      .nbhd-el-body { grid-template-columns:1fr; }
+      .nbhd-el-photo { flex:0 0 170px; height:110px; }
+      .nbhd-el-tab { min-width:120px; font-size:11px; padding:7px 9px; }
     }
 
     /* ── Momentum banner (toast) ────────────────────── */
@@ -2441,6 +2368,67 @@
   }
 
   // ── NEIGHBOURHOOD ────────────────────────────────────
+  const NBHD_ELEMENT_ORDER = [
+    { key: 'parks', label: 'Parks' },
+    { key: 'restaurants', label: 'Food' },
+    { key: 'cafes', label: 'Cafes' },
+    { key: 'street_feel', label: 'Street Feel' },
+    { key: 'icon_spots', label: 'Icon Spots' },
+    { key: 'museums', label: 'Museums' },
+    { key: 'shops', label: 'Shops' },
+  ];
+  const NBHD_CARD_DATA = {};
+
+  function escHtml(s) {
+    return (s||'').replace(/"/g,'&quot;').replace(/'/g,'&#39;').replace(/</g,'&lt;');
+  }
+
+  function nbhdFirstElementKey(h) {
+    const data = h?.vibe_elements || {};
+    const present = NBHD_ELEMENT_ORDER
+      .filter(e => data[e.key])
+      .sort((a,b) => (data[b.key]?.score || 0) - (data[a.key]?.score || 0));
+    return present[0]?.key || 'restaurants';
+  }
+
+  function nbhdElementPanelHTML(h, elementKey) {
+    const element = (h.vibe_elements || {})[elementKey];
+    if (!element) return `<div class="nbhd-el-empty">Element data unavailable.</div>`;
+    const photos = (h.vibe_photos || {})[elementKey] || [];
+    const photoTiles = photos.slice(0, 6).map((p) => {
+      const url = typeof p === 'string' ? p : p?.url;
+      if (!url) return '';
+      return `<div class="nbhd-el-photo"><img src="${escHtml(url)}" loading="lazy" alt="${escHtml(h.name)} ${escHtml(elementKey)}"></div>`;
+    }).join('');
+    const facts = (element.facts || []).slice(0, 3).map(f => `<li>${escHtml(f)}</li>`).join('');
+    const m = element.metrics || {};
+    return `<div class="nbhd-el-body">
+      <div class="nbhd-el-gallery">${photoTiles || '<div class="nbhd-el-empty">No photos yet</div>'}</div>
+      <div class="nbhd-el-info">
+        <div class="nbhd-el-summary">${escHtml(element.summary || '')}</div>
+        <ul class="nbhd-el-facts">${facts}</ul>
+        <div class="nbhd-el-bars">
+          <div class="nbhd-el-bar-row"><span>Signal</span><span>${Math.round(m.signal_strength || 0)}%</span></div>
+          <div class="nbhd-el-bar"><i style="width:${Math.round(m.signal_strength || 0)}%"></i></div>
+          <div class="nbhd-el-bar-row"><span>Confidence</span><span>${Math.round(m.confidence || 0)}%</span></div>
+          <div class="nbhd-el-bar"><i style="width:${Math.round(m.confidence || 0)}%"></i></div>
+          <div class="nbhd-el-bar-row"><span>User fit</span><span>${Math.round(m.user_fit || 0)}%</span></div>
+          <div class="nbhd-el-bar"><i style="width:${Math.round(m.user_fit || 0)}%"></i></div>
+        </div>
+      </div>
+    </div>`;
+  }
+
+  function setNbhdElement(cardId, elementKey, ev) {
+    if (ev) ev.stopPropagation();
+    const h = NBHD_CARD_DATA[cardId];
+    if (!h) return;
+    const tabs = document.querySelectorAll(`.nbhd-el-tab[data-card='${cardId}']`);
+    tabs.forEach(t => t.classList.toggle('active', t.dataset.key === elementKey));
+    const panel = document.getElementById(`nbhd-el-panel-${cardId}`);
+    if (panel) panel.innerHTML = nbhdElementPanelHTML(h, elementKey);
+  }
+
   async function fetchAndShowNeighborhoodsNew(city, isRetry) {
     const grid = document.getElementById('nbhd-grid');
 
@@ -2466,7 +2454,12 @@
         }
         const hoods = data.neighborhoods || [];
         if (hoods.length) {
-          grid.innerHTML = hoods.map(h => renderNbhdCard(h)).join('') + renderNbhdSkip(city);
+          Object.keys(NBHD_CARD_DATA).forEach(k => delete NBHD_CARD_DATA[k]);
+          grid.innerHTML = hoods.map((h, idx) => {
+            const cardId = `n${idx}`;
+            NBHD_CARD_DATA[cardId] = h;
+            return renderNbhdCard(h, cardId);
+          }).join('') + renderNbhdSkip(city);
           return;
         }
       }
@@ -2475,48 +2468,59 @@
     // Fallback to hardcoded data (London, Tokyo, New York)
     const fallback = NBHDS_FALLBACK[city];
     if (fallback && fallback.length) {
-      grid.innerHTML = fallback.map(h => renderNbhdCard(h)).join('') + renderNbhdSkip(city);
+      Object.keys(NBHD_CARD_DATA).forEach(k => delete NBHD_CARD_DATA[k]);
+      grid.innerHTML = fallback.map((h, idx) => {
+        const cardId = `f${idx}`;
+        NBHD_CARD_DATA[cardId] = h;
+        return renderNbhdCard(h, cardId);
+      }).join('') + renderNbhdSkip(city);
     } else {
       // No neighbourhood data at all — skip step gracefully
       pickNbhd('All of ' + city, null);
     }
   }
 
-  function renderNbhdCard(h) {
-    const esc = s => (s||'').replace(/"/g,'&quot;').replace(/'/g,'&#39;').replace(/</g,'&lt;');
+  function renderNbhdCard(h, cardId) {
     const bbox = h.bbox
       ? `${h.bbox.lat_min},${h.bbox.lat_max},${h.bbox.lon_min},${h.bbox.lon_max}`
       : '';
     const tags = (h.tags || []).slice(0,4);
     const count = h.hotel_count > 0 ? h.hotel_count : '—';
     const mediaStyle = h.photo_url
-      ? `background-image:url('${esc(h.photo_url)}');`
+      ? `background-image:url('${escHtml(h.photo_url)}');`
       : `background:${h.bg || 'linear-gradient(160deg,#1a1008 0%,#0e0a06 100%)'};`;
     const credit = h.photo_credit
-      ? `<div class="nbhd-credit-new">📷 <a href="${esc(h.photo_credit.profile_url||'')}" target="_blank" rel="noopener">${esc(h.photo_credit.photographer||'')}</a></div>`
+      ? `<div class="nbhd-credit-new">Photo: <a href="${escHtml(h.photo_credit.profile_url||'')}" target="_blank" rel="noopener">${escHtml(h.photo_credit.photographer||'')}</a></div>`
       : '';
-    return `<div class="nbhd-card-new" onclick="pickNbhd('${esc(h.name)}','${esc(bbox)}')">
-      <div class="nbhd-card-media" style="${mediaStyle}"></div>
-      <div class="nbhd-grad-base"></div>
-      <div class="nbhd-grad-hover"></div>
-      <div class="nbhd-content-new">
-        <div class="nbhd-top-new">
-        <div class="nbhd-tags-new">${tags.map(t=>`<span class="nbhd-tag-new">${esc(t)}</span>`).join('')}</div>
-        <div class="nbhd-name-new">${esc(h.name)}</div>
-        <div class="nbhd-vibe-new">${esc(h.vibe_short||'')}</div>
+    const firstEl = nbhdFirstElementKey(h);
+    const tabs = NBHD_ELEMENT_ORDER
+      .filter(e => (h.vibe_elements || {})[e.key])
+      .map(e => `<button class="nbhd-el-tab ${e.key===firstEl?'active':''}" data-card="${cardId}" data-key="${e.key}" onclick="setNbhdElement('${cardId}','${e.key}',event)">${e.label} ${(h.vibe_elements[e.key]?.score ?? 0)}%</button>`)
+      .join('');
+    return `<div class="nbhd-card-new" onclick="pickNbhd('${escHtml(h.name)}','${escHtml(bbox)}')">
+      <div class="nbhd-hero-wrap" style="${mediaStyle}">
+        <div class="nbhd-hero-grad"></div>
+        <div class="nbhd-hero-top">
+          <div class="nbhd-tags-new">${tags.map(t=>`<span class="nbhd-tag-new">${escHtml(t)}</span>`).join('')}</div>
         </div>
-        <div class="nbhd-detail-new">
-          <div class="nbhd-detail-desc-new">${esc(h.vibe_long||h.vibe_short||'')}</div>
-          <div class="nbhd-best-for-new">${tags.map(f=>`<span class="nbhd-bf-pill-new">✓ ${esc(f)}</span>`).join('')}</div>
-          <div class="nbhd-detail-row-new">
-            <div>
-              <div class="nbhd-hotel-count-new">${count} hotels</div>
-              <div class="nbhd-hotel-sub-new">in this area</div>
-            </div>
-            <button class="nbhd-pick-btn-new" onclick="event.stopPropagation();pickNbhd('${esc(h.name)}','${esc(bbox)}')">Choose →</button>
+        <div class="nbhd-hero-btm">
+          <div class="nbhd-name-new">${escHtml(h.name)}</div>
+          <div class="nbhd-vibe-new">${escHtml(h.vibe_short||'')}</div>
+        </div>
+      </div>
+      <div class="nbhd-detail-new">
+        <div class="nbhd-detail-desc-new">${escHtml(h.vibe_long||h.vibe_short||'')}</div>
+        <div class="nbhd-best-for-new">${tags.map(f=>`<span class="nbhd-bf-pill-new">✓ ${escHtml(f)}</span>`).join('')}</div>
+        <div class="nbhd-el-tabs">${tabs || ''}</div>
+        <div id="nbhd-el-panel-${cardId}">${nbhdElementPanelHTML(h, firstEl)}</div>
+        <div class="nbhd-detail-row-new">
+          <div>
+            <div class="nbhd-hotel-count-new">${count} hotels</div>
+            <div class="nbhd-hotel-sub-new">in this area</div>
           </div>
-          ${credit}
+          <button class="nbhd-pick-btn-new" onclick="event.stopPropagation();pickNbhd('${escHtml(h.name)}','${escHtml(bbox)}')">Choose →</button>
         </div>
+        ${credit}
       </div>
     </div>`;
   }

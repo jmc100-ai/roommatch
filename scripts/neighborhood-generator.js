@@ -5,6 +5,7 @@
  */
 
 const GEMINI_MODEL = "gemini-2.5-flash-lite";
+const { buildNeighborhoodVibeData } = require("./neighborhood-vibe-data");
 
 // Canonical Gemini prompt for neighborhood generation
 function buildNeighborhoodPrompt(city) {
@@ -213,6 +214,32 @@ async function generateNeighborhoods(city, db, geminiKey, unsplashKey) {
     }
   }
 
+  // Compute per-element vibe payloads and photos.
+  // Kept sequential per row to avoid exploding external API concurrency.
+  for (const row of rows) {
+    try {
+      const vibeData = await buildNeighborhoodVibeData({
+        city,
+        neighborhoodName: row.name,
+        attributes: row.attributes || {},
+        tags: row.tags || [],
+        vibeLong: row.vibe_long || "",
+        hotelCount: row.hotel_count || 0,
+        unsplashKey,
+      });
+      row.vibe_elements = vibeData.vibeElements;
+      row.vibe_photos = vibeData.vibePhotos;
+      row.vibe_data_version = "v1";
+      row.vibe_last_computed_at = new Date().toISOString();
+    } catch (e) {
+      console.warn(`[neighborhoods] vibe data generation failed for ${city}/${row.name}: ${e.message}`);
+      row.vibe_elements = {};
+      row.vibe_photos = {};
+      row.vibe_data_version = "v1";
+      row.vibe_last_computed_at = new Date().toISOString();
+    }
+  }
+
   // Upsert all rows
   const { error } = await db
     .from("neighborhoods")
@@ -220,6 +247,44 @@ async function generateNeighborhoods(city, db, geminiKey, unsplashKey) {
   if (error) throw new Error(`neighborhoods upsert failed: ${error.message}`);
 
   return rows;
+}
+
+/**
+ * recomputeNeighborhoodVibes — refresh vibe elements/photos for existing rows.
+ */
+async function recomputeNeighborhoodVibes(city, db, unsplashKey) {
+  const { data: rows, error } = await db
+    .from("neighborhoods")
+    .select("id, city, name, vibe_long, tags, attributes, hotel_count")
+    .eq("city", city)
+    .order("id");
+
+  if (error) throw new Error(`load neighborhoods failed: ${error.message}`);
+  if (!rows?.length) return 0;
+
+  for (const row of rows) {
+    const vibeData = await buildNeighborhoodVibeData({
+      city: row.city,
+      neighborhoodName: row.name,
+      attributes: row.attributes || {},
+      tags: row.tags || [],
+      vibeLong: row.vibe_long || "",
+      hotelCount: row.hotel_count || 0,
+      unsplashKey,
+    });
+    const { error: upErr } = await db
+      .from("neighborhoods")
+      .update({
+        vibe_elements: vibeData.vibeElements,
+        vibe_photos: vibeData.vibePhotos,
+        vibe_data_version: "v1",
+        vibe_last_computed_at: new Date().toISOString(),
+      })
+      .eq("id", row.id);
+    if (upErr) throw new Error(`update ${row.name} failed: ${upErr.message}`);
+  }
+
+  return rows.length;
 }
 
 /**
@@ -244,4 +309,4 @@ async function refreshHotelCounts(city, db) {
   console.log(`[neighborhoods] hotel_count refreshed for ${city} (${hoods.length} neighborhoods)`);
 }
 
-module.exports = { generateNeighborhoods, refreshHotelCounts };
+module.exports = { generateNeighborhoods, refreshHotelCounts, recomputeNeighborhoodVibes };

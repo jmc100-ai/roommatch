@@ -10,7 +10,7 @@ const crypto  = require("crypto");
 require("dotenv").config();
 const { createClient } = require("@supabase/supabase-js");
 const { indexCity }    = require("./scripts/index-city");
-const { generateNeighborhoods, refreshHotelCounts } = require("./scripts/neighborhood-generator");
+const { generateNeighborhoods, refreshHotelCounts, recomputeNeighborhoodVibes } = require("./scripts/neighborhood-generator");
 const { backfillCity } = require("./scripts/backfill-latlng");
 
 // ── Password gate helpers ─────────────────────────────────────────────────────
@@ -2553,6 +2553,29 @@ app.get("/api/vibe-presets", async (req, res) => {
     console.error("[vibe-presets]", err.message);
     res.status(500).json({ error: err.message });
   }
+});
+
+// ── Backfill neighborhood vibe elements/photos (protected) ────────────────────
+// POST /api/backfill-neighborhood-vibes {"secret":"roommatch-2026","city":"Paris"}
+app.post("/api/backfill-neighborhood-vibes", async (req, res) => {
+  const { city, secret } = req.body || {};
+  if (secret !== (process.env.INDEX_SECRET || "roommatch-index")) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
+  if (!city) return res.status(400).json({ error: "city required" });
+  if (!supabase) return res.status(500).json({ error: "Supabase not configured" });
+
+  const db = supabaseAdmin || supabase;
+  res.json({ message: `backfill-neighborhood-vibes started for ${city}` });
+
+  (async () => {
+    try {
+      const updated = await recomputeNeighborhoodVibes(city, db, process.env.UNSPLASH_KEY);
+      console.log(`[backfill-neighborhood-vibes] ${city}: ${updated} neighborhoods refreshed`);
+    } catch (e) {
+      console.error(`[backfill-neighborhood-vibes] ${city} failed:`, e.message);
+    }
+  })();
 });
 
 // ── Backfill lat/lng endpoint (protected) ─────────────────────────────────────

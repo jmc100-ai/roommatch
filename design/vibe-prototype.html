@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Neighbourhood Vibe ? Deep Dive Prototype</title>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;600&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet"/>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{--bg:#0c0c0e;--surface:#131316;--card:#18181c;--row:#1c1c21;--border:rgba(255,255,255,.08);--text:#e8e4dc;--muted:#9a9590;--accent:#c9a96e;--green:#6dba8a;--radius:16px}
+body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;padding-bottom:80px}
+.header{position:sticky;top:0;z-index:40;background:rgba(12,12,14,.92);backdrop-filter:blur(16px);border-bottom:1px solid var(--border);padding:14px 20px 0}
+.header-top{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}
+.logo{font-family:'Cormorant Garamond',serif;font-size:20px}.logo span{color:var(--accent)}
+.badge{font-size:9px;letter-spacing:.12em;text-transform:uppercase;color:var(--accent);border:1px solid rgba(201,169,110,.25);background:rgba(201,169,110,.08);border-radius:999px;padding:3px 10px}
+.city-tabs{display:flex;gap:8px;padding-bottom:12px}
+.city-tab{border:1px solid var(--border);background:transparent;color:var(--muted);border-radius:999px;padding:8px 16px;font-size:13px;cursor:pointer}
+.city-tab.active{background:var(--accent);color:#0c0c0e;border-color:var(--accent);font-weight:600}
+.main{max-width:1050px;margin:0 auto;padding:18px 14px}
+.topbar{display:flex;gap:12px;justify-content:space-between;align-items:flex-start;margin-bottom:12px}
+.title{font-size:16px;font-weight:500}.subtitle{font-size:12px;color:var(--muted);margin-top:4px;line-height:1.45}
+.filter-btn{border:1px solid var(--border);background:var(--surface);color:var(--muted);border-radius:999px;padding:7px 14px;font-size:12px;cursor:pointer}
+.filter-btn.active{color:var(--accent);border-color:rgba(201,169,110,.45);background:rgba(201,169,110,.08)}
+.vibe-row{display:none;flex-wrap:wrap;gap:7px;margin:0 0 14px}.vibe-row.open{display:flex}
+.vibe-chip{border:1px solid var(--border);background:var(--surface);color:var(--muted);border-radius:999px;padding:6px 12px;font-size:12px;cursor:pointer}
+.vibe-chip.active{color:var(--accent);border-color:rgba(201,169,110,.45);background:rgba(201,169,110,.1)}
+.notice{display:none;margin-bottom:14px;border:1px solid rgba(201,169,110,.2);background:rgba(201,169,110,.06);color:var(--muted);border-radius:10px;padding:10px 12px;font-size:12px}
+.notice.show{display:block}
+.cards{display:flex;flex-direction:column;gap:26px}
+.card{background:linear-gradient(180deg,#1a1a1f 0%,#15151a 100%);border:2px solid rgba(255,255,255,.16);border-radius:var(--radius);overflow:hidden;box-shadow:0 10px 36px rgba(0,0,0,.4)}
+.card.top{border-color:rgba(201,169,110,.72);box-shadow:0 14px 44px rgba(0,0,0,.52),0 0 0 1px rgba(201,169,110,.2)}
+.hero{position:relative;height:300px;background:#111}
+.hero img{width:100%;height:100%;object-fit:cover;display:block}
+.hero::after{content:'';position:absolute;inset:0;background:linear-gradient(to bottom,rgba(0,0,0,.1),rgba(0,0,0,.58))}
+.hero-top{position:absolute;top:12px;left:12px;right:12px;display:flex;justify-content:space-between;z-index:2}
+.hero-badges{display:flex;gap:6px;flex-wrap:wrap;max-width:75%}
+.pill{font-size:11px;border-radius:999px;padding:4px 9px;border:1px solid rgba(255,255,255,.18);background:rgba(0,0,0,.52);color:#f6f4ef}
+.match{display:none;font-size:12px;border-radius:999px;padding:5px 10px;border:1px solid rgba(201,169,110,.55);background:rgba(201,169,110,.2);color:var(--accent);font-weight:600}
+.match.show{display:block}
+.hero-bottom{position:absolute;left:14px;right:14px;bottom:12px;z-index:2}
+.name{font-size:24px;font-family:'Cormorant Garamond',serif;font-weight:600;line-height:1.1;color:#ffffff;text-shadow:0 2px 10px rgba(0,0,0,.55)}
+.short{font-size:13px;color:rgba(255,255,255,.75);margin-top:4px;max-width:85ch}
+.meta{display:flex;justify-content:space-between;font-size:11px;color:rgba(255,255,255,.62);margin-top:8px}
+.body{padding:14px;border-top:1px solid rgba(255,255,255,.12)}
+.element-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:9px}
+.element-title{font-size:12px;color:var(--muted);letter-spacing:.08em;text-transform:uppercase}
+.element-help{font-size:11px;color:rgba(255,255,255,.35)}
+.element-tabs{display:flex;gap:8px;overflow-x:auto;scrollbar-width:none;padding-bottom:8px;margin-bottom:10px}
+.element-tabs::-webkit-scrollbar{display:none}
+.el-tab{border:1px solid var(--border);background:var(--row);color:var(--muted);border-radius:10px;padding:8px 10px;min-width:136px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;font-size:12px;flex-shrink:0}
+.el-tab.active{border-color:rgba(201,169,110,.45);background:rgba(201,169,110,.08);color:var(--accent)}
+.el-score{font-size:11px;color:inherit;opacity:.9}
+.deep{display:grid;grid-template-columns:1.2fr 1fr;gap:12px}
+@media(max-width:880px){.deep{grid-template-columns:1fr}}
+.gallery{display:flex;gap:8px;overflow-x:auto;scrollbar-width:none;padding-bottom:2px}
+.gallery::-webkit-scrollbar{display:none}
+.gimg{flex:0 0 220px;height:130px;border-radius:12px;overflow:hidden;border:1px solid var(--border);background:#0d0d10}
+.gimg img{width:100%;height:100%;object-fit:cover;display:block}
+.panel{border:1px solid var(--border);border-radius:12px;background:var(--row);padding:11px}
+.panel h4{font-size:13px;font-weight:500;margin-bottom:6px}
+.panel p{font-size:12px;color:var(--muted);line-height:1.5;margin-bottom:8px}
+.metrics{display:flex;flex-direction:column;gap:6px}
+.metric{display:flex;justify-content:space-between;font-size:11px;color:var(--muted)}
+.bar{width:100%;height:6px;border-radius:99px;background:rgba(255,255,255,.08);overflow:hidden}
+.fill{height:100%;background:var(--accent)}
+.card-footer{display:flex;justify-content:space-between;align-items:center;margin-top:12px}
+.choose{border:none;background:var(--accent);color:#0c0c0e;border-radius:10px;padding:10px 14px;font-size:13px;font-weight:600;cursor:pointer}
+.learn{font-size:12px;color:var(--muted)}
+.chosen{display:none;margin-top:14px;border:1px solid rgba(109,186,138,.25);background:rgba(109,186,138,.08);color:var(--green);border-radius:10px;padding:10px 12px;font-size:13px}
+.chosen.show{display:block}
+.flash{position:fixed;bottom:22px;left:50%;transform:translateX(-50%);padding:10px 18px;border:1px solid var(--border);border-radius:999px;background:var(--surface);font-size:13px;opacity:0;transition:opacity .2s;pointer-events:none}.flash.show{opacity:1}
+</style>
+</head>
+<body>
+<div class="header">
+  <div class="header-top"><div class="logo">Travel<span>Boop</span></div><span class="badge">Prototype</span></div>
+  <div class="city-tabs">
+    <button class="city-tab active" onclick="switchCity('paris')">Paris</button>
+    <button class="city-tab" onclick="switchCity('mexico')">Mexico City</button>
+  </div>
+</div>
+<div class="main">
+  <div class="topbar">
+    <div>
+      <div class="title" id="title">Explore Paris neighbourhoods visually</div>
+      <div class="subtitle">Each card has a deep drill-down by vibe element: parks, restaurants, cafes, streets, icon spots, museums, shops.</div>
+    </div>
+    <button id="filterBtn" class="filter-btn" onclick="toggleFilters()">Filter by vibe</button>
+  </div>
+
+  <div id="vibeRow" class="vibe-row"></div>
+  <div id="notice" class="notice"></div>
+
+  <div id="cards" class="cards"></div>
+  <div id="chosen" class="chosen"></div>
+</div>
+<div id="flash" class="flash"></div>
+<script>
+const VIBES=[
+{id:'culinary',label:'Culinary Corridor',emoji:'FOOD'},{id:'walkable',label:'Car-Free Wandering',emoji:'WALK'},{id:'green',label:'Green Escape',emoji:'GREEN'},{id:'heritage',label:'Grand Heritage',emoji:'HIST'},{id:'village',label:'Urban Village',emoji:'LOCAL'},{id:'arts',label:'Arts District',emoji:'ART'},{id:'scene',label:'The Scene',emoji:'SCENE'},{id:'market',label:'Market Quarter',emoji:'MARKET'},{id:'bohemian',label:'Bookshops & Cafes',emoji:'CAFE'},{id:'waterfront',label:'Waterfront',emoji:'WATER'}
+];
+const EL=[
+{key:'parks',label:'Parks',emoji:'PARK'},{key:'restaurants',label:'Restaurants',emoji:'FOOD'},{key:'cafes',label:'Cafes',emoji:'CAFE'},{key:'streets',label:'Street Feel',emoji:'STREET'},{key:'icon_spots',label:'Icon Spots',emoji:'ICON'},{key:'museums',label:'Museums',emoji:'MUSEUM'},{key:'shops',label:'Shops',emoji:'SHOP'}
+];
+const P={
+parks:['https://images.unsplash.com/photo-1519331379826-f10be5486c6f?w=800&q=80','https://images.unsplash.com/photo-1517167685284-96a27681ad75?w=800&q=80','https://images.unsplash.com/photo-1473445361085-b9a07f55608b?w=800&q=80'],
+restaurants:['https://images.unsplash.com/photo-1414235077428-338989a2e8c0?w=800&q=80','https://images.unsplash.com/photo-1559339352-11d035aa65de?w=800&q=80','https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=800&q=80'],
+cafes:['https://images.unsplash.com/photo-1495474472287-4d71bcdd2085?w=800&q=80','https://images.unsplash.com/photo-1509042239860-f550ce710b93?w=800&q=80','https://images.unsplash.com/photo-1445116572660-236099ec97a0?w=800&q=80'],
+streets:['https://images.unsplash.com/photo-1513635269975-59663e0ac1ad?w=800&q=80','https://images.unsplash.com/photo-1477959858617-67f85cf4f1df?w=800&q=80','https://images.unsplash.com/photo-1496950866446-3253e1470e8e?w=800&q=80'],
+icon_spots:['https://images.unsplash.com/photo-1520339493071-47e7c16a1fcf?w=800&q=80','https://images.unsplash.com/photo-1502602898657-3e91760cbb34?w=800&q=80','https://images.unsplash.com/photo-1543349689-9a4d426bee8e?w=800&q=80'],
+museums:['https://images.unsplash.com/photo-1554907984-15263bfd63bd?w=800&q=80','https://images.unsplash.com/photo-1558449028-b53a39d100fc?w=800&q=80','https://images.unsplash.com/photo-1518998053901-5348d3961a04?w=800&q=80'],
+shops:['https://images.unsplash.com/photo-1441986300917-64674bd600d8?w=800&q=80','https://images.unsplash.com/photo-1483985988355-763728e1935b?w=800&q=80','https://images.unsplash.com/photo-1521334884684-d80222895322?w=800&q=80']
+};
+
+const DATA={
+paris:[
+mk('le-marais','Le Marais','Historic, artsy, buzzing caf? scene',142,'https://images.unsplash.com/photo-1499856871958-5b9627545d1a?w=1200&q=80',{culinary:85,walkable:90,green:30,heritage:75,village:40,arts:70,scene:65,market:50,bohemian:55,waterfront:20},['walkable','culinary']),
+mk('oberkampf','Oberkampf ? 11th','Restaurant row, street art, late-night energy',98,'https://images.unsplash.com/photo-1414235077428-338989a2e8c0?w=1200&q=80',{culinary:95,walkable:75,green:25,heritage:30,village:50,arts:80,scene:78,market:42,bohemian:62,waterfront:10},['culinary','arts']),
+mk('saint-germain','Saint-Germain-des-Pr?s','Literary, fashionable, intellectual buzz',115,'https://images.unsplash.com/photo-1568168578-e0df18b5f7c0?w=1200&q=80',{culinary:70,walkable:80,green:65,heritage:70,village:55,arts:55,scene:88,market:30,bohemian:85,waterfront:15},['scene','bohemian']),
+mk('montmartre','Montmartre','Village on a hill, cobblestones, artistic soul',87,'https://images.unsplash.com/photo-1431274172761-fcdff02846be?w=1200&q=80',{culinary:55,walkable:50,green:45,heritage:65,village:90,arts:82,scene:45,market:38,bohemian:65,waterfront:5},['village','arts'])
+],
+mexico:[
+mk('roma','Roma Norte','Food scene, street murals, expat energy',67,'https://images.unsplash.com/photo-1518638150340-f706e86654de?w=1200&q=80',{culinary:95,walkable:82,green:40,heritage:35,village:45,arts:88,scene:82,market:55,bohemian:72,waterfront:0},['culinary','arts']),
+mk('condesa','La Condesa','Art Deco boulevards, two parks, local calm',45,'https://images.unsplash.com/photo-1596178060671-7a80dc8059ea?w=1200&q=80',{culinary:70,walkable:88,green:92,heritage:50,village:88,arts:55,scene:65,market:30,bohemian:62,waterfront:0},['green','walkable']),
+mk('coyoacan','Coyoac?n','Cobblestone village, Frida Kahlo, local soul',38,'https://images.unsplash.com/photo-1572513800999-89a9c625cce9?w=1200&q=80',{culinary:60,walkable:72,green:78,heritage:82,village:95,arts:68,scene:35,market:72,bohemian:82,waterfront:0},['village','heritage']),
+mk('centro','Centro Hist?rico','Baroque grandeur, markets, living history',91,'https://images.unsplash.com/photo-1547036967-3f1e4da1c1f4?w=1200&q=80',{culinary:65,walkable:72,green:20,heritage:98,village:40,arts:58,scene:32,market:95,bohemian:48,waterfront:0},['heritage','market'])
+]
+};
+
+function mk(id,name,short,count,hero,scores,badges){
+  const base={parks:Math.max(30,Math.round((scores.green+scores.walkable)/2)),restaurants:Math.max(35,Math.round((scores.culinary+scores.scene)/2)),cafes:Math.max(30,Math.round((scores.bohemian+scores.walkable)/2)),streets:Math.max(30,Math.round((scores.walkable+scores.village+scores.scene)/3)),icon_spots:Math.max(25,Math.round((scores.heritage+scores.scene)/2)),museums:Math.max(25,Math.round((scores.heritage+scores.arts+scores.bohemian)/3)),shops:Math.max(30,Math.round((scores.scene+scores.market+scores.culinary)/3))};
+  const details={};
+  EL.forEach(e=>{details[e.key]={score:base[e.key],summary:`${name}: ${e.label.toLowerCase()} feel is ${scoreWord(base[e.key])}.`,facts:[factLine(e.key,base[e.key],count),factLine2(e.key,base[e.key]),factLine3(e.key,base[e.key])],photos:P[e.key]};});
+  return {id,name,short,count,hero,scores,badges,details};
+}
+function scoreWord(s){if(s>=85)return 'very strong'; if(s>=70)return 'strong'; if(s>=55)return 'good'; if(s>=40)return 'moderate'; return 'light';}
+function factLine(k,s,c){if(k==='restaurants')return `${Math.round((s/8)+c/6)} dining spots / km2 (prototype estimate)`;if(k==='parks')return `${Math.round((s/12)+2)} notable green areas nearby`;if(k==='cafes')return `${Math.round((s/9)+6)} independent cafes in walking radius`;if(k==='streets')return `${Math.round((s/10)+4)} highly walkable street segments`;if(k==='icon_spots')return `${Math.round((s/11)+3)} icon spots (landmarks/squares) nearby`;if(k==='shops')return `${Math.round((s/8)+5)} shopping stops in easy stroll`;return `${Math.round((s/11)+2)} museums/galleries in easy reach`;}
+function factLine2(k,s){if(k==='restaurants')return `${Math.max(3,Math.round(s/18))}-${Math.max(7,Math.round(s/11))} min walk to dense food clusters`;if(k==='parks')return `${Math.max(4,Math.round((100-s)/14))}-${Math.max(8,Math.round((100-s)/10))} min walk to larger green pockets`;if(k==='cafes')return `High sidewalk seating visibility score: ${s}%`;if(k==='streets')return `Pedestrian comfort score: ${s}%`;if(k==='icon_spots')return `Landmark + square access score: ${s}%`;if(k==='shops')return `Mix of high-end + vintage potential: ${s}%`;return `Culture-day friendliness score: ${s}%`;}
+function factLine3(k,s){if(k==='restaurants')return `Evening street energy: ${Math.max(35,Math.round(s*0.9))}%`;if(k==='parks')return `Morning calm score: ${Math.max(40,Math.round(s*0.85))}%`;if(k==='cafes')return `Laptop + linger-friendly spots: ${Math.max(30,Math.round(s*0.8))}%`;if(k==='streets')return `Wayfinding simplicity: ${Math.max(35,Math.round(s*0.78))}%`;if(k==='icon_spots')return `Photo-worthy icon moments: ${Math.max(30,Math.round(s*0.86))}%`;if(k==='shops')return `Window-shopping walkability: ${Math.max(35,Math.round(s*0.84))}%`;return `Rainy-day activity resilience: ${Math.max(30,Math.round(s*0.74))}%`;}
+
+const S={city:'paris',activeVibe:null,showFilters:false,selectedEls:{},chosen:null};
+function vibe(id){return VIBES.find(v=>v.id===id);} 
+function topVibes(scores,n=2){return Object.entries(scores).sort((a,b)=>b[1]-a[1]).slice(0,n).map(([id])=>vibe(id));}
+function flash(t){const e=document.getElementById('flash');e.textContent=t;e.classList.add('show');clearTimeout(e._t);e._t=setTimeout(()=>e.classList.remove('show'),2200)}
+
+function renderFilters(){
+  const row=document.getElementById('vibeRow');
+  const has=VIBES.filter(v=>DATA[S.city].some(h=>h.scores[v.id]>=40));
+  row.classList.toggle('open',S.showFilters);
+  document.getElementById('filterBtn').classList.toggle('active',S.showFilters);
+  document.getElementById('filterBtn').textContent=S.showFilters?'Hide vibe filters':'Filter by vibe';
+  row.innerHTML=has.map(v=>`<button class="vibe-chip ${S.activeVibe===v.id?'active':''}" onclick="pickVibe('${v.id}')">${v.emoji} ${v.label}</button>`).join('')+(S.activeVibe?`<button class="vibe-chip" onclick="pickVibe(null)">x Clear</button>`:'');
+}
+
+function renderCards(){
+  const cards=document.getElementById('cards');
+  let arr=[...DATA[S.city]];
+  if(S.activeVibe)arr.sort((a,b)=>b.scores[S.activeVibe]-a.scores[S.activeVibe]);
+  cards.innerHTML=arr.map((h,i)=>cardHTML(h,i===0&&!!S.activeVibe)).join('');
+
+  const notice=document.getElementById('notice');
+  if(S.activeVibe){
+    const vv=vibe(S.activeVibe); notice.className='notice show'; notice.textContent=`Sorted by ${vv.emoji} ${vv.label}. Click a vibe element to drill into photos + data for that dimension.`;
+  } else notice.className='notice';
+}
+
+function cardHTML(h,isTop){
+  const selected=S.selectedEls[h.id]||'restaurants';
+  const d=h.details[selected];
+  const tops=topVibes(h.scores,2);
+  const match=S.activeVibe?`<span class="match show">${h.scores[S.activeVibe]}% match</span>`:'';
+  const tabs=EL.map(e=>`<button class="el-tab ${(selected===e.key)?'active':''}" onclick="setEl('${h.id}','${e.key}')"><span>${e.emoji} ${e.label}</span><span class="el-score">${h.details[e.key].score}%</span></button>`).join('');
+  const gal=d.photos.map(p=>`<div class="gimg"><img src="${p}" loading="lazy"/></div>`).join('');
+  const bars=`${metric('Signal strength',d.score)}${metric('Confidence',Math.max(35,Math.round(d.score*0.82)))}${metric('User fit',Math.max(30,Math.round((d.score+h.count/2)/1.4)))} `;
+  return `<article class="card ${isTop?'top':''}">
+    <div class="hero">
+      <img src="${h.hero}" loading="lazy"/>
+      <div class="hero-top"><div class="hero-badges">${tops.map(v=>`<span class="pill">${v.emoji} ${v.label}</span>`).join('')}</div>${match}</div>
+      <div class="hero-bottom"><div class="name">${h.name}</div><div class="short">${h.short}</div><div class="meta"><span>${h.count} hotels</span><span>Scroll vibe elements below</span></div></div>
+    </div>
+    <div class="body">
+      <div class="element-head"><div class="element-title">Vibe Element Drill-down</div><div class="element-help">Tap to swap photos + metrics</div></div>
+      <div class="element-tabs">${tabs}</div>
+      <div class="deep">
+        <div class="gallery">${gal}</div>
+        <div class="panel"><h4>${EL.find(e=>e.key===selected).emoji} ${EL.find(e=>e.key===selected).label}</h4><p>${d.summary}</p><div class="metrics">${d.facts.map(f=>`<div class="metric"><span>${f}</span></div>`).join('')}<div class="bar"><div class="fill" style="width:${d.score}%"></div></div>${bars}</div></div>
+      </div>
+      <div class="card-footer"><button class="choose" onclick="choose('${h.id}')">Choose ${h.name} -></button><span class="learn">Compare another element above</span></div>
+    </div>
+  </article>`;
+}
+function metric(label,val){return `<div><div class="metric"><span>${label}</span><span>${val}%</span></div><div class="bar"><div class="fill" style="width:${val}%"></div></div></div>`}
+
+function setEl(id,key){S.selectedEls[id]=key;renderCards();}
+function pickVibe(id){S.activeVibe=id;renderFilters();renderCards();if(id){const v=vibe(id);flash(`${v.emoji} Sorted by ${v.label}`)}}
+function toggleFilters(){S.showFilters=!S.showFilters;renderFilters();}
+function choose(id){const h=DATA[S.city].find(x=>x.id===id);S.chosen=h;const c=document.getElementById('chosen');c.className='chosen show';c.textContent=`Selected: ${h.name}. Next step: choose room style + dates.`;flash(`${h.name} selected`)}
+function switchCity(city){S.city=city;S.activeVibe=null;S.showFilters=false;S.chosen=null;document.querySelectorAll('.city-tab').forEach((b,i)=>b.classList.toggle('active',(i===0&&city==='paris')||(i===1&&city==='mexico')));document.getElementById('title').textContent=`Explore ${city==='paris'?'Paris':'Mexico City'} neighbourhoods visually`;document.getElementById('chosen').className='chosen';renderFilters();renderCards()}
+
+renderFilters();renderCards();
+</script>
+</body>
+</html>
