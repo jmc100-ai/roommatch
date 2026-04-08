@@ -530,7 +530,7 @@ async function backfillNeighborhoodPhotos(city, db, unsplashKey, googlePlacesKey
 async function recomputeNeighborhoodVibes(city, db, unsplashKey, googlePlacesKey = null) {
   const { data: rows, error } = await db
     .from("neighborhoods")
-    .select("id, city, name, bbox, vibe_long, tags, attributes, hotel_count")
+    .select("id, city, name, bbox, vibe_long, tags, attributes, hotel_count, vibe_photos, photo_url, photo_credit")
     .eq("city", city)
     .order("id");
 
@@ -580,24 +580,36 @@ async function recomputeNeighborhoodVibes(city, db, unsplashKey, googlePlacesKey
       bbox: row.bbox || null,
       googlePlacesKey,
     });
-    // Derive hero photo from top-scoring vibe elements.
-    // Always update photo_url so it stays in sync with the current vibe_photos.
+    // Derive hero photo from top-scoring vibe elements (fresh photos first).
+    // If fresh photos didn't yield a pick (e.g. Overpass failed → different scoring
+    // → categories with no photos rank top), retry with the previously stored
+    // vibe_photos from the DB — those came from a prior run that succeeded.
+    // Only call the external fallback as a last resort when there are truly no
+    // stored photos at all.
     let heroPick = pickHeroFromVibePhotos(vibeData.vibeElements, vibeData.vibePhotos);
+    if (!heroPick && row.vibe_photos && Object.keys(row.vibe_photos).length > 0) {
+      heroPick = pickHeroFromVibePhotos(vibeData.vibeElements, row.vibe_photos);
+      if (heroPick) console.log(`[photos] ${row.name}: hero from stored vibe_photos (fresh fetch had no candidates)`);
+    }
     if (!heroPick) {
-      // Fallback: fetch directly via Places / Unsplash
+      // Last resort: fetch directly via Places / Unsplash
       const fallback = await fetchNeighborhoodPhoto(
         row.name, row.city, unsplashKey, row.vibe_long || "", row.tags || [], row.bbox || null, googlePlacesKey
       ).catch(() => null);
       if (fallback) heroPick = { url: fallback.url, photographer: fallback.photographer, profile_url: fallback.profile_url, query_used: fallback.query_used };
     }
 
+    // Merge fresh vibe_photos with existing stored ones so photos accumulated
+    // over multiple runs are preserved (new photos override same-key entries).
+    const mergedVibePhotos = { ...(row.vibe_photos || {}), ...vibeData.vibePhotos };
+
     const updatePayload = {
       vibe_elements: vibeData.vibeElements,
-      vibe_photos:   vibeData.vibePhotos,
+      vibe_photos:   mergedVibePhotos,
       vibe_data_version:    "v1",
       vibe_last_computed_at: new Date().toISOString(),
-      photo_url:    heroPick?.url    || null,
-      photo_credit: heroPick ? { photographer: heroPick.photographer, profile_url: heroPick.profile_url, query_used: heroPick.query_used } : null,
+      photo_url:    heroPick?.url    || row.photo_url || null,
+      photo_credit: heroPick ? { photographer: heroPick.photographer, profile_url: heroPick.profile_url, query_used: heroPick.query_used } : (row.photo_credit || null),
     };
 
     const { error: upErr } = await db
