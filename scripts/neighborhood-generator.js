@@ -545,6 +545,14 @@ async function recomputeNeighborhoodVibes(city, db, unsplashKey, googlePlacesKey
         return null;
       });
       if (fetched) {
+        // Don't zero-out parks if the green-area query failed and we already have
+        // a valid count stored. parks=0 only makes sense when the query truly
+        // succeeded and found no qualifying polygons.
+        const oldParks = row.attributes?.poi_counts?.parks;
+        if (fetched.parks === 0 && oldParks > 0) {
+          console.warn(`[recompute] ${row.name}: green query failed, preserving old parks=${oldParks}`);
+          fetched.parks = oldParks;
+        }
         console.log(`[recompute] Overpass ${row.name}: cafes=${fetched.cafes} restaurants=${fetched.restaurants} parks=${fetched.parks} shops=${fetched.shops} museums=${fetched.museums} icon_spots=${fetched.icon_spots}`);
         const updatedAttrs = { ...(row.attributes || {}), poi_counts: fetched };
         await db.from("neighborhoods").update({ attributes: updatedAttrs }).eq("id", row.id);

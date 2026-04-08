@@ -220,18 +220,6 @@ async function fetchOverpassGreenCount(bbox, minSqM) {
 );
 out geom;`;
 
-  // Light fallback query: just a count (no geometry, very fast).
-  const qCount = `[out:json][timeout:15];
-(
-  way["leisure"~"^(park|garden|nature_reserve|recreation_ground)$"](${bb});
-  relation["leisure"~"^(park|garden|nature_reserve|recreation_ground)$"](${bb});
-  way["landuse"~"^(village_green|forest)$"](${bb});
-  relation["landuse"~"^(village_green|forest)$"](${bb});
-  way["natural"="wood"](${bb});
-  relation["natural"="wood"](${bb});
-);
-out count;`;
-
   const doFetch = (query, timeoutMs) => fetch(OVERPASS_URL, {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
@@ -239,10 +227,10 @@ out count;`;
     signal: AbortSignal.timeout(timeoutMs),
   });
 
-  // Try geometry query once, with a single 12 s retry on rate-limit.
+  // Try geometry query with a single 15s back-off retry on rate-limit.
   let res = await doFetch(qGeom, 30000);
-  if ((res.status === 429 || res.status === 504) && res.status !== 200) {
-    await new Promise((r) => setTimeout(r, 12_000));
+  if (res.status === 429 || res.status === 504) {
+    await new Promise((r) => setTimeout(r, 15_000));
     res = await doFetch(qGeom, 30000);
   }
 
@@ -251,21 +239,8 @@ out count;`;
     return countGreenAreasMinSqM(data.elements, minSqM);
   }
 
-  // Geometry query failed — try the cheap count fallback.
-  console.warn(`[overpass] geometry query ${res.status}; trying count fallback`);
-  await new Promise((r) => setTimeout(r, 8_000));
-  let res2 = await doFetch(qCount, 15000);
-  if ((res2.status === 429 || res2.status === 504) && res2.status !== 200) {
-    await new Promise((r) => setTimeout(r, 10_000));
-    res2 = await doFetch(qCount, 15000);
-  }
-  if (!res2.ok) throw new Error(`Overpass green count ${res2.status} (both queries failed)`);
-
-  const data2 = await res2.json();
-  // "out count" returns a single element with tags.total
-  const total = parseInt(data2?.elements?.[0]?.tags?.total || "0", 10);
-  console.log(`[overpass] green count fallback (unfiltered): ${total}`);
-  return total;
+  // Both geometry attempts failed — throw so the caller can preserve the old count.
+  throw new Error(`Overpass green count ${res.status}`);
 }
 
 /**
