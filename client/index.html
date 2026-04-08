@@ -2512,28 +2512,56 @@
     </div>`;
   }
 
-  function buildHeroPhotos(h) {
-    const photos = [];
-    if (h.photo_url) photos.push(h.photo_url);
-    const vibePhotos = h.vibe_photos || {};
-    // street_feel photos are always generic Unsplash results (no geo-targeted
-    // Places type exists for it) — skip them in the carousel to avoid showing
-    // the same generic street photo across all neighborhoods.
-    // Also skip any URL that is another neighborhood's designated hero photo.
-    for (const e of NBHD_ELEMENT_ORDER) {
-      if (e.key === 'street_feel') continue;
-      const arr = vibePhotos[e.key] || [];
-      for (const p of arr) {
-        const url = p && (typeof p === 'string' ? p : p?.url);
-        if (!url) continue;
-        if (photos.includes(url)) continue;
-        // Skip photos that serve as another neighborhood's primary hero
-        if (NBHD_RESERVED_HEROES.has(url) && url !== h.photo_url) continue;
-        photos.push(url);
-        break; // one photo per element in the carousel
-      }
-      if (photos.length >= 6) break;
+  function nbhdHeroUrlFromEntry(p) {
+    if (typeof p === 'string') return p;
+    return p?.url || '';
+  }
+  function nbhdHeroIsFallback(p) {
+    return typeof p === 'object' && p && p.is_fallback === true;
+  }
+  function nbhdHeroIsNewPlacesUrl(url) {
+    return url && url.includes('/place-photos/');
+  }
+  /** One URL per vibe element: prefer new Places URL, then non-fallback, then any. */
+  function pickOneHeroUrlFromElement(arr, seen, h) {
+    if (!arr || !arr.length) return null;
+    const rows = [];
+    for (const p of arr) {
+      const url = nbhdHeroUrlFromEntry(p);
+      if (!url) continue;
+      rows.push({ url, fb: nbhdHeroIsFallback(p) });
     }
+    const tryTier = pred => {
+      for (const c of rows) {
+        if (!pred(c)) continue;
+        if (seen.has(c.url)) continue;
+        if (NBHD_RESERVED_HEROES.has(c.url) && c.url !== h.photo_url) continue;
+        return c.url;
+      }
+      return null;
+    };
+    return tryTier(c => !c.fb && nbhdHeroIsNewPlacesUrl(c.url))
+      || tryTier(c => !c.fb)
+      || tryTier(() => true);
+  }
+  /** Hero strip: one photo per vibe, ordered by vibe score (highest first). Skips street_feel. */
+  function buildHeroPhotos(h) {
+    const vibePhotos = h.vibe_photos || {};
+    const vibeElements = h.vibe_elements || {};
+    const ordered = NBHD_ELEMENT_ORDER
+      .filter(e => e.key !== 'street_feel')
+      .filter(e => Array.isArray(vibePhotos[e.key]) && vibePhotos[e.key].length > 0 && vibeElements[e.key])
+      .sort((a, b) => (vibeElements[b.key]?.score || 0) - (vibeElements[a.key]?.score || 0));
+    const photos = [];
+    const seen = new Set();
+    for (const e of ordered) {
+      const url = pickOneHeroUrlFromElement(vibePhotos[e.key], seen, h);
+      if (url) {
+        photos.push(url);
+        seen.add(url);
+      }
+    }
+    if (!photos.length && h.photo_url) photos.push(h.photo_url);
     return photos;
   }
 
