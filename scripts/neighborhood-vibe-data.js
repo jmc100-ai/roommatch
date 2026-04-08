@@ -474,10 +474,17 @@ async function fetchGooglePlacesElementPhotos(bbox, elementKey, placesKey, maxPh
     Math.round(Math.max(bbox.lat_max - bbox.lat_min, bbox.lon_max - bbox.lon_min) * 111000 / 2)
   );
 
+  // icon_spots and parks use DISTANCE ranking so the search returns places
+  // closest to the neighbourhood centre, preventing adjacent mega-landmarks
+  // (e.g. Chapultepec Castle appearing in Condesa results) from dominating.
+  // Other categories keep POPULARITY since a well-rated restaurant / cafe
+  // anywhere in the bbox is a valid representative of the neighbourhood.
+  const rankPref = (elementKey === "icon_spots" || elementKey === "parks") ? "DISTANCE" : "POPULARITY";
+
   const body = {
     includedTypes: types,
     maxResultCount: maxPhotos,
-    rankPreference: "POPULARITY",
+    rankPreference: rankPref,
     locationRestriction: {
       circle: { center: { latitude: centerLat, longitude: centerLng }, radius: radiusM },
     },
