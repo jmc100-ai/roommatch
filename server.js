@@ -10,7 +10,7 @@ const crypto  = require("crypto");
 require("dotenv").config();
 const { createClient } = require("@supabase/supabase-js");
 const { indexCity }    = require("./scripts/index-city");
-const { generateNeighborhoods, refreshHotelCounts, recomputeNeighborhoodVibes } = require("./scripts/neighborhood-generator");
+const { generateNeighborhoods, refreshHotelCounts, recomputeNeighborhoodVibes, backfillNeighborhoodPhotos } = require("./scripts/neighborhood-generator");
 const { backfillCity } = require("./scripts/backfill-latlng");
 
 // ── Password gate helpers ─────────────────────────────────────────────────────
@@ -2574,6 +2574,30 @@ app.post("/api/backfill-neighborhood-vibes", async (req, res) => {
       console.log(`[backfill-neighborhood-vibes] ${city}: ${updated} neighborhoods refreshed`);
     } catch (e) {
       console.error(`[backfill-neighborhood-vibes] ${city} failed:`, e.message);
+    }
+  })();
+});
+
+// POST /api/backfill-neighborhood-photos {"secret":"roommatch-2026","city":"Paris"}
+// Re-fetches only hero photos (photo_url/photo_credit) using improved Unsplash queries.
+// Does NOT regenerate Gemini data. Responds immediately; runs in background.
+app.post("/api/backfill-neighborhood-photos", async (req, res) => {
+  const { city, secret } = req.body || {};
+  if (secret !== (process.env.INDEX_SECRET || "roommatch-index")) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
+  if (!city) return res.status(400).json({ error: "city required" });
+  if (!supabase) return res.status(500).json({ error: "Supabase not configured" });
+
+  const db = supabaseAdmin || supabase;
+  res.json({ message: `backfill-neighborhood-photos started for ${city}` });
+
+  (async () => {
+    try {
+      const updated = await backfillNeighborhoodPhotos(city, db, process.env.UNSPLASH_KEY);
+      console.log(`[backfill-neighborhood-photos] ${city}: ${updated} photos updated`);
+    } catch (e) {
+      console.error(`[backfill-neighborhood-photos] ${city} failed:`, e.message);
     }
   })();
 });

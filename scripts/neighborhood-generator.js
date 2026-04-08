@@ -63,28 +63,70 @@ async function callGemini(prompt, geminiKey) {
   return data.candidates?.[0]?.content?.parts?.[0]?.text || "";
 }
 
-async function fetchNeighborhoodPhoto(name, city, unsplashKey) {
+// Visual keywords extracted from vibe_short — skip filler words, keep concrete nouns/adjectives
+function vibeVisualTerms(vibeShort = "", maxWords = 3) {
+  const stop = new Set(["with","and","the","for","its","feel","that","this","from","very","also","area","lots","some","many","has"]);
+  return (vibeShort || "")
+    .replace(/[,;]/g, " ")
+    .split(/\s+/)
+    .map(w => w.toLowerCase().replace(/[^a-z]/g, ""))
+    .filter(w => w.length > 3 && !stop.has(w))
+    .slice(0, maxWords)
+    .join(" ");
+}
+
+// Map neighbourhood tags to concrete visual search terms Unsplash responds well to
+const TAG_VISUAL = {
+  walkable:   "pedestrian street promenade",
+  artsy:      "street art mural gallery",
+  historic:   "historic architecture buildings",
+  green:      "park trees leafy",
+  foodie:     "restaurant terrace outdoor dining",
+  nightlife:  "bar nightlife neon",
+  shopping:   "boutique shops street",
+  romantic:   "romantic cobblestone evening",
+  luxury:     "luxury upscale elegant",
+  quiet:      "quiet residential street",
+  "local-feel": "local market street life",
+  family:     "family park playground",
+  business:   "modern office district",
+  beachfront: "beach waterfront seaside",
+};
+
+async function fetchNeighborhoodPhoto(name, city, unsplashKey, vibeShort = "", tags = []) {
   if (!unsplashKey) return null;
-  // Build a list of queries to try in order, from specific to generic
-  const simpleName = name.replace(/\s*\([^)]*\)/g, "").trim(); // strip "(7th Arrondissement)" etc.
+
+  const simpleName = name.replace(/\s*\([^)]*\)/g, "").trim();
+  const vibeTerms  = vibeVisualTerms(vibeShort);
+  // Pull visual terms from the two most descriptive tags
+  const tagTerms   = (tags || []).slice(0, 2)
+    .map(t => TAG_VISUAL[t] || t)
+    .join(" ")
+    .split(/\s+/).slice(0, 4).join(" ");
+
+  // Ordered from most specific (best accuracy) to most generic (last resort)
   const queries = [
-    `${name} ${city} neighborhood`,
-    ...(simpleName !== name ? [`${simpleName} ${city} neighborhood`] : []),
-    `${simpleName} ${city} street`,
-    `${city} neighborhood street`,
-  ];
+    vibeTerms  ? `${simpleName} ${city} ${vibeTerms}`   : null, // name + city + vibe words
+    tagTerms   ? `${simpleName} ${city} ${tagTerms}`    : null, // name + city + tag visuals
+    `${simpleName} ${city} street`,                              // bare street scene
+    tagTerms   ? `${city} ${tagTerms}`                  : null, // city-level vibe (broader)
+    `${city} street neighborhood`,                               // last-resort city generic
+  ].filter(Boolean).filter((q, i, arr) => arr.indexOf(q) === i); // dedupe
+
   for (const query of queries) {
     try {
-      const url = `https://api.unsplash.com/search/photos?query=${encodeURIComponent(query)}&per_page=1&orientation=landscape`;
+      const url = `https://api.unsplash.com/search/photos?query=${encodeURIComponent(query)}&per_page=3&orientation=landscape`;
       const res = await fetch(url, { headers: { Authorization: `Client-ID ${unsplashKey}` } });
       if (!res.ok) continue;
       const data  = await res.json();
-      const photo = data.results?.[0];
+      // Pick the result with the most downloads (most authoritative photo for the query)
+      const photo = (data.results || []).sort((a, b) => (b.downloads || 0) - (a.downloads || 0))[0];
       if (!photo) continue;
       return {
         url:          photo.urls.regular,
         photographer: photo.user.name,
         profile_url:  photo.user.links.html,
+        query_used:   query,
       };
     } catch { continue; }
   }
@@ -131,7 +173,7 @@ async function generateNeighborhoods(city, db, geminiKey, unsplashKey) {
     // Fetch Unsplash photo (non-fatal if it fails)
     let photoUrl    = null;
     let photoCredit = null;
-    const photo = await fetchNeighborhoodPhoto(item.name, city, unsplashKey).catch(() => null);
+    const photo = await fetchNeighborhoodPhoto(item.name, city, unsplashKey, item.vibe_short, item.tags).catch(() => null);
     if (photo) {
       photoUrl    = photo.url;
       photoCredit = { photographer: photo.photographer, profile_url: photo.profile_url };
@@ -250,6 +292,49 @@ async function generateNeighborhoods(city, db, geminiKey, unsplashKey) {
 }
 
 /**
+ * backfillNeighborhoodPhotos — re-fetches only the hero photo_url/photo_credit for
+ * existing rows without regenerating Gemini data.  Useful when UNSPLASH_KEY is first
+ * set or when photo quality needs improvement.
+ */
+async function backfillNeighborhoodPhotos(city, db, unsplashKey) {
+  if (!unsplashKey) throw new Error("UNSPLASH_KEY not set");
+
+  const { data: rows, error } = await db
+    .from("neighborhoods")
+    .select("id, name, vibe_short, tags, bbox")
+    .eq("city", city)
+    .order("id");
+
+  if (error) throw new Error(`load neighborhoods failed: ${error.message}`);
+  if (!rows?.length) return 0;
+
+  let updated = 0;
+  for (const row of rows) {
+    const photo = await fetchNeighborhoodPhoto(
+      row.name, city, unsplashKey, row.vibe_short || "", row.tags || []
+    ).catch(() => null);
+
+    if (photo) {
+      const { error: upErr } = await db
+        .from("neighborhoods")
+        .update({
+          photo_url:    photo.url,
+          photo_credit: { photographer: photo.photographer, profile_url: photo.profile_url, query_used: photo.query_used },
+        })
+        .eq("id", row.id);
+      if (upErr) console.warn(`[photos] update ${row.name} failed: ${upErr.message}`);
+      else {
+        console.log(`[photos] ${row.name} → ${photo.query_used}`);
+        updated++;
+      }
+    } else {
+      console.warn(`[photos] no Unsplash result for ${row.name} (${city})`);
+    }
+  }
+  return updated;
+}
+
+/**
  * recomputeNeighborhoodVibes — refresh vibe elements/photos for existing rows.
  */
 async function recomputeNeighborhoodVibes(city, db, unsplashKey) {
@@ -309,4 +394,4 @@ async function refreshHotelCounts(city, db) {
   console.log(`[neighborhoods] hotel_count refreshed for ${city} (${hoods.length} neighborhoods)`);
 }
 
-module.exports = { generateNeighborhoods, refreshHotelCounts, recomputeNeighborhoodVibes };
+module.exports = { generateNeighborhoods, refreshHotelCounts, recomputeNeighborhoodVibes, backfillNeighborhoodPhotos };
