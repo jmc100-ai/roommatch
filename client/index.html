@@ -2474,12 +2474,12 @@
         <div class="nbhd-el-summary">${escHtml(element.summary || '')}</div>
         <ul class="nbhd-el-facts">${facts}</ul>
         <div class="nbhd-el-bars">
-          <div class="nbhd-el-bar-row"><span>Signal</span><span>${Math.round(m.signal_strength || 0)}%</span></div>
-          <div class="nbhd-el-bar"><i style="width:${Math.round(m.signal_strength || 0)}%"></i></div>
-          <div class="nbhd-el-bar-row"><span>Confidence</span><span>${Math.round(m.confidence || 0)}%</span></div>
-          <div class="nbhd-el-bar"><i style="width:${Math.round(m.confidence || 0)}%"></i></div>
-          <div class="nbhd-el-bar-row"><span>User fit</span><span>${Math.round(m.user_fit || 0)}%</span></div>
-          <div class="nbhd-el-bar"><i style="width:${Math.round(m.user_fit || 0)}%"></i></div>
+          <div class="nbhd-el-bar-row"><span>Density</span><span>${Math.round(m.density ?? m.signal_strength ?? 0)}%</span></div>
+          <div class="nbhd-el-bar"><i style="width:${Math.round(m.density ?? m.signal_strength ?? 0)}%"></i></div>
+          <div class="nbhd-el-bar-row"><span>Walkability</span><span>${Math.round(m.walkability ?? m.confidence ?? 0)}%</span></div>
+          <div class="nbhd-el-bar"><i style="width:${Math.round(m.walkability ?? m.confidence ?? 0)}%"></i></div>
+          <div class="nbhd-el-bar-row"><span>Boop Vibe</span><span>${Math.round(m.boop_vibe ?? m.user_fit ?? 0)}%</span></div>
+          <div class="nbhd-el-bar"><i style="width:${Math.round(m.boop_vibe ?? m.user_fit ?? 0)}%"></i></div>
         </div>
       </div>
     </div>`;

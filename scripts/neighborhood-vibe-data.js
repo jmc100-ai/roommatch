@@ -228,6 +228,61 @@ function catScore(value, map) {
 }
 
 /**
+ * computeWalkabilityScore — per-element walkability score derived from
+ * Gemini-generated neighbourhood attributes.
+ *
+ * Each element type maps to the most relevant attribute(s):
+ *   parks       → green_spaces + transport accessibility
+ *   restaurants → walkability_dining
+ *   cafes       → walkability_dining + street_energy blend
+ *   museums     → walkability_tourist_spots
+ *   icon_spots  → walkability_tourist_spots + transport
+ *   shops       → walkability_dining + street_energy blend
+ *   street_feel → street_energy + transport_dependency inverse
+ */
+function computeWalkabilityScore(elementKey, attributes = {}) {
+  const wDining = catScore(attributes.walkability_dining,        { excellent: 90, good: 68, limited: 40 });
+  const wTour   = catScore(attributes.walkability_tourist_spots, { excellent: 90, good: 68, limited: 40 });
+  const energy  = catScore(attributes.street_energy,            { lively: 88, moderate: 62, quiet: 42 });
+  const green   = catScore(attributes.green_spaces,             { lots: 88, some: 62, minimal: 35 });
+  const transit = catScore(attributes.transport_dependency,     { low: 86, medium: 60, high: 36 });
+
+  switch (elementKey) {
+    case "parks":       return clamp(Math.round(green * 0.6 + transit * 0.4));
+    case "restaurants": return clamp(Math.round(wDining));
+    case "cafes":       return clamp(Math.round(wDining * 0.7 + energy * 0.3));
+    case "museums":     return clamp(Math.round(wTour));
+    case "icon_spots":  return clamp(Math.round(wTour * 0.65 + transit * 0.35));
+    case "shops":       return clamp(Math.round(wDining * 0.45 + energy * 0.55));
+    case "street_feel": return clamp(Math.round(energy * 0.5 + transit * 0.5));
+    default:            return 60;
+  }
+}
+
+/**
+ * computeBoopVibe — neighbourhood-level aggregate score shown in every element panel.
+ *
+ * Formula: mean of all element scores × POI-richness scaling.
+ * The scaling factor √(totalPOIs / 600) rewards data-rich neighbourhoods (more POIs =
+ * more to actually do) and gently discounts sparse areas.  Caps at 1.0 beyond 600
+ * total POIs so dense cities don't all cluster at 99–100.
+ */
+function computeBoopVibe(elementScores, poiCounts = null) {
+  const scoreValues = Object.values(elementScores).filter((v) => typeof v === "number");
+  if (!scoreValues.length) return 50;
+
+  const meanScore = scoreValues.reduce((a, b) => a + b, 0) / scoreValues.length;
+
+  let poiScaling = 0.75; // conservative default when Overpass data absent
+  if (poiCounts) {
+    const totalPOIs = Object.values(poiCounts).reduce((a, b) => a + (b || 0), 0);
+    if (totalPOIs > 0) poiScaling = Math.min(1, Math.sqrt(totalPOIs / 600));
+  }
+
+  return clamp(Math.round(meanScore * poiScaling));
+}
+
+/**
  * poiCountToScore — density-aware √-scale normalisation.
  *
  * Converts a raw POI count + neighbourhood area into a 0–100 score by:
@@ -361,16 +416,16 @@ function elementFacts(elementKey, score, hotelCount, shopsSubscores = null, poiC
 
 // ── Payload builder ───────────────────────────────────────────────────────────
 
-function buildElementPayload(elementKey, score, neighborhoodName, hotelCount, shopsSubscores = null, poiCounts = null) {
+function buildElementPayload(elementKey, score, neighborhoodName, hotelCount, shopsSubscores = null, poiCounts = null, walkability = 60, boopVibe = 50) {
   const label = ELEMENTS.find((e) => e.key === elementKey)?.label || elementKey;
   return {
     score,
     summary: `${neighborhoodName}: ${label.toLowerCase()} feel is ${score >= 80 ? "very strong" : score >= 65 ? "strong" : score >= 50 ? "good" : "moderate"}.`,
     facts: elementFacts(elementKey, score, hotelCount, shopsSubscores, poiCounts),
     metrics: {
-      signal_strength: score,
-      confidence: clamp(score * 0.82),
-      user_fit: clamp(score * 0.78 + 12),
+      density:     score,
+      walkability: walkability,
+      boop_vibe:   boopVibe,
     },
     ...(elementKey === "shops" ? { subscores: shopsSubscores } : {}),
   };
@@ -554,11 +609,13 @@ async function fetchElementPhotos(city, neighborhoodName, elementKey, unsplashKe
 async function buildNeighborhoodVibeData({ city, neighborhoodName, attributes, tags, vibeLong, hotelCount, unsplashKey, poiCounts = null, cityMaxCounts = null, bbox = null, googlePlacesKey = null }) {
   const areaKm2 = bboxAreaKm2(bbox);
   const { scores, shopsSubscores } = computeElementScores(attributes, tags, vibeLong, poiCounts, cityMaxCounts, areaKm2);
+  const boopVibe = computeBoopVibe(scores, poiCounts);
   const vibeElements = {};
   const vibePhotos = {};
 
   for (const element of ELEMENTS) {
     const key = element.key;
+    const walkability = computeWalkabilityScore(key, attributes);
     vibeElements[key] = buildElementPayload(
       key,
       scores[key] || 0,
@@ -566,6 +623,8 @@ async function buildNeighborhoodVibeData({ city, neighborhoodName, attributes, t
       hotelCount || 0,
       key === "shops" ? shopsSubscores : null,
       poiCounts,
+      walkability,
+      boopVibe,
     );
     vibePhotos[key] = await fetchElementPhotos(city, neighborhoodName, key, unsplashKey, bbox, googlePlacesKey);
   }
