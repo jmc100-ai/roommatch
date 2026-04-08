@@ -586,11 +586,15 @@ async function recomputeNeighborhoodVibes(city, db, unsplashKey, googlePlacesKey
     // vibe_photos from the DB — those came from a prior run that succeeded.
     // Only call the external fallback as a last resort when there are truly no
     // stored photos at all.
-    let heroPick = pickHeroFromVibePhotos(vibeData.vibeElements, vibeData.vibePhotos);
-    if (!heroPick && row.vibe_photos && Object.keys(row.vibe_photos).length > 0) {
-      heroPick = pickHeroFromVibePhotos(vibeData.vibeElements, row.vibe_photos);
-      if (heroPick) console.log(`[photos] ${row.name}: hero from stored vibe_photos (fresh fetch had no candidates)`);
+    // Merge fresh + stored photos FIRST (only override categories with real fresh results)
+    // so the fallback pick can draw from the best available photos across all runs.
+    const mergedForHero = { ...(row.vibe_photos || {}) };
+    for (const [key, photos] of Object.entries(vibeData.vibePhotos)) {
+      if (Array.isArray(photos) && photos.length > 0) mergedForHero[key] = photos;
     }
+
+    let heroPick = pickHeroFromVibePhotos(vibeData.vibeElements, mergedForHero);
+    if (!heroPick) console.log(`[photos] ${row.name}: pickHeroFromVibePhotos returned null — trying external fallback`);
     if (!heroPick) {
       // Last resort: fetch directly via Places / Unsplash
       const fallback = await fetchNeighborhoodPhoto(
@@ -599,9 +603,8 @@ async function recomputeNeighborhoodVibes(city, db, unsplashKey, googlePlacesKey
       if (fallback) heroPick = { url: fallback.url, photographer: fallback.photographer, profile_url: fallback.profile_url, query_used: fallback.query_used };
     }
 
-    // Merge fresh vibe_photos with existing stored ones so photos accumulated
-    // over multiple runs are preserved (new photos override same-key entries).
-    const mergedVibePhotos = { ...(row.vibe_photos || {}), ...vibeData.vibePhotos };
+    // mergedForHero is already the merged set — reuse it for storing to DB.
+    const mergedVibePhotos = mergedForHero;
 
     const updatePayload = {
       vibe_elements: vibeData.vibeElements,
