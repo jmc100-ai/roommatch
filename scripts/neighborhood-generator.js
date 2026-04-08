@@ -166,8 +166,10 @@ async function generateNeighborhoods(city, db, geminiKey, unsplashKey) {
     throw new Error(`Gemini returned empty neighborhoods array for ${city}`);
   }
 
-  // Process in parallel: Unsplash + hotel_count
-  const rows = await Promise.all(items.map(async (item) => {
+  // Process sequentially to stay within Overpass fair-use rate limits
+  // (Unsplash + hotel_count are fine in parallel, only Overpass needs spacing)
+  const rows = [];
+  for (const item of items) {
     const bbox = item.bbox || {};
 
     // Fetch Unsplash photo (non-fatal if it fails)
@@ -193,9 +195,10 @@ async function generateNeighborhoods(city, db, geminiKey, unsplashKey) {
       }
     }
 
-    // Fetch real POI counts from Overpass (non-fatal — falls back to formula)
+    // Fetch real POI counts from Overpass — 3s gap before each call
     let poiCounts = null;
     if (bbox.lat_min != null) {
+      await new Promise((r) => setTimeout(r, 3000));
       poiCounts = await fetchOverpassPOIs(bbox).catch((e) => {
         console.warn(`[neighborhoods] Overpass failed for ${item.name}: ${e.message}`);
         return null;
@@ -216,7 +219,7 @@ async function generateNeighborhoods(city, db, geminiKey, unsplashKey) {
       ...(poiCounts ? { poi_counts: poiCounts } : {}),
     };
 
-    return {
+    rows.push({
       city,
       name:         item.name,
       bbox:         bbox,
@@ -229,8 +232,8 @@ async function generateNeighborhoods(city, db, geminiKey, unsplashKey) {
       photo_credit: photoCredit,
       hotel_count:  hotelCount,
       _poiCounts:   poiCounts, // transient — used below, not persisted as top-level column
-    };
-  }));
+    });
+  }
 
   // Fallback photo from hotels_cache for rows that got no Unsplash photo
   const noPhotoRows = rows.filter(r => !r.photo_url);
@@ -370,11 +373,14 @@ async function recomputeNeighborhoodVibes(city, db, unsplashKey) {
     // Use stored counts; re-fetch from Overpass if not yet enriched
     let poiCounts = row.attributes?.poi_counts || null;
     if (!poiCounts && row.bbox?.lat_min != null) {
+      // Space requests 3s apart to stay within Overpass fair-use limits
+      await new Promise((r) => setTimeout(r, 3000));
       poiCounts = await fetchOverpassPOIs(row.bbox).catch((e) => {
         console.warn(`[recompute] Overpass failed for ${row.name}: ${e.message}`);
         return null;
       });
       if (poiCounts) {
+        console.log(`[recompute] Overpass ${row.name}: cafes=${poiCounts.cafes} restaurants=${poiCounts.restaurants} parks=${poiCounts.parks} shops=${poiCounts.shops} museums=${poiCounts.museums} icon_spots=${poiCounts.icon_spots}`);
         // Persist fresh counts back into attributes so next recompute is instant
         const updatedAttrs = { ...(row.attributes || {}), poi_counts: poiCounts };
         await db.from("neighborhoods").update({ attributes: updatedAttrs }).eq("id", row.id);

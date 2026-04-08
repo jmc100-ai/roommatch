@@ -105,6 +105,9 @@ const POI_MAX_EXPECTED = {
  * fetchOverpassPOIs — queries OpenStreetMap via Overpass for 6 POI categories
  * inside a bounding box. Returns { parks, restaurants, cafes, museums, shops,
  * icon_spots } counts, or null on failure (caller should fall back to formula).
+ *
+ * Retries once on 429/504 after a 10s back-off to stay within fair-use limits
+ * of the public overpass-api.de instance.
  */
 async function fetchOverpassPOIs(bbox) {
   const { lat_min, lat_max, lon_min, lon_max } = bbox || {};
@@ -125,12 +128,20 @@ async function fetchOverpassPOIs(bbox) {
 );
 out tags;`;
 
-  const res = await fetch(OVERPASS_URL, {
+  const doFetch = () => fetch(OVERPASS_URL, {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body: `data=${encodeURIComponent(q)}`,
     signal: AbortSignal.timeout(30000),
   });
+
+  let res = await doFetch();
+
+  // Single retry after back-off on rate-limit or gateway timeout
+  if (res.status === 429 || res.status === 504) {
+    await new Promise((r) => setTimeout(r, 10000));
+    res = await doFetch();
+  }
 
   if (!res.ok) throw new Error(`Overpass API ${res.status}`);
   const data = await res.json();
