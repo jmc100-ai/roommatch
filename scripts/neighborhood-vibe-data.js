@@ -164,7 +164,9 @@ async function fetchOverpassPOIs(bbox) {
   relation["tourism"~"^(attraction|viewpoint)$"](${lat_min},${lon_min},${lat_max},${lon_max});
   node["historic"~"^(monument|memorial|castle|ruins|archaeological_site|palace|building)$"](${lat_min},${lon_min},${lat_max},${lon_max});
   way["historic"~"^(monument|memorial|castle|ruins|archaeological_site|palace|building|fortification)$"](${lat_min},${lon_min},${lat_max},${lon_max});
-  way["building"~"^(cathedral|basilica|chapel|monastery)$"](${lat_min},${lon_min},${lat_max},${lon_max});
+  relation["historic"~"^(monument|memorial|castle|ruins|archaeological_site|palace|building|fortification)$"](${lat_min},${lon_min},${lat_max},${lon_max});
+  way["building"~"^(cathedral|basilica|chapel|monastery|church|temple|shrine)$"](${lat_min},${lon_min},${lat_max},${lon_max});
+  relation["building"~"^(cathedral|basilica|chapel|monastery|church|temple|shrine)$"](${lat_min},${lon_min},${lat_max},${lon_max});
 );
 out tags;`;
 
@@ -204,7 +206,8 @@ out tags;`;
       ["attraction", "viewpoint", "artwork"].includes(t.tourism) ||
       ["monument", "memorial", "castle", "ruins", "archaeological_site",
        "palace", "building", "fortification"].includes(t.historic) ||
-      ["cathedral", "basilica", "chapel", "monastery"].includes(t.building)
+      ["cathedral", "basilica", "chapel", "monastery",
+       "church", "temple", "shrine"].includes(t.building)
     ) {
       counts.icon_spots++;
     }

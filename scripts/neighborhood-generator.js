@@ -271,10 +271,10 @@ async function fetchNeighborhoodPhoto(name, city, unsplashKey, vibeShort = "", t
 // Categories that make visually distinctive heroes — ranked by preference.
 // Tier 1 (landmark/cultural) beats Tier 2 (food/green) beats Tier 3 (retail).
 const HERO_CATEGORY_TIER = {
-  icon_spots:  1,
-  museums:     1,
+  icon_spots:  1,  // landmarks & monuments — always preferred for hero
   parks:       2,
-  cafes:       2,
+  museums:     2,
+  cafes:       3,
   restaurants: 3,
   shops:       4,
   street_feel: 4,
