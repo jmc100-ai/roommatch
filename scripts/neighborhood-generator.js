@@ -98,19 +98,22 @@ async function fetchNeighborhoodPhoto(name, city, unsplashKey, vibeShort = "", t
 
   const simpleName = name.replace(/\s*\([^)]*\)/g, "").trim();
   const vibeTerms  = vibeVisualTerms(vibeShort);
-  // Pull visual terms from the two most descriptive tags
   const tagTerms   = (tags || []).slice(0, 2)
     .map(t => TAG_VISUAL[t] || t)
     .join(" ")
     .split(/\s+/).slice(0, 4).join(" ");
 
-  // Ordered from most specific (best accuracy) to most generic (last resort)
+  // Strategy: start with bare name+city (highest specificity, least noise).
+  // Then try name alone — many Unsplash photographers don't tag city.
+  // Vibe/tag terms are added later as tiebreakers, not lead queries.
+  // City-level fallbacks last.
   const queries = [
-    vibeTerms  ? `${simpleName} ${city} ${vibeTerms}`   : null, // name + city + vibe words
-    tagTerms   ? `${simpleName} ${city} ${tagTerms}`    : null, // name + city + tag visuals
-    `${simpleName} ${city} street`,                              // bare street scene
-    tagTerms   ? `${city} ${tagTerms}`                  : null, // city-level vibe (broader)
-    `${city} street neighborhood`,                               // last-resort city generic
+    `${simpleName} ${city}`,                                         // name + city, no extra noise
+    simpleName,                                                       // name alone (global coverage)
+    tagTerms   ? `${simpleName} ${tagTerms}`             : null,    // name + tag visuals (no city)
+    vibeTerms  ? `${simpleName} ${city} ${vibeTerms}`   : null,    // name + city + vibe
+    tagTerms   ? `${city} ${tagTerms}`                   : null,    // city + vibe (broader)
+    `${city} street neighborhood`,                                    // last-resort city generic
   ].filter(Boolean).filter((q, i, arr) => arr.indexOf(q) === i); // dedupe
 
   for (const query of queries) {
