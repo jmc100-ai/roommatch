@@ -446,7 +446,9 @@ const PLACES_ELEMENT_TYPES = {
   restaurants: ["restaurant"],
   cafes:       ["cafe"],
   museums:     ["museum", "art_gallery"],
-  shops:       ["clothing_store", "book_store", "gift_shop", "shopping_mall"],
+  // shopping_mall removed — mall interiors are generic and chain-heavy.
+  // gift_shop also removed: tends to pull souvenir stalls or airport shops.
+  shops:       ["clothing_store", "book_store", "florist", "home_goods_store"],
   // historical_landmark + worship buildings — these return outdoor architectural photos.
   // tourist_attraction is intentionally excluded: it matches museums/restaurants/bars
   // which return interior shots. church/mosque/hindu_temple cover major religious
@@ -455,6 +457,27 @@ const PLACES_ELEMENT_TYPES = {
   icon_spots:  ["historical_landmark", "church", "mosque", "hindu_temple", "synagogue"],
   street_feel: null,
 };
+
+// Global chain names to exclude from element photo results.
+// These are mega-chains whose Google Maps photos are typically generic interiors
+// rather than neighbourhood-specific imagery.
+const CHAIN_BLOCKLIST = new Set([
+  "starbucks", "mcdonald's", "mcdonalds", "burger king", "kfc", "subway",
+  "domino's", "dominos", "pizza hut", "taco bell", "wendy's", "wendys",
+  "dunkin'", "dunkin", "tim hortons", "costa coffee", "pret a manger",
+  "pret", "five guys", "popeyes", "chick-fil-a", "chipotle", "applebee's",
+  "olive garden", "ihop", "denny's", "dennys", "sushi express", "sushi king",
+  "nando's", "nandos", "wagamama", "panda express", "wingstop",
+  "krispy kreme", "jamba juice", "smoothie king", "seven eleven", "7-eleven",
+  "circle k", "oxxo", "vips", "sanborns", "walmart", "costco", "carrefour",
+  "liverpool", "palacio de hierro",   // Mexican department store chains
+  "sears", "h&m", "zara", "forever 21", "gap", "old navy",
+]);
+
+function isChain(displayName) {
+  if (!displayName) return false;
+  return CHAIN_BLOCKLIST.has(displayName.toLowerCase().trim());
+}
 
 /**
  * fetchGooglePlacesElementPhotos — nearby search inside the neighbourhood bbox,
@@ -514,6 +537,11 @@ async function fetchGooglePlacesElementPhotos(bbox, elementKey, placesKey, maxPh
   const photos = [];
   for (const place of places) {
     if (!place.photos?.length) continue;
+    // Skip global chain venues — their photos are generic interiors, not neighbourhood-specific.
+    if (isChain(place.displayName?.text)) {
+      console.log(`[photos] skipping chain: ${place.displayName?.text}`);
+      continue;
+    }
     const photoName = place.photos[0].name;
     const attr = place.photos[0].authorAttributions?.[0];
     try {
