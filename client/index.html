@@ -1556,6 +1556,17 @@
     }
     .nbhd-hero-top {
       position:absolute; top:12px; left:12px; right:12px; z-index:1;
+      display:flex; flex-direction:column; gap:8px;
+    }
+    .nbhd-bv-badge {
+      display:inline-flex; align-items:baseline; gap:5px;
+      background:rgba(0,0,0,.58); backdrop-filter:blur(6px);
+      border:1px solid rgba(255,255,255,.18); border-radius:8px;
+      padding:5px 11px; width:fit-content;
+      color:rgba(255,255,255,.72); font-size:10px; letter-spacing:.04em; text-transform:uppercase;
+    }
+    .nbhd-bv-badge strong {
+      font-size:22px; font-weight:700; color:#fff; letter-spacing:-.01em; line-height:1;
     }
     .nbhd-hero-btm {
       position:absolute; bottom:14px; left:14px; right:14px; z-index:1;
@@ -1636,9 +1647,11 @@
     .nbhd-gal-next { right:6px; }
     @media(min-width:901px){ .nbhd-gal-arrow { display:flex; } }
     .nbhd-el-info { border:1px solid rgba(255,255,255,.09); border-radius:12px; background:var(--row); padding:10px; }
-    .nbhd-el-summary { font-size:12px; line-height:1.5; color:var(--muted); margin-bottom:7px; }
-    .nbhd-el-facts { margin:0 0 8px 14px; color:rgba(232,228,220,.78); font-size:11px; line-height:1.35; }
-    .nbhd-el-bars { display:flex; flex-direction:column; gap:5px; }
+    .nbhd-el-summary { font-size:14px; line-height:1.55; color:var(--muted); margin-bottom:8px; }
+    .nbhd-el-facts { margin:0 0 8px 14px; color:rgba(232,228,220,.85); font-size:13px; line-height:1.45; }
+    .nbhd-el-extra-facts { margin:6px 0 0 14px; color:rgba(200,196,188,.72); font-size:12px; line-height:1.45; list-style:none; padding:0; }
+    .nbhd-el-extra-facts li::before { content:'→ '; opacity:.55; }
+    /* .nbhd-el-bars { display:flex; flex-direction:column; gap:5px; } — commented out, replaced by text bullets */
     .nbhd-el-bar-row { display:flex; justify-content:space-between; font-size:10px; color:var(--muted); }
     .nbhd-el-bar { height:5px; border-radius:99px; background:rgba(255,255,255,.1); overflow:hidden; }
     .nbhd-el-bar i { display:block; height:100%; background:var(--accent); }
@@ -2467,6 +2480,14 @@
     }).join('');
     const facts = (element.facts || []).slice(0, 3).map(f => `<li>${escHtml(f)}</li>`).join('');
     const m = element.metrics || {};
+    // Extra context lines replacing the metric bars
+    const walkPct   = Math.round(m.walkability ?? m.confidence ?? 0);
+    const densityPct = Math.round(m.density ?? m.signal_strength ?? 0);
+    const densityLabel = densityPct >= 67 ? 'high' : densityPct >= 34 ? 'moderate' : 'low';
+    const extraLines = [
+      walkPct   > 0 ? `Walkability: ${walkPct}%`                          : null,
+      densityPct > 0 ? `Local density: ${densityLabel} (${densityPct}%)`  : null,
+    ].filter(Boolean).map(l => `<li>${escHtml(l)}</li>`).join('');
     const galleryInner = photoTiles
       ? `<div class="nbhd-el-gallery">${photoTiles}</div>
          <button class="nbhd-gal-arrow nbhd-gal-prev" onclick="scrollGallery(this,-1,event)" aria-label="Scroll left">&#8249;</button>
@@ -2477,6 +2498,8 @@
       <div class="nbhd-el-info">
         <div class="nbhd-el-summary">${escHtml(element.summary || '')}</div>
         <ul class="nbhd-el-facts">${facts}</ul>
+        ${extraLines ? `<ul class="nbhd-el-extra-facts">${extraLines}</ul>` : ''}
+        <!-- metric bars commented out — replaced by text bullets above
         <div class="nbhd-el-bars">
           <div class="nbhd-el-bar-row"><span>Density</span><span>${Math.round(m.density ?? m.signal_strength ?? 0)}%</span></div>
           <div class="nbhd-el-bar"><i style="width:${Math.round(m.density ?? m.signal_strength ?? 0)}%"></i></div>
@@ -2485,6 +2508,7 @@
           <div class="nbhd-el-bar-row"><span>Boop Vibe</span><span>${Math.round(m.boop_vibe ?? m.user_fit ?? 0)}%</span></div>
           <div class="nbhd-el-bar"><i style="width:${Math.round(m.boop_vibe ?? m.user_fit ?? 0)}%"></i></div>
         </div>
+        -->
       </div>
     </div>`;
   }
@@ -2660,12 +2684,23 @@
     }
   }
 
+  function nbhdBoopVibeScore(h) {
+    // Neighborhood-level Boop Vibe = mean of all element boop_vibe metrics
+    // Falls back to mean of element scores if boop_vibe metric not populated
+    const elems = Object.values(h.vibe_elements || {});
+    if (!elems.length) return 0;
+    const vals = elems.map(e => e?.metrics?.boop_vibe ?? e?.score ?? 0).filter(v => v > 0);
+    if (!vals.length) return 0;
+    return Math.round(vals.reduce((a, b) => a + b, 0) / vals.length);
+  }
+
   function renderNbhdCard(h, cardId) {
     const bbox = h.bbox
       ? `${h.bbox.lat_min},${h.bbox.lat_max},${h.bbox.lon_min},${h.bbox.lon_max}`
       : '';
     const tags = (h.tags || []).slice(0,4);
     const count = h.hotel_count > 0 ? h.hotel_count : '—';
+    const boopVibe = nbhdBoopVibeScore(h);
     const heroPhotos = buildHeroPhotos(h);
     const firstPhoto = heroPhotos[0] || '';
     const mediaStyle = firstPhoto
@@ -2691,6 +2726,7 @@
         <div class="nbhd-hero-zoom-icon">⤢</div>
         <div class="nbhd-hero-grad"></div>
         <div class="nbhd-hero-top">
+          ${boopVibe > 0 ? `<div class="nbhd-bv-badge"><strong>${boopVibe}%</strong> Boop Vibe</div>` : ''}
           <div class="nbhd-tags-new">${tags.map(t=>`<span class="nbhd-tag-new">${escHtml(t)}</span>`).join('')}</div>
         </div>
         <div class="nbhd-hero-btm">
