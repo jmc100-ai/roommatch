@@ -268,32 +268,21 @@ async function fetchNeighborhoodPhoto(name, city, unsplashKey, vibeShort = "", t
   return null;
 }
 
-// Categories that make visually distinctive heroes — ranked by preference.
-// Tier 1 (landmark/cultural) beats Tier 2 (food/green) beats Tier 3 (retail).
-const HERO_CATEGORY_TIER = {
-  icon_spots:  1,  // landmarks & monuments — always preferred for hero
-  parks:       2,
-  museums:     2,
-  cafes:       3,
-  restaurants: 3,
-  shops:       4,
-  street_feel: 4,
-};
-
 /**
- * pickHeroFromVibePhotos — derive the hero photo from the top-N scoring vibe
- * element categories.  The top-scoring categories represent what the neighbourhood
- * is actually known for (icon_spots for Centro Histórico, cafes for Roma Norte, etc.)
- * and their photos come from the Google Places nearby search so they are geo-accurate.
+ * pickHeroFromVibePhotos — derive the hero photo from the top-3 scoring vibe
+ * element categories, then pick a random photo from their combined pool.
  *
- * Within the top-N pool, prefer lower-tier (more visually distinctive) categories.
- * Prefers non-fallback (real) photos; falls back to curated statics only as last resort.
- * Returns null if vibePhotos has no usable entries.
+ * Design intent: the hero should come from whichever elements the neighbourhood
+ * actually scores highest on (those are what the neighbourhood is known for).
+ * No tier overrides — score rank is the only criterion so the hero photo always
+ * reflects the neighbourhood's dominant character.
+ *
+ * Prefers non-fallback (real) photos.  Returns null if no usable photos found.
  */
-function pickHeroFromVibePhotos(vibeElements, vibePhotos, topN = 4) {
+function pickHeroFromVibePhotos(vibeElements, vibePhotos, topN = 3) {
   if (!vibeElements || !vibePhotos) return null;
 
-  // Sort elements by score descending, keep only those that have at least one photo
+  // Top-N elements by score that have at least one stored photo
   const ranked = Object.entries(vibeElements)
     .filter(([key]) => Array.isArray(vibePhotos[key]) && vibePhotos[key].length > 0)
     .sort(([, a], [, b]) => (b.score || 0) - (a.score || 0))
@@ -301,29 +290,20 @@ function pickHeroFromVibePhotos(vibeElements, vibePhotos, topN = 4) {
 
   if (ranked.length === 0) return null;
 
-  // Within the pool, pick photos from the best-tier category that has real photos.
-  // e.g. if top-4 is [restaurants, shops, icon_spots, parks] we pick from icon_spots first.
-  const bestTier = Math.min(...ranked.map(([key]) => HERO_CATEGORY_TIER[key] || 99));
-  const preferredKeys = ranked
-    .filter(([key]) => (HERO_CATEGORY_TIER[key] || 99) === bestTier)
-    .map(([key]) => key);
-
-  const realPool = preferredKeys.flatMap(key =>
+  // Pool all real (non-fallback) photos from the top-N elements
+  const realPool = ranked.flatMap(([key]) =>
     (vibePhotos[key] || []).filter(p => p?.url && !p.is_fallback)
   );
-
-  // Widen to all top-N if preferred tier has no real photos
-  const fallbackPool = ranked.flatMap(([key]) =>
-    (vibePhotos[key] || []).filter(p => p?.url && !p.is_fallback)
-  );
-  const pool = (realPool.length > 0 ? realPool : fallbackPool.length > 0 ? fallbackPool : null)
-    ?? ranked.flatMap(([key]) => (vibePhotos[key] || []).filter(p => p?.url));
+  // Widen to include fallback photos only as last resort
+  const pool = realPool.length > 0
+    ? realPool
+    : ranked.flatMap(([key]) => (vibePhotos[key] || []).filter(p => p?.url));
 
   if (pool.length === 0) return null;
 
   const pick    = pool[Math.floor(Math.random() * pool.length)];
   const topKeys = ranked.map(([key]) => key).join(",");
-  console.log(`[photos] hero from top vibes [${topKeys}] tier=${bestTier}: ${pick.source || "?"} — ${pick.query}`);
+  console.log(`[photos] hero from top ${topN} vibes [${topKeys}]: ${pick.source || "?"} — ${pick.query}`);
   return {
     url:          pick.url,
     photographer: pick.attribution?.photographer || "Google Maps contributor",
@@ -600,19 +580,25 @@ async function recomputeNeighborhoodVibes(city, db, unsplashKey, googlePlacesKey
       bbox: row.bbox || null,
       googlePlacesKey,
     });
-    // Derive hero photo from top-scoring vibe elements
-    const heroPick = pickHeroFromVibePhotos(vibeData.vibeElements, vibeData.vibePhotos);
+    // Derive hero photo from top-scoring vibe elements.
+    // Always update photo_url so it stays in sync with the current vibe_photos.
+    let heroPick = pickHeroFromVibePhotos(vibeData.vibeElements, vibeData.vibePhotos);
+    if (!heroPick) {
+      // Fallback: fetch directly via Places / Unsplash
+      const fallback = await fetchNeighborhoodPhoto(
+        row.name, row.city, unsplashKey, row.vibe_long || "", row.tags || [], row.bbox || null, googlePlacesKey
+      ).catch(() => null);
+      if (fallback) heroPick = { url: fallback.url, photographer: fallback.photographer, profile_url: fallback.profile_url, query_used: fallback.query_used };
+    }
 
     const updatePayload = {
       vibe_elements: vibeData.vibeElements,
       vibe_photos:   vibeData.vibePhotos,
       vibe_data_version:    "v1",
       vibe_last_computed_at: new Date().toISOString(),
+      photo_url:    heroPick?.url    || null,
+      photo_credit: heroPick ? { photographer: heroPick.photographer, profile_url: heroPick.profile_url, query_used: heroPick.query_used } : null,
     };
-    if (heroPick) {
-      updatePayload.photo_url    = heroPick.url;
-      updatePayload.photo_credit = { photographer: heroPick.photographer, profile_url: heroPick.profile_url, query_used: heroPick.query_used };
-    }
 
     const { error: upErr } = await db
       .from("neighborhoods")
