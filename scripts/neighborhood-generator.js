@@ -94,18 +94,97 @@ const TAG_VISUAL = {
 };
 
 const PLACES_SEARCH_TEXT_URL = "https://places.googleapis.com/v1/places:searchText";
+const PLACES_NEARBY_URL      = "https://places.googleapis.com/v1/places:searchNearby";
 const PLACES_MEDIA_BASE      = "https://places.googleapis.com/v1";
 
+// Types used for hero photo nearby search — prefer landmark/attraction photos
+// over generic businesses so the hero actually shows the neighbourhood character.
+const HERO_NEARBY_TYPES = [
+  ["tourist_attraction", "historical_landmark"],  // landmarks first
+  ["park", "national_park"],                       // parks as second pass
+];
+
 /**
- * fetchGooglePlacesHeroPhoto — text-search for the neighbourhood by name,
- * return the first photo from the top result.  Falls back gracefully.
+ * fetchPlacesPhotoUrl — fetch the actual image URL for a Places photo reference.
+ * Returns null on failure.
+ */
+async function fetchPlacesPhotoUrl(photoName, placesKey, maxWidth = 1400) {
+  try {
+    const res = await fetch(
+      `${PLACES_MEDIA_BASE}/${photoName}/media?maxWidthPx=${maxWidth}&skipHttpRedirect=true`,
+      { headers: { "X-Goog-Api-Key": placesKey }, signal: AbortSignal.timeout(10000) }
+    );
+    if (!res.ok) return null;
+    const data = await res.json();
+    return data.photoUri || null;
+  } catch { return null; }
+}
+
+/**
+ * fetchGooglePlacesHeroPhoto — two-strategy approach:
+ *
+ * Strategy 1 (preferred): nearby search inside the neighbourhood bbox for
+ *   tourist_attraction / historical_landmark types, ranked by popularity.
+ *   This returns photos of the actual monuments, plazas, parks in that area.
+ *
+ * Strategy 2 (fallback): text search for "{name}, {city}" — used when there
+ *   is no bbox or strategy 1 yields no photos.
  */
 async function fetchGooglePlacesHeroPhoto(name, city, bbox, placesKey) {
   if (!placesKey) return null;
   const simpleName = name.replace(/\s*\([^)]*\)/g, "").trim();
-  const queries = [`${simpleName}, ${city}`, simpleName];
 
-  for (const textQuery of queries) {
+  // ── Strategy 1: nearby landmark search within bbox ─────────────────────────
+  if (bbox?.lat_min != null) {
+    const centerLat = (bbox.lat_min + bbox.lat_max) / 2;
+    const centerLng = (bbox.lon_min + bbox.lon_max) / 2;
+    // Use half the diagonal of the bbox as radius, cap at 2 km
+    const latSpan = bbox.lat_max - bbox.lat_min;
+    const lonSpan = bbox.lon_max - bbox.lon_min;
+    const radiusM = Math.min(2000, Math.round(Math.sqrt(latSpan ** 2 + lonSpan ** 2) * 111000 / 2));
+
+    for (const types of HERO_NEARBY_TYPES) {
+      try {
+        const res = await fetch(PLACES_NEARBY_URL, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-Goog-Api-Key": placesKey,
+            "X-Goog-FieldMask": "places.id,places.displayName,places.photos",
+          },
+          body: JSON.stringify({
+            includedTypes: types,
+            maxResultCount: 10,
+            rankPreference: "POPULARITY",
+            locationRestriction: {
+              circle: { center: { latitude: centerLat, longitude: centerLng }, radius: radiusM },
+            },
+          }),
+          signal: AbortSignal.timeout(12000),
+        });
+        if (!res.ok) continue;
+        const data = await res.json();
+
+        for (const place of (data.places || [])) {
+          if (!place.photos?.length) continue;
+          const photoUrl = await fetchPlacesPhotoUrl(place.photos[0].name, placesKey);
+          if (!photoUrl) continue;
+          const attr = place.photos[0].authorAttributions?.[0];
+          console.log(`[photos] Google Places hero (nearby ${types[0]}) for ${name}: ${place.displayName?.text}`);
+          return {
+            url:          photoUrl,
+            photographer: attr?.displayName || "Google Maps contributor",
+            profile_url:  attr?.uri || null,
+            query_used:   `google_places_nearby:${place.displayName?.text}`,
+            source:       "google_places",
+          };
+        }
+      } catch { continue; }
+    }
+  }
+
+  // ── Strategy 2: text search fallback ──────────────────────────────────────
+  for (const textQuery of [`${simpleName}, ${city}`, simpleName]) {
     try {
       const res = await fetch(PLACES_SEARCH_TEXT_URL, {
         method: "POST",
@@ -114,41 +193,29 @@ async function fetchGooglePlacesHeroPhoto(name, city, bbox, placesKey) {
           "X-Goog-Api-Key": placesKey,
           "X-Goog-FieldMask": "places.id,places.displayName,places.photos",
         },
-        body: JSON.stringify({ textQuery, maxResultCount: 3 }),
+        body: JSON.stringify({ textQuery, maxResultCount: 5 }),
         signal: AbortSignal.timeout(12000),
       });
       if (!res.ok) continue;
-      const data   = await res.json();
-      const places = data.places || [];
+      const data = await res.json();
 
-      // Find the best place — prefer one with a photo whose bounding box overlaps ours
-      let candidate = null;
-      for (const p of places) {
-        if (p.photos?.length) { candidate = p; break; }
+      for (const place of (data.places || [])) {
+        if (!place.photos?.length) continue;
+        const photoUrl = await fetchPlacesPhotoUrl(place.photos[0].name, placesKey);
+        if (!photoUrl) continue;
+        const attr = place.photos[0].authorAttributions?.[0];
+        console.log(`[photos] Google Places hero (text) for ${name}: ${textQuery}`);
+        return {
+          url:          photoUrl,
+          photographer: attr?.displayName || "Google Maps contributor",
+          profile_url:  attr?.uri || null,
+          query_used:   `google_places_text:${textQuery}`,
+          source:       "google_places",
+        };
       }
-      if (!candidate) continue;
-
-      const photoName = candidate.photos[0].name;
-      const attr      = candidate.photos[0].authorAttributions?.[0];
-
-      const mediaRes = await fetch(
-        `${PLACES_MEDIA_BASE}/${photoName}/media?maxWidthPx=1400&skipHttpRedirect=true`,
-        { headers: { "X-Goog-Api-Key": placesKey }, signal: AbortSignal.timeout(10000) }
-      );
-      if (!mediaRes.ok) continue;
-      const mediaData = await mediaRes.json();
-      if (!mediaData.photoUri) continue;
-
-      console.log(`[photos] Google Places hero for ${name}: ${textQuery}`);
-      return {
-        url:          mediaData.photoUri,
-        photographer: attr?.displayName || "Google Maps contributor",
-        profile_url:  attr?.uri || null,
-        query_used:   `google_places:${textQuery}`,
-        source:       "google_places",
-      };
     } catch { continue; }
   }
+
   return null;
 }
 
