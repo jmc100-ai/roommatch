@@ -279,39 +279,53 @@ async function fetchNeighborhoodPhoto(name, city, unsplashKey, vibeShort = "", t
  *
  * Prefers non-fallback (real) photos.  Returns null if no usable photos found.
  */
+// Categories that produce outdoor / architectural photos — ideal for the hero.
+// restaurants / cafes / shops typically produce interior shots and should only
+// be used as a last resort when no outdoor category has photos.
+const HERO_OUTDOOR_CATEGORIES = new Set(["icon_spots", "parks", "museums"]);
+
 function pickHeroFromVibePhotos(vibeElements, vibePhotos, topN = 3) {
   if (!vibeElements || !vibePhotos) return null;
 
-  // Top-N elements by score that have at least one stored photo
-  const ranked = Object.entries(vibeElements)
-    .filter(([key]) => Array.isArray(vibePhotos[key]) && vibePhotos[key].length > 0)
-    .sort(([, a], [, b]) => (b.score || 0) - (a.score || 0))
-    .slice(0, topN);
-
-  if (ranked.length === 0) return null;
-
-  // Prefer new-format place-photos URLs (from the current Places API).
-  // Old-format places/ANXAkq... URLs come from early backfill runs and look
-  // visually identical but we want to purge them over time by preferring fresh ones.
   const isNewFormat = (p) => p?.url?.includes('/place-photos/');
 
-  // Tier 1: new-format, non-fallback
-  const newPool = ranked.flatMap(([key]) =>
-    (vibePhotos[key] || []).filter(p => p?.url && !p.is_fallback && isNewFormat(p))
-  );
-  // Tier 2: any non-fallback (includes old places/ format)
-  const anyRealPool = newPool.length > 0 ? newPool : ranked.flatMap(([key]) =>
-    (vibePhotos[key] || []).filter(p => p?.url && !p.is_fallback)
-  );
-  // Tier 3: fallback photos only as last resort
-  const pool = anyRealPool.length > 0
-    ? anyRealPool
-    : ranked.flatMap(([key]) => (vibePhotos[key] || []).filter(p => p?.url));
+  // Helper: build a prioritised photo pool from a given set of [key, element] pairs.
+  //   Tier 1 — new-format, non-fallback  (place-photos/ URL)
+  //   Tier 2 — any non-fallback          (includes legacy places/ URL)
+  //   Tier 3 — fallback curated photos   (last resort)
+  const buildPool = (pairs) => {
+    const newPool = pairs.flatMap(([key]) =>
+      (vibePhotos[key] || []).filter(p => p?.url && !p.is_fallback && isNewFormat(p))
+    );
+    if (newPool.length > 0) return newPool;
+    const anyReal = pairs.flatMap(([key]) =>
+      (vibePhotos[key] || []).filter(p => p?.url && !p.is_fallback)
+    );
+    if (anyReal.length > 0) return anyReal;
+    return pairs.flatMap(([key]) => (vibePhotos[key] || []).filter(p => p?.url));
+  };
+
+  // All elements with photos, sorted by score descending.
+  const allRanked = Object.entries(vibeElements)
+    .filter(([key]) => Array.isArray(vibePhotos[key]) && vibePhotos[key].length > 0)
+    .sort(([, a], [, b]) => (b.score || 0) - (a.score || 0));
+
+  if (allRanked.length === 0) return null;
+
+  // PASS 1: try outdoor categories only (top-N by score among outdoor set).
+  // This ensures Centro Histórico's hero comes from icon_spots/museums rather
+  // than restaurants even when restaurants score higher overall.
+  const outdoorRanked = allRanked.filter(([key]) => HERO_OUTDOOR_CATEGORIES.has(key)).slice(0, topN);
+  const outdoorPool   = buildPool(outdoorRanked);
+
+  // PASS 2: fall back to ALL top-N elements if no outdoor photos available.
+  const pool = outdoorPool.length > 0 ? outdoorPool : buildPool(allRanked.slice(0, topN));
 
   if (pool.length === 0) return null;
 
+  const topKeys = (outdoorPool.length > 0 ? outdoorRanked : allRanked.slice(0, topN))
+    .map(([key]) => key).join(",");
   const pick    = pool[Math.floor(Math.random() * pool.length)];
-  const topKeys = ranked.map(([key]) => key).join(",");
   console.log(`[photos] hero from top ${topN} vibes [${topKeys}]: ${pick.source || "?"} — ${pick.query}`);
   return {
     url:          pick.url,
