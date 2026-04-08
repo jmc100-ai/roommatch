@@ -158,7 +158,9 @@ function polygonAreaSqM(coords) {
 
 /**
  * Tags that represent meaningful green / open spaces a visitor would recognise.
- * leisure=garden is kept but filtered by MIN_GREEN_AREA_SQ_M to drop planters/courtyards.
+ * Excludes landuse=grass (too noisy in dense cities — catches every median strip
+ * and ornamental lawn). Includes forest/wood for nature reserves and city woods.
+ * leisure=garden is kept but filtered by MIN_GREEN_AREA_SQ_M to drop small planters.
  */
 function isGreenElement(t) {
   return (
@@ -167,9 +169,8 @@ function isGreenElement(t) {
     t.leisure === "nature_reserve" ||
     t.leisure === "recreation_ground" ||
     t.landuse === "village_green" ||
-    t.landuse === "grass" ||
-    t.natural  === "wood" ||
-    t.landuse  === "forest"
+    t.landuse  === "forest" ||
+    t.natural  === "wood"
   );
 }
 
@@ -207,25 +208,25 @@ async function fetchOverpassGreenCount(bbox, minSqM) {
   const bb = `${lat_min},${lon_min},${lat_max},${lon_max}`;
 
   // Heavy query: fetch full geometry so we can filter by polygon area.
+  // landuse=grass excluded — in dense cities it tags every median strip and lawn.
   const qGeom = `[out:json][timeout:30];
 (
   way["leisure"~"^(park|garden|nature_reserve|recreation_ground)$"](${bb});
   relation["leisure"~"^(park|garden|nature_reserve|recreation_ground)$"](${bb});
-  way["landuse"~"^(village_green|grass|forest)$"](${bb});
-  relation["landuse"~"^(village_green|grass|forest)$"](${bb});
+  way["landuse"~"^(village_green|forest)$"](${bb});
+  relation["landuse"~"^(village_green|forest)$"](${bb});
   way["natural"="wood"](${bb});
   relation["natural"="wood"](${bb});
 );
 out geom;`;
 
   // Light fallback query: just a count (no geometry, very fast).
-  // No area filter is possible here, but captures the same green-space tags.
   const qCount = `[out:json][timeout:15];
 (
   way["leisure"~"^(park|garden|nature_reserve|recreation_ground)$"](${bb});
   relation["leisure"~"^(park|garden|nature_reserve|recreation_ground)$"](${bb});
-  way["landuse"~"^(village_green|grass|forest)$"](${bb});
-  relation["landuse"~"^(village_green|grass|forest)$"](${bb});
+  way["landuse"~"^(village_green|forest)$"](${bb});
+  relation["landuse"~"^(village_green|forest)$"](${bb});
   way["natural"="wood"](${bb});
   relation["natural"="wood"](${bb});
 );
