@@ -2612,7 +2612,10 @@
           setTimeout(() => fetchAndShowNeighborhoodsNew(city, true), 3000);
           return;
         }
-        const hoods = data.neighborhoods || [];
+        const hoods = (data.neighborhoods || []).sort((a, b) => {
+          const bv = h => Object.values(h.vibe_elements || {})[0]?.metrics?.boop_vibe || 0;
+          return bv(b) - bv(a);
+        });
         if (hoods.length) {
           Object.keys(NBHD_CARD_DATA).forEach(k => delete NBHD_CARD_DATA[k]);
           grid.innerHTML = hoods.map((h, idx) => {
@@ -4201,7 +4204,10 @@
         return;
       }
 
-      const hoods = data.neighborhoods || [];
+      const hoods = (data.neighborhoods || []).sort((a, b) => {
+        const bv = h => Object.values(h.vibe_elements || {})[0]?.metrics?.boop_vibe || 0;
+        return bv(b) - bv(a);
+      });
       if (!hoods.length) {
         hideNeighborhoodSection();
         return;

@@ -447,7 +447,10 @@ const PLACES_ELEMENT_TYPES = {
   cafes:       ["cafe"],
   museums:     ["museum", "art_gallery"],
   shops:       ["clothing_store", "book_store", "gift_shop", "shopping_mall"],
-  icon_spots:  ["tourist_attraction", "historical_landmark"],
+  // historical_landmark only — these return outdoor architectural photos (cathedrals,
+  // palaces, monuments). tourist_attraction is intentionally excluded because it
+  // matches museums/restaurants/bars which return interior shots.
+  icon_spots:  ["historical_landmark"],
   street_feel: null,
 };
 
