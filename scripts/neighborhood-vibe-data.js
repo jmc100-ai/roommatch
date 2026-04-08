@@ -266,8 +266,8 @@ async function fetchOverpassPOIs(bbox) {
     console.warn(`[overpass] green count failed (${e.message}); falling back to unfiltered park+garden`);
   }
 
-  // Brief pause before main union — eases 429 on overpass-api.de
-  await new Promise((r) => setTimeout(r, 3000));
+  // Pause between green query and main union — gives Overpass time to recover.
+  await new Promise((r) => setTimeout(r, 10000));
 
   // Main union (no park/garden — those are in fetchOverpassGreenCount).
   //
