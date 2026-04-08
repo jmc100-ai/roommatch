@@ -268,6 +268,48 @@ async function fetchNeighborhoodPhoto(name, city, unsplashKey, vibeShort = "", t
   return null;
 }
 
+/**
+ * pickHeroFromVibePhotos — derive the hero photo from the top-N scoring vibe
+ * element categories.  The top-scoring categories represent what the neighbourhood
+ * is actually known for (icon_spots for Centro Histórico, cafes for Roma Norte, etc.)
+ * and their photos come from the Google Places nearby search so they are geo-accurate.
+ *
+ * Prefers non-fallback (real) photos; falls back to curated statics only as last resort.
+ * Returns null if vibePhotos has no usable entries.
+ */
+function pickHeroFromVibePhotos(vibeElements, vibePhotos, topN = 3) {
+  if (!vibeElements || !vibePhotos) return null;
+
+  // Sort elements by score descending, keep only those that have at least one photo
+  const ranked = Object.entries(vibeElements)
+    .filter(([key]) => Array.isArray(vibePhotos[key]) && vibePhotos[key].length > 0)
+    .sort(([, a], [, b]) => (b.score || 0) - (a.score || 0))
+    .slice(0, topN);
+
+  if (ranked.length === 0) return null;
+
+  // Prefer real (non-fallback) photos
+  const realPool = ranked.flatMap(([key]) =>
+    (vibePhotos[key] || []).filter(p => p?.url && !p.is_fallback)
+  );
+  const pool = realPool.length > 0
+    ? realPool
+    : ranked.flatMap(([key]) => (vibePhotos[key] || []).filter(p => p?.url));
+
+  if (pool.length === 0) return null;
+
+  const pick    = pool[Math.floor(Math.random() * pool.length)];
+  const topKeys = ranked.map(([key]) => key).join(",");
+  console.log(`[photos] hero from top vibes [${topKeys}]: ${pick.source || "?"} — ${pick.query}`);
+  return {
+    url:          pick.url,
+    photographer: pick.attribution?.photographer || "Google Maps contributor",
+    profile_url:  pick.attribution?.profile_url  || null,
+    query_used:   `vibe_pick:${pick.query || pick.source || "unknown"}`,
+    source:       pick.source || "google_places",
+  };
+}
+
 async function getHotelCountForBbox(city, bbox, db) {
   const { lat_min, lat_max, lon_min, lon_max } = bbox;
   const { count } = await db
@@ -302,19 +344,9 @@ async function generateNeighborhoods(city, db, geminiKey, unsplashKey, googlePla
   }
 
   // Process sequentially to stay within Overpass fair-use rate limits
-  // (Unsplash + hotel_count are fine in parallel, only Overpass needs spacing)
   const rows = [];
   for (const item of items) {
     const bbox = item.bbox || {};
-
-    // Fetch hero photo — Google Places first, Unsplash fallback (non-fatal if it fails)
-    let photoUrl    = null;
-    let photoCredit = null;
-    const photo = await fetchNeighborhoodPhoto(item.name, city, unsplashKey, item.vibe_short, item.tags, bbox, googlePlacesKey).catch(() => null);
-    if (photo) {
-      photoUrl    = photo.url;
-      photoCredit = { photographer: photo.photographer, profile_url: photo.profile_url };
-    }
 
     // Hotel count (skip if no lat/lng backfill done yet)
     let hotelCount = 0;
@@ -363,61 +395,22 @@ async function generateNeighborhoods(city, db, geminiKey, unsplashKey, googlePla
       tags:         item.tags || [],
       visitor_type: item.visitor_type,
       attributes,
-      photo_url:    photoUrl,
-      photo_credit: photoCredit,
+      photo_url:    null, // set after vibe photos are computed below
+      photo_credit: null,
       hotel_count:  hotelCount,
       _poiCounts:   poiCounts, // transient — used below, not persisted as top-level column
     });
   }
 
-  // Fallback photo from hotels_cache for rows that got no Unsplash photo
-  const noPhotoRows = rows.filter(r => !r.photo_url);
-  if (noPhotoRows.length > 0) {
-    const { data: fallbackPhotos } = await db
-      .from("hotels_cache")
-      .select("main_photo, lat, lng")
-      .eq("city", city)
-      .not("main_photo", "is", null)
-      .not("lat", "is", null)
-      .order("star_rating", { ascending: false })
-      .limit(100);
-
-    // Track which fallback photos have been used to avoid duplicates
-    const usedPhotos = new Set();
-
-    for (const row of noPhotoRows) {
-      if (!fallbackPhotos?.length) break;
-      const bbox = row.bbox;
-      // Try bbox-matched hotel photo first
-      let match = null;
-      if (bbox?.lat_min != null) {
-        const { lat_min, lat_max, lon_min, lon_max } = bbox;
-        match = fallbackPhotos.find(h =>
-          !usedPhotos.has(h.main_photo) &&
-          h.lat >= lat_min && h.lat <= lat_max && h.lng >= lon_min && h.lng <= lon_max
-        );
-      }
-      // Fallback: any unused top-rated city hotel photo
-      if (!match) {
-        match = fallbackPhotos.find(h => !usedPhotos.has(h.main_photo));
-      }
-      if (match) {
-        row.photo_url = match.main_photo;
-        usedPhotos.add(match.main_photo);
-      }
-    }
-  }
-
   // Compute city-level POI maximums for per-city score normalisation.
-  // Only uses rows that have real Overpass counts.
   const allPoiCounts = rows.map((r) => r._poiCounts).filter(Boolean);
   const cityMaxCounts = allPoiCounts.length > 0 ? computeCityMaxCounts(allPoiCounts) : null;
   if (cityMaxCounts) {
     console.log(`[neighborhoods] city max counts for ${city}: ${JSON.stringify(cityMaxCounts)}`);
   }
 
-  // Compute per-element vibe payloads and photos.
-  // Kept sequential per row to avoid exploding external API concurrency.
+  // Compute per-element vibe payloads and photos, then derive hero from top elements.
+  // Sequential to avoid hammering Google Places.
   for (const row of rows) {
     try {
       const vibeData = await buildNeighborhoodVibeData({
@@ -434,16 +427,31 @@ async function generateNeighborhoods(city, db, geminiKey, unsplashKey, googlePla
         googlePlacesKey,
       });
       row.vibe_elements = vibeData.vibeElements;
-      row.vibe_photos = vibeData.vibePhotos;
-      row.vibe_data_version = "v1";
+      row.vibe_photos   = vibeData.vibePhotos;
+      row.vibe_data_version    = "v1";
       row.vibe_last_computed_at = new Date().toISOString();
     } catch (e) {
       console.warn(`[neighborhoods] vibe data generation failed for ${city}/${row.name}: ${e.message}`);
       row.vibe_elements = {};
-      row.vibe_photos = {};
-      row.vibe_data_version = "v1";
+      row.vibe_photos   = {};
+      row.vibe_data_version    = "v1";
       row.vibe_last_computed_at = new Date().toISOString();
     }
+
+    // Hero photo: pick from top-scoring vibe elements (geo-accurate, reflects character)
+    const heroPick = pickHeroFromVibePhotos(row.vibe_elements, row.vibe_photos);
+    if (heroPick) {
+      row.photo_url    = heroPick.url;
+      row.photo_credit = { photographer: heroPick.photographer, profile_url: heroPick.profile_url, query_used: heroPick.query_used };
+    } else {
+      // Last resort: fetch directly (Places nearby → Unsplash)
+      const photo = await fetchNeighborhoodPhoto(row.name, city, unsplashKey, row.vibe_short, row.tags, row.bbox, googlePlacesKey).catch(() => null);
+      if (photo) {
+        row.photo_url    = photo.url;
+        row.photo_credit = { photographer: photo.photographer, profile_url: photo.profile_url, query_used: photo.query_used };
+      }
+    }
+
     // Remove transient field — not a DB column
     delete row._poiCounts;
   }
@@ -463,11 +471,9 @@ async function generateNeighborhoods(city, db, geminiKey, unsplashKey, googlePla
  * set or when photo quality needs improvement.
  */
 async function backfillNeighborhoodPhotos(city, db, unsplashKey, googlePlacesKey = null) {
-  if (!unsplashKey && !googlePlacesKey) throw new Error("Neither UNSPLASH_KEY nor GOOGLE_PLACES_KEY is set");
-
   const { data: rows, error } = await db
     .from("neighborhoods")
-    .select("id, name, vibe_short, tags, bbox")
+    .select("id, name, vibe_short, tags, bbox, vibe_elements, vibe_photos")
     .eq("city", city)
     .order("id");
 
@@ -476,9 +482,19 @@ async function backfillNeighborhoodPhotos(city, db, unsplashKey, googlePlacesKey
 
   let updated = 0;
   for (const row of rows) {
-    const photo = await fetchNeighborhoodPhoto(
-      row.name, city, unsplashKey, row.vibe_short || "", row.tags || [], row.bbox || null, googlePlacesKey
-    ).catch(() => null);
+    // Primary: pick hero from top-scoring vibe elements (no extra API call)
+    let photo = pickHeroFromVibePhotos(row.vibe_elements, row.vibe_photos);
+
+    // Fallback: fetch directly via Places / Unsplash
+    if (!photo) {
+      if (!unsplashKey && !googlePlacesKey) {
+        console.warn(`[photos] no vibe photos and no API keys for ${row.name} — skipping`);
+        continue;
+      }
+      photo = await fetchNeighborhoodPhoto(
+        row.name, city, unsplashKey, row.vibe_short || "", row.tags || [], row.bbox || null, googlePlacesKey
+      ).catch(() => null);
+    }
 
     if (photo) {
       const { error: upErr } = await db
@@ -556,14 +572,23 @@ async function recomputeNeighborhoodVibes(city, db, unsplashKey, googlePlacesKey
       bbox: row.bbox || null,
       googlePlacesKey,
     });
+    // Derive hero photo from top-scoring vibe elements
+    const heroPick = pickHeroFromVibePhotos(vibeData.vibeElements, vibeData.vibePhotos);
+
+    const updatePayload = {
+      vibe_elements: vibeData.vibeElements,
+      vibe_photos:   vibeData.vibePhotos,
+      vibe_data_version:    "v1",
+      vibe_last_computed_at: new Date().toISOString(),
+    };
+    if (heroPick) {
+      updatePayload.photo_url    = heroPick.url;
+      updatePayload.photo_credit = { photographer: heroPick.photographer, profile_url: heroPick.profile_url, query_used: heroPick.query_used };
+    }
+
     const { error: upErr } = await db
       .from("neighborhoods")
-      .update({
-        vibe_elements: vibeData.vibeElements,
-        vibe_photos: vibeData.vibePhotos,
-        vibe_data_version: "v1",
-        vibe_last_computed_at: new Date().toISOString(),
-      })
+      .update(updatePayload)
       .eq("id", row.id);
     if (upErr) throw new Error(`update ${row.name} failed: ${upErr.message}`);
   }
