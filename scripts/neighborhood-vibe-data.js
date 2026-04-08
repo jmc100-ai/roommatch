@@ -199,14 +199,15 @@ function countGreenAreasMinSqM(elements, minSqM) {
 
 /**
  * Fetch park/garden/green-space polygons with geometry and filter by area in Node.
- * Retries up to 3× on 429/504 with exponential back-off.
+ * On persistent 429/504 falls back to a cheap "out count" query (no area filter,
+ * but far better than returning 0).
  */
 async function fetchOverpassGreenCount(bbox, minSqM) {
   const { lat_min, lat_max, lon_min, lon_max } = bbox || {};
   const bb = `${lat_min},${lon_min},${lat_max},${lon_max}`;
-  // Broad green-space union: parks, gardens, nature reserves, village greens,
-  // grass landuse, woods. All filtered to min area in Node.
-  const q = `[out:json][timeout:35];
+
+  // Heavy query: fetch full geometry so we can filter by polygon area.
+  const qGeom = `[out:json][timeout:30];
 (
   way["leisure"~"^(park|garden|nature_reserve|recreation_ground)$"](${bb});
   relation["leisure"~"^(park|garden|nature_reserve|recreation_ground)$"](${bb});
@@ -217,27 +218,53 @@ async function fetchOverpassGreenCount(bbox, minSqM) {
 );
 out geom;`;
 
-  const doFetch = () => fetch(OVERPASS_URL, {
+  // Light fallback query: just a count (no geometry, very fast).
+  // No area filter is possible here, but captures the same green-space tags.
+  const qCount = `[out:json][timeout:15];
+(
+  way["leisure"~"^(park|garden|nature_reserve|recreation_ground)$"](${bb});
+  relation["leisure"~"^(park|garden|nature_reserve|recreation_ground)$"](${bb});
+  way["landuse"~"^(village_green|grass|forest)$"](${bb});
+  relation["landuse"~"^(village_green|grass|forest)$"](${bb});
+  way["natural"="wood"](${bb});
+  relation["natural"="wood"](${bb});
+);
+out count;`;
+
+  const doFetch = (query, timeoutMs) => fetch(OVERPASS_URL, {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: `data=${encodeURIComponent(q)}`,
-    signal: AbortSignal.timeout(35000),
+    body: `data=${encodeURIComponent(query)}`,
+    signal: AbortSignal.timeout(timeoutMs),
   });
 
-  let res;
-  const delays = [10_000, 15_000, 20_000];
-  for (let attempt = 0; attempt <= delays.length; attempt++) {
-    res = await doFetch();
-    if (res.ok) break;
-    if ((res.status === 429 || res.status === 504) && attempt < delays.length) {
-      await new Promise((r) => setTimeout(r, delays[attempt]));
-    } else {
-      throw new Error(`Overpass green count ${res.status}`);
-    }
+  // Try geometry query once, with a single 12 s retry on rate-limit.
+  let res = await doFetch(qGeom, 30000);
+  if ((res.status === 429 || res.status === 504) && res.status !== 200) {
+    await new Promise((r) => setTimeout(r, 12_000));
+    res = await doFetch(qGeom, 30000);
   }
-  if (!res.ok) throw new Error(`Overpass green count ${res.status}`);
-  const data = await res.json();
-  return countGreenAreasMinSqM(data.elements, minSqM);
+
+  if (res.ok) {
+    const data = await res.json();
+    return countGreenAreasMinSqM(data.elements, minSqM);
+  }
+
+  // Geometry query failed — try the cheap count fallback.
+  console.warn(`[overpass] geometry query ${res.status}; trying count fallback`);
+  await new Promise((r) => setTimeout(r, 8_000));
+  let res2 = await doFetch(qCount, 15000);
+  if ((res2.status === 429 || res2.status === 504) && res2.status !== 200) {
+    await new Promise((r) => setTimeout(r, 10_000));
+    res2 = await doFetch(qCount, 15000);
+  }
+  if (!res2.ok) throw new Error(`Overpass green count ${res2.status} (both queries failed)`);
+
+  const data2 = await res2.json();
+  // "out count" returns a single element with tags.total
+  const total = parseInt(data2?.elements?.[0]?.tags?.total || "0", 10);
+  console.log(`[overpass] green count fallback (unfiltered): ${total}`);
+  return total;
 }
 
 /**

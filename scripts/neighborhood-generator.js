@@ -534,11 +534,12 @@ async function recomputeNeighborhoodVibes(city, db, unsplashKey, googlePlacesKey
   if (error) throw new Error(`load neighborhoods failed: ${error.message}`);
   if (!rows?.length) return 0;
 
-  // Always re-fetch Overpass counts (sequential, 3s gap) so any query changes
-  // (e.g. parks node→way fix) propagate without a separate migration step.
+  // Always re-fetch Overpass counts (sequential, 12s gap) so any query changes
+  // propagate without a separate migration step. 12s cooldown between neighbourhoods
+  // lets the public Overpass endpoint recover from the previous pair of requests.
   for (const row of rows) {
     if (row.bbox?.lat_min != null) {
-      await new Promise((r) => setTimeout(r, 3000));
+      await new Promise((r) => setTimeout(r, 12000));
       const fetched = await fetchOverpassPOIs(row.bbox).catch((e) => {
         console.warn(`[recompute] Overpass failed for ${row.name}: ${e.message}`);
         return null;
