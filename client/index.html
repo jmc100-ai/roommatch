@@ -2436,6 +2436,10 @@
     { key: 'shops', label: 'Shops' },
   ];
   const NBHD_CARD_DATA = {};
+  // Set of photo_url values used as the primary hero of any neighborhood in the
+  // current city. Used by buildHeroPhotos to prevent a neighbor's hero from
+  // bleeding into another neighborhood's carousel.
+  let NBHD_RESERVED_HEROES = new Set();
 
   function escHtml(s) {
     return (s||'').replace(/"/g,'&quot;').replace(/'/g,'&#39;').replace(/</g,'&lt;');
@@ -2489,11 +2493,22 @@
     const photos = [];
     if (h.photo_url) photos.push(h.photo_url);
     const vibePhotos = h.vibe_photos || {};
+    // street_feel photos are always generic Unsplash results (no geo-targeted
+    // Places type exists for it) — skip them in the carousel to avoid showing
+    // the same generic street photo across all neighborhoods.
+    // Also skip any URL that is another neighborhood's designated hero photo.
     for (const e of NBHD_ELEMENT_ORDER) {
+      if (e.key === 'street_feel') continue;
       const arr = vibePhotos[e.key] || [];
-      const p = arr[0];
-      const url = p && (typeof p === 'string' ? p : p?.url);
-      if (url && !photos.includes(url)) photos.push(url);
+      for (const p of arr) {
+        const url = p && (typeof p === 'string' ? p : p?.url);
+        if (!url) continue;
+        if (photos.includes(url)) continue;
+        // Skip photos that serve as another neighborhood's primary hero
+        if (NBHD_RESERVED_HEROES.has(url) && url !== h.photo_url) continue;
+        photos.push(url);
+        break; // one photo per element in the carousel
+      }
       if (photos.length >= 6) break;
     }
     return photos;
@@ -2618,6 +2633,7 @@
         });
         if (hoods.length) {
           Object.keys(NBHD_CARD_DATA).forEach(k => delete NBHD_CARD_DATA[k]);
+          NBHD_RESERVED_HEROES = new Set(hoods.map(h => h.photo_url).filter(Boolean));
           grid.innerHTML = hoods.map((h, idx) => {
             const cardId = `n${idx}`;
             NBHD_CARD_DATA[cardId] = h;
@@ -2632,6 +2648,7 @@
     const fallback = NBHDS_FALLBACK[city];
     if (fallback && fallback.length) {
       Object.keys(NBHD_CARD_DATA).forEach(k => delete NBHD_CARD_DATA[k]);
+      NBHD_RESERVED_HEROES = new Set(fallback.map(h => h.photo_url).filter(Boolean));
       grid.innerHTML = fallback.map((h, idx) => {
         const cardId = `f${idx}`;
         NBHD_CARD_DATA[cardId] = h;

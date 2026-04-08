@@ -564,7 +564,28 @@ async function recomputeNeighborhoodVibes(city, db, unsplashKey, googlePlacesKey
     console.log(`[recompute] city peak densities for ${city}: ${JSON.stringify(Object.fromEntries(Object.entries(cityMaxCounts).map(([k,v]) => [k, Math.round(v * 10) / 10])))} per km²`);
   }
 
+  // Build a city-wide set of already-committed photo URLs so we can skip
+  // photos that appear in a sibling neighborhood (prevents the same Google
+  // Places venue photo showing up in neighbouring hoods' carousels).
+  // Populated incrementally as each neighbourhood is processed.
+  const cityUsedPhotoUrls = new Set(
+    rows.flatMap(r =>
+      Object.values(r.vibe_photos || {}).flatMap(arr =>
+        Array.isArray(arr) ? arr.map(p => (typeof p === 'string' ? p : p?.url)).filter(Boolean) : []
+      )
+    )
+  );
+
   for (const row of rows) {
+    // Remove this row's own photos from the used-set so they don't block
+    // themselves from being re-used when the row is re-written.
+    const ownUrls = new Set(
+      Object.values(row.vibe_photos || {}).flatMap(arr =>
+        Array.isArray(arr) ? arr.map(p => (typeof p === 'string' ? p : p?.url)).filter(Boolean) : []
+      )
+    );
+    ownUrls.forEach(u => cityUsedPhotoUrls.delete(u));
+
     const poiCounts = row.attributes?.poi_counts || null;
 
     const vibeData = await buildNeighborhoodVibeData({
@@ -580,6 +601,21 @@ async function recomputeNeighborhoodVibes(city, db, unsplashKey, googlePlacesKey
       bbox: row.bbox || null,
       googlePlacesKey,
     });
+    // Deduplicate fresh photos against other neighborhoods in this city.
+    // Google Places returns the same venue photos for adjacent neighborhoods
+    // (e.g. a cafe on the border of Roma Norte and Juárez). Filter out any
+    // photo URL already committed to a sibling neighborhood so each hood gets
+    // a unique set. Unsplash street_feel photos are excluded from this since
+    // they're generic anyway and fall back to fallback_curated if all are dupes.
+    for (const [key, photos] of Object.entries(vibeData.vibePhotos)) {
+      vibeData.vibePhotos[key] = photos.filter(p => {
+        const u = typeof p === 'string' ? p : p?.url;
+        return u && !cityUsedPhotoUrls.has(u);
+      });
+    }
+    const dupCount = Object.values(vibeData.vibePhotos).reduce((s, a) => s + a.length, 0);
+    console.log(`[dedup] ${row.name}: ${dupCount} unique photos after city-level dedup`);
+
     // Derive hero photo from top-scoring vibe elements (fresh photos first).
     // If fresh photos didn't yield a pick (e.g. Overpass failed → different scoring
     // → categories with no photos rank top), retry with the previously stored
@@ -605,6 +641,16 @@ async function recomputeNeighborhoodVibes(city, db, unsplashKey, googlePlacesKey
 
     // mergedForHero is already the merged set — reuse it for storing to DB.
     const mergedVibePhotos = mergedForHero;
+
+    // Mark all photos we're about to store as used, so subsequent neighborhoods
+    // in this same run won't re-use them.
+    Object.values(mergedVibePhotos).forEach(arr => {
+      if (Array.isArray(arr)) arr.forEach(p => {
+        const u = typeof p === 'string' ? p : p?.url;
+        if (u) cityUsedPhotoUrls.add(u);
+      });
+    });
+    if (heroPick?.url) cityUsedPhotoUrls.add(heroPick.url);
 
     const updatePayload = {
       vibe_elements: vibeData.vibeElements,
