@@ -5,7 +5,7 @@
  */
 
 const GEMINI_MODEL = "gemini-2.5-flash-lite";
-const { buildNeighborhoodVibeData, fetchOverpassPOIs } = require("./neighborhood-vibe-data");
+const { buildNeighborhoodVibeData, fetchOverpassPOIs, computeCityMaxCounts } = require("./neighborhood-vibe-data");
 
 // Canonical Gemini prompt for neighborhood generation
 function buildNeighborhoodPrompt(city) {
@@ -273,6 +273,14 @@ async function generateNeighborhoods(city, db, geminiKey, unsplashKey) {
     }
   }
 
+  // Compute city-level POI maximums for per-city score normalisation.
+  // Only uses rows that have real Overpass counts.
+  const allPoiCounts = rows.map((r) => r._poiCounts).filter(Boolean);
+  const cityMaxCounts = allPoiCounts.length > 0 ? computeCityMaxCounts(allPoiCounts) : null;
+  if (cityMaxCounts) {
+    console.log(`[neighborhoods] city max counts for ${city}: ${JSON.stringify(cityMaxCounts)}`);
+  }
+
   // Compute per-element vibe payloads and photos.
   // Kept sequential per row to avoid exploding external API concurrency.
   for (const row of rows) {
@@ -286,6 +294,7 @@ async function generateNeighborhoods(city, db, geminiKey, unsplashKey) {
         hotelCount: row.hotel_count || 0,
         unsplashKey,
         poiCounts: row._poiCounts || null,
+        cityMaxCounts,
       });
       row.vibe_elements = vibeData.vibeElements;
       row.vibe_photos = vibeData.vibePhotos;
@@ -369,23 +378,33 @@ async function recomputeNeighborhoodVibes(city, db, unsplashKey) {
   if (error) throw new Error(`load neighborhoods failed: ${error.message}`);
   if (!rows?.length) return 0;
 
+  // Always re-fetch Overpass counts (sequential, 3s gap) so any query changes
+  // (e.g. parks node→way fix) propagate without a separate migration step.
   for (const row of rows) {
-    // Use stored counts; re-fetch from Overpass if not yet enriched
-    let poiCounts = row.attributes?.poi_counts || null;
-    if (!poiCounts && row.bbox?.lat_min != null) {
-      // Space requests 3s apart to stay within Overpass fair-use limits
+    if (row.bbox?.lat_min != null) {
       await new Promise((r) => setTimeout(r, 3000));
-      poiCounts = await fetchOverpassPOIs(row.bbox).catch((e) => {
+      const fetched = await fetchOverpassPOIs(row.bbox).catch((e) => {
         console.warn(`[recompute] Overpass failed for ${row.name}: ${e.message}`);
         return null;
       });
-      if (poiCounts) {
-        console.log(`[recompute] Overpass ${row.name}: cafes=${poiCounts.cafes} restaurants=${poiCounts.restaurants} parks=${poiCounts.parks} shops=${poiCounts.shops} museums=${poiCounts.museums} icon_spots=${poiCounts.icon_spots}`);
-        // Persist fresh counts back into attributes so next recompute is instant
-        const updatedAttrs = { ...(row.attributes || {}), poi_counts: poiCounts };
+      if (fetched) {
+        console.log(`[recompute] Overpass ${row.name}: cafes=${fetched.cafes} restaurants=${fetched.restaurants} parks=${fetched.parks} shops=${fetched.shops} museums=${fetched.museums} icon_spots=${fetched.icon_spots}`);
+        const updatedAttrs = { ...(row.attributes || {}), poi_counts: fetched };
         await db.from("neighborhoods").update({ attributes: updatedAttrs }).eq("id", row.id);
+        row.attributes = updatedAttrs;
       }
     }
+  }
+
+  // Compute city-level maximums from all stored counts for per-city normalisation
+  const allPoiCounts = rows.map((r) => r.attributes?.poi_counts).filter(Boolean);
+  const cityMaxCounts = allPoiCounts.length > 0 ? computeCityMaxCounts(allPoiCounts) : null;
+  if (cityMaxCounts) {
+    console.log(`[recompute] city max counts for ${city}: ${JSON.stringify(cityMaxCounts)}`);
+  }
+
+  for (const row of rows) {
+    const poiCounts = row.attributes?.poi_counts || null;
 
     const vibeData = await buildNeighborhoodVibeData({
       city: row.city,
@@ -396,6 +415,7 @@ async function recomputeNeighborhoodVibes(city, db, unsplashKey) {
       hotelCount: row.hotel_count || 0,
       unsplashKey,
       poiCounts,
+      cityMaxCounts,
     });
     const { error: upErr } = await db
       .from("neighborhoods")

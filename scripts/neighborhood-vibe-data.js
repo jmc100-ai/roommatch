@@ -90,16 +90,21 @@ const FALLBACK_PHOTOS = {
 
 const OVERPASS_URL = "https://overpass-api.de/api/interpreter";
 
-// Max expected POI counts for log-scale score normalisation.
-// Tuned so a very dense urban neighbourhood ≈ 100. Adjust if scores feel off.
-const POI_MAX_EXPECTED = {
-  parks:       15,
-  restaurants: 100,
-  cafes:        50,
-  museums:      12,
-  shops:       150,
-  icon_spots:   15,
-};
+// POI categories that can be scored from real counts.
+const POI_CATEGORIES = ["parks", "restaurants", "cafes", "museums", "shops", "icon_spots"];
+
+/**
+ * computeCityMaxCounts — given an array of poiCounts objects (one per neighbourhood),
+ * returns the per-category maximum across the city.  Used as the normalisation
+ * ceiling so scores are relative within the city (best = ~100%, worst = ~20%).
+ */
+function computeCityMaxCounts(allPoiCounts) {
+  const cityMax = {};
+  for (const cat of POI_CATEGORIES) {
+    cityMax[cat] = Math.max(1, ...allPoiCounts.map((c) => c?.[cat] || 0));
+  }
+  return cityMax;
+}
 
 /**
  * fetchOverpassPOIs — queries OpenStreetMap via Overpass for 6 POI categories
@@ -113,11 +118,14 @@ async function fetchOverpassPOIs(bbox) {
   const { lat_min, lat_max, lon_min, lon_max } = bbox || {};
   if (lat_min == null) return null;
 
-  // Single union query — one HTTP call per neighbourhood
+  // Single union query — one HTTP call per neighbourhood.
+  // Parks: ways/relations only (polygons = actual park areas).
+  // Node-tagged parks in OSM are usually micro-markers (tree planters, 2m² patches)
+  // that inflate counts by 10-30x — only polygon areas represent real parks.
   const q = `[out:json][timeout:25];
 (
-  node["leisure"~"^(park|garden)$"](${lat_min},${lon_min},${lat_max},${lon_max});
   way["leisure"~"^(park|garden)$"](${lat_min},${lon_min},${lat_max},${lon_max});
+  relation["leisure"~"^(park|garden)$"](${lat_min},${lon_min},${lat_max},${lon_max});
   node["amenity"~"^(restaurant|fast_food|bar|pub|food_court)$"](${lat_min},${lon_min},${lat_max},${lon_max});
   node["amenity"="cafe"](${lat_min},${lon_min},${lat_max},${lon_max});
   node["tourism"~"^(museum|gallery|attraction|viewpoint)$"](${lat_min},${lon_min},${lat_max},${lon_max});
@@ -186,24 +194,37 @@ function catScore(value, map) {
 }
 
 /**
- * Log-scale normalisation: score 0–100 from a raw POI count.
- * Feels natural for counts — rapid gain at low end, diminishing returns at top.
+ * poiCountToScore — √-scale normalisation relative to the city's own maximum.
+ *
+ * Scoring is per-city: the neighbourhood with the most of a category scores
+ * ~95–100%; others scale proportionally.  √ gives natural spread — a
+ * neighbourhood with half the city max scores ~70%, not 50%.
+ *
+ * Floor of 10 so even the quietest neighbourhood registers visibly.
+ *
+ * Falls back to a global ceiling when cityMaxCounts is not available.
  */
-function poiCountToScore(count, category) {
-  if (!count || count <= 0) return 0;
-  const max = POI_MAX_EXPECTED[category] || 50;
-  return clamp(Math.round(Math.log(count + 1) / Math.log(max + 1) * 100));
+const GLOBAL_FALLBACK_MAX = {
+  parks: 20, restaurants: 300, cafes: 100, museums: 30, shops: 500, icon_spots: 30,
+};
+
+function poiCountToScore(count, category, cityMaxCounts = null) {
+  if (!count || count <= 0) return 10;
+  const max = cityMaxCounts?.[category] || GLOBAL_FALLBACK_MAX[category] || 50;
+  // √(count/max)*100, floor 10, ceil 100
+  return clamp(Math.round(Math.sqrt(count / max) * 100), 10, 100);
 }
 
 /**
  * computeElementScores — returns per-element 0–100 scores.
  *
- * When poiCounts is provided (real Overpass data), all POI-countable elements
- * use log-normalised real counts. street_feel always uses the Gemini-attribute
- * formula because it reflects walkability infrastructure, not a POI count.
- * Falls back to the full formula when poiCounts is null.
+ * When poiCounts + cityMaxCounts are provided (real Overpass data), scores for
+ * all POI-countable elements are derived from real counts normalised within the
+ * city.  street_feel always uses the Gemini-attribute formula (walkability
+ * infrastructure, not a POI count).  Falls back to the full formula when
+ * poiCounts is null.
  */
-function computeElementScores(attributes = {}, tags = [], vibeLong = "", poiCounts = null) {
+function computeElementScores(attributes = {}, tags = [], vibeLong = "", poiCounts = null, cityMaxCounts = null) {
   const wDining = catScore(attributes.walkability_dining, { excellent: 90, good: 68, limited: 40 });
   const wTour   = catScore(attributes.walkability_tourist_spots, { excellent: 90, good: 68, limited: 40 });
   const energy  = catScore(attributes.street_energy, { lively: 88, moderate: 62, quiet: 42 });
@@ -215,12 +236,12 @@ function computeElementScores(attributes = {}, tags = [], vibeLong = "", poiCoun
   let scores;
   if (hasRealCounts) {
     scores = {
-      parks:       poiCountToScore(poiCounts.parks,       "parks"),
-      restaurants: poiCountToScore(poiCounts.restaurants, "restaurants"),
-      cafes:       poiCountToScore(poiCounts.cafes,       "cafes"),
-      museums:     poiCountToScore(poiCounts.museums,     "museums"),
-      shops:       poiCountToScore(poiCounts.shops,       "shops"),
-      icon_spots:  poiCountToScore(poiCounts.icon_spots,  "icon_spots"),
+      parks:       poiCountToScore(poiCounts.parks,       "parks",       cityMaxCounts),
+      restaurants: poiCountToScore(poiCounts.restaurants, "restaurants", cityMaxCounts),
+      cafes:       poiCountToScore(poiCounts.cafes,       "cafes",       cityMaxCounts),
+      museums:     poiCountToScore(poiCounts.museums,     "museums",     cityMaxCounts),
+      shops:       poiCountToScore(poiCounts.shops,       "shops",       cityMaxCounts),
+      icon_spots:  poiCountToScore(poiCounts.icon_spots,  "icon_spots",  cityMaxCounts),
     };
   } else {
     const green   = catScore(attributes.green_spaces, { lots: 90, some: 65, minimal: 32 });
@@ -384,8 +405,8 @@ async function fetchElementPhotos(city, neighborhoodName, elementKey, unsplashKe
  * scores for all elements except street_feel are derived from real OSM data.
  * Falls back to Gemini-attribute formula when null.
  */
-async function buildNeighborhoodVibeData({ city, neighborhoodName, attributes, tags, vibeLong, hotelCount, unsplashKey, poiCounts = null }) {
-  const { scores, shopsSubscores } = computeElementScores(attributes, tags, vibeLong, poiCounts);
+async function buildNeighborhoodVibeData({ city, neighborhoodName, attributes, tags, vibeLong, hotelCount, unsplashKey, poiCounts = null, cityMaxCounts = null }) {
+  const { scores, shopsSubscores } = computeElementScores(attributes, tags, vibeLong, poiCounts, cityMaxCounts);
   const vibeElements = {};
   const vibePhotos = {};
 
@@ -408,6 +429,8 @@ async function buildNeighborhoodVibeData({ city, neighborhoodName, attributes, t
 module.exports = {
   ELEMENTS,
   PHOTO_RULES,
+  POI_CATEGORIES,
   fetchOverpassPOIs,
+  computeCityMaxCounts,
   buildNeighborhoodVibeData,
 };
