@@ -28,8 +28,7 @@ Each item must follow this exact structure:
   "walkability_tourist_spots": "excellent",
   "green_spaces": "some",
   "skyline_character": "low-rise historic",
-  "street_energy": "lively",
-  "transport_dependency": "low"
+  "street_energy": "lively"
 }
 
 Field rules:
@@ -43,8 +42,7 @@ Field rules:
 - walkability_tourist_spots: "excellent" | "good" | "limited"
 - green_spaces: "lots" | "some" | "minimal"
 - skyline_character: "low-rise historic" | "modern high-rise" | "mixed" | "tree-lined"
-- street_energy: "lively" | "moderate" | "quiet"
-- transport_dependency: "low" | "medium" | "high"`;
+- street_energy: "lively" | "moderate" | "quiet"`;
 }
 
 async function callGemini(prompt, geminiKey) {
@@ -385,7 +383,6 @@ async function generateNeighborhoods(city, db, geminiKey, unsplashKey, googlePla
       green_spaces:              item.green_spaces,
       skyline_character:         item.skyline_character,
       street_energy:             item.street_energy,
-      transport_dependency:      item.transport_dependency,
       ...(poiCounts ? { poi_counts: poiCounts } : {}),
     };
 

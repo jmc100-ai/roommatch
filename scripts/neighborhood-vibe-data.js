@@ -235,29 +235,28 @@ function catScore(value, map) {
  * Gemini-generated neighbourhood attributes.
  *
  * Each element type maps to the most relevant attribute(s):
- *   parks       → green_spaces + transport accessibility
+ *   parks       → green_spaces
  *   restaurants → walkability_dining
  *   cafes       → walkability_dining + street_energy blend
  *   museums     → walkability_tourist_spots
- *   icon_spots  → walkability_tourist_spots + transport
+ *   icon_spots  → walkability_tourist_spots
  *   shops       → walkability_dining + street_energy blend
- *   street_feel → street_energy + transport_dependency inverse
+ *   street_feel → street_energy
  */
 function computeWalkabilityScore(elementKey, attributes = {}) {
   const wDining = catScore(attributes.walkability_dining,        { excellent: 90, good: 68, limited: 40 });
   const wTour   = catScore(attributes.walkability_tourist_spots, { excellent: 90, good: 68, limited: 40 });
   const energy  = catScore(attributes.street_energy,            { lively: 88, moderate: 62, quiet: 42 });
   const green   = catScore(attributes.green_spaces,             { lots: 88, some: 62, minimal: 35 });
-  const transit = catScore(attributes.transport_dependency,     { low: 86, medium: 60, high: 36 });
 
   switch (elementKey) {
-    case "parks":       return clamp(Math.round(green * 0.6 + transit * 0.4));
+    case "parks":       return clamp(Math.round(green));
     case "restaurants": return clamp(Math.round(wDining));
     case "cafes":       return clamp(Math.round(wDining * 0.7 + energy * 0.3));
     case "museums":     return clamp(Math.round(wTour));
-    case "icon_spots":  return clamp(Math.round(wTour * 0.65 + transit * 0.35));
+    case "icon_spots":  return clamp(Math.round(wTour));
     case "shops":       return clamp(Math.round(wDining * 0.45 + energy * 0.55));
-    case "street_feel": return clamp(Math.round(energy * 0.5 + transit * 0.5));
+    case "street_feel": return clamp(Math.round(energy));
     default:            return 60;
   }
 }
@@ -332,7 +331,6 @@ function computeElementScores(attributes = {}, tags = [], vibeLong = "", poiCoun
   const wDining = catScore(attributes.walkability_dining, { excellent: 90, good: 68, limited: 40 });
   const wTour   = catScore(attributes.walkability_tourist_spots, { excellent: 90, good: 68, limited: 40 });
   const energy  = catScore(attributes.street_energy, { lively: 88, moderate: 62, quiet: 42 });
-  const transit = catScore(attributes.transport_dependency, { low: 86, medium: 62, high: 36 });
   const text    = (vibeLong || "").toLowerCase();
 
   const hasRealCounts = poiCounts && Object.values(poiCounts).some((v) => v > 0);
@@ -353,7 +351,7 @@ function computeElementScores(attributes = {}, tags = [], vibeLong = "", poiCoun
       "low-rise historic": 82, "modern high-rise": 58, mixed: 70, "tree-lined": 76,
     });
     scores = {
-      parks:       clamp(green * 0.68 + wTour * 0.22 + transit * 0.1 + (hasTag(tags, "green") ? 8 : 0)),
+      parks:       clamp(green * 0.756 + wTour * 0.244 + (hasTag(tags, "green") ? 8 : 0)),
       restaurants: clamp(wDining * 0.64 + energy * 0.26 + (hasTag(tags, "foodie") ? 10 : 0)),
       cafes:       clamp(wDining * 0.45 + wTour * 0.25 + (hasTag(tags, "local-feel") ? 8 : 0) + (hasTag(tags, "shopping") ? 5 : 0)),
       museums:     clamp(skyline * 0.26 + wTour * 0.34 + (hasTag(tags, "artsy") ? 8 : 0) + (text.includes("museum") || text.includes("gallery") ? 16 : 0)),
@@ -362,8 +360,8 @@ function computeElementScores(attributes = {}, tags = [], vibeLong = "", poiCoun
     };
   }
 
-  // street_feel is always formula-derived (walkability infrastructure signal)
-  scores.street_feel = clamp(wTour * 0.42 + transit * 0.32 + energy * 0.26);
+  // street_feel: tourist-walkability + street energy (transport_dependency removed)
+  scores.street_feel = clamp(Math.round((wTour * 42 + energy * 26) / 68));
 
   const shopsSubscores = {
     high_end_boutique: clamp(scores.shops * 0.55 + (hasTag(tags, "luxury") ? 28 : 0) + (text.includes("designer") ? 12 : 0)),
