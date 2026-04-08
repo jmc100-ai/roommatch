@@ -290,13 +290,22 @@ function pickHeroFromVibePhotos(vibeElements, vibePhotos, topN = 3) {
 
   if (ranked.length === 0) return null;
 
-  // Pool all real (non-fallback) photos from the top-N elements
-  const realPool = ranked.flatMap(([key]) =>
+  // Prefer new-format place-photos URLs (from the current Places API).
+  // Old-format places/ANXAkq... URLs come from early backfill runs and look
+  // visually identical but we want to purge them over time by preferring fresh ones.
+  const isNewFormat = (p) => p?.url?.includes('/place-photos/');
+
+  // Tier 1: new-format, non-fallback
+  const newPool = ranked.flatMap(([key]) =>
+    (vibePhotos[key] || []).filter(p => p?.url && !p.is_fallback && isNewFormat(p))
+  );
+  // Tier 2: any non-fallback (includes old places/ format)
+  const anyRealPool = newPool.length > 0 ? newPool : ranked.flatMap(([key]) =>
     (vibePhotos[key] || []).filter(p => p?.url && !p.is_fallback)
   );
-  // Widen to include fallback photos only as last resort
-  const pool = realPool.length > 0
-    ? realPool
+  // Tier 3: fallback photos only as last resort
+  const pool = anyRealPool.length > 0
+    ? anyRealPool
     : ranked.flatMap(([key]) => (vibePhotos[key] || []).filter(p => p?.url));
 
   if (pool.length === 0) return null;
