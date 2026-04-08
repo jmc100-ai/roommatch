@@ -1559,14 +1559,14 @@
       display:flex; flex-direction:column; gap:8px;
     }
     .nbhd-bv-badge {
-      display:inline-flex; align-items:baseline; gap:5px;
+      display:inline-flex; align-items:baseline; gap:4px;
       background:rgba(0,0,0,.58); backdrop-filter:blur(6px);
       border:1px solid rgba(255,255,255,.18); border-radius:8px;
-      padding:5px 11px; width:fit-content;
-      color:rgba(255,255,255,.72); font-size:10px; letter-spacing:.04em; text-transform:uppercase;
+      padding:4px 10px; width:fit-content;
+      color:rgba(255,255,255,.65); font-size:9px; letter-spacing:.04em; text-transform:uppercase;
     }
     .nbhd-bv-badge strong {
-      font-size:22px; font-weight:700; color:#fff; letter-spacing:-.01em; line-height:1;
+      font-size:17px; font-weight:700; color:#c9a84c; letter-spacing:-.01em; line-height:1;
     }
     .nbhd-hero-btm {
       position:absolute; bottom:14px; left:14px; right:14px; z-index:1;
@@ -1649,8 +1649,7 @@
     .nbhd-el-info { border:1px solid rgba(255,255,255,.09); border-radius:12px; background:var(--row); padding:10px; }
     .nbhd-el-summary { font-size:14px; line-height:1.55; color:var(--muted); margin-bottom:8px; }
     .nbhd-el-facts { margin:0 0 8px 14px; color:rgba(232,228,220,.85); font-size:13px; line-height:1.45; }
-    .nbhd-el-extra-facts { margin:6px 0 0 14px; color:rgba(200,196,188,.72); font-size:12px; line-height:1.45; list-style:none; padding:0; }
-    .nbhd-el-extra-facts li::before { content:'→ '; opacity:.55; }
+    .nbhd-el-extra-facts { margin:0; padding:0 0 0 14px; color:rgba(232,228,220,.85); font-size:13px; line-height:1.45; }
     /* .nbhd-el-bars { display:flex; flex-direction:column; gap:5px; } — commented out, replaced by text bullets */
     .nbhd-el-bar-row { display:flex; justify-content:space-between; font-size:10px; color:var(--muted); }
     .nbhd-el-bar { height:5px; border-radius:99px; background:rgba(255,255,255,.1); overflow:hidden; }
@@ -2482,11 +2481,11 @@
     const m = element.metrics || {};
     // Extra context lines replacing the metric bars
     const walkPct   = Math.round(m.walkability ?? m.confidence ?? 0);
-    const densityPct = Math.round(m.density ?? m.signal_strength ?? 0);
-    const densityLabel = densityPct >= 67 ? 'high' : densityPct >= 34 ? 'moderate' : 'low';
+    // const densityPct = Math.round(m.density ?? m.signal_strength ?? 0);
+    // const densityLabel = densityPct >= 67 ? 'high' : densityPct >= 34 ? 'moderate' : 'low';
     const extraLines = [
-      walkPct   > 0 ? `Walkability: ${walkPct}%`                          : null,
-      densityPct > 0 ? `Local density: ${densityLabel} (${densityPct}%)`  : null,
+      walkPct > 0 ? `Walkability: ${walkPct}%` : null,
+      // densityPct > 0 ? `Local density: ${densityLabel} (${densityPct}%)` : null,
     ].filter(Boolean).map(l => `<li>${escHtml(l)}</li>`).join('');
     const galleryInner = photoTiles
       ? `<div class="nbhd-el-gallery">${photoTiles}</div>
@@ -2496,7 +2495,6 @@
     return `<div class="nbhd-el-body">
       <div class="nbhd-el-gallery-wrap">${galleryInner}</div>
       <div class="nbhd-el-info">
-        <div class="nbhd-el-summary">${escHtml(element.summary || '')}</div>
         <ul class="nbhd-el-facts">${facts}</ul>
         ${extraLines ? `<ul class="nbhd-el-extra-facts">${extraLines}</ul>` : ''}
         <!-- metric bars commented out — replaced by text bullets above
