@@ -94,14 +94,35 @@ const OVERPASS_URL = "https://overpass-api.de/api/interpreter";
 const POI_CATEGORIES = ["parks", "restaurants", "cafes", "museums", "shops", "icon_spots"];
 
 /**
- * computeCityMaxCounts — given an array of poiCounts objects (one per neighbourhood),
- * returns the per-category maximum across the city.  Used as the normalisation
- * ceiling so scores are relative within the city (best = ~100%, worst = ~20%).
+ * bboxAreaKm2 — approximate area of a lat/lng bounding box in km².
+ * Uses the midpoint latitude to correct for longitudinal compression.
  */
-function computeCityMaxCounts(allPoiCounts) {
+function bboxAreaKm2(bbox) {
+  if (!bbox?.lat_min) return null;
+  const { lat_min, lat_max, lon_min, lon_max } = bbox;
+  const midLat  = (lat_min + lat_max) / 2;
+  const latKm   = (lat_max - lat_min) * 111.0;
+  const lonKm   = (lon_max - lon_min) * 111.0 * Math.cos(midLat * Math.PI / 180);
+  return Math.max(0.01, latKm * lonKm); // floor at 0.01 km² to avoid div-by-zero
+}
+
+/**
+ * computeCityMaxCounts — given an array of { counts, areaKm2 } objects (one per
+ * neighbourhood), returns the per-category maximum **density** (POIs per km²)
+ * across the city.  This is the normalisation ceiling used by poiCountToScore.
+ *
+ * Density-based ceilings mean large neighbourhoods aren't artificially
+ * over-scored versus small ones that pack the same category into less space.
+ */
+function computeCityMaxCounts(allNeighbourhoodData) {
   const cityMax = {};
   for (const cat of POI_CATEGORIES) {
-    cityMax[cat] = Math.max(1, ...allPoiCounts.map((c) => c?.[cat] || 0));
+    const densities = allNeighbourhoodData.map(({ counts, areaKm2 }) => {
+      const count = counts?.[cat] || 0;
+      const area  = areaKm2 && areaKm2 > 0 ? areaKm2 : 1;
+      return count / area;
+    });
+    cityMax[cat] = Math.max(0.001, ...densities);
   }
   return cityMax;
 }
@@ -194,24 +215,36 @@ function catScore(value, map) {
 }
 
 /**
- * poiCountToScore — √-scale normalisation relative to the city's own maximum.
+ * poiCountToScore — density-aware √-scale normalisation.
  *
- * Scoring is per-city: the neighbourhood with the most of a category scores
- * ~95–100%; others scale proportionally.  √ gives natural spread — a
- * neighbourhood with half the city max scores ~70%, not 50%.
+ * Converts a raw POI count + neighbourhood area into a 0–100 score by:
+ *  1. Computing density = count / areaKm2 (POIs per km²)
+ *  2. Normalising against the city's peak density for that category
+ *  3. Applying √ scaling so a neighbourhood at half the peak scores ~70%, not 50%
  *
+ * This prevents large neighbourhoods from being over-scored just because they
+ * contain more absolute POIs — a compact dense neighbourhood scores higher than
+ * a sprawling one with the same raw count.
+ *
+ * Falls back to raw-count global ceilings when area or cityMaxCounts is absent.
  * Floor of 10 so even the quietest neighbourhood registers visibly.
- *
- * Falls back to a global ceiling when cityMaxCounts is not available.
  */
+// Global fallback ceilings in **density units** (POIs per km²) for a typical
+// walkable urban neighbourhood (~4 km²).  Used only when Overpass data is absent.
 const GLOBAL_FALLBACK_MAX = {
-  parks: 20, restaurants: 300, cafes: 100, museums: 30, shops: 500, icon_spots: 30,
+  parks: 5, restaurants: 75, cafes: 25, museums: 8, shops: 120, icon_spots: 8,
 };
 
-function poiCountToScore(count, category, cityMaxCounts = null) {
+function poiCountToScore(count, category, areaKm2 = null, cityMaxDensities = null) {
   if (!count || count <= 0) return 10;
-  const max = cityMaxCounts?.[category] || GLOBAL_FALLBACK_MAX[category] || 50;
-  // √(count/max)*100, floor 10, ceil 100
+  if (areaKm2 && areaKm2 > 0) {
+    // Density path (preferred): normalise against city's peak density
+    const density    = count / areaKm2;
+    const maxDensity = cityMaxDensities?.[category] || GLOBAL_FALLBACK_MAX[category] || 5;
+    return clamp(Math.round(Math.sqrt(density / maxDensity) * 100), 10, 100);
+  }
+  // Fallback: raw count against global ceiling (no area data available)
+  const max = GLOBAL_FALLBACK_MAX[category] || 50;
   return clamp(Math.round(Math.sqrt(count / max) * 100), 10, 100);
 }
 
@@ -224,7 +257,7 @@ function poiCountToScore(count, category, cityMaxCounts = null) {
  * infrastructure, not a POI count).  Falls back to the full formula when
  * poiCounts is null.
  */
-function computeElementScores(attributes = {}, tags = [], vibeLong = "", poiCounts = null, cityMaxCounts = null) {
+function computeElementScores(attributes = {}, tags = [], vibeLong = "", poiCounts = null, cityMaxCounts = null, areaKm2 = null) {
   const wDining = catScore(attributes.walkability_dining, { excellent: 90, good: 68, limited: 40 });
   const wTour   = catScore(attributes.walkability_tourist_spots, { excellent: 90, good: 68, limited: 40 });
   const energy  = catScore(attributes.street_energy, { lively: 88, moderate: 62, quiet: 42 });
@@ -236,12 +269,12 @@ function computeElementScores(attributes = {}, tags = [], vibeLong = "", poiCoun
   let scores;
   if (hasRealCounts) {
     scores = {
-      parks:       poiCountToScore(poiCounts.parks,       "parks",       cityMaxCounts),
-      restaurants: poiCountToScore(poiCounts.restaurants, "restaurants", cityMaxCounts),
-      cafes:       poiCountToScore(poiCounts.cafes,       "cafes",       cityMaxCounts),
-      museums:     poiCountToScore(poiCounts.museums,     "museums",     cityMaxCounts),
-      shops:       poiCountToScore(poiCounts.shops,       "shops",       cityMaxCounts),
-      icon_spots:  poiCountToScore(poiCounts.icon_spots,  "icon_spots",  cityMaxCounts),
+      parks:       poiCountToScore(poiCounts.parks,       "parks",       areaKm2, cityMaxCounts),
+      restaurants: poiCountToScore(poiCounts.restaurants, "restaurants", areaKm2, cityMaxCounts),
+      cafes:       poiCountToScore(poiCounts.cafes,       "cafes",       areaKm2, cityMaxCounts),
+      museums:     poiCountToScore(poiCounts.museums,     "museums",     areaKm2, cityMaxCounts),
+      shops:       poiCountToScore(poiCounts.shops,       "shops",       areaKm2, cityMaxCounts),
+      icon_spots:  poiCountToScore(poiCounts.icon_spots,  "icon_spots",  areaKm2, cityMaxCounts),
     };
   } else {
     const green   = catScore(attributes.green_spaces, { lots: 90, some: 65, minimal: 32 });
@@ -506,7 +539,8 @@ async function fetchElementPhotos(city, neighborhoodName, elementKey, unsplashKe
  * Falls back to Gemini-attribute formula when null.
  */
 async function buildNeighborhoodVibeData({ city, neighborhoodName, attributes, tags, vibeLong, hotelCount, unsplashKey, poiCounts = null, cityMaxCounts = null, bbox = null, googlePlacesKey = null }) {
-  const { scores, shopsSubscores } = computeElementScores(attributes, tags, vibeLong, poiCounts, cityMaxCounts);
+  const areaKm2 = bboxAreaKm2(bbox);
+  const { scores, shopsSubscores } = computeElementScores(attributes, tags, vibeLong, poiCounts, cityMaxCounts, areaKm2);
   const vibeElements = {};
   const vibePhotos = {};
 
@@ -530,6 +564,7 @@ module.exports = {
   ELEMENTS,
   PHOTO_RULES,
   POI_CATEGORIES,
+  bboxAreaKm2,
   fetchOverpassPOIs,
   computeCityMaxCounts,
   buildNeighborhoodVibeData,

@@ -5,7 +5,7 @@
  */
 
 const GEMINI_MODEL = "gemini-2.5-flash-lite";
-const { buildNeighborhoodVibeData, fetchOverpassPOIs, computeCityMaxCounts } = require("./neighborhood-vibe-data");
+const { buildNeighborhoodVibeData, fetchOverpassPOIs, computeCityMaxCounts, bboxAreaKm2 } = require("./neighborhood-vibe-data");
 
 // Canonical Gemini prompt for neighborhood generation
 function buildNeighborhoodPrompt(city) {
@@ -425,11 +425,14 @@ async function generateNeighborhoods(city, db, geminiKey, unsplashKey, googlePla
     });
   }
 
-  // Compute city-level POI maximums for per-city score normalisation.
-  const allPoiCounts = rows.map((r) => r._poiCounts).filter(Boolean);
-  const cityMaxCounts = allPoiCounts.length > 0 ? computeCityMaxCounts(allPoiCounts) : null;
+  // Compute city-level peak densities for per-city score normalisation.
+  // Uses {counts, areaKm2} pairs so scores reflect POI density not raw counts.
+  const allNeighbourhoodData = rows
+    .filter(r => r._poiCounts && r.bbox?.lat_min != null)
+    .map(r => ({ counts: r._poiCounts, areaKm2: bboxAreaKm2(r.bbox) }));
+  const cityMaxCounts = allNeighbourhoodData.length > 0 ? computeCityMaxCounts(allNeighbourhoodData) : null;
   if (cityMaxCounts) {
-    console.log(`[neighborhoods] city max counts for ${city}: ${JSON.stringify(cityMaxCounts)}`);
+    console.log(`[neighborhoods] city peak densities for ${city}: ${JSON.stringify(Object.fromEntries(Object.entries(cityMaxCounts).map(([k,v]) => [k, Math.round(v * 10) / 10])))} per km²`);
   }
 
   // Compute per-element vibe payloads and photos, then derive hero from top elements.
@@ -572,11 +575,13 @@ async function recomputeNeighborhoodVibes(city, db, unsplashKey, googlePlacesKey
     }
   }
 
-  // Compute city-level maximums from all stored counts for per-city normalisation
-  const allPoiCounts = rows.map((r) => r.attributes?.poi_counts).filter(Boolean);
-  const cityMaxCounts = allPoiCounts.length > 0 ? computeCityMaxCounts(allPoiCounts) : null;
+  // Compute city-level peak densities from stored counts + bbox areas
+  const allNeighbourhoodData = rows
+    .filter(r => r.attributes?.poi_counts && r.bbox?.lat_min != null)
+    .map(r => ({ counts: r.attributes.poi_counts, areaKm2: bboxAreaKm2(r.bbox) }));
+  const cityMaxCounts = allNeighbourhoodData.length > 0 ? computeCityMaxCounts(allNeighbourhoodData) : null;
   if (cityMaxCounts) {
-    console.log(`[recompute] city max counts for ${city}: ${JSON.stringify(cityMaxCounts)}`);
+    console.log(`[recompute] city peak densities for ${city}: ${JSON.stringify(Object.fromEntries(Object.entries(cityMaxCounts).map(([k,v]) => [k, Math.round(v * 10) / 10])))} per km²`);
   }
 
   for (const row of rows) {
