@@ -140,20 +140,31 @@ async function fetchOverpassPOIs(bbox) {
   if (lat_min == null) return null;
 
   // Single union query — one HTTP call per neighbourhood.
-  // Parks: ways/relations only (polygons = actual park areas).
-  // Node-tagged parks in OSM are usually micro-markers (tree planters, 2m² patches)
-  // that inflate counts by 10-30x — only polygon areas represent real parks.
-  const q = `[out:json][timeout:25];
+  //
+  // Parks: polygon areas only (ways/relations). Node-tagged parks are usually
+  // micro-markers (tree planters, 2m² patches) that inflate counts 10–30x.
+  //
+  // Icon spots: must capture both nodes (small statues, plaques) AND polygon
+  // features (cathedrals, palaces, archaeological sites like Templo Mayor).
+  // tourism=artwork included for public sculptures and murals.
+  // historic=palace/archaeological_site added for civic landmarks that are
+  // mapped as way/relation footprints in OSM (not as tourism=attraction nodes).
+  const q = `[out:json][timeout:30];
 (
   way["leisure"~"^(park|garden)$"](${lat_min},${lon_min},${lat_max},${lon_max});
   relation["leisure"~"^(park|garden)$"](${lat_min},${lon_min},${lat_max},${lon_max});
   node["amenity"~"^(restaurant|fast_food|bar|pub|food_court)$"](${lat_min},${lon_min},${lat_max},${lon_max});
   node["amenity"="cafe"](${lat_min},${lon_min},${lat_max},${lon_max});
-  node["tourism"~"^(museum|gallery|attraction|viewpoint)$"](${lat_min},${lon_min},${lat_max},${lon_max});
+  node["tourism"~"^(museum|gallery)$"](${lat_min},${lon_min},${lat_max},${lon_max});
   way["tourism"~"^(museum|gallery)$"](${lat_min},${lon_min},${lat_max},${lon_max});
+  relation["tourism"~"^(museum|gallery)$"](${lat_min},${lon_min},${lat_max},${lon_max});
   node["shop"](${lat_min},${lon_min},${lat_max},${lon_max});
-  node["historic"~"^(monument|memorial|castle|ruins|archaeological_site)$"](${lat_min},${lon_min},${lat_max},${lon_max});
-  way["historic"~"^(monument|castle|ruins)$"](${lat_min},${lon_min},${lat_max},${lon_max});
+  node["tourism"~"^(attraction|viewpoint|artwork)$"](${lat_min},${lon_min},${lat_max},${lon_max});
+  way["tourism"~"^(attraction|viewpoint)$"](${lat_min},${lon_min},${lat_max},${lon_max});
+  relation["tourism"~"^(attraction|viewpoint)$"](${lat_min},${lon_min},${lat_max},${lon_max});
+  node["historic"~"^(monument|memorial|castle|ruins|archaeological_site|palace|building)$"](${lat_min},${lon_min},${lat_max},${lon_max});
+  way["historic"~"^(monument|memorial|castle|ruins|archaeological_site|palace|building|fortification)$"](${lat_min},${lon_min},${lat_max},${lon_max});
+  way["building"~"^(cathedral|basilica|chapel|monastery)$"](${lat_min},${lon_min},${lat_max},${lon_max});
 );
 out tags;`;
 
@@ -190,8 +201,10 @@ out tags;`;
     } else if (t.shop) {
       counts.shops++;
     } else if (
-      ["attraction", "viewpoint"].includes(t.tourism) ||
-      ["monument", "memorial", "castle", "ruins", "archaeological_site"].includes(t.historic)
+      ["attraction", "viewpoint", "artwork"].includes(t.tourism) ||
+      ["monument", "memorial", "castle", "ruins", "archaeological_site",
+       "palace", "building", "fortification"].includes(t.historic) ||
+      ["cathedral", "basilica", "chapel", "monastery"].includes(t.building)
     ) {
       counts.icon_spots++;
     }
