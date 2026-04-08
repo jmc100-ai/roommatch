@@ -90,6 +90,9 @@ const FALLBACK_PHOTOS = {
 
 const OVERPASS_URL = "https://overpass-api.de/api/interpreter";
 
+/** Drop OSM micro-polygons (planter beds, etc.); ~500 m² ≈ 22 m square. */
+const MIN_GREEN_AREA_SQ_M = 500;
+
 // POI categories that can be scored from real counts.
 const POI_CATEGORIES = ["parks", "restaurants", "cafes", "museums", "shops", "icon_spots"];
 
@@ -128,21 +131,107 @@ function computeCityMaxCounts(allNeighbourhoodData) {
 }
 
 /**
+ * Shoelace area of a closed lat/lon ring in m² (equirectangular approx; fine for small polygons).
+ */
+function polygonAreaSqM(coords) {
+  if (!coords || coords.length < 4) return 0;
+  const first = coords[0];
+  const last  = coords[coords.length - 1];
+  const closed =
+    Math.abs(first.lat - last.lat) < 1e-7 && Math.abs(first.lon - last.lon) < 1e-7;
+  if (!closed) return 0;
+  let latSum = 0;
+  for (const p of coords) latSum += p.lat;
+  const refLat = (latSum / coords.length) * (Math.PI / 180);
+  const mPerLat = 111_000;
+  const mPerLon = 111_000 * Math.cos(refLat);
+  let sum = 0;
+  for (let i = 0; i < coords.length - 1; i++) {
+    const x1 = coords[i].lon * mPerLon;
+    const y1 = coords[i].lat * mPerLat;
+    const x2 = coords[i + 1].lon * mPerLon;
+    const y2 = coords[i + 1].lat * mPerLat;
+    sum += x1 * y2 - x2 * y1;
+  }
+  return Math.abs(sum / 2);
+}
+
+/**
+ * Count leisure=park|garden features whose mapped area ≥ minSqM.
+ * Overpass public servers do not support (if: geom.area()), so we use out geom + this filter.
+ */
+function countGreenAreasMinSqM(elements, minSqM) {
+  let n = 0;
+  for (const el of elements || []) {
+    const t = el.tags || {};
+    if (t.leisure !== "park" && t.leisure !== "garden") continue;
+
+    if (el.type === "way" && el.geometry?.length) {
+      if (polygonAreaSqM(el.geometry) >= minSqM) n++;
+    } else if (el.type === "relation" && el.members?.length) {
+      let total = 0;
+      for (const m of el.members) {
+        if (m.role === "inner") continue;
+        if (m.geometry?.length) total += polygonAreaSqM(m.geometry);
+      }
+      if (total >= minSqM) n++;
+    }
+  }
+  return n;
+}
+
+async function fetchOverpassGreenCount(bbox, minSqM) {
+  const { lat_min, lat_max, lon_min, lon_max } = bbox || {};
+  const q = `[out:json][timeout:30];
+(
+  way["leisure"~"^(park|garden)$"](${lat_min},${lon_min},${lat_max},${lon_max});
+  relation["leisure"~"^(park|garden)$"](${lat_min},${lon_min},${lat_max},${lon_max});
+);
+out geom;`;
+
+  const doFetch = () => fetch(OVERPASS_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: `data=${encodeURIComponent(q)}`,
+    signal: AbortSignal.timeout(30000),
+  });
+
+  let res = await doFetch();
+  if (res.status === 429 || res.status === 504) {
+    await new Promise((r) => setTimeout(r, 10_000));
+    res = await doFetch();
+  }
+  if (!res.ok) throw new Error(`Overpass API ${res.status}`);
+  const data = await res.json();
+  return countGreenAreasMinSqM(data.elements, minSqM);
+}
+
+/**
  * fetchOverpassPOIs — queries OpenStreetMap via Overpass for 6 POI categories
  * inside a bounding box. Returns { parks, restaurants, cafes, museums, shops,
  * icon_spots } counts, or null on failure (caller should fall back to formula).
  *
  * Retries once on 429/504 after a 10s back-off to stay within fair-use limits
  * of the public overpass-api.de instance.
+ *
+ * Parks: second request with out geom; counts only polygons ≥ MIN_GREEN_AREA_SQ_M
+ * (public Overpass has no geom.area() filter).
  */
 async function fetchOverpassPOIs(bbox) {
   const { lat_min, lat_max, lon_min, lon_max } = bbox || {};
   if (lat_min == null) return null;
 
-  // Single union query — one HTTP call per neighbourhood.
-  //
-  // Parks: polygon areas only (ways/relations). Node-tagged parks are usually
-  // micro-markers (tree planters, 2m² patches) that inflate counts 10–30x.
+  let parksFiltered = 0;
+  try {
+    parksFiltered = await fetchOverpassGreenCount(bbox, MIN_GREEN_AREA_SQ_M);
+  } catch (e) {
+    console.warn(`[overpass] green area filter failed, using 0 parks: ${e.message}`);
+  }
+
+  // Brief pause before main union — eases 429 on overpass-api.de
+  await new Promise((r) => setTimeout(r, 3000));
+
+  // Main union (no park/garden — those are in fetchOverpassGreenCount).
   //
   // Icon spots: must capture both nodes (small statues, plaques) AND polygon
   // features (cathedrals, palaces, archaeological sites like Templo Mayor).
@@ -151,8 +240,6 @@ async function fetchOverpassPOIs(bbox) {
   // mapped as way/relation footprints in OSM (not as tourism=attraction nodes).
   const q = `[out:json][timeout:30];
 (
-  way["leisure"~"^(park|garden)$"](${lat_min},${lon_min},${lat_max},${lon_max});
-  relation["leisure"~"^(park|garden)$"](${lat_min},${lon_min},${lat_max},${lon_max});
   node["amenity"~"^(restaurant|fast_food|bar|pub|food_court)$"](${lat_min},${lon_min},${lat_max},${lon_max});
   node["amenity"="cafe"](${lat_min},${lon_min},${lat_max},${lon_max});
   node["tourism"~"^(museum|gallery)$"](${lat_min},${lon_min},${lat_max},${lon_max});
@@ -188,13 +275,18 @@ out tags;`;
   if (!res.ok) throw new Error(`Overpass API ${res.status}`);
   const data = await res.json();
 
-  const counts = { parks: 0, restaurants: 0, cafes: 0, museums: 0, shops: 0, icon_spots: 0 };
+  const counts = {
+    parks: parksFiltered,
+    restaurants: 0,
+    cafes: 0,
+    museums: 0,
+    shops: 0,
+    icon_spots: 0,
+  };
 
   for (const el of (data.elements || [])) {
     const t = el.tags || {};
-    if (t.leisure === "park" || t.leisure === "garden") {
-      counts.parks++;
-    } else if (t.amenity === "cafe") {
+    if (t.amenity === "cafe") {
       counts.cafes++;
     } else if (["restaurant", "fast_food", "bar", "pub", "food_court"].includes(t.amenity)) {
       counts.restaurants++;
