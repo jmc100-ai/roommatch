@@ -90,8 +90,8 @@ const FALLBACK_PHOTOS = {
 
 const OVERPASS_URL = "https://overpass-api.de/api/interpreter";
 
-/** Drop OSM micro-polygons (planter beds, etc.); ~500 m² ≈ 22 m square. */
-const MIN_GREEN_AREA_SQ_M = 500;
+/** Drop micro-polygons smaller than this; 250 m² ≈ ~16 m × 16 m square. */
+const MIN_GREEN_AREA_SQ_M = 250;
 
 // POI categories that can be scored from real counts.
 const POI_CATEGORIES = ["parks", "restaurants", "cafes", "museums", "shops", "icon_spots"];
@@ -157,14 +157,31 @@ function polygonAreaSqM(coords) {
 }
 
 /**
- * Count leisure=park|garden features whose mapped area ≥ minSqM.
+ * Tags that represent meaningful green / open spaces a visitor would recognise.
+ * leisure=garden is kept but filtered by MIN_GREEN_AREA_SQ_M to drop planters/courtyards.
+ */
+function isGreenElement(t) {
+  return (
+    t.leisure === "park" ||
+    t.leisure === "garden" ||
+    t.leisure === "nature_reserve" ||
+    t.leisure === "recreation_ground" ||
+    t.landuse === "village_green" ||
+    t.landuse === "grass" ||
+    t.natural  === "wood" ||
+    t.landuse  === "forest"
+  );
+}
+
+/**
+ * Count green-space features whose mapped polygon area ≥ minSqM.
  * Overpass public servers do not support (if: geom.area()), so we use out geom + this filter.
  */
 function countGreenAreasMinSqM(elements, minSqM) {
   let n = 0;
   for (const el of elements || []) {
     const t = el.tags || {};
-    if (t.leisure !== "park" && t.leisure !== "garden") continue;
+    if (!isGreenElement(t)) continue;
 
     if (el.type === "way" && el.geometry?.length) {
       if (polygonAreaSqM(el.geometry) >= minSqM) n++;
@@ -180,12 +197,23 @@ function countGreenAreasMinSqM(elements, minSqM) {
   return n;
 }
 
+/**
+ * Fetch park/garden/green-space polygons with geometry and filter by area in Node.
+ * Retries up to 3× on 429/504 with exponential back-off.
+ */
 async function fetchOverpassGreenCount(bbox, minSqM) {
   const { lat_min, lat_max, lon_min, lon_max } = bbox || {};
-  const q = `[out:json][timeout:30];
+  const bb = `${lat_min},${lon_min},${lat_max},${lon_max}`;
+  // Broad green-space union: parks, gardens, nature reserves, village greens,
+  // grass landuse, woods. All filtered to min area in Node.
+  const q = `[out:json][timeout:35];
 (
-  way["leisure"~"^(park|garden)$"](${lat_min},${lon_min},${lat_max},${lon_max});
-  relation["leisure"~"^(park|garden)$"](${lat_min},${lon_min},${lat_max},${lon_max});
+  way["leisure"~"^(park|garden|nature_reserve|recreation_ground)$"](${bb});
+  relation["leisure"~"^(park|garden|nature_reserve|recreation_ground)$"](${bb});
+  way["landuse"~"^(village_green|grass|forest)$"](${bb});
+  relation["landuse"~"^(village_green|grass|forest)$"](${bb});
+  way["natural"="wood"](${bb});
+  relation["natural"="wood"](${bb});
 );
 out geom;`;
 
@@ -193,15 +221,21 @@ out geom;`;
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body: `data=${encodeURIComponent(q)}`,
-    signal: AbortSignal.timeout(30000),
+    signal: AbortSignal.timeout(35000),
   });
 
-  let res = await doFetch();
-  if (res.status === 429 || res.status === 504) {
-    await new Promise((r) => setTimeout(r, 10_000));
+  let res;
+  const delays = [10_000, 15_000, 20_000];
+  for (let attempt = 0; attempt <= delays.length; attempt++) {
     res = await doFetch();
+    if (res.ok) break;
+    if ((res.status === 429 || res.status === 504) && attempt < delays.length) {
+      await new Promise((r) => setTimeout(r, delays[attempt]));
+    } else {
+      throw new Error(`Overpass green count ${res.status}`);
+    }
   }
-  if (!res.ok) throw new Error(`Overpass API ${res.status}`);
+  if (!res.ok) throw new Error(`Overpass green count ${res.status}`);
   const data = await res.json();
   return countGreenAreasMinSqM(data.elements, minSqM);
 }
@@ -221,11 +255,12 @@ async function fetchOverpassPOIs(bbox) {
   const { lat_min, lat_max, lon_min, lon_max } = bbox || {};
   if (lat_min == null) return null;
 
-  let parksFiltered = 0;
+  let parksFiltered = null;   // null = fetch failed → fall back to old park+garden count
   try {
     parksFiltered = await fetchOverpassGreenCount(bbox, MIN_GREEN_AREA_SQ_M);
+    console.log(`[overpass] green spaces (≥${MIN_GREEN_AREA_SQ_M} m²): ${parksFiltered}`);
   } catch (e) {
-    console.warn(`[overpass] green area filter failed, using 0 parks: ${e.message}`);
+    console.warn(`[overpass] green count failed (${e.message}); falling back to unfiltered park+garden`);
   }
 
   // Brief pause before main union — eases 429 on overpass-api.de
@@ -276,12 +311,13 @@ out tags;`;
   const data = await res.json();
 
   const counts = {
-    parks: parksFiltered,
+    parks: 0,       // filled in below; either from filtered green count or fallback
     restaurants: 0,
     cafes: 0,
     museums: 0,
     shops: 0,
     icon_spots: 0,
+    _parkFallback: 0, // unfiltered park+garden node count from main union (fallback only)
   };
 
   for (const el of (data.elements || [])) {
@@ -304,6 +340,12 @@ out tags;`;
       counts.icon_spots++;
     }
   }
+
+  // Use filtered green count when available; fallback to 0 (main query has no park nodes)
+  counts.parks = parksFiltered !== null ? parksFiltered : counts._parkFallback;
+  delete counts._parkFallback;
+
+  console.log(`[overpass] final counts: parks=${counts.parks} restaurants=${counts.restaurants} cafes=${counts.cafes} museums=${counts.museums} shops=${counts.shops} icon_spots=${counts.icon_spots}`);
 
   return counts;
 }
