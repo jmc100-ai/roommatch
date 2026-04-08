@@ -447,10 +447,12 @@ const PLACES_ELEMENT_TYPES = {
   cafes:       ["cafe"],
   museums:     ["museum", "art_gallery"],
   shops:       ["clothing_store", "book_store", "gift_shop", "shopping_mall"],
-  // historical_landmark only — these return outdoor architectural photos (cathedrals,
-  // palaces, monuments). tourist_attraction is intentionally excluded because it
-  // matches museums/restaurants/bars which return interior shots.
-  icon_spots:  ["historical_landmark"],
+  // historical_landmark + worship buildings — these return outdoor architectural photos.
+  // tourist_attraction is intentionally excluded: it matches museums/restaurants/bars
+  // which return interior shots. church/mosque/hindu_temple cover major religious
+  // landmarks (Parroquia de la Sagrada Familia, mosques in KL, etc.) that Google
+  // Places doesn't always tag as historical_landmark.
+  icon_spots:  ["historical_landmark", "church", "mosque", "hindu_temple", "synagogue"],
   street_feel: null,
 };
 
