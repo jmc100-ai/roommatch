@@ -1619,7 +1619,8 @@
       border-radius:10px; padding:8px 10px; min-width:136px; white-space:nowrap; cursor:pointer; font-size:12px;
     }
     .nbhd-el-tab.active { border-color:rgba(201,169,110,.45); background:rgba(201,169,110,.08); color:var(--accent); }
-    .nbhd-el-body { display:grid; grid-template-columns:1.2fr 1fr; gap:12px; margin-bottom:10px; }
+    /* Gallery ~65% / text ~35% (was ~55/45) — more room for photo strip */
+    .nbhd-el-body { display:grid; grid-template-columns:1.9fr 1fr; gap:12px; margin-bottom:10px; }
     /* Gallery wrap: clips overflowing photos; arrows overlay inside the edges */
     .nbhd-el-gallery-wrap { position:relative; overflow:hidden; border-radius:12px; }
     .nbhd-el-gallery { display:flex; gap:8px; overflow-x:auto; scrollbar-width:none; scroll-behavior:smooth; }
