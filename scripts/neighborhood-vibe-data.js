@@ -468,18 +468,22 @@ async function fetchGooglePlacesElementPhotos(bbox, elementKey, placesKey, maxPh
 
   const centerLat = (bbox.lat_min + bbox.lat_max) / 2;
   const centerLng = (bbox.lon_min + bbox.lon_max) / 2;
-  // Convert bbox size to radius in metres, cap at 3 km
-  const radiusM = Math.min(
+  // Base radius from bbox size, capped at 3 km
+  const baseRadiusM = Math.min(
     3000,
     Math.round(Math.max(bbox.lat_max - bbox.lat_min, bbox.lon_max - bbox.lon_min) * 111000 / 2)
   );
 
-  // icon_spots and parks use DISTANCE ranking so the search returns places
-  // closest to the neighbourhood centre, preventing adjacent mega-landmarks
-  // (e.g. Chapultepec Castle appearing in Condesa results) from dominating.
-  // Other categories keep POPULARITY since a well-rated restaurant / cafe
-  // anywhere in the bbox is a valid representative of the neighbourhood.
-  const rankPref = (elementKey === "icon_spots" || elementKey === "parks") ? "DISTANCE" : "POPULARITY";
+  // icon_spots: use POPULARITY (returns well-known places) but shrink radius to
+  // 65% so landmarks at the edges of the bbox (e.g. Chapultepec Castle appearing
+  // in Condesa results) are excluded. The tighter circle stays centred on the
+  // neighbourhood and picks the most-popular spots actually *within* it.
+  // parks: use DISTANCE so large parks at the centre rank first.
+  // All other categories: full radius + POPULARITY.
+  const rankPref = elementKey === "parks" ? "DISTANCE" : "POPULARITY";
+  const radiusM  = elementKey === "icon_spots"
+    ? Math.round(baseRadiusM * 0.65)
+    : baseRadiusM;
 
   const body = {
     includedTypes: types,
