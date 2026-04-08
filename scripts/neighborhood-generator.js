@@ -584,14 +584,6 @@ async function recomputeNeighborhoodVibes(city, db, unsplashKey, googlePlacesKey
       bbox: row.bbox || null,
       googlePlacesKey,
     });
-    // Deduplicate fresh photos against other neighborhoods in this city.
-    // Google Places returns the same venue photos for adjacent neighborhoods
-    // (e.g. a cafe on the border of Roma Norte and Juárez). Filter out any
-    // photo URL already committed to a sibling neighborhood so each hood gets
-    // a unique set. Unsplash street_feel photos are excluded from this since
-    // they're generic anyway and fall back to fallback_curated if all are dupes.
-    for (const [key, photos] of Object.entries(vibeData.vibePhotos)) {
-      vibeData.vibePhotos[key] = photos.filter(p => {
     // Merge fresh + stored photos (only override categories with real fresh results).
     const mergedForHero = { ...(row.vibe_photos || {}) };
     for (const [key, photos] of Object.entries(vibeData.vibePhotos)) {
