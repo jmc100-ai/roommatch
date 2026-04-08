@@ -330,6 +330,93 @@ function buildElementPayload(elementKey, score, neighborhoodName, hotelCount, sh
   };
 }
 
+// ── Google Places photo helpers ───────────────────────────────────────────────
+
+const PLACES_NEARBY_URL  = "https://places.googleapis.com/v1/places:searchNearby";
+const PLACES_MEDIA_BASE  = "https://places.googleapis.com/v1";
+
+// Places API (New) type values per element category.
+// street_feel has no clean Places type — falls back to Unsplash.
+const PLACES_ELEMENT_TYPES = {
+  parks:       ["park", "national_park", "botanical_garden"],
+  restaurants: ["restaurant"],
+  cafes:       ["cafe"],
+  museums:     ["museum", "art_gallery"],
+  shops:       ["clothing_store", "book_store", "gift_shop", "shopping_mall"],
+  icon_spots:  ["tourist_attraction", "historical_landmark"],
+  street_feel: null,
+};
+
+/**
+ * fetchGooglePlacesElementPhotos — nearby search inside the neighbourhood bbox,
+ * filtered by category type. Returns up to `maxPhotos` photo objects.
+ * Falls back gracefully — returns [] on any error.
+ */
+async function fetchGooglePlacesElementPhotos(bbox, elementKey, placesKey, maxPhotos = PHOTO_RULES.target) {
+  if (!placesKey || !bbox?.lat_min) return [];
+  const types = PLACES_ELEMENT_TYPES[elementKey];
+  if (!types) return []; // street_feel — caller uses Unsplash fallback
+
+  const centerLat = (bbox.lat_min + bbox.lat_max) / 2;
+  const centerLng = (bbox.lon_min + bbox.lon_max) / 2;
+  // Convert bbox size to radius in metres, cap at 3 km
+  const radiusM = Math.min(
+    3000,
+    Math.round(Math.max(bbox.lat_max - bbox.lat_min, bbox.lon_max - bbox.lon_min) * 111000 / 2)
+  );
+
+  const body = {
+    includedTypes: types,
+    maxResultCount: maxPhotos,
+    rankPreference: "POPULARITY",
+    locationRestriction: {
+      circle: { center: { latitude: centerLat, longitude: centerLng }, radius: radiusM },
+    },
+  };
+
+  let places = [];
+  try {
+    const res = await fetch(PLACES_NEARBY_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Goog-Api-Key": placesKey,
+        "X-Goog-FieldMask": "places.id,places.displayName,places.photos",
+      },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(15000),
+    });
+    if (!res.ok) return [];
+    const data = await res.json();
+    places = data.places || [];
+  } catch { return []; }
+
+  const photos = [];
+  for (const place of places) {
+    if (!place.photos?.length) continue;
+    const photoName = place.photos[0].name;
+    const attr = place.photos[0].authorAttributions?.[0];
+    try {
+      const mediaRes = await fetch(
+        `${PLACES_MEDIA_BASE}/${photoName}/media?maxWidthPx=900&skipHttpRedirect=true`,
+        { headers: { "X-Goog-Api-Key": placesKey }, signal: AbortSignal.timeout(10000) }
+      );
+      if (!mediaRes.ok) continue;
+      const mediaData = await mediaRes.json();
+      if (!mediaData.photoUri) continue;
+      photos.push({
+        url:        mediaData.photoUri,
+        source:     "google_places",
+        query:      place.displayName?.text || elementKey,
+        is_fallback: false,
+        attribution: attr ? { photographer: attr.displayName, profile_url: attr.uri } : null,
+      });
+    } catch { continue; }
+    if (photos.length >= maxPhotos) break;
+  }
+  return photos;
+}
+
 // ── Unsplash photo helpers ────────────────────────────────────────────────────
 
 function buildQueries(elementKey, neighborhoodName, city) {
@@ -364,7 +451,11 @@ async function fetchUnsplashPhotos(query, unsplashKey, perPage = 8) {
   return data.results || [];
 }
 
-async function fetchElementPhotos(city, neighborhoodName, elementKey, unsplashKey) {
+/**
+ * fetchElementPhotos — Google Places primary, Unsplash fallback, curated last resort.
+ * street_feel has no Places type so it always uses Unsplash.
+ */
+async function fetchElementPhotos(city, neighborhoodName, elementKey, unsplashKey, bbox = null, googlePlacesKey = null) {
   const dedupe = new Set();
   const picks = [];
 
@@ -376,17 +467,26 @@ async function fetchElementPhotos(city, neighborhoodName, elementKey, unsplashKe
     picks.push(obj);
   };
 
-  const queries = buildQueries(elementKey, neighborhoodName, city);
-  if (queries[0]) {
-    const res = await fetchUnsplashPhotos(queries[0], unsplashKey, PHOTO_RULES.max);
-    res.forEach((photo) => addPick(normalizePhotoObject(photo, queries[0], "unsplash")));
+  // Primary: Google Places geo-search (real photos from actual venues in the neighbourhood)
+  if (googlePlacesKey && bbox) {
+    const placesPhotos = await fetchGooglePlacesElementPhotos(bbox, elementKey, googlePlacesKey);
+    placesPhotos.forEach((p) => addPick(p));
   }
 
-  if (picks.length < PHOTO_RULES.min && queries[2]) {
-    const res = await fetchUnsplashPhotos(queries[2], unsplashKey, PHOTO_RULES.max);
-    res.forEach((photo) => addPick(normalizePhotoObject(photo, queries[2], "unsplash_city")));
+  // Fallback: Unsplash text search
+  if (picks.length < PHOTO_RULES.min) {
+    const queries = buildQueries(elementKey, neighborhoodName, city);
+    if (queries[0]) {
+      const res = await fetchUnsplashPhotos(queries[0], unsplashKey, PHOTO_RULES.max);
+      res.forEach((photo) => addPick(normalizePhotoObject(photo, queries[0], "unsplash")));
+    }
+    if (picks.length < PHOTO_RULES.min && queries[2]) {
+      const res = await fetchUnsplashPhotos(queries[2], unsplashKey, PHOTO_RULES.max);
+      res.forEach((photo) => addPick(normalizePhotoObject(photo, queries[2], "unsplash_city")));
+    }
   }
 
+  // Last resort: curated static fallbacks
   if (picks.length < PHOTO_RULES.min) {
     (FALLBACK_PHOTOS[elementKey] || []).forEach((url) =>
       addPick(normalizePhotoObject(url, "fallback", "fallback_curated", true))
@@ -405,7 +505,7 @@ async function fetchElementPhotos(city, neighborhoodName, elementKey, unsplashKe
  * scores for all elements except street_feel are derived from real OSM data.
  * Falls back to Gemini-attribute formula when null.
  */
-async function buildNeighborhoodVibeData({ city, neighborhoodName, attributes, tags, vibeLong, hotelCount, unsplashKey, poiCounts = null, cityMaxCounts = null }) {
+async function buildNeighborhoodVibeData({ city, neighborhoodName, attributes, tags, vibeLong, hotelCount, unsplashKey, poiCounts = null, cityMaxCounts = null, bbox = null, googlePlacesKey = null }) {
   const { scores, shopsSubscores } = computeElementScores(attributes, tags, vibeLong, poiCounts, cityMaxCounts);
   const vibeElements = {};
   const vibePhotos = {};
@@ -420,7 +520,7 @@ async function buildNeighborhoodVibeData({ city, neighborhoodName, attributes, t
       key === "shops" ? shopsSubscores : null,
       poiCounts,
     );
-    vibePhotos[key] = await fetchElementPhotos(city, neighborhoodName, key, unsplashKey);
+    vibePhotos[key] = await fetchElementPhotos(city, neighborhoodName, key, unsplashKey, bbox, googlePlacesKey);
   }
 
   return { vibeElements, vibePhotos };

@@ -2448,7 +2448,7 @@ app.get("/api/neighborhoods", async (req, res) => {
     try {
       const rows = await generateNeighborhoods(
         city, supabaseAdmin || supabase,
-        process.env.GEMINI_KEY, process.env.UNSPLASH_KEY
+        process.env.GEMINI_KEY, process.env.UNSPLASH_KEY, process.env.GOOGLE_PLACES_KEY
       );
       neighborhoodGenerating.delete(city);
       return res.json({ neighborhoods: rows, city });
@@ -2570,7 +2570,7 @@ app.post("/api/backfill-neighborhood-vibes", async (req, res) => {
 
   (async () => {
     try {
-      const updated = await recomputeNeighborhoodVibes(city, db, process.env.UNSPLASH_KEY);
+      const updated = await recomputeNeighborhoodVibes(city, db, process.env.UNSPLASH_KEY, process.env.GOOGLE_PLACES_KEY);
       console.log(`[backfill-neighborhood-vibes] ${city}: ${updated} neighborhoods refreshed`);
     } catch (e) {
       console.error(`[backfill-neighborhood-vibes] ${city} failed:`, e.message);
@@ -2594,7 +2594,7 @@ app.post("/api/backfill-neighborhood-photos", async (req, res) => {
 
   (async () => {
     try {
-      const updated = await backfillNeighborhoodPhotos(city, db, process.env.UNSPLASH_KEY);
+      const updated = await backfillNeighborhoodPhotos(city, db, process.env.UNSPLASH_KEY, process.env.GOOGLE_PLACES_KEY);
       console.log(`[backfill-neighborhood-photos] ${city}: ${updated} photos updated`);
     } catch (e) {
       console.error(`[backfill-neighborhood-photos] ${city} failed:`, e.message);

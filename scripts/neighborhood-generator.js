@@ -93,7 +93,76 @@ const TAG_VISUAL = {
   beachfront: "beach waterfront seaside",
 };
 
-async function fetchNeighborhoodPhoto(name, city, unsplashKey, vibeShort = "", tags = []) {
+const PLACES_SEARCH_TEXT_URL = "https://places.googleapis.com/v1/places:searchText";
+const PLACES_MEDIA_BASE      = "https://places.googleapis.com/v1";
+
+/**
+ * fetchGooglePlacesHeroPhoto — text-search for the neighbourhood by name,
+ * return the first photo from the top result.  Falls back gracefully.
+ */
+async function fetchGooglePlacesHeroPhoto(name, city, bbox, placesKey) {
+  if (!placesKey) return null;
+  const simpleName = name.replace(/\s*\([^)]*\)/g, "").trim();
+  const queries = [`${simpleName}, ${city}`, simpleName];
+
+  for (const textQuery of queries) {
+    try {
+      const res = await fetch(PLACES_SEARCH_TEXT_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Goog-Api-Key": placesKey,
+          "X-Goog-FieldMask": "places.id,places.displayName,places.photos",
+        },
+        body: JSON.stringify({ textQuery, maxResultCount: 3 }),
+        signal: AbortSignal.timeout(12000),
+      });
+      if (!res.ok) continue;
+      const data   = await res.json();
+      const places = data.places || [];
+
+      // Find the best place — prefer one with a photo whose bounding box overlaps ours
+      let candidate = null;
+      for (const p of places) {
+        if (p.photos?.length) { candidate = p; break; }
+      }
+      if (!candidate) continue;
+
+      const photoName = candidate.photos[0].name;
+      const attr      = candidate.photos[0].authorAttributions?.[0];
+
+      const mediaRes = await fetch(
+        `${PLACES_MEDIA_BASE}/${photoName}/media?maxWidthPx=1400&skipHttpRedirect=true`,
+        { headers: { "X-Goog-Api-Key": placesKey }, signal: AbortSignal.timeout(10000) }
+      );
+      if (!mediaRes.ok) continue;
+      const mediaData = await mediaRes.json();
+      if (!mediaData.photoUri) continue;
+
+      console.log(`[photos] Google Places hero for ${name}: ${textQuery}`);
+      return {
+        url:          mediaData.photoUri,
+        photographer: attr?.displayName || "Google Maps contributor",
+        profile_url:  attr?.uri || null,
+        query_used:   `google_places:${textQuery}`,
+        source:       "google_places",
+      };
+    } catch { continue; }
+  }
+  return null;
+}
+
+/**
+ * fetchNeighborhoodPhoto — Google Places primary, Unsplash fallback.
+ */
+async function fetchNeighborhoodPhoto(name, city, unsplashKey, vibeShort = "", tags = [], bbox = null, googlePlacesKey = null) {
+  // 1. Try Google Places first (geo-accurate real neighbourhood photos)
+  if (googlePlacesKey) {
+    const placesPhoto = await fetchGooglePlacesHeroPhoto(name, city, bbox, googlePlacesKey).catch(() => null);
+    if (placesPhoto) return placesPhoto;
+  }
+
+  // 2. Fall back to Unsplash
   if (!unsplashKey) return null;
 
   const simpleName = name.replace(/\s*\([^)]*\)/g, "").trim();
@@ -103,18 +172,14 @@ async function fetchNeighborhoodPhoto(name, city, unsplashKey, vibeShort = "", t
     .join(" ")
     .split(/\s+/).slice(0, 4).join(" ");
 
-  // Strategy: start with bare name+city (highest specificity, least noise).
-  // Then try name alone — many Unsplash photographers don't tag city.
-  // Vibe/tag terms are added later as tiebreakers, not lead queries.
-  // City-level fallbacks last.
   const queries = [
-    `${simpleName} ${city}`,                                         // name + city, no extra noise
-    simpleName,                                                       // name alone (global coverage)
-    tagTerms   ? `${simpleName} ${tagTerms}`             : null,    // name + tag visuals (no city)
-    vibeTerms  ? `${simpleName} ${city} ${vibeTerms}`   : null,    // name + city + vibe
-    tagTerms   ? `${city} ${tagTerms}`                   : null,    // city + vibe (broader)
-    `${city} street neighborhood`,                                    // last-resort city generic
-  ].filter(Boolean).filter((q, i, arr) => arr.indexOf(q) === i); // dedupe
+    `${simpleName} ${city}`,
+    simpleName,
+    tagTerms   ? `${simpleName} ${tagTerms}`           : null,
+    vibeTerms  ? `${simpleName} ${city} ${vibeTerms}`  : null,
+    tagTerms   ? `${city} ${tagTerms}`                 : null,
+    `${city} street neighborhood`,
+  ].filter(Boolean).filter((q, i, arr) => arr.indexOf(q) === i);
 
   for (const query of queries) {
     try {
@@ -122,7 +187,6 @@ async function fetchNeighborhoodPhoto(name, city, unsplashKey, vibeShort = "", t
       const res = await fetch(url, { headers: { Authorization: `Client-ID ${unsplashKey}` } });
       if (!res.ok) continue;
       const data  = await res.json();
-      // Pick the result with the most downloads (most authoritative photo for the query)
       const photo = (data.results || []).sort((a, b) => (b.downloads || 0) - (a.downloads || 0))[0];
       if (!photo) continue;
       return {
@@ -130,6 +194,7 @@ async function fetchNeighborhoodPhoto(name, city, unsplashKey, vibeShort = "", t
         photographer: photo.user.name,
         profile_url:  photo.user.links.html,
         query_used:   query,
+        source:       "unsplash",
       };
     } catch { continue; }
   }
@@ -151,7 +216,7 @@ async function getHotelCountForBbox(city, bbox, db) {
  * generateNeighborhoods — calls Gemini, fetches Unsplash photos, upserts to DB.
  * Returns array of neighborhood rows.
  */
-async function generateNeighborhoods(city, db, geminiKey, unsplashKey) {
+async function generateNeighborhoods(city, db, geminiKey, unsplashKey, googlePlacesKey = null) {
   const prompt = buildNeighborhoodPrompt(city);
   const raw    = await callGemini(prompt, geminiKey);
 
@@ -175,10 +240,10 @@ async function generateNeighborhoods(city, db, geminiKey, unsplashKey) {
   for (const item of items) {
     const bbox = item.bbox || {};
 
-    // Fetch Unsplash photo (non-fatal if it fails)
+    // Fetch hero photo — Google Places first, Unsplash fallback (non-fatal if it fails)
     let photoUrl    = null;
     let photoCredit = null;
-    const photo = await fetchNeighborhoodPhoto(item.name, city, unsplashKey, item.vibe_short, item.tags).catch(() => null);
+    const photo = await fetchNeighborhoodPhoto(item.name, city, unsplashKey, item.vibe_short, item.tags, bbox, googlePlacesKey).catch(() => null);
     if (photo) {
       photoUrl    = photo.url;
       photoCredit = { photographer: photo.photographer, profile_url: photo.profile_url };
@@ -298,6 +363,8 @@ async function generateNeighborhoods(city, db, geminiKey, unsplashKey) {
         unsplashKey,
         poiCounts: row._poiCounts || null,
         cityMaxCounts,
+        bbox: row.bbox || null,
+        googlePlacesKey,
       });
       row.vibe_elements = vibeData.vibeElements;
       row.vibe_photos = vibeData.vibePhotos;
@@ -328,8 +395,8 @@ async function generateNeighborhoods(city, db, geminiKey, unsplashKey) {
  * existing rows without regenerating Gemini data.  Useful when UNSPLASH_KEY is first
  * set or when photo quality needs improvement.
  */
-async function backfillNeighborhoodPhotos(city, db, unsplashKey) {
-  if (!unsplashKey) throw new Error("UNSPLASH_KEY not set");
+async function backfillNeighborhoodPhotos(city, db, unsplashKey, googlePlacesKey = null) {
+  if (!unsplashKey && !googlePlacesKey) throw new Error("Neither UNSPLASH_KEY nor GOOGLE_PLACES_KEY is set");
 
   const { data: rows, error } = await db
     .from("neighborhoods")
@@ -343,7 +410,7 @@ async function backfillNeighborhoodPhotos(city, db, unsplashKey) {
   let updated = 0;
   for (const row of rows) {
     const photo = await fetchNeighborhoodPhoto(
-      row.name, city, unsplashKey, row.vibe_short || "", row.tags || []
+      row.name, city, unsplashKey, row.vibe_short || "", row.tags || [], row.bbox || null, googlePlacesKey
     ).catch(() => null);
 
     if (photo) {
@@ -356,11 +423,11 @@ async function backfillNeighborhoodPhotos(city, db, unsplashKey) {
         .eq("id", row.id);
       if (upErr) console.warn(`[photos] update ${row.name} failed: ${upErr.message}`);
       else {
-        console.log(`[photos] ${row.name} → ${photo.query_used}`);
+        console.log(`[photos] ${row.name} → ${photo.query_used} (${photo.source || "unknown"})`);
         updated++;
       }
     } else {
-      console.warn(`[photos] no Unsplash result for ${row.name} (${city})`);
+      console.warn(`[photos] no photo found for ${row.name} (${city})`);
     }
   }
   return updated;
@@ -371,7 +438,7 @@ async function backfillNeighborhoodPhotos(city, db, unsplashKey) {
  * Uses stored poi_counts from attributes when present; re-fetches from Overpass
  * when missing so older rows are automatically enriched on first recompute.
  */
-async function recomputeNeighborhoodVibes(city, db, unsplashKey) {
+async function recomputeNeighborhoodVibes(city, db, unsplashKey, googlePlacesKey = null) {
   const { data: rows, error } = await db
     .from("neighborhoods")
     .select("id, city, name, bbox, vibe_long, tags, attributes, hotel_count")
@@ -419,6 +486,8 @@ async function recomputeNeighborhoodVibes(city, db, unsplashKey) {
       unsplashKey,
       poiCounts,
       cityMaxCounts,
+      bbox: row.bbox || null,
+      googlePlacesKey,
     });
     const { error: upErr } = await db
       .from("neighborhoods")
