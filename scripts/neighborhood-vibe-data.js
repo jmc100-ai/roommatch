@@ -86,6 +86,82 @@ const FALLBACK_PHOTOS = {
   ],
 };
 
+// ── Overpass API ──────────────────────────────────────────────────────────────
+
+const OVERPASS_URL = "https://overpass-api.de/api/interpreter";
+
+// Max expected POI counts for log-scale score normalisation.
+// Tuned so a very dense urban neighbourhood ≈ 100. Adjust if scores feel off.
+const POI_MAX_EXPECTED = {
+  parks:       15,
+  restaurants: 100,
+  cafes:        50,
+  museums:      12,
+  shops:       150,
+  icon_spots:   15,
+};
+
+/**
+ * fetchOverpassPOIs — queries OpenStreetMap via Overpass for 6 POI categories
+ * inside a bounding box. Returns { parks, restaurants, cafes, museums, shops,
+ * icon_spots } counts, or null on failure (caller should fall back to formula).
+ */
+async function fetchOverpassPOIs(bbox) {
+  const { lat_min, lat_max, lon_min, lon_max } = bbox || {};
+  if (lat_min == null) return null;
+
+  // Single union query — one HTTP call per neighbourhood
+  const q = `[out:json][timeout:25];
+(
+  node["leisure"~"^(park|garden)$"](${lat_min},${lon_min},${lat_max},${lon_max});
+  way["leisure"~"^(park|garden)$"](${lat_min},${lon_min},${lat_max},${lon_max});
+  node["amenity"~"^(restaurant|fast_food|bar|pub|food_court)$"](${lat_min},${lon_min},${lat_max},${lon_max});
+  node["amenity"="cafe"](${lat_min},${lon_min},${lat_max},${lon_max});
+  node["tourism"~"^(museum|gallery|attraction|viewpoint)$"](${lat_min},${lon_min},${lat_max},${lon_max});
+  way["tourism"~"^(museum|gallery)$"](${lat_min},${lon_min},${lat_max},${lon_max});
+  node["shop"](${lat_min},${lon_min},${lat_max},${lon_max});
+  node["historic"~"^(monument|memorial|castle|ruins|archaeological_site)$"](${lat_min},${lon_min},${lat_max},${lon_max});
+  way["historic"~"^(monument|castle|ruins)$"](${lat_min},${lon_min},${lat_max},${lon_max});
+);
+out tags;`;
+
+  const res = await fetch(OVERPASS_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: `data=${encodeURIComponent(q)}`,
+    signal: AbortSignal.timeout(30000),
+  });
+
+  if (!res.ok) throw new Error(`Overpass API ${res.status}`);
+  const data = await res.json();
+
+  const counts = { parks: 0, restaurants: 0, cafes: 0, museums: 0, shops: 0, icon_spots: 0 };
+
+  for (const el of (data.elements || [])) {
+    const t = el.tags || {};
+    if (t.leisure === "park" || t.leisure === "garden") {
+      counts.parks++;
+    } else if (t.amenity === "cafe") {
+      counts.cafes++;
+    } else if (["restaurant", "fast_food", "bar", "pub", "food_court"].includes(t.amenity)) {
+      counts.restaurants++;
+    } else if (["museum", "gallery"].includes(t.tourism)) {
+      counts.museums++;
+    } else if (t.shop) {
+      counts.shops++;
+    } else if (
+      ["attraction", "viewpoint"].includes(t.tourism) ||
+      ["monument", "memorial", "castle", "ruins", "archaeological_site"].includes(t.historic)
+    ) {
+      counts.icon_spots++;
+    }
+  }
+
+  return counts;
+}
+
+// ── Score helpers ─────────────────────────────────────────────────────────────
+
 function clamp(n, min = 0, max = 100) {
   return Math.max(min, Math.min(max, Math.round(n)));
 }
@@ -98,52 +174,87 @@ function catScore(value, map) {
   return map[value] ?? 50;
 }
 
-function computeElementScores(attributes = {}, tags = [], vibeLong = "") {
-  const wDining = catScore(attributes.walkability_dining, { excellent: 90, good: 68, limited: 40 });
-  const wTour = catScore(attributes.walkability_tourist_spots, { excellent: 90, good: 68, limited: 40 });
-  const green = catScore(attributes.green_spaces, { lots: 90, some: 65, minimal: 32 });
-  const skyline = catScore(attributes.skyline_character, {
-    "low-rise historic": 82,
-    "modern high-rise": 58,
-    mixed: 70,
-    "tree-lined": 76,
-  });
-  const energy = catScore(attributes.street_energy, { lively: 88, moderate: 62, quiet: 42 });
-  const transit = catScore(attributes.transport_dependency, { low: 86, medium: 62, high: 36 });
-  const text = (vibeLong || "").toLowerCase();
+/**
+ * Log-scale normalisation: score 0–100 from a raw POI count.
+ * Feels natural for counts — rapid gain at low end, diminishing returns at top.
+ */
+function poiCountToScore(count, category) {
+  if (!count || count <= 0) return 0;
+  const max = POI_MAX_EXPECTED[category] || 50;
+  return clamp(Math.round(Math.log(count + 1) / Math.log(max + 1) * 100));
+}
 
-  const scores = {
-    parks: clamp(green * 0.68 + wTour * 0.22 + transit * 0.1 + (hasTag(tags, "green") ? 8 : 0)),
-    restaurants: clamp(wDining * 0.64 + energy * 0.26 + (hasTag(tags, "foodie") ? 10 : 0)),
-    cafes: clamp((wDining * 0.45 + wTour * 0.25 + (hasTag(tags, "local-feel") ? 8 : 0) + (hasTag(tags, "shopping") ? 5 : 0))),
-    street_feel: clamp((wTour * 0.42 + transit * 0.32 + energy * 0.26)),
-    icon_spots: clamp((skyline * 0.4 + wTour * 0.3 + (hasTag(tags, "historic") ? 14 : 0) + (text.includes("square") || text.includes("landmark") ? 8 : 0))),
-    museums: clamp((skyline * 0.26 + wTour * 0.34 + (hasTag(tags, "artsy") ? 8 : 0) + (text.includes("museum") || text.includes("gallery") ? 16 : 0))),
-    shops: clamp((energy * 0.24 + wTour * 0.2 + wDining * 0.18 + (hasTag(tags, "shopping") ? 18 : 0) + (hasTag(tags, "luxury") ? 8 : 0))),
-  };
+/**
+ * computeElementScores — returns per-element 0–100 scores.
+ *
+ * When poiCounts is provided (real Overpass data), all POI-countable elements
+ * use log-normalised real counts. street_feel always uses the Gemini-attribute
+ * formula because it reflects walkability infrastructure, not a POI count.
+ * Falls back to the full formula when poiCounts is null.
+ */
+function computeElementScores(attributes = {}, tags = [], vibeLong = "", poiCounts = null) {
+  const wDining = catScore(attributes.walkability_dining, { excellent: 90, good: 68, limited: 40 });
+  const wTour   = catScore(attributes.walkability_tourist_spots, { excellent: 90, good: 68, limited: 40 });
+  const energy  = catScore(attributes.street_energy, { lively: 88, moderate: 62, quiet: 42 });
+  const transit = catScore(attributes.transport_dependency, { low: 86, medium: 62, high: 36 });
+  const text    = (vibeLong || "").toLowerCase();
+
+  const hasRealCounts = poiCounts && Object.values(poiCounts).some((v) => v > 0);
+
+  let scores;
+  if (hasRealCounts) {
+    scores = {
+      parks:       poiCountToScore(poiCounts.parks,       "parks"),
+      restaurants: poiCountToScore(poiCounts.restaurants, "restaurants"),
+      cafes:       poiCountToScore(poiCounts.cafes,       "cafes"),
+      museums:     poiCountToScore(poiCounts.museums,     "museums"),
+      shops:       poiCountToScore(poiCounts.shops,       "shops"),
+      icon_spots:  poiCountToScore(poiCounts.icon_spots,  "icon_spots"),
+    };
+  } else {
+    const green   = catScore(attributes.green_spaces, { lots: 90, some: 65, minimal: 32 });
+    const skyline = catScore(attributes.skyline_character, {
+      "low-rise historic": 82, "modern high-rise": 58, mixed: 70, "tree-lined": 76,
+    });
+    scores = {
+      parks:       clamp(green * 0.68 + wTour * 0.22 + transit * 0.1 + (hasTag(tags, "green") ? 8 : 0)),
+      restaurants: clamp(wDining * 0.64 + energy * 0.26 + (hasTag(tags, "foodie") ? 10 : 0)),
+      cafes:       clamp(wDining * 0.45 + wTour * 0.25 + (hasTag(tags, "local-feel") ? 8 : 0) + (hasTag(tags, "shopping") ? 5 : 0)),
+      museums:     clamp(skyline * 0.26 + wTour * 0.34 + (hasTag(tags, "artsy") ? 8 : 0) + (text.includes("museum") || text.includes("gallery") ? 16 : 0)),
+      shops:       clamp(energy * 0.24 + wTour * 0.2 + wDining * 0.18 + (hasTag(tags, "shopping") ? 18 : 0) + (hasTag(tags, "luxury") ? 8 : 0)),
+      icon_spots:  clamp(skyline * 0.4 + wTour * 0.3 + (hasTag(tags, "historic") ? 14 : 0) + (text.includes("square") || text.includes("landmark") ? 8 : 0)),
+    };
+  }
+
+  // street_feel is always formula-derived (walkability infrastructure signal)
+  scores.street_feel = clamp(wTour * 0.42 + transit * 0.32 + energy * 0.26);
 
   const shopsSubscores = {
     high_end_boutique: clamp(scores.shops * 0.55 + (hasTag(tags, "luxury") ? 28 : 0) + (text.includes("designer") ? 12 : 0)),
-    vintage_thrift: clamp(scores.shops * 0.58 + (hasTag(tags, "artsy") ? 20 : 0) + (text.includes("vintage") ? 14 : 0)),
-    local_artisan: clamp(scores.shops * 0.62 + (hasTag(tags, "local-feel") ? 20 : 0) + (hasTag(tags, "market") ? 16 : 0)),
+    vintage_thrift:    clamp(scores.shops * 0.58 + (hasTag(tags, "artsy") ? 20 : 0) + (text.includes("vintage") ? 14 : 0)),
+    local_artisan:     clamp(scores.shops * 0.62 + (hasTag(tags, "local-feel") ? 20 : 0) + (hasTag(tags, "market") ? 16 : 0)),
   };
 
   return { scores, shopsSubscores };
 }
 
-function elementFacts(elementKey, score, hotelCount, shopsSubscores = null) {
+// ── Facts lines ───────────────────────────────────────────────────────────────
+
+function elementFacts(elementKey, score, hotelCount, shopsSubscores = null, poiCounts = null) {
+  const real = poiCounts?.[elementKey];
+
   if (elementKey === "parks") return [
-    `${Math.max(2, Math.round(score / 12))} notable green areas in easy reach`,
+    real != null ? `${real} parks & gardens mapped in the area` : `${Math.max(2, Math.round(score / 12))} notable green areas in easy reach`,
     `${Math.max(4, Math.round((100 - score) / 14))}-${Math.max(8, Math.round((100 - score) / 10))} min walk to larger green spaces`,
     `Morning calm profile: ${Math.max(38, Math.round(score * 0.84))}%`,
   ];
   if (elementKey === "restaurants") return [
-    `${Math.round(score / 8 + hotelCount / 6)} dining venues per km2 (estimated)`,
+    real != null ? `${real} restaurants, bars & eateries` : `${Math.round(score / 8 + hotelCount / 6)} dining venues per km² (estimated)`,
     `${Math.max(3, Math.round(score / 18))}-${Math.max(7, Math.round(score / 11))} min walk to dense food streets`,
     `Evening dining energy: ${Math.max(35, Math.round(score * 0.9))}%`,
   ];
   if (elementKey === "cafes") return [
-    `${Math.max(8, Math.round(score / 8 + 4))} cafe options in walk radius`,
+    real != null ? `${real} cafes mapped in the area` : `${Math.max(8, Math.round(score / 8 + 4))} cafe options in walk radius`,
     `Sidewalk seating visibility: ${score}%`,
     `Linger-friendly profile: ${Math.max(32, Math.round(score * 0.82))}%`,
   ];
@@ -153,29 +264,31 @@ function elementFacts(elementKey, score, hotelCount, shopsSubscores = null) {
     `Wayfinding simplicity: ${Math.max(34, Math.round(score * 0.8))}%`,
   ];
   if (elementKey === "icon_spots") return [
-    `${Math.max(3, Math.round(score / 11 + 2))} icon spots in practical reach`,
+    real != null ? `${real} landmarks, monuments & viewpoints` : `${Math.max(3, Math.round(score / 11 + 2))} icon spots in practical reach`,
     `Landmark/square access profile: ${score}%`,
     `Photo-worthy icon moments: ${Math.max(30, Math.round(score * 0.86))}%`,
   ];
   if (elementKey === "museums") return [
-    `${Math.max(2, Math.round(score / 11 + 2))} museums/galleries in easy reach`,
+    real != null ? `${real} museums & galleries` : `${Math.max(2, Math.round(score / 11 + 2))} museums/galleries in easy reach`,
     `Culture-day friendliness: ${score}%`,
     `Rainy-day resilience: ${Math.max(30, Math.round(score * 0.76))}%`,
   ];
   if (elementKey === "shops" && shopsSubscores) return [
+    real != null ? `${real} shops mapped in the area` : `${Math.max(5, Math.round(score / 8 + 3))} shopping stops in easy stroll`,
     `Boutique: ${shopsSubscores.high_end_boutique}%  Vintage: ${shopsSubscores.vintage_thrift}%`,
     `Local artisan/market: ${shopsSubscores.local_artisan}%`,
-    `Window-shopping walkability: ${Math.max(34, Math.round(score * 0.84))}%`,
   ];
   return [`Signal profile: ${score}%`];
 }
 
-function buildElementPayload(elementKey, score, neighborhoodName, hotelCount, shopsSubscores = null) {
+// ── Payload builder ───────────────────────────────────────────────────────────
+
+function buildElementPayload(elementKey, score, neighborhoodName, hotelCount, shopsSubscores = null, poiCounts = null) {
   const label = ELEMENTS.find((e) => e.key === elementKey)?.label || elementKey;
   return {
     score,
     summary: `${neighborhoodName}: ${label.toLowerCase()} feel is ${score >= 80 ? "very strong" : score >= 65 ? "strong" : score >= 50 ? "good" : "moderate"}.`,
-    facts: elementFacts(elementKey, score, hotelCount, shopsSubscores),
+    facts: elementFacts(elementKey, score, hotelCount, shopsSubscores, poiCounts),
     metrics: {
       signal_strength: score,
       confidence: clamp(score * 0.82),
@@ -184,6 +297,8 @@ function buildElementPayload(elementKey, score, neighborhoodName, hotelCount, sh
     ...(elementKey === "shops" ? { subscores: shopsSubscores } : {}),
   };
 }
+
+// ── Unsplash photo helpers ────────────────────────────────────────────────────
 
 function buildQueries(elementKey, neighborhoodName, city) {
   const templates = QUERY_TEMPLATES[elementKey] || [];
@@ -249,8 +364,17 @@ async function fetchElementPhotos(city, neighborhoodName, elementKey, unsplashKe
   return picks.slice(0, PHOTO_RULES.target);
 }
 
-async function buildNeighborhoodVibeData({ city, neighborhoodName, attributes, tags, vibeLong, hotelCount, unsplashKey }) {
-  const { scores, shopsSubscores } = computeElementScores(attributes, tags, vibeLong);
+// ── Main export ───────────────────────────────────────────────────────────────
+
+/**
+ * buildNeighborhoodVibeData — computes per-element scores + fetches photos.
+ *
+ * poiCounts (optional): real counts from fetchOverpassPOIs. When provided,
+ * scores for all elements except street_feel are derived from real OSM data.
+ * Falls back to Gemini-attribute formula when null.
+ */
+async function buildNeighborhoodVibeData({ city, neighborhoodName, attributes, tags, vibeLong, hotelCount, unsplashKey, poiCounts = null }) {
+  const { scores, shopsSubscores } = computeElementScores(attributes, tags, vibeLong, poiCounts);
   const vibeElements = {};
   const vibePhotos = {};
 
@@ -261,7 +385,8 @@ async function buildNeighborhoodVibeData({ city, neighborhoodName, attributes, t
       scores[key] || 0,
       neighborhoodName,
       hotelCount || 0,
-      key === "shops" ? shopsSubscores : null
+      key === "shops" ? shopsSubscores : null,
+      poiCounts,
     );
     vibePhotos[key] = await fetchElementPhotos(city, neighborhoodName, key, unsplashKey);
   }
@@ -272,5 +397,6 @@ async function buildNeighborhoodVibeData({ city, neighborhoodName, attributes, t
 module.exports = {
   ELEMENTS,
   PHOTO_RULES,
+  fetchOverpassPOIs,
   buildNeighborhoodVibeData,
 };

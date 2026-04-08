@@ -5,7 +5,7 @@
  */
 
 const GEMINI_MODEL = "gemini-2.5-flash-lite";
-const { buildNeighborhoodVibeData } = require("./neighborhood-vibe-data");
+const { buildNeighborhoodVibeData, fetchOverpassPOIs } = require("./neighborhood-vibe-data");
 
 // Canonical Gemini prompt for neighborhood generation
 function buildNeighborhoodPrompt(city) {
@@ -193,7 +193,19 @@ async function generateNeighborhoods(city, db, geminiKey, unsplashKey) {
       }
     }
 
-    // Pack dimension scores into attributes JSONB
+    // Fetch real POI counts from Overpass (non-fatal — falls back to formula)
+    let poiCounts = null;
+    if (bbox.lat_min != null) {
+      poiCounts = await fetchOverpassPOIs(bbox).catch((e) => {
+        console.warn(`[neighborhoods] Overpass failed for ${item.name}: ${e.message}`);
+        return null;
+      });
+      if (poiCounts) {
+        console.log(`[neighborhoods] Overpass ${item.name}: cafes=${poiCounts.cafes} restaurants=${poiCounts.restaurants} parks=${poiCounts.parks} shops=${poiCounts.shops} museums=${poiCounts.museums} icon_spots=${poiCounts.icon_spots}`);
+      }
+    }
+
+    // Pack dimension scores + real POI counts into attributes JSONB
     const attributes = {
       walkability_dining:        item.walkability_dining,
       walkability_tourist_spots: item.walkability_tourist_spots,
@@ -201,6 +213,7 @@ async function generateNeighborhoods(city, db, geminiKey, unsplashKey) {
       skyline_character:         item.skyline_character,
       street_energy:             item.street_energy,
       transport_dependency:      item.transport_dependency,
+      ...(poiCounts ? { poi_counts: poiCounts } : {}),
     };
 
     return {
@@ -215,6 +228,7 @@ async function generateNeighborhoods(city, db, geminiKey, unsplashKey) {
       photo_url:    photoUrl,
       photo_credit: photoCredit,
       hotel_count:  hotelCount,
+      _poiCounts:   poiCounts, // transient — used below, not persisted as top-level column
     };
   }));
 
@@ -268,6 +282,7 @@ async function generateNeighborhoods(city, db, geminiKey, unsplashKey) {
         vibeLong: row.vibe_long || "",
         hotelCount: row.hotel_count || 0,
         unsplashKey,
+        poiCounts: row._poiCounts || null,
       });
       row.vibe_elements = vibeData.vibeElements;
       row.vibe_photos = vibeData.vibePhotos;
@@ -280,6 +295,8 @@ async function generateNeighborhoods(city, db, geminiKey, unsplashKey) {
       row.vibe_data_version = "v1";
       row.vibe_last_computed_at = new Date().toISOString();
     }
+    // Remove transient field — not a DB column
+    delete row._poiCounts;
   }
 
   // Upsert all rows
@@ -336,11 +353,13 @@ async function backfillNeighborhoodPhotos(city, db, unsplashKey) {
 
 /**
  * recomputeNeighborhoodVibes — refresh vibe elements/photos for existing rows.
+ * Uses stored poi_counts from attributes when present; re-fetches from Overpass
+ * when missing so older rows are automatically enriched on first recompute.
  */
 async function recomputeNeighborhoodVibes(city, db, unsplashKey) {
   const { data: rows, error } = await db
     .from("neighborhoods")
-    .select("id, city, name, vibe_long, tags, attributes, hotel_count")
+    .select("id, city, name, bbox, vibe_long, tags, attributes, hotel_count")
     .eq("city", city)
     .order("id");
 
@@ -348,6 +367,20 @@ async function recomputeNeighborhoodVibes(city, db, unsplashKey) {
   if (!rows?.length) return 0;
 
   for (const row of rows) {
+    // Use stored counts; re-fetch from Overpass if not yet enriched
+    let poiCounts = row.attributes?.poi_counts || null;
+    if (!poiCounts && row.bbox?.lat_min != null) {
+      poiCounts = await fetchOverpassPOIs(row.bbox).catch((e) => {
+        console.warn(`[recompute] Overpass failed for ${row.name}: ${e.message}`);
+        return null;
+      });
+      if (poiCounts) {
+        // Persist fresh counts back into attributes so next recompute is instant
+        const updatedAttrs = { ...(row.attributes || {}), poi_counts: poiCounts };
+        await db.from("neighborhoods").update({ attributes: updatedAttrs }).eq("id", row.id);
+      }
+    }
+
     const vibeData = await buildNeighborhoodVibeData({
       city: row.city,
       neighborhoodName: row.name,
@@ -356,6 +389,7 @@ async function recomputeNeighborhoodVibes(city, db, unsplashKey) {
       vibeLong: row.vibe_long || "",
       hotelCount: row.hotel_count || 0,
       unsplashKey,
+      poiCounts,
     });
     const { error: upErr } = await db
       .from("neighborhoods")
