@@ -1539,6 +1539,16 @@
       position:relative; height:300px; overflow:hidden;
       background-size:cover; background-position:center; background-color:#0c0c0e;
     }
+    .nbhd-hero-wrap.nbhd-hero-zoomable { cursor:zoom-in; }
+    .nbhd-hero-zoom-icon {
+      position:absolute; top:10px; right:10px; z-index:5;
+      width:28px; height:28px; border-radius:6px;
+      background:rgba(0,0,0,.52); backdrop-filter:blur(4px);
+      display:flex; align-items:center; justify-content:center;
+      color:rgba(255,255,255,.75); font-size:13px;
+      opacity:0; transition:opacity .18s; pointer-events:none;
+    }
+    .nbhd-hero-wrap.nbhd-hero-zoomable:hover .nbhd-hero-zoom-icon { opacity:1; }
     .nbhd-hero-grad {
       position:absolute; inset:0;
       background:linear-gradient(to bottom,rgba(0,0,0,.08) 0%,rgba(0,0,0,.3) 50%,rgba(0,0,0,.72) 100%);
@@ -2528,6 +2538,28 @@
     wrap.querySelectorAll('.nbhd-hero-dot').forEach((d, i) => d.classList.toggle('active', i === idx));
   }
 
+  /**
+   * openNbhdHeroLightbox — open the shared lightbox for the neighbourhood hero
+   * photo(s).  Clicking the hero area (but not arrows/dots which stopPropagation)
+   * opens the full-screen view starting at the currently visible photo.
+   */
+  function openNbhdHeroLightbox(wrapEl, ev) {
+    ev.stopPropagation();
+    const cardId = wrapEl.dataset.card;
+    const h = NBHD_CARD_DATA[cardId];
+    if (!h) return;
+    const photos = buildHeroPhotos(h);
+    if (!photos.length) return;
+    const startIdx = parseInt(wrapEl.dataset.heroIdx || '0', 10);
+    const regKey   = '_nbhd_' + cardId;
+    _lbRegistry[regKey] = {
+      photos,
+      name:  h.name,
+      score: null,
+    };
+    openLightbox(regKey, startIdx);
+  }
+
   function scrollGallery(btn, dir, ev) {
     if (ev) ev.stopPropagation();
     const gallery = btn.closest('.nbhd-el-gallery-wrap').querySelector('.nbhd-el-gallery');
@@ -2632,8 +2664,11 @@
       <button class="nbhd-hero-arrow nbhd-hero-prev" onclick="nbhdHeroNav(this,-1,event)" aria-label="Previous photo">&#8249;</button>
       <button class="nbhd-hero-arrow nbhd-hero-next" onclick="nbhdHeroNav(this,1,event)" aria-label="Next photo">&#8250;</button>
       <div class="nbhd-hero-dots">${heroPhotos.map((_,i)=>`<span class="nbhd-hero-dot${i===0?' active':''}" onclick="nbhdHeroDot(this,${i},event)"></span>`).join('')}</div>` : '';
+    const zoomable  = firstPhoto ? ' nbhd-hero-zoomable' : '';
+    const zoomClick = firstPhoto ? ' onclick="openNbhdHeroLightbox(this,event)"' : '';
     return `<div class="nbhd-card-new">
-      <div class="nbhd-hero-wrap" style="${mediaStyle}" data-card="${escHtml(cardId)}" data-hero-idx="0">
+      <div class="nbhd-hero-wrap${zoomable}" style="${mediaStyle}" data-card="${escHtml(cardId)}" data-hero-idx="0"${zoomClick}>
+        <div class="nbhd-hero-zoom-icon">⤢</div>
         <div class="nbhd-hero-grad"></div>
         <div class="nbhd-hero-top">
           <div class="nbhd-tags-new">${tags.map(t=>`<span class="nbhd-tag-new">${escHtml(t)}</span>`).join('')}</div>
