@@ -84,6 +84,11 @@ const LITEAPI_KEY = process.env.LITEAPI_PROD_KEY || process.env.LITEAPI_KEY || "
 const IS_PROD     = !!process.env.LITEAPI_PROD_KEY;
 const PORT        = process.env.PORT || 3000;
 
+// Keep health check fast and dependency-free for Render startup probes.
+app.get("/api/health", (_, res) => {
+  res.status(200).type("text/plain").send("ok");
+});
+
 const CITY_COORDS = {
   "new york": [40.7128, -74.006], "new york city": [40.7128, -74.006],
   "nyc": [40.7128, -74.006], "manhattan": [40.758, -73.9855],
@@ -609,8 +614,6 @@ if (SITE_PASSWORD) {
 }
 
 app.use(express.static(path.join(__dirname, "client")));
-
-app.get("/api/health", (_, res) => res.json({ status: "ok" }));
 
 // ── Photo fields debug — shows raw LiteAPI photo object structure ─────────────
 app.get("/api/debug-photos", async (req, res) => {
@@ -2689,13 +2692,14 @@ async function gracefulShutdown(signal) {
 process.on("SIGTERM", () => gracefulShutdown("SIGTERM"));
 process.on("SIGINT",  () => gracefulShutdown("SIGINT"));
 
-app.listen(PORT, () => {
+app.listen(PORT, "0.0.0.0", () => {
   console.log(`[config] Using ${IS_PROD ? "PRODUCTION" : "SANDBOX"} LiteAPI key`);
   console.log(`TravelBoop on port ${PORT}`);
 
-  // ── Keepalive: ping self every 10 min to prevent Render free tier spin-down
+  // Optional keepalive loop. Starter/paid plans generally do not need this.
+  const KEEPALIVE_ENABLED = String(process.env.RENDER_KEEPALIVE || "").toLowerCase() === "true";
   const RENDER_URL = process.env.RENDER_EXTERNAL_URL;
-  if (RENDER_URL) {
+  if (RENDER_URL && KEEPALIVE_ENABLED) {
     console.log(`[keepalive] pinging ${RENDER_URL} every 10 min`);
     setInterval(async () => {
       try {
@@ -2705,5 +2709,7 @@ app.listen(PORT, () => {
         console.warn('[keepalive] ping failed:', e.message);
       }
     }, 10 * 60 * 1000);
+  } else if (RENDER_URL) {
+    console.log("[keepalive] disabled (set RENDER_KEEPALIVE=true to enable)");
   }
 });
