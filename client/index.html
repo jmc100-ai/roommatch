@@ -1406,6 +1406,7 @@
     .s-dates-cta:hover { background:rgba(201,169,110,.2); border-color:rgba(201,169,110,.7); }
     .s-dates-cta.set { background:rgba(255,255,255,.05); border-color:rgba(255,255,255,.14); color:var(--text); font-weight:400; font-size:14px; }
     /* Dates CTA only after vibe is chosen — not on neighbourhood / room vibe steps */
+    #discovery-flow[data-active-step="boop"] .s-dates-cta,
     #discovery-flow[data-active-step="nbhd"] .s-dates-cta,
     #discovery-flow[data-active-step="style"] .s-dates-cta { display:none !important; }
 
@@ -1524,6 +1525,125 @@
     }
     .back-btn:hover { color:var(--text); }
     .back-btn svg { width:14px; height:14px; flex-shrink:0; }
+
+    /* ── Boop intro step (between city and neighbourhood) */
+    .boop-wrap { max-width:760px; margin:0 auto; }
+    .boop-progress {
+      margin:10px 0 14px; height:6px; border-radius:999px; overflow:hidden;
+      background:rgba(255,255,255,.08);
+    }
+    .boop-progress > i {
+      display:block; height:100%; width:0%;
+      background:linear-gradient(90deg,#b38a4b 0%,#e3c189 60%,#e6d4b8 100%);
+      transition:width .2s ease;
+    }
+    .boop-q-head { margin-bottom:10px; }
+    .boop-q-step { font-size:11px; color:var(--muted); letter-spacing:.08em; text-transform:uppercase; }
+    .boop-q-title { font-size:28px; line-height:1.2; margin-top:4px; font-family:'Cormorant Garamond',serif; }
+    .boop-q-sub { margin-top:6px; font-size:13px; color:var(--muted); line-height:1.55; }
+    .boop-grid { display:grid; grid-template-columns:1fr; gap:12px; margin-top:12px; justify-content:center; }
+    @media(min-width:760px){ .boop-grid { grid-template-columns:repeat(2,minmax(320px,430px)); } }
+    .boop-card {
+      border-radius:14px; overflow:hidden; border:1px solid var(--border); cursor:pointer;
+      background:#151922; transition:transform .15s,border-color .15s,box-shadow .15s;
+    }
+    .boop-card:hover { transform:translateY(-1px); border-color:rgba(201,169,110,.45); box-shadow:0 10px 24px rgba(0,0,0,.3); }
+    .boop-card-media { position:relative; width:100%; aspect-ratio:4/3; min-height:210px; }
+    .boop-card-media img { width:100%; height:100%; object-fit:cover; display:block; }
+    .boop-card-grad { position:absolute; inset:0; background:linear-gradient(to bottom,rgba(0,0,0,.08),rgba(0,0,0,.7)); }
+    .boop-card-body { position:absolute; left:12px; right:12px; bottom:10px; }
+    .boop-card-emoji { font-size:22px; text-shadow:0 2px 10px rgba(0,0,0,.65); }
+    .boop-card-title { margin-top:4px; font-size:17px; font-weight:700; color:#fff; text-shadow:0 2px 10px rgba(0,0,0,.72); }
+    .boop-card-note { margin-top:4px; font-size:12px; color:#edf2ff; text-shadow:0 2px 10px rgba(0,0,0,.72); }
+    .boop-slider-wrap { border:1px solid var(--border); border-radius:14px; padding:12px; background:rgba(255,255,255,.02); margin-top:12px; }
+    .boop-slider-img { position:relative; width:100%; aspect-ratio:16/9; min-height:130px; border-radius:10px; overflow:hidden; border:1px solid var(--border); margin-bottom:10px; }
+    .boop-slider-img img { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; display:block; transition:opacity .18s linear; }
+    .boop-slider-img .shade { position:absolute; inset:0; background:linear-gradient(to bottom,rgba(0,0,0,.1),rgba(0,0,0,.6)); }
+    .boop-slider-row { display:flex; justify-content:space-between; font-size:12px; color:var(--muted); margin-bottom:8px; }
+    .boop-slider-val { margin-top:8px; font-size:13px; color:var(--accent2); }
+    .boop-actions { margin-top:12px; display:flex; gap:10px; justify-content:space-between; flex-wrap:wrap; }
+    .boop-btn {
+      border:1px solid var(--border); background:var(--row); color:var(--text);
+      border-radius:10px; padding:10px 14px; font-size:13px; cursor:pointer;
+    }
+    .boop-btn.primary { background:var(--accent); color:#0c0c0e; border-color:rgba(201,169,110,.5); font-weight:600; }
+    .boop-btn.subtle { color:var(--muted); }
+    .boop-note { margin-top:8px; font-size:12px; color:#8bc4ad; min-height:18px; }
+    .boop-saved {
+      margin-top:10px; border:1px solid rgba(201,169,110,.24); background:rgba(201,169,110,.08);
+      color:var(--muted); border-radius:10px; padding:10px 12px; font-size:12px;
+    }
+    .boop-saved strong { color:var(--accent2); font-weight:600; }
+    .boop-deal-grid { display:grid; grid-template-columns:1fr; gap:12px; margin-top:12px; justify-content:center; }
+    @media(min-width:760px){ .boop-deal-grid { grid-template-columns:repeat(2,minmax(320px,430px)); } }
+    .boop-deal-card {
+      position:relative; border-radius:14px; overflow:hidden; border:1px solid var(--border); background:#151922;
+      cursor:pointer; transition:transform .15s,border-color .15s,box-shadow .15s;
+    }
+    .boop-deal-card:hover { transform:translateY(-1px); border-color:rgba(201,169,110,.45); box-shadow:0 10px 24px rgba(0,0,0,.3); }
+    .boop-deal-media { position:relative; width:100%; aspect-ratio:4/3; min-height:210px; }
+    .boop-deal-media img { width:100%; height:100%; object-fit:cover; display:block; }
+    .boop-deal-grad { position:absolute; inset:0; background:linear-gradient(to bottom,rgba(0,0,0,.14),rgba(0,0,0,.72)); }
+    .boop-deal-content { position:absolute; left:12px; right:12px; bottom:10px; }
+    .boop-deal-title { font-size:17px; font-weight:700; color:#fff; text-shadow:0 2px 10px rgba(0,0,0,.72); }
+    .boop-deal-hint  { margin-top:4px; font-size:12px; color:#edf2ff; text-shadow:0 2px 10px rgba(0,0,0,.72); }
+    .boop-deal-check {
+      position:absolute; top:10px; right:10px; width:28px; height:28px; border-radius:999px;
+      border:1px solid rgba(255,255,255,.28); background:rgba(0,0,0,.45); color:#fff;
+      display:grid; place-items:center; font-size:14px;
+    }
+    .boop-deal-card.active {
+      border-color:rgba(224,192,144,.95);
+      box-shadow:0 0 0 2px rgba(224,192,144,.2), 0 12px 28px rgba(0,0,0,.35);
+    }
+    .boop-deal-card.active .boop-deal-check {
+      background:#e0c090; border-color:#e0c090; color:#16110b;
+    }
+
+    /* ── Neighbourhood header: Boop summary (upper-right) */
+    .nbhd-top {
+      max-width:none;
+      display:grid;
+      grid-template-columns:minmax(0,1fr);
+      gap:14px;
+      align-items:start;
+    }
+    @media(min-width:980px){
+      .nbhd-top { grid-template-columns:minmax(0,1fr) 360px; }
+    }
+    .nbhd-top-main { min-width:0; max-width:660px; }
+    .boop-summary {
+      border:1px solid rgba(201,169,110,.42);
+      border-radius:14px;
+      background:rgba(201,169,110,.08);
+      padding:12px;
+      box-shadow:0 8px 22px rgba(0,0,0,.28), inset 0 0 0 1px rgba(201,169,110,.16);
+    }
+    .boop-summary-title {
+      font-size:11px; letter-spacing:.12em; text-transform:uppercase; color:var(--accent);
+      margin-bottom:8px;
+    }
+    .boop-summary-sub { font-size:11px; color:var(--muted); margin-bottom:10px; }
+    .boop-summary-chips { display:flex; gap:6px; flex-wrap:wrap; margin-bottom:9px; }
+    .boop-summary-chip {
+      font-size:11px; padding:4px 8px; border-radius:999px;
+      border:1px solid rgba(255,255,255,.16); background:rgba(0,0,0,.35); color:#f5f1e9;
+    }
+    .boop-summary-meter-row { display:flex; justify-content:space-between; font-size:11px; color:var(--muted); margin-bottom:5px; }
+    .boop-summary-meter { height:6px; border-radius:999px; background:rgba(255,255,255,.1); overflow:hidden; margin-bottom:8px; }
+    .boop-summary-meter > i { display:block; height:100%; background:linear-gradient(90deg,#6dba8a,#c9a96e); }
+    .boop-summary-foot { font-size:11px; color:var(--muted); line-height:1.5; }
+    .boop-summary-foot strong { color:var(--text); font-weight:500; }
+    .boop-summary-actions { margin-top:10px; display:flex; justify-content:flex-end; }
+    .boop-summary-edit {
+      border:1px solid rgba(255,255,255,.18); background:rgba(0,0,0,.26); color:var(--accent2);
+      border-radius:8px; font-size:12px; padding:6px 10px; cursor:pointer;
+    }
+    .boop-summary-empty {
+      border:1px dashed rgba(255,255,255,.2); border-radius:12px;
+      padding:10px; color:var(--muted); font-size:12px; line-height:1.55;
+      background:rgba(0,0,0,.2);
+    }
 
     /* ── Neighbourhood cards (full large-card drilldown) */
     .nbhd-grid-new { display:flex; flex-direction:column; gap:18px; width:100%; min-width:0; }
@@ -1989,15 +2109,35 @@
     </div>
   </div>
 
-  <!-- ─── Step 2: Neighbourhood ────────────────────────── -->
-  <div id="st-nbhd" style="display:none">
+  <!-- ─── Step 2: Boop Intro Quiz ─────────────────────── -->
+  <div id="st-boop" style="display:none">
     <div class="chapter">
       <div class="chapter-inner">
         <div class="chapter-top">
           <button class="back-btn" onclick="goToStep('city')"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 3L5 8l5 5"/></svg> Back to City</button>
-          <div class="eyebrow"><div class="eyebrow-dot"></div><span id="nbhd-city-label">Paris</span> · Step 2 of 4</div>
-          <h1 class="chapter-h1">Find your <em>neighbourhood Boop Vibe</em></h1>
-          <p class="chapter-sub">Every card is a neighbourhood Boop Vibe — the feel of where you'll stay. Find your <em style="color:var(--accent2);font-style:italic">Boop</em> for the area, or skip and search the whole city.</p>
+          <div class="eyebrow"><div class="eyebrow-dot"></div>Step 2 of 5 · Quick Boop intro</div>
+          <h1 class="chapter-h1">Let's shape your <em>Boop Vibe</em></h1>
+          <p class="chapter-sub">A quick visual check-in so neighborhood ranking matches your trip style. You can skip straight to neighborhoods anytime.</p>
+        </div>
+        <div class="chapter-body">
+          <div class="boop-wrap" id="boop-wrap"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ─── Step 2: Neighbourhood ────────────────────────── -->
+  <div id="st-nbhd" style="display:none">
+    <div class="chapter">
+      <div class="chapter-inner">
+        <div class="chapter-top nbhd-top">
+          <div class="nbhd-top-main">
+            <button class="back-btn" onclick="goToStep('city')"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 3L5 8l5 5"/></svg> Back to City</button>
+            <div class="eyebrow"><div class="eyebrow-dot"></div><span id="nbhd-city-label">Paris</span> · Step 3 of 5</div>
+            <h1 class="chapter-h1">Find your <em>neighbourhood Boop Vibe</em></h1>
+            <p class="chapter-sub">Every card is a neighbourhood Boop Vibe — the feel of where you'll stay. Find your <em style="color:var(--accent2);font-style:italic">Boop</em> for the area, or skip and search the whole city.</p>
+          </div>
+          <aside id="boop-summary-slot"></aside>
         </div>
         <div class="chapter-body">
           <div class="nbhd-grid-new" id="nbhd-grid"></div>
@@ -2012,7 +2152,7 @@
       <div class="chapter-inner">
         <div class="chapter-top">
           <button class="back-btn" onclick="goToStep('nbhd')"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 3L5 8l5 5"/></svg> Back to Neighbourhood</button>
-          <div class="eyebrow"><div class="eyebrow-dot"></div>Step 3 of 4 · <span style="color:var(--accent2)">Find your room Boop</span> <span style="color:var(--muted);letter-spacing:.04em;text-transform:none">(your Boop Vibe)</span></div>
+          <div class="eyebrow"><div class="eyebrow-dot"></div>Step 4 of 5 · <span style="color:var(--accent2)">Find your room Boop</span> <span style="color:var(--muted);letter-spacing:.04em;text-transform:none">(your Boop Vibe)</span></div>
           <h1 class="chapter-h1">Choose your <em>room Boop Vibe</em></h1>
           <p class="chapter-sub">Describe the look or tap a preset — we match your Boop Vibe with real room photos. Think of it as locking in the room half of your <em style="color:var(--accent2);font-style:italic">Boop</em>.</p>
         </div>
@@ -2062,7 +2202,7 @@
       <div class="chapter-inner">
         <div class="chapter-top">
           <button class="back-btn" onclick="goToStep('style')"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 3L5 8l5 5"/></svg> Back to Room Boop Vibe</button>
-          <div class="eyebrow"><div class="eyebrow-dot"></div>Almost there · Step 4 of 4</div>
+          <div class="eyebrow"><div class="eyebrow-dot"></div>Almost there · Step 5 of 5</div>
           <h1 class="chapter-h1">When are you <em>going?</em></h1>
           <p class="chapter-sub">Add dates to see live pricing and availability. You can always skip and browse first.</p>
         </div>
@@ -2196,6 +2336,7 @@
   let _priceCurrency  = 'EUR';  // currency returned by rates API
   const QUERY_HISTORY_KEY = 'roomsearch.recentQueries';
   const CITY_HISTORY_KEY  = 'roomsearch.recentCities';
+  const BOOP_PROFILE_KEY  = 'roomsearch.boopProfileByCity.v1';
   const HISTORY_LIMIT     = 6;
 
   // ════════════════════════════════════════════════════════
@@ -2340,8 +2481,120 @@
   const S = { city:null, nbhd:null, nbhdBbox:null, style:null, q:null, checkin:null, checkout:null };
   let _flowFeatIdx = 0;
 
+  // Boop intro profile (persisted per city)
+  const BOOP = { idx:0, prefs:{}, answers:{}, dealbreakers:new Set(), slider:0, saved:null };
+  const BOOP_WIZARD_IMAGES = {}; // cityKey -> { questionId: { optionId: url } }
+  const BOOP_WIZARD_CITY_FALLBACKS = {}; // cityKey -> { questionId: url }
+  const BOOP_WIZARD_FETCHING = new Set();
+  const BOOP_QUESTIONS = [
+    {
+      id:'trip',
+      label:'Trip context',
+      title:'What kind of trip is this?',
+      sub:'Tap one to continue.',
+      type:'cards',
+      options:[
+        { id:'first', emoji:'🗺️', title:'First time here', note:'Central, iconic, easier navigation', image:'https://images.unsplash.com/photo-1499856871958-5b9627545d1a?auto=format&fit=crop&w=1200&q=80', weights:{ central:20, iconic:18, calm:8, local:-6 } },
+        { id:'repeat', emoji:'🔍', title:'Been before, want something new', note:'Local texture and less touristy picks', image:'https://images.unsplash.com/photo-1518638150340-f706e86654de?auto=format&fit=crop&w=1200&q=80', weights:{ local:18, culture:8, central:-3 } },
+        { id:'expert', emoji:'🧭', title:'I know the city well', note:'Hidden gems and deeper neighborhood fit', image:'https://images.unsplash.com/photo-1505764706515-aa95265c5abc?auto=format&fit=crop&w=1200&q=80', weights:{ local:20, calm:6, central:-8, iconic:-5 } },
+      ]
+    },
+    {
+      id:'morning',
+      label:'Morning anchor',
+      title:'Pick your perfect morning',
+      sub:'One choice helps set your vibe baseline.',
+      type:'cards',
+      options:[
+        { id:'cafe', emoji:'☕', title:'Coffee and pastries', note:'Cafe streets + walkability', image:'https://images.unsplash.com/photo-1442512595331-e89e73853f31?auto=format&fit=crop&w=1200&q=80', weights:{ cafes:18, walkability:10, foodie:8, local:6 } },
+        { id:'park', emoji:'🌳', title:'Park walk or jog', note:'Leafy and calm atmosphere', image:'https://images.unsplash.com/photo-1519331379826-f10be5486c6f?auto=format&fit=crop&w=1200&q=80', weights:{ green:22, calm:10, walkability:6 } },
+        { id:'shopping', emoji:'🛍️', title:'Shopping and brunch', note:'Upscale and polished', image:'https://images.unsplash.com/photo-1481437156560-3205f6a55735?auto=format&fit=crop&w=1200&q=80', weights:{ shopping:20, luxury:12, central:6 } },
+        { id:'historic', emoji:'🏛️', title:'Historic streets', note:'Architecture + culture', image:'https://images.unsplash.com/photo-1467269204594-9661b134dd2b?auto=format&fit=crop&w=1200&q=80', weights:{ culture:16, iconic:10, central:8 } },
+      ]
+    },
+    {
+      id:'night',
+      label:'Night energy',
+      title:'What does your night look like?',
+      sub:'Quiet dinner or lively social energy.',
+      type:'cards',
+      options:[
+        { id:'chill', emoji:'🍷', title:'Wine bar and calm dinner', note:'Relaxed pace', image:'https://images.unsplash.com/photo-1470337458703-46ad1756a187?auto=format&fit=crop&w=1200&q=80', weights:{ calm:16, nightlife:-9, foodie:8 } },
+        { id:'street', emoji:'🌮', title:'Street food and casual spots', note:'Local + vibrant', image:'https://images.unsplash.com/photo-1552332386-f8dd00dc2f85?auto=format&fit=crop&w=1200&q=80', weights:{ foodie:16, local:12, nightlife:4 } },
+        { id:'trendy', emoji:'🍸', title:'Trendy restaurants and cocktails', note:'Modern social scene', image:'https://images.unsplash.com/photo-1514933651103-005eec06c04b?auto=format&fit=crop&w=1200&q=80', weights:{ nightlife:10, shopping:8, luxury:6 } },
+        { id:'late', emoji:'🎶', title:'Bars and music', note:'Late and lively', image:'https://images.unsplash.com/photo-1492684223066-81342ee5ff30?auto=format&fit=crop&w=1200&q=80', weights:{ nightlife:20, calm:-12, central:5 } },
+      ]
+    },
+    {
+      id:'mobility',
+      label:'Mobility',
+      title:'How do you want to get around?',
+      sub:'Walk-first or ride-flexible.',
+      type:'cards',
+      options:[
+        { id:'walk', emoji:'🚶', title:'Walk almost everywhere', note:'High walkability', image:'https://images.unsplash.com/photo-1501426026826-31c667bdf23d?auto=format&fit=crop&w=1200&q=80', weights:{ walkability:20, central:8 } },
+        { id:'mix', emoji:'⚖️', title:'Walk plus short rides', note:'Balanced flexibility', image:'https://images.unsplash.com/photo-1476480862126-209bfaa8edc8?auto=format&fit=crop&w=1200&q=80', weights:{ walkability:10, local:6 } },
+        { id:'ride', emoji:'🚕', title:'Uber for great spots', note:'Distance is fine', image:'https://images.unsplash.com/photo-1449965408869-eaa3f722e40d?auto=format&fit=crop&w=1200&q=80', weights:{ central:-8, local:8, calm:4 } },
+      ]
+    },
+    {
+      id:'environment',
+      label:'Environment tradeoff',
+      title:'What matters more around you?',
+      sub:'Pick the atmosphere that best matches your trip style.',
+      type:'cards',
+      options:[
+        {
+          id:'calm_green',
+          emoji:'🌳',
+          title:'Quiet + Green',
+          note:'Leafy streets, calmer pace, less noise.',
+          image:'https://images.unsplash.com/photo-1473445361085-b9a07f55608b?auto=format&fit=crop&w=1200&q=80',
+          weights:{ green:22, calm:16, nightlife:-10, shopping:-4 }
+        },
+        {
+          id:'calm_cafe',
+          emoji:'☕',
+          title:'Calm + Cafe Streets',
+          note:'Walkable daytime energy, relaxed evenings.',
+          image:'https://images.unsplash.com/photo-1509042239860-f550ce710b93?auto=format&fit=crop&w=1200&q=80',
+          weights:{ cafes:14, walkability:12, foodie:8, calm:8 }
+        },
+        {
+          id:'urban_mix',
+          emoji:'⚖️',
+          title:'Walkable Urban Mix',
+          note:'A balanced blend of buzz and breathing room.',
+          image:'https://images.unsplash.com/photo-1496950866446-3253e1470e8e?auto=format&fit=crop&w=1200&q=80',
+          weights:{ walkability:12, central:10, nightlife:4, calm:4, shopping:6 }
+        },
+        {
+          id:'lively_central',
+          emoji:'🌆',
+          title:'Lively + Central',
+          note:'Dense food, shops, nightlife, and movement.',
+          image:'https://images.unsplash.com/photo-1477959858617-67f85cf4f1df?auto=format&fit=crop&w=1200&q=80',
+          weights:{ nightlife:18, shopping:12, central:12, calm:-12, green:-6 }
+        }
+      ]
+    },
+    {
+      id:'dealbreakers',
+      label:'Dealbreakers',
+      title:'Any dealbreakers?',
+      sub:'Optional, select as many as you want.',
+      type:'chips',
+      options:[
+        { id:'noisy', label:'Too noisy', hint:'Prefer quieter streets', image:'https://images.unsplash.com/photo-1449824913935-59a10b8d2000?auto=format&fit=crop&w=1200&q=80&v=20260409-noisy-street' },
+        { id:'far', label:'Too far from things', hint:'Need convenient location', image:'https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=1200&q=80' },
+        { id:'touristy', label:'Too touristy', hint:'Want more local feel', image:'https://images.unsplash.com/photo-1481437156560-3205f6a55735?auto=format&fit=crop&w=1200&q=80' },
+        { id:'lowFood', label:'Not enough food options', hint:'Need dense food scene', image:'https://images.unsplash.com/photo-1448630360428-65456885c650?auto=format&fit=crop&w=1200&q=80' },
+      ]
+    }
+  ];
+
   // ── Flow helpers ──────────────────────────────────────
-  const FLOW_STEPS = ['city','nbhd','style','dates'];
+  const FLOW_STEPS = ['city','boop','nbhd','style','dates'];
 
   function showFlowStep(id) {
     FLOW_STEPS.forEach(s => {
@@ -2350,6 +2603,8 @@
     });
     const df = document.getElementById('discovery-flow');
     if (df) df.setAttribute('data-active-step', id);
+    const story = document.getElementById('story');
+    if (story) story.classList.toggle('show', id !== 'city' && id !== 'boop');
     window.scrollTo({ top:0, behavior:'smooth' });
   }
 
@@ -2361,11 +2616,21 @@
       document.getElementById('discovery-flow').style.display = '';
     }
     if (id === 'city')  { document.getElementById('story').classList.remove('show'); showFlowStep('city'); return; }
+    if (id === 'boop'  && !S.city)  return;
     if (id === 'nbhd'  && !S.city)  return;
     if (id === 'style' && !S.nbhd)  { flashMsg('Choose a neighbourhood first'); return; }
     if (id === 'dates' && !S.style) { flashMsg('Choose a room Boop Vibe first'); return; }
-    document.getElementById('story').classList.add('show');
-    showFlowStep(id);
+    if (id === 'boop') {
+      startBoopStep();
+      showFlowStep('boop');
+      return;
+    }
+    if (id === 'nbhd') {
+      enterNeighborhoodStep();
+    } else {
+      document.getElementById('story').classList.add('show');
+      showFlowStep(id);
+    }
     refreshStory(id);
   }
 
@@ -2421,19 +2686,704 @@
     return { text: s.slice(0, keep) + VIBE_CHIP_SUFFIX, placeholder: false };
   }
 
+  // ── BOOP INTRO (after city, before neighbourhood) ───
+  function cityKey(name) {
+    return (name || '').trim().toLowerCase();
+  }
+
+  function readBoopProfiles() {
+    try {
+      const raw = JSON.parse(localStorage.getItem(BOOP_PROFILE_KEY) || '{}');
+      return raw && typeof raw === 'object' ? raw : {};
+    } catch {
+      return {};
+    }
+  }
+
+  function writeBoopProfiles(map) {
+    localStorage.setItem(BOOP_PROFILE_KEY, JSON.stringify(map || {}));
+  }
+
+  function loadBoopProfileForCity(city) {
+    const key = cityKey(city);
+    if (!key) return null;
+    const map = readBoopProfiles();
+    return map[key] || null;
+  }
+
+  function saveBoopProfileForCity(city, profile) {
+    const key = cityKey(city);
+    if (!key) return;
+    const map = readBoopProfiles();
+    map[key] = { ...profile, updatedAt: Date.now() };
+    writeBoopProfiles(map);
+  }
+
+  function resetBoopState() {
+    BOOP.idx = 0;
+    BOOP.prefs = {};
+    BOOP.answers = {};
+    BOOP.dealbreakers = new Set();
+    BOOP.slider = 0;
+  }
+
+  function applyBoopWeights(weights) {
+    Object.entries(weights || {}).forEach(([k, v]) => {
+      BOOP.prefs[k] = (BOOP.prefs[k] || 0) + v;
+    });
+  }
+
+  function boopEnvLabel(v) {
+    if (v <= -60) return 'Very quiet and green';
+    if (v <= -20) return 'Leaning calm and leafy';
+    if (v < 20) return 'Balanced';
+    if (v < 60) return 'Leaning busy and social';
+    return 'Very lively and dense';
+  }
+
+  function boopBlend(v) {
+    return Math.max(0, Math.min(1, (Number(v) + 100) / 200));
+  }
+
+  function boopProgressPct() {
+    return Math.round(((BOOP.idx + 1) / BOOP_QUESTIONS.length) * 100);
+  }
+
+  function boopExtractUrl(entry) {
+    if (!entry) return '';
+    if (typeof entry === 'string') return entry;
+    return entry.url || '';
+  }
+
+  const BOOP_OPTION_INTENTS = {
+    trip: {
+      first:   { tags:['first-timers','iconic'], visitor:['first-timers','both'], preferElements:['icon_spots','museums','street_feel'], attrs:{ culture:0.7, walkability:0.4, nightlife:-0.2 } },
+      repeat:  { tags:['returning','local'], visitor:['returning','both'], preferElements:['cafes','street_feel','restaurants'], attrs:{ culture:0.6, walkability:0.3, nightlife:0.1 } },
+      expert:  { tags:['returning','local'], visitor:['returning','both'], preferElements:['street_feel','cafes','restaurants'], attrs:{ culture:0.8, walkability:0.4, luxury:-0.2, touristy:-0.5 } },
+    },
+    morning: {
+      cafe:     { tags:['walkable'], preferElements:['cafes','street_feel','restaurants'], attrs:{ walkability:0.8, culture:0.3, nightlife:-0.2 } },
+      park:     { tags:['nature'], preferElements:['parks','street_feel'], attrs:{ nature:1.0, walkability:0.3, nightlife:-0.3 } },
+      shopping: { tags:['shopping','luxury'], preferElements:['shops','street_feel'], attrs:{ luxury:1.0, walkability:0.3, nightlife:0.2 } },
+      historic: { tags:['culture'], preferElements:['museums','icon_spots','street_feel'], attrs:{ culture:1.0, walkability:0.4, business:-0.2 } },
+    },
+    night: {
+      chill:  { tags:['romantic'], preferElements:['restaurants','cafes','street_feel'], attrs:{ nightlife:-0.6, walkability:0.3, culture:0.2 } },
+      street: { tags:['local','walkable'], preferElements:['restaurants','street_feel','cafes'], attrs:{ nightlife:0.2, walkability:0.6, culture:0.3 } },
+      trendy: { tags:['nightlife','shopping'], preferElements:['restaurants','shops','street_feel'], attrs:{ nightlife:0.8, luxury:0.6, culture:0.1 } },
+      late:   { tags:['nightlife'], preferElements:['street_feel','restaurants','shops'], attrs:{ nightlife:1.0, walkability:0.4, nature:-0.2 } },
+    },
+    mobility: {
+      walk: { tags:['walkable','first-timers'], preferElements:['street_feel','icon_spots','cafes'], attrs:{ walkability:1.0, culture:0.2, business:-0.2 } },
+      mix:  { tags:['both','walkable'], preferElements:['street_feel','cafes','restaurants'], attrs:{ walkability:0.7, business:0.2, nightlife:0.1 } },
+      ride: { tags:['returning'], preferElements:['icon_spots','street_feel','shops'], attrs:{ walkability:-0.5, business:0.4, luxury:0.2 } },
+    },
+    environment: {
+      calm_green:    { tags:['nature'], preferElements:['parks','street_feel'], attrs:{ nature:1.0, nightlife:-0.8, business:-0.2 } },
+      calm_cafe:     { tags:['walkable'], preferElements:['cafes','street_feel'], attrs:{ walkability:0.7, nightlife:-0.5, culture:0.3 } },
+      urban_mix:     { tags:['walkable','both'], preferElements:['street_feel','cafes','shops'], attrs:{ walkability:0.8, nightlife:0.2, culture:0.2 } },
+      lively_central:{ tags:['nightlife','shopping'], preferElements:['street_feel','shops','restaurants'], attrs:{ nightlife:1.0, luxury:0.4, nature:-0.4 } },
+    },
+    dealbreakers: {
+      noisy:    { tags:['calm'], preferElements:['parks','cafes','street_feel'], attrs:{ nightlife:-1.0, nature:0.4 } },
+      far:      { tags:['first-timers','walkable'], preferElements:['icon_spots','street_feel'], attrs:{ walkability:1.0, business:0.2 } },
+      touristy: { tags:['returning','local'], preferElements:['street_feel','cafes','restaurants'], attrs:{ culture:0.6, nightlife:0.2 } },
+      lowFood:  { tags:['food'], preferElements:['restaurants','cafes','street_feel'], attrs:{ nightlife:0.2, walkability:0.3 } },
+    }
+  };
+
+  function boopIntentScoreNeighborhood(h, intent) {
+    let score = 0;
+    const tags = (h.tags || []).map(t => String(t).toLowerCase());
+    const visitorType = String(h.visitor_type || '').toLowerCase();
+    const attrs = h.attributes || {};
+
+    (intent.tags || []).forEach(tag => {
+      if (tags.includes(String(tag).toLowerCase())) score += 1.2;
+    });
+    (intent.visitor || []).forEach(v => {
+      if (visitorType === String(v).toLowerCase()) score += 1.1;
+    });
+
+    Object.entries(intent.attrs || {}).forEach(([k, w]) => {
+      const raw = Number(attrs[k]);
+      const n = Number.isFinite(raw) ? Math.max(0, Math.min(10, raw)) / 10 : 0.5;
+      score += (w >= 0 ? n * w : (1 - n) * Math.abs(w));
+    });
+    return score;
+  }
+
+  function boopCollectUrlsFromHood(h, intent) {
+    const urls = [];
+    const keys = intent.preferElements || [];
+    for (const key of keys) {
+      const arr = (h.vibe_photos || {})[key] || [];
+      for (const p of arr) {
+        const u = boopExtractUrl(p);
+        if (u) urls.push(u);
+      }
+    }
+    if (h.photo_url) urls.push(h.photo_url);
+    return urls;
+  }
+
+  function boopPickIntentImage(scored, intent, usedUrls) {
+    for (const item of scored) {
+      const urls = boopCollectUrlsFromHood(item.hood, intent);
+      for (const u of urls) {
+        if (!usedUrls.has(u)) {
+          usedUrls.add(u);
+          return u;
+        }
+      }
+    }
+    for (const item of scored) {
+      const u = item.hood?.photo_url || '';
+      if (u && !usedUrls.has(u)) {
+        usedUrls.add(u);
+        return u;
+      }
+    }
+    return '';
+  }
+
+  function boopNeighborhoodGreenScore(h) {
+    const attrs = h?.attributes || {};
+    const gs = String(attrs.green_spaces || '').toLowerCase();
+    const greenBucket = gs === 'lots' ? 3 : (gs === 'some' ? 2 : 0);
+    const parks = Number(attrs?.poi_counts?.parks);
+    const parkBucket = Number.isFinite(parks) ? Math.min(3, parks / 4) : 0;
+    const tags = (h?.tags || []).map(t => String(t).toLowerCase());
+    const tagBoost = (tags.includes('green') || tags.includes('nature')) ? 1 : 0;
+    return greenBucket + parkBucket + tagBoost;
+  }
+
+  function boopIsGreenParkPhoto(p) {
+    const q = String(p?.query || '').toLowerCase();
+    if (!q) return true; // no metadata; don't over-reject
+    return /(park|garden|botanic|forest|nature|trail|lake|green)/.test(q);
+  }
+
+  function boopIsLeafyStreetPhoto(p) {
+    const q = String(p?.query || '').toLowerCase();
+    if (!q) return false;
+    const greenCue = /(tree|trees|leafy|green|garden|boulevard|shaded|residential)/.test(q);
+    const streetCue = /(street|sidewalk|walkable|pedestrian|avenue|neighborhood)/.test(q);
+    const antiCue = /(skyline|high[-\s]?rise|skyscraper|downtown towers?)/.test(q);
+    return greenCue && streetCue && !antiCue;
+  }
+
+  function boopIsStreetFoodPhoto(p) {
+    const q = String(p?.query || '').toLowerCase();
+    if (!q) return false;
+    // Prefer explicit vendor/market/street-food cues over generic restaurant photos.
+    return /(street food|food stall|vendor|taqueria|taco|night market|market|hawker|cart|mercado|puestos?)/.test(q);
+  }
+
+  function boopIsLiveMusicBarPhoto(p) {
+    const q = String(p?.query || '').toLowerCase();
+    if (!q) return false;
+    // Strong nightlife intent: bars + live music / crowd cues.
+    return /(bar|pub|cantina|cocktail|mezcal|speakeasy|club|jazz|live music|dj|band|karaoke|music venue|dance|crowd|packed|nightlife)/.test(q);
+  }
+
+  function boopIsWineBarInteriorPhoto(p) {
+    const q = String(p?.query || '').toLowerCase();
+    if (!q) return false;
+    // Calm evening intent: explicitly wine-bar + indoor/interior atmosphere.
+    const wineBarCue = /(wine bar|wine lounge|vinoteca|enoteca|wine cellar|cocktail bar)/.test(q);
+    const interiorCue = /(interior|indoors|inside|cozy|intimate|dim|candle|bar stools?|lounge)/.test(q);
+    return wineBarCue && interiorCue;
+  }
+
+  function boopPickStrictElementImage(hoods, elementKey, usedUrls, opts = {}) {
+    const {
+      sourcePriority = [],
+      photoPredicate = null,
+      allowLoose = true,
+      rankScore = null,
+    } = opts;
+    const ranked = [...hoods].sort((a, b) => {
+      const sa = rankScore ? rankScore(a) : 0;
+      const sb = rankScore ? rankScore(b) : 0;
+      return sb - sa;
+    });
+    const passes = sourcePriority.length ? sourcePriority : [null];
+
+    for (const source of passes) {
+      for (const h of ranked) {
+        const arr = (h.vibe_photos || {})[elementKey] || [];
+        for (const p of arr) {
+          if (source && String(p?.source || '') !== source) continue;
+          if (photoPredicate && !photoPredicate(p)) continue;
+          const u = boopExtractUrl(p);
+          if (u && !usedUrls.has(u)) {
+            usedUrls.add(u);
+            return u;
+          }
+        }
+      }
+    }
+
+    if (!allowLoose) return '';
+    for (const h of ranked) {
+      const arr = (h.vibe_photos || {})[elementKey] || [];
+      for (const p of arr) {
+        const u = boopExtractUrl(p);
+        if (u && !usedUrls.has(u)) {
+          usedUrls.add(u);
+          return u;
+        }
+      }
+    }
+    return '';
+  }
+
+  function boopBuildCityWizardImages(city, hoods) {
+    const cityK = cityKey(city);
+    if (!cityK || !Array.isArray(hoods) || !hoods.length) return;
+    const result = {};
+    const usedUrls = new Set();
+    Object.entries(BOOP_OPTION_INTENTS).forEach(([qId, options]) => {
+      result[qId] = {};
+      Object.entries(options).forEach(([oId, intent]) => {
+        const scored = hoods
+          .map(h => ({ hood: h, s: boopIntentScoreNeighborhood(h, intent) }))
+          .sort((a, b) => b.s - a.s);
+        result[qId][oId] = boopPickIntentImage(scored, intent, usedUrls);
+      });
+    });
+
+    // Tight intent lock: "Park walk or jog" must come from park imagery.
+    if (result.morning) {
+      const greenSorted = [...hoods].sort((a, b) => boopNeighborhoodGreenScore(b) - boopNeighborhoodGreenScore(a));
+      const greenCandidates = greenSorted.filter(h => boopNeighborhoodGreenScore(h) >= 3);
+      const parkUrl = boopPickStrictElementImage(
+        greenCandidates.length ? greenCandidates : greenSorted,
+        'parks',
+        usedUrls,
+        {
+          sourcePriority: ['google_places', 'unsplash', 'unsplash_city'],
+          photoPredicate: boopIsGreenParkPhoto,
+          allowLoose: false,
+          rankScore: boopNeighborhoodGreenScore,
+        }
+      );
+      // If no "green park" match, leave dynamic empty so static card image is used.
+      result.morning.park = parkUrl || '';
+    }
+
+    if (result.environment) {
+      const greenSorted = [...hoods].sort((a, b) => boopNeighborhoodGreenScore(b) - boopNeighborhoodGreenScore(a));
+      const greenCandidates = greenSorted.filter(h => boopNeighborhoodGreenScore(h) >= 3);
+      const calmGreenUrl =
+        boopPickStrictElementImage(greenCandidates.length ? greenCandidates : greenSorted, 'street_feel', usedUrls, {
+          sourcePriority: ['google_places', 'unsplash', 'unsplash_city'],
+          photoPredicate: boopIsLeafyStreetPhoto,
+          allowLoose: false,
+          rankScore: boopNeighborhoodGreenScore,
+        }) ||
+        boopPickStrictElementImage(greenCandidates.length ? greenCandidates : greenSorted, 'parks', usedUrls, {
+          sourcePriority: ['google_places', 'unsplash', 'unsplash_city'],
+          photoPredicate: boopIsGreenParkPhoto,
+          allowLoose: false,
+          rankScore: boopNeighborhoodGreenScore,
+        });
+      // Prefer a local leafy-street scene; if unavailable, keep existing fallback behavior.
+      result.environment.calm_green = calmGreenUrl || '';
+    }
+
+    if (result.night) {
+      const wineBarInteriorUrl =
+        boopPickStrictElementImage(hoods, 'restaurants', usedUrls, {
+          sourcePriority: ['google_places', 'unsplash', 'unsplash_city'],
+          photoPredicate: boopIsWineBarInteriorPhoto,
+          allowLoose: false,
+        }) ||
+        boopPickStrictElementImage(hoods, 'cafes', usedUrls, {
+          sourcePriority: ['unsplash', 'unsplash_city', 'google_places'],
+          photoPredicate: boopIsWineBarInteriorPhoto,
+          allowLoose: false,
+        });
+      // If we can't prove "wine bar interior", keep the static calm-dinner tile image.
+      result.night.chill = wineBarInteriorUrl || '';
+
+      const streetFoodUrl =
+        boopPickStrictElementImage(hoods, 'restaurants', usedUrls, {
+          sourcePriority: ['google_places', 'unsplash', 'unsplash_city'],
+          photoPredicate: boopIsStreetFoodPhoto,
+          allowLoose: false,
+        }) ||
+        boopPickStrictElementImage(hoods, 'street_feel', usedUrls, {
+          sourcePriority: ['unsplash', 'unsplash_city', 'google_places'],
+          photoPredicate: boopIsStreetFoodPhoto,
+          allowLoose: false,
+        });
+      // If we can't prove "street food", keep the static street-food tile image.
+      result.night.street = streetFoodUrl || '';
+
+      const lateNightBarUrl =
+        boopPickStrictElementImage(hoods, 'restaurants', usedUrls, {
+          sourcePriority: ['google_places', 'unsplash', 'unsplash_city'],
+          photoPredicate: boopIsLiveMusicBarPhoto,
+          allowLoose: false,
+        }) ||
+        boopPickStrictElementImage(hoods, 'street_feel', usedUrls, {
+          sourcePriority: ['google_places', 'unsplash', 'unsplash_city'],
+          photoPredicate: boopIsLiveMusicBarPhoto,
+          allowLoose: false,
+        });
+      // If we can't prove "bar + live music", keep the static late-night tile image.
+      result.night.late = lateNightBarUrl || '';
+    }
+
+    // Per-question city fallback images (still city-specific, no city hardcoding).
+    const pickCityQuestionFallback = (questionId, elementKeys = []) => {
+      for (const h of hoods) {
+        for (const key of elementKeys) {
+          const arr = (h.vibe_photos || {})[key] || [];
+          for (const p of arr) {
+            const u = boopExtractUrl(p);
+            if (u) return u;
+          }
+        }
+      }
+      for (const h of hoods) {
+        if (h.photo_url) return h.photo_url;
+      }
+      return '';
+    };
+    BOOP_WIZARD_CITY_FALLBACKS[cityK] = {
+      trip: pickCityQuestionFallback('trip', ['street_feel', 'icon_spots']),
+      morning: pickCityQuestionFallback('morning', ['cafes', 'parks', 'icon_spots']),
+      night: pickCityQuestionFallback('night', ['restaurants', 'street_feel']),
+      mobility: pickCityQuestionFallback('mobility', ['street_feel']),
+      environment: pickCityQuestionFallback('environment', ['parks', 'street_feel']),
+      dealbreakers: pickCityQuestionFallback('dealbreakers', ['street_feel', 'shops', 'restaurants']),
+    };
+
+    BOOP_WIZARD_IMAGES[cityK] = result;
+  }
+
+  function boopGetDynamicImage(questionId, optionId, fallback) {
+    // Keep this card literal: users expect a car visual cue.
+    if (questionId === 'mobility' && optionId === 'ride') return fallback;
+    // Keep dealbreakers literal so intent images never drift.
+    if (questionId === 'dealbreakers') return fallback;
+    const cityK = cityKey(S.city);
+    const cityMap = cityK ? BOOP_WIZARD_IMAGES[cityK] : null;
+    const cityFallback = cityK ? BOOP_WIZARD_CITY_FALLBACKS[cityK]?.[questionId] : '';
+    return cityMap?.[questionId]?.[optionId] || cityFallback || fallback;
+  }
+
+  async function prefetchBoopWizardImages(city) {
+    const cityK = cityKey(city);
+    if (!cityK || BOOP_WIZARD_IMAGES[cityK] || BOOP_WIZARD_FETCHING.has(cityK)) return;
+    BOOP_WIZARD_FETCHING.add(cityK);
+    try {
+      const resp = await fetch(`${BACKEND}/api/neighborhoods?city=${encodeURIComponent(city)}`);
+      if (!resp.ok) return;
+      const data = await resp.json();
+      const hoods = data.neighborhoods || [];
+      if (!hoods.length) return;
+      boopBuildCityWizardImages(city, hoods);
+      if (document.getElementById('st-boop')?.style.display !== 'none') {
+        renderBoopQuestion(); // refresh cards with city-specific photos
+      }
+    } catch (e) {
+      // silently keep static fallbacks
+    } finally {
+      BOOP_WIZARD_FETCHING.delete(cityK);
+    }
+  }
+
+  function boopEnergyLabelFromEnv(envValue) {
+    if (typeof envValue === 'string') {
+      const labels = {
+        calm_green: 'Very calm',
+        calm_cafe: 'Calm-leaning',
+        urban_mix: 'Balanced',
+        lively_central: 'Lively-leaning'
+      };
+      return labels[envValue] || 'Balanced';
+    }
+    if (typeof envValue !== 'number') return 'Balanced';
+    if (envValue <= -40) return 'Calm-leaning';
+    if (envValue >= 40) return 'Lively-leaning';
+    return 'Balanced';
+  }
+
+  function boopEnergyPctFromEnv(envValue) {
+    if (typeof envValue === 'string') {
+      const p = {
+        calm_green: 18,
+        calm_cafe: 35,
+        urban_mix: 52,
+        lively_central: 82
+      };
+      return p[envValue] ?? 50;
+    }
+    if (typeof envValue !== 'number') return 50;
+    return Math.max(0, Math.min(100, Math.round(((envValue + 100) / 200) * 100)));
+  }
+
+  function boopSummaryKeywords(profile) {
+    const prefs = profile?.prefs || {};
+    const labels = {
+      walkability: 'Walk-first',
+      cafes: 'Cafe mornings',
+      calm: 'Calm nights',
+      nightlife: 'Lively nights',
+      green: 'Green spaces',
+      local: 'Local feel',
+      culture: 'Culture-heavy',
+      shopping: 'Shopping',
+      central: 'Central stay',
+      iconic: 'Iconic sights',
+      luxury: 'Upscale'
+    };
+    return Object.entries(prefs)
+      .filter(([k, v]) => labels[k] && Number(v) > 0)
+      .sort((a, b) => Number(b[1]) - Number(a[1]))
+      .slice(0, 3)
+      .map(([k]) => labels[k]);
+  }
+
+  function renderBoopSummaryCard() {
+    const slot = document.getElementById('boop-summary-slot');
+    if (!slot) return;
+    const profile = S.boopProfile || loadBoopProfileForCity(S.city);
+    if (!profile) {
+      slot.innerHTML = `<div class="boop-summary">
+        <div class="boop-summary-title">Your Boop Vibe</div>
+        <div class="boop-summary-empty">No intro profile yet for this city. Run the Boop intro to personalize neighborhood ranking.</div>
+        <div class="boop-summary-actions"><button class="boop-summary-edit" onclick="goToStep('boop')">Start intro →</button></div>
+      </div>`;
+      return;
+    }
+    const chips = boopSummaryKeywords(profile);
+    const env = profile.answers?.environment;
+    const energyPct = boopEnergyPctFromEnv(env);
+    const energyLabel = boopEnergyLabelFromEnv(env);
+    const db = Array.isArray(profile.dealbreakers) ? profile.dealbreakers : [];
+    const dbText = db.length
+      ? db.map(d => ({
+          noisy:'Too noisy',
+          far:'Too far from things',
+          touristy:'Too touristy',
+          lowFood:'Not enough food options'
+        }[d] || d)).join(', ')
+      : 'None selected';
+    slot.innerHTML = `<div class="boop-summary">
+      <div class="boop-summary-title">Your Boop Vibe</div>
+      <div class="boop-summary-sub">Based on your intro answers</div>
+      <div class="boop-summary-chips">
+        ${(chips.length ? chips : ['Balanced explorer']).map(c => `<span class="boop-summary-chip">${c}</span>`).join('')}
+      </div>
+      <div class="boop-summary-meter-row"><span>Energy</span><span>${energyLabel}</span></div>
+      <div class="boop-summary-meter"><i style="width:${energyPct}%"></i></div>
+      <div class="boop-summary-foot"><strong>Dealbreakers:</strong> ${dbText}</div>
+      <div class="boop-summary-actions"><button class="boop-summary-edit" onclick="goToStep('boop')">Edit vibe →</button></div>
+    </div>`;
+  }
+
+  function startBoopStep() {
+    const saved = loadBoopProfileForCity(S.city);
+    BOOP.saved = saved;
+    resetBoopState();
+    renderBoopQuestion();
+  }
+
+  function boopUseSaved() {
+    const saved = loadBoopProfileForCity(S.city);
+    if (!saved) return;
+    S.boopProfile = {
+      answers: saved.answers || {},
+      prefs: saved.prefs || {},
+      dealbreakers: Array.isArray(saved.dealbreakers) ? saved.dealbreakers : [],
+      updatedAt: saved.updatedAt || Date.now(),
+    };
+    flashMsg('Using your saved Boop Vibe for ' + S.city, 1800);
+    enterNeighborhoodStep();
+  }
+
+  function boopSkipToNeighborhood() {
+    S.boopProfile = loadBoopProfileForCity(S.city) || null;
+    flashMsg('Skipping Boop intro — showing neighborhoods', 1700);
+    enterNeighborhoodStep();
+  }
+
+  function boopChoose(questionId, optionId) {
+    const q = BOOP_QUESTIONS.find(x => x.id === questionId);
+    const o = (q?.options || []).find(x => x.id === optionId);
+    if (!q || !o) return;
+    BOOP.answers[questionId] = optionId;
+    applyBoopWeights(o.weights);
+    BOOP.idx += 1;
+    renderBoopQuestion();
+  }
+
+  function boopSliderChanged(v) {
+    BOOP.slider = Number(v);
+    const label = boopEnvLabel(BOOP.slider);
+    const val = document.getElementById('boop-slider-value');
+    if (val) val.textContent = label;
+    const cap = document.getElementById('boop-slider-caption');
+    if (cap) cap.textContent = label;
+    const blend = boopBlend(BOOP.slider);
+    const qimg = document.getElementById('boop-quiet-img');
+    const bimg = document.getElementById('boop-busy-img');
+    if (qimg) qimg.style.opacity = (1 - blend).toFixed(2);
+    if (bimg) bimg.style.opacity = blend.toFixed(2);
+  }
+
+  function boopConfirmSlider() {
+    BOOP.answers.environment = BOOP.slider;
+    const n = BOOP.slider / 100;
+    applyBoopWeights({
+      green: Math.round(-n * 14),
+      calm: Math.round(-n * 16),
+      nightlife: Math.round(n * 16),
+      shopping: Math.round(n * 10),
+    });
+    BOOP.idx += 1;
+    renderBoopQuestion();
+  }
+
+  function boopToggleDealbreaker(id) {
+    if (BOOP.dealbreakers.has(id)) BOOP.dealbreakers.delete(id);
+    else BOOP.dealbreakers.add(id);
+    renderBoopQuestion();
+  }
+
+  function boopBack() {
+    if (BOOP.idx <= 0) { goToStep('city'); return; }
+    BOOP.idx -= 1;
+    renderBoopQuestion();
+  }
+
+  function boopFinish() {
+    const profile = {
+      answers: { ...BOOP.answers },
+      prefs: { ...BOOP.prefs },
+      dealbreakers: Array.from(BOOP.dealbreakers),
+      updatedAt: Date.now(),
+    };
+    S.boopProfile = profile;
+    saveBoopProfileForCity(S.city, profile);
+    flashMsg('Boop Vibe saved — ranking neighborhoods for you', 1900);
+    enterNeighborhoodStep();
+  }
+
+  function renderBoopQuestion() {
+    const wrap = document.getElementById('boop-wrap');
+    if (!wrap) return;
+    const q = BOOP_QUESTIONS[BOOP.idx];
+    if (!q) { boopFinish(); return; }
+    const p = boopProgressPct();
+    const saved = loadBoopProfileForCity(S.city);
+    const savedTs = saved?.updatedAt ? new Date(saved.updatedAt).toLocaleDateString() : null;
+    const savedUi = (BOOP.idx === 0 && saved)
+      ? `<div class="boop-saved"><strong>Saved vibe found</strong>${savedTs ? ` · last updated ${savedTs}` : ''}. <button class="boop-btn subtle" style="margin-left:8px" onclick="boopUseSaved()">Use saved</button> <button class="boop-btn subtle" style="margin-left:6px" onclick="resetBoopState();renderBoopQuestion()">Retake</button></div>`
+      : '';
+
+    let body = '';
+    if (q.type === 'cards') {
+      body = `<div class="boop-grid">${q.options.map(o => `
+        <button class="boop-card" onclick="boopChoose('${q.id}','${o.id}')">
+          <div class="boop-card-media">
+            <img src="${boopGetDynamicImage(q.id, o.id, o.image)}" alt="${o.title}" loading="lazy" onerror="this.onerror=null;this.src='https://images.unsplash.com/photo-1477959858617-67f85cf4f1df?auto=format&fit=crop&w=1200&q=80';" />
+            <div class="boop-card-grad"></div>
+            <div class="boop-card-body">
+              <div class="boop-card-emoji">${o.emoji}</div>
+              <div class="boop-card-title">${o.title}</div>
+              <div class="boop-card-note">${o.note || ''}</div>
+            </div>
+          </div>
+        </button>
+      `).join('')}</div>`;
+    } else if (q.type === 'slider') {
+      const blend = boopBlend(BOOP.slider);
+      body = `<div class="boop-slider-wrap">
+        <div class="boop-slider-img">
+          <img id="boop-quiet-img" src="https://images.unsplash.com/photo-1519331379826-f10be5486c6f?auto=format&fit=crop&w=1400&q=80" alt="Quiet and green" style="opacity:${(1-blend).toFixed(2)}" />
+          <img id="boop-busy-img" src="https://images.unsplash.com/photo-1477959858617-67f85cf4f1df?auto=format&fit=crop&w=1400&q=80" alt="Busy and lively" style="opacity:${blend.toFixed(2)}" />
+          <div class="shade"></div>
+        </div>
+        <div class="boop-slider-row"><span>Quiet + green</span><span>Busy + lively</span></div>
+        <input type="range" min="-100" max="100" value="${BOOP.slider}" oninput="boopSliderChanged(this.value)" style="width:100%;accent-color:#d8b27a" />
+        <div class="boop-slider-val" id="boop-slider-value">${boopEnvLabel(BOOP.slider)}</div>
+        <div class="boop-slider-val">Current mood: <strong id="boop-slider-caption">${boopEnvLabel(BOOP.slider)}</strong></div>
+      </div>
+      <div class="boop-actions">
+        <button class="boop-btn subtle" onclick="boopBack()">Back</button>
+        <button class="boop-btn primary" onclick="boopConfirmSlider()">Use this preference</button>
+      </div>`;
+    } else {
+      body = `<div class="boop-deal-grid">${q.options.map(o => `
+        <button class="boop-deal-card ${BOOP.dealbreakers.has(o.id) ? 'active' : ''}" onclick="boopToggleDealbreaker('${o.id}')">
+          <div class="boop-deal-media">
+            <img src="${boopGetDynamicImage(q.id, o.id, o.image || 'https://images.unsplash.com/photo-1477959858617-67f85cf4f1df?auto=format&fit=crop&w=1200&q=80')}" alt="${o.label}" loading="lazy" onerror="this.onerror=null;this.src='https://images.unsplash.com/photo-1477959858617-67f85cf4f1df?auto=format&fit=crop&w=1200&q=80'" />
+            <div class="boop-deal-grad"></div>
+            <div class="boop-deal-check">${BOOP.dealbreakers.has(o.id) ? '✓' : '+'}</div>
+            <div class="boop-deal-content">
+              <div class="boop-deal-title">${o.label}</div>
+              <div class="boop-deal-hint">${o.hint || ''}</div>
+            </div>
+          </div>
+        </button>
+      `).join('')}</div>
+      <div class="boop-note">Optional: select as many as needed.</div>
+      <div class="boop-actions">
+        <button class="boop-btn subtle" onclick="boopBack()">Back</button>
+        <button class="boop-btn primary" onclick="boopFinish()">Continue to neighborhoods</button>
+      </div>`;
+    }
+
+    const nav = q.type === 'cards'
+      ? `<div class="boop-actions">${BOOP.idx > 0 ? `<button class="boop-btn subtle" onclick="boopBack()">Back</button>` : '<span></span>'}<button class="boop-btn subtle" onclick="boopSkipToNeighborhood()">Skip to neighborhoods</button></div>`
+      : `<div class="boop-actions"><button class="boop-btn subtle" onclick="boopSkipToNeighborhood()">Skip to neighborhoods</button></div>`;
+
+    wrap.innerHTML = `
+      <div class="boop-progress"><i style="width:${p}%"></i></div>
+      <div class="boop-q-head">
+        <div class="boop-q-step">${q.label} · ${BOOP.idx + 1} of ${BOOP_QUESTIONS.length}</div>
+        <div class="boop-q-title">${q.title}</div>
+        <div class="boop-q-sub">${q.sub || ''}</div>
+      </div>
+      ${savedUi}
+      ${body}
+      ${nav}
+    `;
+  }
+
   // ── CITY ─────────────────────────────────────────────
   function pickCity(name) {
     S.city = name;
     document.getElementById('cityInput').value = name;
     document.getElementById('sv-city').textContent = name.length > 20 ? name.slice(0,18)+'…' : name;
-    document.getElementById('story').classList.add('show');
     // Save to history and rebuild chips so next visit shows it as recent
     writeHistory(CITY_HISTORY_KEY, name);
     buildCityChips();
+    // Reset downstream selections when city changes
+    S.nbhd = null;
+    S.nbhdBbox = null;
+    selectedNeighborhood = null;
+    S.style = null;
+    S.q = null;
+    // City -> Boop intro step
+    startBoopStep();
+    prefetchBoopWizardImages(name);
+    refreshStory('boop');
+    showFlowStep('boop');
+  }
 
-    // Always show neighbourhood step — API generates for any city via Gemini
-    document.getElementById('nbhd-city-label').textContent = name;
-    fetchAndShowNeighborhoodsNew(name);
+  function enterNeighborhoodStep() {
+    if (!S.city) return;
+    document.getElementById('nbhd-city-label').textContent = S.city;
+    document.getElementById('story').classList.add('show');
+    renderBoopSummaryCard();
+    fetchAndShowNeighborhoodsNew(S.city);
     refreshStory('nbhd');
     showFlowStep('nbhd');
   }
@@ -2453,6 +3403,112 @@
   // current city. Used by buildHeroPhotos to prevent a neighbor's hero from
   // bleeding into another neighborhood's carousel.
   let NBHD_RESERVED_HEROES = new Set();
+
+  function textHasAny(text, arr) {
+    const t = (text || '').toLowerCase();
+    return arr.some(k => t.includes(k));
+  }
+
+  // Derive explicit comparable signals from neighborhood data.
+  function deriveNbhdSignals(h) {
+    const e = h.vibe_elements || {};
+    const v = k => Number(e[k]?.score || 0);
+    const tags = (h.tags || []).map(t => String(t).toLowerCase());
+    const txt = `${h.vibe_short || ''} ${h.vibe_long || ''}`.toLowerCase();
+
+    const s = {
+      walkability: Math.round((v('street_feel') * 0.55) + (v('cafes') * 0.20) + (v('parks') * 0.25)),
+      green:       Math.round(v('parks') * 0.9 + (tags.includes('nature') ? 15 : 0)),
+      foodie:      Math.round((v('restaurants') * 0.65) + (v('cafes') * 0.35)),
+      culture:     Math.round((v('museums') * 0.55) + (v('icon_spots') * 0.45)),
+      shopping:    Math.round(v('shops') * 0.9 + (tags.includes('shopping') ? 12 : 0)),
+      nightlife:   Math.round((v('street_feel') * 0.40) + (v('restaurants') * 0.35) + (tags.includes('nightlife') ? 18 : 0)),
+      calm:        Math.round((v('parks') * 0.50) + (v('cafes') * 0.25) + ((100 - v('street_feel')) * 0.25)),
+      central:     Math.round((v('icon_spots') * 0.55) + (v('street_feel') * 0.25) + (textHasAny(txt, ['central', 'heart', 'iconic']) ? 14 : 0)),
+      local:       Math.round((v('cafes') * 0.35) + (v('street_feel') * 0.35) + (v('restaurants') * 0.30) + (tags.includes('returning') ? 10 : 0)),
+      iconic:      Math.round(v('icon_spots') * 0.9 + (textHasAny(txt, ['iconic', 'landmark']) ? 10 : 0)),
+      luxury:      Math.round(v('shops') * 0.55 + (tags.includes('luxury') ? 28 : 0)),
+      touristy:    Math.round((v('icon_spots') * 0.55) + (textHasAny(txt, ['touristy', 'tourist']) ? 18 : 0)),
+    };
+    Object.keys(s).forEach(k => { s[k] = Math.max(0, Math.min(100, s[k])); });
+    return s;
+  }
+
+  function normalizeSignalsByCity(hoods) {
+    const dims = ['walkability','green','foodie','culture','shopping','nightlife','calm','central','local','iconic','luxury','touristy'];
+    const raw = hoods.map(h => ({ name: h.name, s: deriveNbhdSignals(h) }));
+    const minMax = {};
+    dims.forEach(d => {
+      const vals = raw.map(r => r.s[d]);
+      minMax[d] = { min: Math.min(...vals), max: Math.max(...vals) };
+    });
+    const normByName = {};
+    raw.forEach(r => {
+      const out = {};
+      dims.forEach(d => {
+        const { min, max } = minMax[d];
+        out[d] = (max - min) < 0.0001 ? 50 : Math.round(((r.s[d] - min) / (max - min)) * 100);
+      });
+      normByName[r.name] = out;
+    });
+    return normByName;
+  }
+
+  function computeBoopMatch(h, profile, normByName) {
+    if (!profile || !profile.prefs) return null;
+    const sig = normByName[h.name] || deriveNbhdSignals(h);
+    const prefs = profile.prefs || {};
+
+    // Weighted fit in [0..1]: positive weights want higher signal, negative weights want lower.
+    let sum = 0;
+    let denom = 0;
+    Object.entries(prefs).forEach(([k, wRaw]) => {
+      if (typeof sig[k] !== 'number') return;
+      const w = Number(wRaw);
+      if (!Number.isFinite(w) || w === 0) return;
+      const importance = Math.abs(w);
+      const x = Math.max(0, Math.min(1, sig[k] / 100));
+      const fit = w >= 0 ? x : (1 - x);
+      sum += importance * fit;
+      denom += importance;
+    });
+    let fit = denom > 0 ? (sum / denom) : 0.5; // 0..1
+
+    // Dealbreaker penalties in fit space to avoid hard clipping near 99.
+    const db = new Set(profile.dealbreakers || []);
+    if (db.has('noisy'))   fit -= ((1 - ((sig.calm ?? 50) / 100)) * 0.20);
+    if (db.has('far'))     fit -= ((1 - ((sig.central ?? 50) / 100)) * 0.16);
+    if (db.has('touristy'))fit -= (((sig.touristy ?? 50) / 100) * 0.18);
+    if (db.has('lowFood')) fit -= ((1 - ((sig.foodie ?? 50) / 100)) * 0.18);
+
+    fit = Math.max(0, Math.min(1, fit));
+    return fit; // raw fit, normalized later per city
+  }
+
+  function rankNeighborhoodsByBoop(hoods) {
+    const profile = S.boopProfile || loadBoopProfileForCity(S.city);
+    if (!profile) return hoods;
+    const norm = normalizeSignalsByCity(hoods);
+    const ranked = [...hoods].map(h => ({ ...h, _boop_raw: computeBoopMatch(h, profile, norm) }));
+
+    // City-relative spread: convert raw fits into a readable 45..95 range.
+    const vals = ranked.map(h => h._boop_raw).filter(v => typeof v === 'number');
+    const min = Math.min(...vals);
+    const max = Math.max(...vals);
+    ranked.forEach(h => {
+      const v = typeof h._boop_raw === 'number' ? h._boop_raw : 0.5;
+      let pct;
+      if ((max - min) < 0.0001) {
+        pct = 75; // all similar
+      } else {
+        const rel = (v - min) / (max - min); // 0..1
+        pct = 45 + (rel * 50); // 45..95
+      }
+      h._boop_match = Math.round(Math.max(0, Math.min(99, pct)));
+    });
+
+    return ranked.sort((a, b) => (b._boop_match || 0) - (a._boop_match || 0));
+  }
 
   function escHtml(s) {
     return (s||'').replace(/"/g,'&quot;').replace(/'/g,'&#39;').replace(/</g,'&lt;');
@@ -2678,10 +3734,7 @@
           setTimeout(() => fetchAndShowNeighborhoodsNew(city, true), 3000);
           return;
         }
-        const hoods = (data.neighborhoods || []).sort((a, b) => {
-          const bv = h => Object.values(h.vibe_elements || {})[0]?.metrics?.boop_vibe || 0;
-          return bv(b) - bv(a);
-        });
+        const hoods = rankNeighborhoodsByBoop(data.neighborhoods || []);
         if (hoods.length) {
           Object.keys(NBHD_CARD_DATA).forEach(k => delete NBHD_CARD_DATA[k]);
           NBHD_RESERVED_HEROES = new Set(hoods.map(h => h.photo_url).filter(Boolean));
@@ -2700,7 +3753,8 @@
     if (fallback && fallback.length) {
       Object.keys(NBHD_CARD_DATA).forEach(k => delete NBHD_CARD_DATA[k]);
       NBHD_RESERVED_HEROES = new Set(fallback.map(h => h.photo_url).filter(Boolean));
-      grid.innerHTML = fallback.map((h, idx) => {
+      const rankedFallback = rankNeighborhoodsByBoop(fallback);
+      grid.innerHTML = rankedFallback.map((h, idx) => {
         const cardId = `f${idx}`;
         NBHD_CARD_DATA[cardId] = h;
         return renderNbhdCard(h, cardId);
@@ -2712,6 +3766,7 @@
   }
 
   function nbhdBoopVibeScore(h) {
+    if (typeof h._boop_match === 'number') return Math.max(0, Math.min(99, Math.round(h._boop_match)));
     // Neighborhood-level Boop Vibe = mean of all element boop_vibe metrics
     // Falls back to mean of element scores if boop_vibe metric not populated
     const elems = Object.values(h.vibe_elements || {});
