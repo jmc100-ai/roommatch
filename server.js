@@ -9,9 +9,17 @@ const path    = require("path");
 const crypto  = require("crypto");
 require("dotenv").config();
 const { createClient } = require("@supabase/supabase-js");
-const { indexCity }    = require("./scripts/index-city");
-const { generateNeighborhoods, refreshHotelCounts, recomputeNeighborhoodVibes, backfillNeighborhoodPhotos } = require("./scripts/neighborhood-generator");
-const { backfillCity } = require("./scripts/backfill-latlng");
+
+// Lazy-load heavy pipeline modules so we bind PORT quickly (Render "port scan" / health checks).
+function loadIndexCity() {
+  return require("./scripts/index-city").indexCity;
+}
+function loadNeighborhoodGenerator() {
+  return require("./scripts/neighborhood-generator");
+}
+function loadBackfillLatlng() {
+  return require("./scripts/backfill-latlng");
+}
 
 // ── Password gate helpers ─────────────────────────────────────────────────────
 const SITE_PASSWORD = process.env.SITE_PASSWORD || "";
@@ -1479,7 +1487,7 @@ app.get("/api/vsearch", async (req, res) => {
 
         if (!insertErr) {
           // We won the race — start indexing
-          indexCity(city, 200).catch(e => console.error("[indexer]", e.message));
+          loadIndexCity()(city, 200).catch(e => console.error("[indexer]", e.message));
         } else {
           console.log(`[vsearch] ${city} indexing already started by another request`);
         }
@@ -2480,7 +2488,7 @@ app.get("/api/neighborhoods", async (req, res) => {
     // Kick off generation
     neighborhoodGenerating.add(city);
     try {
-      const rows = await generateNeighborhoods(
+      const rows = await loadNeighborhoodGenerator().generateNeighborhoods(
         city, supabaseAdmin || supabase,
         process.env.GEMINI_KEY, process.env.UNSPLASH_KEY, process.env.GOOGLE_PLACES_KEY
       );
@@ -2605,7 +2613,7 @@ app.post("/api/backfill-neighborhood-vibes", async (req, res) => {
 
   (async () => {
     try {
-      const updated = await recomputeNeighborhoodVibes(city, db, process.env.UNSPLASH_KEY, process.env.GOOGLE_PLACES_KEY);
+      const updated = await loadNeighborhoodGenerator().recomputeNeighborhoodVibes(city, db, process.env.UNSPLASH_KEY, process.env.GOOGLE_PLACES_KEY);
       console.log(`[backfill-neighborhood-vibes] ${city}: ${updated} neighborhoods refreshed`);
     } catch (e) {
       console.error(`[backfill-neighborhood-vibes] ${city} failed:`, e.message);
@@ -2629,7 +2637,7 @@ app.post("/api/backfill-neighborhood-photos", async (req, res) => {
 
   (async () => {
     try {
-      const updated = await backfillNeighborhoodPhotos(city, db, process.env.UNSPLASH_KEY, process.env.GOOGLE_PLACES_KEY);
+      const updated = await loadNeighborhoodGenerator().backfillNeighborhoodPhotos(city, db, process.env.UNSPLASH_KEY, process.env.GOOGLE_PLACES_KEY);
       console.log(`[backfill-neighborhood-photos] ${city}: ${updated} photos updated`);
     } catch (e) {
       console.error(`[backfill-neighborhood-photos] ${city} failed:`, e.message);
@@ -2650,10 +2658,10 @@ app.post("/api/backfill-latlng", async (req, res) => {
   (async () => {
     for (const c of cities) {
       try {
-        const updated = await backfillCity(c, db, !!dry_run);
+        const updated = await loadBackfillLatlng().backfillCity(c, db, !!dry_run);
         console.log(`[backfill-latlng] ${c}: ${updated} updated`);
         // Refresh hotel_count for neighborhoods after backfill
-        await refreshHotelCounts(c, db).catch(() => {});
+        await loadNeighborhoodGenerator().refreshHotelCounts(c, db).catch(() => {});
       } catch (e) {
         console.error(`[backfill-latlng] ${c} error:`, e.message);
       }
@@ -2671,7 +2679,7 @@ app.post("/api/index-city", async (req, res) => {
   }
   if (!city) return res.status(400).json({ error: "city required" });
   // Fire and forget
-  indexCity(city, limit || 200)
+  loadIndexCity()(city, limit || 200)
     .catch(e => {
       console.error(`[indexer] FAILED for ${city}:`, e.message);
     });
@@ -2726,6 +2734,7 @@ process.on("SIGTERM", () => gracefulShutdown("SIGTERM"));
 process.on("SIGINT",  () => gracefulShutdown("SIGINT"));
 
 app.listen(PORT, "0.0.0.0", () => {
+  console.log(`[boot] listening on 0.0.0.0:${PORT}`);
   console.log(`[config] Using ${IS_PROD ? "PRODUCTION" : "SANDBOX"} LiteAPI key`);
   console.log(`TravelBoop on port ${PORT}`);
 
