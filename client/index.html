@@ -1839,11 +1839,11 @@
     }
 
     /* ── Neighbourhood cards (full large-card drilldown) */
-    .nbhd-grid-new { display:flex; flex-direction:column; gap:18px; width:100%; min-width:0; }
+    .nbhd-grid-new { display:flex; flex-direction:column; gap:26px; width:100%; min-width:0; }
     .nbhd-card-new {
-      border-radius:16px; border:2px solid rgba(255,255,255,.16);
+      border-radius:16px; border:2px solid rgba(255,255,255,.26);
       background:linear-gradient(180deg,#1a1a1f 0%,#15151a 100%);
-      box-shadow:0 10px 36px rgba(0,0,0,.4);
+      box-shadow:0 10px 36px rgba(0,0,0,.4), 0 0 0 1px rgba(255,255,255,.06) inset;
       overflow:hidden; transition:border-color .2s, box-shadow .2s, transform .2s;
     }
     .nbhd-card-new:hover { transform:translateY(-3px); border-color:rgba(201,169,110,.45); box-shadow:0 14px 44px rgba(0,0,0,.52); }
