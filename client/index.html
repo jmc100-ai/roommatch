@@ -1594,11 +1594,24 @@
     .boop-deal-toolbar-actions {
       display:flex;
       flex-wrap:wrap;
-      gap:8px;
+      gap:8px 14px;
       justify-content:flex-end;
       align-items:center;
       flex:0 1 auto;
     }
+    .boop-deal-back-link {
+      font-size:13px;
+      font-weight:500;
+      color:var(--muted);
+      text-decoration:underline;
+      text-underline-offset:3px;
+      padding:6px 0;
+      border:0;
+      background:transparent;
+      cursor:pointer;
+      align-self:center;
+    }
+    .boop-deal-back-link:hover { color:var(--text); }
     @media (max-width:540px){
       .boop-deal-toolbar-actions {
         width:100%;
@@ -1608,6 +1621,11 @@
         flex:1;
         min-width:0;
         text-align:center;
+      }
+      .boop-deal-back-link {
+        flex:0 0 auto;
+        text-align:left;
+        padding:8px 0;
       }
     }
     /* Dealbreakers: horizontal list (image ~60% + text), mirrors design/boop-screen6-dealbreakers-list-preview-v2 */
@@ -3507,7 +3525,7 @@
       body = `<div class="boop-deal-toolbar">
         <p class="boop-note boop-deal-toolbar-note">Optional: select as many as needed, then continue.</p>
         <div class="boop-deal-toolbar-actions">
-          <button type="button" class="boop-btn subtle" onclick="boopBack()">Back</button>
+          <a class="boop-deal-back-link" href="#" onclick="event.preventDefault();boopBack();">Back</a>
           <button type="button" class="boop-btn subtle" onclick="boopSkipToNeighborhood()">Skip</button>
           <button type="button" class="boop-btn primary" onclick="boopFinish()">Continue to neighborhoods</button>
         </div>
