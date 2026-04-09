@@ -579,6 +579,32 @@ function resolveCoords(city) {
   return null;
 }
 
+function normalizeCityName(city) {
+  return String(city || "")
+    .trim()
+    .replace(/\s+/g, " ")
+    .replace(/\w\S*/g, (w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase());
+}
+
+async function resolveCityName(rawCity, dbClient, tableHints = ["indexed_cities", "hotels_cache"]) {
+  const normalized = normalizeCityName(rawCity);
+  if (!normalized || !dbClient) return normalized;
+
+  for (const table of tableHints) {
+    try {
+      const { data } = await dbClient
+        .from(table)
+        .select("city")
+        .ilike("city", normalized)
+        .limit(1);
+      if (data?.[0]?.city) return data[0].city;
+    } catch {
+      // Fallback to normalized input on any table/query mismatch.
+    }
+  }
+  return normalized;
+}
+
 async function liteGet(path) {
   const r = await fetch(`https://api.liteapi.travel/v3.0${path}`, {
     headers: { "X-API-Key": LITEAPI_KEY, "accept": "application/json" }
@@ -1404,10 +1430,10 @@ app.get("/api/clip-search", async (req, res) => {
 // ── Vector search endpoint ────────────────────────────────────────────────────
 app.get("/api/vsearch", async (req, res) => {
   const { query } = req.query;
-  // Normalize city to Title Case so "paris" and "Paris" resolve the same
-  const city = (req.query.city || "").trim().replace(/\w\S*/g, w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase());
-  if (!query || !city) return res.status(400).json({ error: "query and city required" });
+  const cityInput = (req.query.city || "").trim();
+  if (!query || !cityInput) return res.status(400).json({ error: "query and city required" });
   if (!supabase)       return res.status(500).json({ error: "Supabase not configured" });
+  const city = await resolveCityName(cityInput, supabaseAdmin || supabase, ["indexed_cities", "hotels_cache"]);
 
   const CC_MAP = {
     "paris":"FR","london":"GB","new york city":"US","new york":"US","nyc":"US",
@@ -1890,8 +1916,9 @@ app.get("/api/vsearch", async (req, res) => {
 
 // ── Index status endpoint ──────────────────────────────────────────────────────
 app.get("/api/index-status", async (req, res) => {
-  const { city } = req.query;
-  if (!city || !supabase) return res.json({ status: "unknown" });
+  const cityInput = (req.query.city || "").trim();
+  if (!cityInput || !supabase) return res.json({ status: "unknown" });
+  const city = await resolveCityName(cityInput, supabaseAdmin || supabase, ["indexed_cities"]);
   const { data } = await supabase
     .from("indexed_cities")
     .select("status, hotel_count, photo_count, started_at, completed_at")
@@ -1902,7 +1929,8 @@ app.get("/api/index-status", async (req, res) => {
 
 // ── Cancel indexing endpoint ──────────────────────────────────────────────────
 app.post("/api/index-cancel", async (req, res) => {
-  const { city, secret } = req.body || {};
+  const { city: cityRaw, secret } = req.body || {};
+  const city = normalizeCityName(cityRaw);
   if (secret !== (process.env.INDEX_SECRET || "roommatch-index")) {
     return res.status(401).json({ error: "Unauthorized" });
   }
@@ -1925,11 +1953,13 @@ app.post("/api/index-cancel", async (req, res) => {
 // Fires a single batched POST to LiteAPI /hotels/rates with all hotel IDs.
 // Returns { prices: { hotel_id: $/night }, currency, nights, pricedCount }
 app.get("/api/rates", async (req, res) => {
-  const { city, checkin } = req.query;
+  const cityInput = (req.query.city || "").trim();
+  const { checkin } = req.query;
   let { checkout } = req.query;
-  if (!city || !checkin || !checkout) {
+  if (!cityInput || !checkin || !checkout) {
     return res.status(400).json({ error: "city, checkin and checkout required" });
   }
+  const city = await resolveCityName(cityInput, supabaseAdmin || supabase, ["hotels_cache", "indexed_cities"]);
   let nights = Math.round((new Date(checkout) - new Date(checkin)) / 86400000);
   if (nights < 1) {
     return res.status(400).json({ error: "checkout must be after checkin" });
@@ -2426,9 +2456,10 @@ app.post("/api/backfill-room-ids", async (req, res) => {
 const neighborhoodGenerating = new Set(); // track in-flight generation per city
 
 app.get("/api/neighborhoods", async (req, res) => {
-  const city = (req.query.city || "").trim();
-  if (!city) return res.status(400).json({ error: "city required" });
+  const cityInput = (req.query.city || "").trim();
+  if (!cityInput) return res.status(400).json({ error: "city required" });
   if (!supabase) return res.status(500).json({ error: "Supabase not configured" });
+  const city = await resolveCityName(cityInput, supabaseAdmin || supabase, ["neighborhoods", "indexed_cities", "hotels_cache"]);
 
   try {
     // Return cached rows immediately if they exist
@@ -2481,9 +2512,10 @@ const VIBE_STYLES = [
 ];
 
 app.get("/api/vibe-presets", async (req, res) => {
-  const city = (req.query.city || "").trim();
-  if (!city) return res.status(400).json({ error: "city required" });
+  const cityInput = (req.query.city || "").trim();
+  if (!cityInput) return res.status(400).json({ error: "city required" });
   if (!supabase) return res.status(500).json({ error: "Supabase not configured" });
+  const city = await resolveCityName(cityInput, supabaseAdmin || supabase, ["vibe_presets", "neighborhoods", "indexed_cities"]);
 
   try {
     // Return cached presets if available
@@ -2632,7 +2664,8 @@ app.post("/api/backfill-latlng", async (req, res) => {
 
 // ── Manual trigger endpoint (protected) ───────────────────────────────────────
 app.post("/api/index-city", async (req, res) => {
-  const { city, limit, secret } = req.body || {};
+  const { city: cityRaw, limit, secret } = req.body || {};
+  const city = normalizeCityName(cityRaw);
   if (secret !== (process.env.INDEX_SECRET || "roommatch-index")) {
     return res.status(401).json({ error: "Unauthorized" });
   }

@@ -1574,30 +1574,156 @@
       color:var(--muted); border-radius:10px; padding:10px 12px; font-size:12px;
     }
     .boop-saved strong { color:var(--accent2); font-weight:600; }
-    .boop-deal-grid { display:grid; grid-template-columns:1fr; gap:12px; margin-top:12px; justify-content:center; }
-    @media(min-width:760px){ .boop-deal-grid { grid-template-columns:repeat(2,minmax(320px,430px)); } }
-    .boop-deal-card {
-      position:relative; border-radius:14px; overflow:hidden; border:1px solid var(--border); background:#151922;
-      cursor:pointer; transition:transform .15s,border-color .15s,box-shadow .15s;
+    /* Dealbreakers: horizontal list (image ~60% + text), mirrors design/boop-screen6-dealbreakers-list-preview-v2 */
+    .boop-deal-list-shell { margin-top:12px; }
+    @media(min-width:900px){
+      .boop-wrap--deal .boop-deal-list-shell {
+        min-height:max(400px, calc(100dvh - 300px));
+        display:flex;
+        flex-direction:column;
+      }
+      .boop-wrap--deal .boop-deal-list {
+        flex:1;
+        min-height:0;
+        display:flex;
+        flex-direction:column;
+        gap:8px;
+      }
+      .boop-wrap--deal .boop-deal-row {
+        flex:1 1 0;
+        min-height:0;
+      }
     }
-    .boop-deal-card:hover { transform:translateY(-1px); border-color:rgba(201,169,110,.45); box-shadow:0 10px 24px rgba(0,0,0,.3); }
-    .boop-deal-media { position:relative; width:100%; aspect-ratio:4/3; min-height:210px; }
-    .boop-deal-media img { width:100%; height:100%; object-fit:cover; display:block; }
-    .boop-deal-grad { position:absolute; inset:0; background:linear-gradient(to bottom,rgba(0,0,0,.14),rgba(0,0,0,.72)); }
-    .boop-deal-content { position:absolute; left:12px; right:12px; bottom:10px; }
-    .boop-deal-title { font-size:17px; font-weight:700; color:#fff; text-shadow:0 2px 10px rgba(0,0,0,.72); }
-    .boop-deal-hint  { margin-top:4px; font-size:12px; color:#edf2ff; text-shadow:0 2px 10px rgba(0,0,0,.72); }
-    .boop-deal-check {
-      position:absolute; top:10px; right:10px; width:28px; height:28px; border-radius:999px;
-      border:1px solid rgba(255,255,255,.28); background:rgba(0,0,0,.45); color:#fff;
-      display:grid; place-items:center; font-size:14px;
+    .boop-deal-list {
+      display:flex;
+      flex-direction:column;
+      gap:8px;
     }
-    .boop-deal-card.active {
+    .boop-deal-row {
+      display:grid;
+      grid-template-columns:minmax(220px, 60%) 1fr;
+      align-items:stretch;
+      min-height:104px;
+      border-radius:12px;
+      overflow:hidden;
+      border:1px solid var(--border);
+      background:#1a1d25;
+      cursor:pointer;
+      width:100%;
+      font:inherit;
+      color:var(--text);
+      text-align:left;
+      padding:0;
+      transition:transform .15s, border-color .15s, box-shadow .15s;
+    }
+    .boop-deal-row:hover {
+      transform:translateY(-1px);
+      border-color:rgba(201,169,110,.4);
+      box-shadow:0 8px 22px rgba(0,0,0,.28);
+    }
+    .boop-deal-row:focus-visible {
+      outline:2px solid var(--accent);
+      outline-offset:2px;
+    }
+    .boop-deal-row-media {
+      position:relative;
+      min-height:0;
+      min-width:0;
+      height:100%;
+      align-self:stretch;
+    }
+    .boop-deal-row-media img {
+      width:100%;
+      height:100%;
+      object-fit:cover;
+      object-position:center 42%;
+      display:block;
+    }
+    .boop-deal-row-media::after {
+      content:"";
+      position:absolute;
+      inset:0;
+      pointer-events:none;
+      background:linear-gradient(90deg,rgba(0,0,0,.04),rgba(0,0,0,.28));
+    }
+    .boop-deal-row-text {
+      padding:10px 12px;
+      display:flex;
+      flex-direction:column;
+      justify-content:space-between;
+      gap:8px;
+      min-width:0;
+    }
+    .boop-deal-row-head {
+      display:flex;
+      justify-content:space-between;
+      gap:10px;
+      align-items:flex-start;
+    }
+    .boop-deal-row-copy { min-width:0; }
+    .boop-deal-row-title {
+      font-size:20px;
+      line-height:1.12;
+      font-weight:700;
+      white-space:nowrap;
+      overflow:hidden;
+      text-overflow:ellipsis;
+    }
+    .boop-deal-row-hint {
+      margin-top:5px;
+      font-size:13px;
+      color:#d6d1c8;
+      line-height:1.35;
+      display:-webkit-box;
+      -webkit-line-clamp:2;
+      -webkit-box-orient:vertical;
+      overflow:hidden;
+    }
+    .boop-deal-row-check {
+      width:30px;
+      height:30px;
+      border-radius:999px;
+      border:1px solid rgba(255,255,255,.33);
+      display:grid;
+      place-items:center;
+      font-size:15px;
+      background:rgba(0,0,0,.28);
+      flex-shrink:0;
+      color:#fff;
+    }
+    .boop-deal-row-meta {
+      font-size:11px;
+      color:#9ee0c4;
+      border:1px solid rgba(158,224,196,.28);
+      padding:4px 9px;
+      border-radius:999px;
+      align-self:flex-start;
+      white-space:nowrap;
+      overflow:hidden;
+      text-overflow:ellipsis;
+      max-width:100%;
+    }
+    .boop-deal-row.active {
       border-color:rgba(224,192,144,.95);
-      box-shadow:0 0 0 2px rgba(224,192,144,.2), 0 12px 28px rgba(0,0,0,.35);
+      box-shadow:0 0 0 2px rgba(224,192,144,.2);
     }
-    .boop-deal-card.active .boop-deal-check {
-      background:#e0c090; border-color:#e0c090; color:#16110b;
+    .boop-deal-row.active .boop-deal-row-check {
+      background:#e0c090;
+      border-color:#e0c090;
+      color:#17120b;
+    }
+    @media(max-width:760px){
+      .boop-deal-row {
+        grid-template-columns:1fr;
+        flex:none;
+        min-height:0;
+      }
+      .boop-deal-row-media {
+        height:auto;
+        aspect-ratio:2/1;
+        max-height:180px;
+      }
+      .boop-deal-row-media img { min-height:140px; }
     }
 
     /* ── Neighbourhood header: Boop summary (upper-right) */
@@ -2585,10 +2711,10 @@
       sub:'Optional, select as many as you want.',
       type:'chips',
       options:[
-        { id:'noisy', label:'Too noisy', hint:'Prefer quieter streets', image:'https://images.unsplash.com/photo-1449824913935-59a10b8d2000?auto=format&fit=crop&w=1200&q=80&v=20260409-noisy-street' },
-        { id:'far', label:'Too far from things', hint:'Need convenient location', image:'https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=1200&q=80' },
-        { id:'touristy', label:'Too touristy', hint:'Want more local feel', image:'https://images.unsplash.com/photo-1481437156560-3205f6a55735?auto=format&fit=crop&w=1200&q=80' },
-        { id:'lowFood', label:'Not enough food options', hint:'Need dense food scene', image:'https://images.unsplash.com/photo-1448630360428-65456885c650?auto=format&fit=crop&w=1200&q=80' },
+        { id:'noisy', label:'Too noisy', hint:'Busy streets and traffic wear me out.', meta:'Filter for calmer streets', image:'https://images.unsplash.com/photo-1449824913935-59a10b8d2000?auto=format&fit=crop&w=1200&q=80&v=20260409-noisy-street' },
+        { id:'far', label:'Too far from things', hint:'I want easy access to central spots.', meta:'Boost central convenience', image:'https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=1200&q=80' },
+        { id:'touristy', label:'Too touristy', hint:'Skip oversaturated streets with heavy crowds.', meta:'Prioritize local vibe', image:'https://images.unsplash.com/photo-1481437156560-3205f6a55735?auto=format&fit=crop&w=1200&q=80' },
+        { id:'lowFood', label:'Not enough food options', hint:'I need plenty of restaurants nearby.', meta:'Boost food-dense neighborhoods', image:'https://images.unsplash.com/photo-1448630360428-65456885c650?auto=format&fit=crop&w=1200&q=80' },
       ]
     }
   ];
@@ -2689,6 +2815,13 @@
   // ── BOOP INTRO (after city, before neighbourhood) ───
   function cityKey(name) {
     return (name || '').trim().toLowerCase();
+  }
+
+  function normalizeCityName(name) {
+    return String(name || '')
+      .trim()
+      .replace(/\s+/g, ' ')
+      .replace(/\w\S*/g, w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase());
   }
 
   function readBoopProfiles() {
@@ -2976,21 +3109,28 @@
     if (result.environment) {
       const greenSorted = [...hoods].sort((a, b) => boopNeighborhoodGreenScore(b) - boopNeighborhoodGreenScore(a));
       const greenCandidates = greenSorted.filter(h => boopNeighborhoodGreenScore(h) >= 3);
+      // Use a dedicated set so this critical card can still pick the best local
+      // green-street image even if similar URLs were consumed by earlier cards.
+      const calmGreenUsed = new Set();
       const calmGreenUrl =
-        boopPickStrictElementImage(greenCandidates.length ? greenCandidates : greenSorted, 'street_feel', usedUrls, {
-          sourcePriority: ['google_places', 'unsplash', 'unsplash_city'],
-          photoPredicate: boopIsLeafyStreetPhoto,
+        boopPickStrictElementImage(greenCandidates.length ? greenCandidates : greenSorted, 'street_feel', calmGreenUsed, {
+          // Prefer city-specific street imagery first; Google Places often returns
+          // off-intent interiors for this card.
+          sourcePriority: ['unsplash_city', 'unsplash', 'google_places'],
+          // Keep this loose enough to avoid rejecting valid local street photos.
+          photoPredicate: null,
           allowLoose: false,
           rankScore: boopNeighborhoodGreenScore,
         }) ||
-        boopPickStrictElementImage(greenCandidates.length ? greenCandidates : greenSorted, 'parks', usedUrls, {
-          sourcePriority: ['google_places', 'unsplash', 'unsplash_city'],
+        boopPickStrictElementImage(greenCandidates.length ? greenCandidates : greenSorted, 'parks', calmGreenUsed, {
+          sourcePriority: ['unsplash_city', 'unsplash', 'google_places'],
           photoPredicate: boopIsGreenParkPhoto,
           allowLoose: false,
           rankScore: boopNeighborhoodGreenScore,
         });
       // Prefer a local leafy-street scene; if unavailable, keep existing fallback behavior.
       result.environment.calm_green = calmGreenUrl || '';
+      if (calmGreenUrl) usedUrls.add(calmGreenUrl);
     }
 
     if (result.night) {
@@ -3280,6 +3420,7 @@
     if (!wrap) return;
     const q = BOOP_QUESTIONS[BOOP.idx];
     if (!q) { boopFinish(); return; }
+    wrap.className = 'boop-wrap' + (q.type === 'chips' ? ' boop-wrap--deal' : '');
     const p = boopProgressPct();
     const saved = loadBoopProfileForCity(S.city);
     const savedTs = saved?.updatedAt ? new Date(saved.updatedAt).toLocaleDateString() : null;
@@ -3320,19 +3461,23 @@
         <button class="boop-btn primary" onclick="boopConfirmSlider()">Use this preference</button>
       </div>`;
     } else {
-      body = `<div class="boop-deal-grid">${q.options.map(o => `
-        <button class="boop-deal-card ${BOOP.dealbreakers.has(o.id) ? 'active' : ''}" onclick="boopToggleDealbreaker('${o.id}')">
-          <div class="boop-deal-media">
+      body = `<div class="boop-deal-list-shell"><div class="boop-deal-list">${q.options.map(o => `
+        <button type="button" class="boop-deal-row ${BOOP.dealbreakers.has(o.id) ? 'active' : ''}" aria-pressed="${BOOP.dealbreakers.has(o.id) ? 'true' : 'false'}" onclick="boopToggleDealbreaker('${o.id}')">
+          <div class="boop-deal-row-media">
             <img src="${boopGetDynamicImage(q.id, o.id, o.image || 'https://images.unsplash.com/photo-1477959858617-67f85cf4f1df?auto=format&fit=crop&w=1200&q=80')}" alt="${o.label}" loading="lazy" onerror="this.onerror=null;this.src='https://images.unsplash.com/photo-1477959858617-67f85cf4f1df?auto=format&fit=crop&w=1200&q=80'" />
-            <div class="boop-deal-grad"></div>
-            <div class="boop-deal-check">${BOOP.dealbreakers.has(o.id) ? '✓' : '+'}</div>
-            <div class="boop-deal-content">
-              <div class="boop-deal-title">${o.label}</div>
-              <div class="boop-deal-hint">${o.hint || ''}</div>
+          </div>
+          <div class="boop-deal-row-text">
+            <div class="boop-deal-row-head">
+              <div class="boop-deal-row-copy">
+                <div class="boop-deal-row-title">${o.label}</div>
+                <div class="boop-deal-row-hint">${o.hint || ''}</div>
+              </div>
+              <div class="boop-deal-row-check" aria-hidden="true">${BOOP.dealbreakers.has(o.id) ? '✓' : '+'}</div>
             </div>
+            ${o.meta ? `<div class="boop-deal-row-meta">${o.meta}</div>` : ''}
           </div>
         </button>
-      `).join('')}</div>
+      `).join('')}</div></div>
       <div class="boop-note">Optional: select as many as needed.</div>
       <div class="boop-actions">
         <button class="boop-btn subtle" onclick="boopBack()">Back</button>
@@ -3359,11 +3504,12 @@
 
   // ── CITY ─────────────────────────────────────────────
   function pickCity(name) {
-    S.city = name;
-    document.getElementById('cityInput').value = name;
-    document.getElementById('sv-city').textContent = name.length > 20 ? name.slice(0,18)+'…' : name;
+    const city = normalizeCityName(name);
+    S.city = city;
+    document.getElementById('cityInput').value = city;
+    document.getElementById('sv-city').textContent = city.length > 20 ? city.slice(0,18)+'…' : city;
     // Save to history and rebuild chips so next visit shows it as recent
-    writeHistory(CITY_HISTORY_KEY, name);
+    writeHistory(CITY_HISTORY_KEY, city);
     buildCityChips();
     // Reset downstream selections when city changes
     S.nbhd = null;
@@ -3373,7 +3519,7 @@
     S.q = null;
     // City -> Boop intro step
     startBoopStep();
-    prefetchBoopWizardImages(name);
+    prefetchBoopWizardImages(city);
     refreshStory('boop');
     showFlowStep('boop');
   }
