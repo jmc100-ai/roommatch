@@ -1574,8 +1574,45 @@
       color:var(--muted); border-radius:10px; padding:10px 12px; font-size:12px;
     }
     .boop-saved strong { color:var(--accent2); font-weight:600; }
+    /* Dealbreakers: actions above list so Continue is visible without scrolling */
+    .boop-deal-toolbar {
+      display:flex;
+      flex-wrap:wrap;
+      align-items:center;
+      justify-content:space-between;
+      gap:12px;
+      margin-top:10px;
+    }
+    .boop-deal-toolbar-note {
+      margin:0 !important;
+      flex:1 1 200px;
+      min-width:min(100%, 220px);
+      font-size:12px;
+      color:#8bc4ad;
+      line-height:1.35;
+    }
+    .boop-deal-toolbar-actions {
+      display:flex;
+      flex-wrap:wrap;
+      gap:8px;
+      justify-content:flex-end;
+      align-items:center;
+      flex:0 1 auto;
+    }
+    @media (max-width:540px){
+      .boop-deal-toolbar-actions {
+        width:100%;
+        justify-content:stretch;
+      }
+      .boop-deal-toolbar-actions .boop-btn {
+        flex:1;
+        min-width:0;
+        text-align:center;
+      }
+    }
     /* Dealbreakers: horizontal list (image ~60% + text), mirrors design/boop-screen6-dealbreakers-list-preview-v2 */
     .boop-deal-list-shell { margin-top:12px; }
+    .boop-deal-toolbar + .boop-deal-list-shell { margin-top:8px; }
     @media(min-width:900px){
       .boop-wrap--deal .boop-deal-list-shell {
         min-height:max(400px, calc(100dvh - 300px));
@@ -3467,7 +3504,15 @@
         <button class="boop-btn primary" onclick="boopConfirmSlider()">Use this preference</button>
       </div>`;
     } else {
-      body = `<div class="boop-deal-list-shell"><div class="boop-deal-list">${q.options.map(o => `
+      body = `<div class="boop-deal-toolbar">
+        <p class="boop-note boop-deal-toolbar-note">Optional: select as many as needed, then continue.</p>
+        <div class="boop-deal-toolbar-actions">
+          <button type="button" class="boop-btn subtle" onclick="boopBack()">Back</button>
+          <button type="button" class="boop-btn subtle" onclick="boopSkipToNeighborhood()">Skip</button>
+          <button type="button" class="boop-btn primary" onclick="boopFinish()">Continue to neighborhoods</button>
+        </div>
+      </div>
+      <div class="boop-deal-list-shell"><div class="boop-deal-list">${q.options.map(o => `
         <button type="button" class="boop-deal-row ${BOOP.dealbreakers.has(o.id) ? 'active' : ''}" aria-pressed="${BOOP.dealbreakers.has(o.id) ? 'true' : 'false'}" onclick="boopToggleDealbreaker('${o.id}')">
           <div class="boop-deal-row-media">
             <img src="${boopGetDynamicImage(q.id, o.id, o.image || 'https://images.unsplash.com/photo-1477959858617-67f85cf4f1df?auto=format&fit=crop&w=1200&q=80')}" alt="${o.label}" loading="lazy" onerror="this.onerror=null;this.src='https://images.unsplash.com/photo-1477959858617-67f85cf4f1df?auto=format&fit=crop&w=1200&q=80'" />
@@ -3483,16 +3528,13 @@
             ${o.meta ? `<div class="boop-deal-row-meta">${o.meta}</div>` : ''}
           </div>
         </button>
-      `).join('')}</div></div>
-      <div class="boop-note">Optional: select as many as needed.</div>
-      <div class="boop-actions">
-        <button class="boop-btn subtle" onclick="boopBack()">Back</button>
-        <button class="boop-btn primary" onclick="boopFinish()">Continue to neighborhoods</button>
-      </div>`;
+      `).join('')}</div></div>`;
     }
 
     const nav = q.type === 'cards'
       ? `<div class="boop-actions">${BOOP.idx > 0 ? `<button class="boop-btn subtle" onclick="boopBack()">Back</button>` : '<span></span>'}<button class="boop-btn subtle" onclick="boopSkipToNeighborhood()">Skip to neighborhoods</button></div>`
+      : q.type === 'chips'
+      ? ''
       : `<div class="boop-actions"><button class="boop-btn subtle" onclick="boopSkipToNeighborhood()">Skip to neighborhoods</button></div>`;
 
     wrap.innerHTML = `
