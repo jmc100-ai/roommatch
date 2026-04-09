@@ -614,6 +614,32 @@ function isChain(displayName) {
   return CHAIN_BLOCKLIST.has(displayName.toLowerCase().trim());
 }
 
+// Well-known mega-landmarks that Google Places POPULARITY surfaces for any
+// nearby neighbourhood but that clearly belong to a specific iconic location
+// (e.g. Chapultepec Park, Angel de Independencia strip). Blocklisting them
+// stops them from appearing in adjacent neighbourhood photo carousels.
+const LANDMARK_BLOCKLIST = new Set([
+  // Chapultepec Park landmarks (appear in Condesa, Juárez, Polanco results)
+  "chapultepec castle", "castillo de chapultepec",
+  "bosque de chapultepec", "chapultepec forest",
+  "museo nacional de antropología", "national museum of anthropology",
+  "museo de arte moderno", "museo rufino tamayo",
+  "papalote museo del niño",
+  "monumento a los niños héroes", "niños héroes",
+  "puerta de los leones de chapultepec",
+  // Reforma corridor (bleeds into Juárez / Condesa)
+  "diana the huntress fountain", "fuente de diana la cazadora",
+  "fuente de diana cazadora",
+  "ángel de la independencia", "angel de la independencia",
+  "monumento a la independencia",
+  "torre mayor", "torre reforma",
+]);
+
+function isBlocklistedLandmark(displayName) {
+  if (!displayName) return false;
+  return LANDMARK_BLOCKLIST.has(displayName.toLowerCase().trim());
+}
+
 /**
  * fetchGooglePlacesElementPhotos — nearby search inside the neighbourhood bbox,
  * filtered by category type. Returns up to `maxPhotos` photo objects.
@@ -633,14 +659,14 @@ async function fetchGooglePlacesElementPhotos(bbox, elementKey, placesKey, maxPh
   );
 
   // icon_spots: use POPULARITY (returns well-known places) but shrink radius to
-  // 65% so landmarks at the edges of the bbox (e.g. Chapultepec Castle appearing
-  // in Condesa results) are excluded. The tighter circle stays centred on the
-  // neighbourhood and picks the most-popular spots actually *within* it.
+  // 50% so landmarks at the edges of the bbox (e.g. Chapultepec/Diana Cazadora
+  // appearing in Condesa results) are excluded. The tighter circle stays centred
+  // on the neighbourhood and picks the most-popular spots actually *within* it.
   // parks: use DISTANCE so large parks at the centre rank first.
   // All other categories: full radius + POPULARITY.
   const rankPref = elementKey === "parks" ? "DISTANCE" : "POPULARITY";
   const radiusM  = elementKey === "icon_spots"
-    ? Math.round(baseRadiusM * 0.65)
+    ? Math.round(baseRadiusM * 0.50)
     : baseRadiusM;
 
   const body = {
@@ -675,6 +701,12 @@ async function fetchGooglePlacesElementPhotos(bbox, elementKey, placesKey, maxPh
     // Skip global chain venues — their photos are generic interiors, not neighbourhood-specific.
     if (isChain(place.displayName?.text)) {
       console.log(`[photos] skipping chain: ${place.displayName?.text}`);
+      continue;
+    }
+    // Skip well-known mega-landmarks that belong to a specific iconic location
+    // (e.g. Chapultepec Park) and bleed into adjacent neighbourhoods via POPULARITY.
+    if (isBlocklistedLandmark(place.displayName?.text)) {
+      console.log(`[photos] skipping blocklisted landmark: ${place.displayName?.text}`);
       continue;
     }
     const photoName = place.photos[0].name;
