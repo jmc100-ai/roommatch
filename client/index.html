@@ -3213,7 +3213,13 @@
     const cityK = cityKey(S.city);
     const cityMap = cityK ? BOOP_WIZARD_IMAGES[cityK] : null;
     const cityFallback = cityK ? BOOP_WIZARD_CITY_FALLBACKS[cityK]?.[questionId] : '';
-    return cityMap?.[questionId]?.[optionId] || cityFallback || fallback;
+    const v = cityMap?.[questionId]?.[optionId];
+    if (v) return v;
+    // Builder sets '' when strict intent photos miss — must use this card's static
+    // fallback. Using || would treat '' as missing and reuse one cityFallback URL
+    // for every option (e.g. all four "night" tiles looked identical).
+    if (v === undefined && cityFallback) return cityFallback;
+    return fallback;
   }
 
   async function prefetchBoopWizardImages(city) {
