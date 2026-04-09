@@ -96,6 +96,32 @@ const PORT        = process.env.PORT || 3000;
 app.get("/api/health", (_, res) => {
   res.status(200).type("text/plain").send("ok");
 });
+app.head("/api/health", (_, res) => {
+  res.status(200).end();
+});
+
+// Bind PORT before the rest of this file runs (huge tables + routes). Render scans the
+// container port immediately; waiting until EOF made probes time out intermittently.
+app.listen(PORT, "0.0.0.0", () => {
+  console.log(`[boot] listening on 0.0.0.0:${PORT}`);
+  console.log(`[config] Using ${IS_PROD ? "PRODUCTION" : "SANDBOX"} LiteAPI key`);
+  console.log(`TravelBoop on port ${PORT}`);
+  const KEEPALIVE_ENABLED = String(process.env.RENDER_KEEPALIVE || "").toLowerCase() === "true";
+  const RENDER_URL = process.env.RENDER_EXTERNAL_URL;
+  if (RENDER_URL && KEEPALIVE_ENABLED) {
+    console.log(`[keepalive] pinging ${RENDER_URL} every 10 min`);
+    setInterval(async () => {
+      try {
+        await fetch(`${RENDER_URL}/api/health`);
+        console.log("[keepalive] ping ok");
+      } catch (e) {
+        console.warn("[keepalive] ping failed:", e.message);
+      }
+    }, 10 * 60 * 1000);
+  } else if (RENDER_URL) {
+    console.log("[keepalive] disabled (set RENDER_KEEPALIVE=true to enable)");
+  }
+});
 
 const CITY_COORDS = {
   "new york": [40.7128, -74.006], "new york city": [40.7128, -74.006],
@@ -2732,26 +2758,3 @@ async function gracefulShutdown(signal) {
 
 process.on("SIGTERM", () => gracefulShutdown("SIGTERM"));
 process.on("SIGINT",  () => gracefulShutdown("SIGINT"));
-
-app.listen(PORT, "0.0.0.0", () => {
-  console.log(`[boot] listening on 0.0.0.0:${PORT}`);
-  console.log(`[config] Using ${IS_PROD ? "PRODUCTION" : "SANDBOX"} LiteAPI key`);
-  console.log(`TravelBoop on port ${PORT}`);
-
-  // Optional keepalive loop. Starter/paid plans generally do not need this.
-  const KEEPALIVE_ENABLED = String(process.env.RENDER_KEEPALIVE || "").toLowerCase() === "true";
-  const RENDER_URL = process.env.RENDER_EXTERNAL_URL;
-  if (RENDER_URL && KEEPALIVE_ENABLED) {
-    console.log(`[keepalive] pinging ${RENDER_URL} every 10 min`);
-    setInterval(async () => {
-      try {
-        await fetch(`${RENDER_URL}/api/health`);
-        console.log('[keepalive] ping ok');
-      } catch (e) {
-        console.warn('[keepalive] ping failed:', e.message);
-      }
-    }, 10 * 60 * 1000);
-  } else if (RENDER_URL) {
-    console.log("[keepalive] disabled (set RENDER_KEEPALIVE=true to enable)");
-  }
-});
