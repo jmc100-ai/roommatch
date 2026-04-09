@@ -545,13 +545,13 @@ async function recomputeNeighborhoodVibes(city, db, unsplashKey, googlePlacesKey
         return null;
       });
       if (fetched) {
-        // Don't zero-out parks if the green-area query failed and we already have
-        // a valid count stored. parks=0 only makes sense when the query truly
-        // succeeded and found no qualifying polygons.
-        const oldParks = row.attributes?.poi_counts?.parks;
-        if (fetched.parks === 0 && oldParks > 0) {
-          console.warn(`[recompute] ${row.name}: green query failed, preserving old parks=${oldParks}`);
+        // parks=null means the green-area Overpass query failed (not that there are 0 parks).
+        // Always fall back to the existing DB value so a flaky Overpass request never
+        // zeroes out a neighbourhood that genuinely has parks.
+        if (fetched.parks == null) {
+          const oldParks = row.attributes?.poi_counts?.parks ?? null;
           fetched.parks = oldParks;
+          console.warn(`[recompute] ${row.name}: green query failed — keeping stored parks=${oldParks ?? "none"}`);
         }
         console.log(`[recompute] Overpass ${row.name}: cafes=${fetched.cafes} restaurants=${fetched.restaurants} parks=${fetched.parks} shops=${fetched.shops} museums=${fetched.museums} icon_spots=${fetched.icon_spots}`);
         const updatedAttrs = { ...(row.attributes || {}), poi_counts: fetched };

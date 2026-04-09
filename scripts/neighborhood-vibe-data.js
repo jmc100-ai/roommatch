@@ -314,13 +314,12 @@ out tags;`;
   const data = await res.json();
 
   const counts = {
-    parks: 0,       // filled in below; either from filtered green count or fallback
+    parks: parksFiltered,  // null when green query failed — caller must preserve old DB value
     restaurants: 0,
     cafes: 0,
     museums: 0,
     shops: 0,
     icon_spots: 0,
-    _parkFallback: 0, // unfiltered park+garden node count from main union (fallback only)
   };
 
   for (const el of (data.elements || [])) {
@@ -344,11 +343,7 @@ out tags;`;
     }
   }
 
-  // Use filtered green count when available; fallback to 0 (main query has no park nodes)
-  counts.parks = parksFiltered !== null ? parksFiltered : counts._parkFallback;
-  delete counts._parkFallback;
-
-  console.log(`[overpass] final counts: parks=${counts.parks} restaurants=${counts.restaurants} cafes=${counts.cafes} museums=${counts.museums} shops=${counts.shops} icon_spots=${counts.icon_spots}`);
+  console.log(`[overpass] final counts: parks=${counts.parks ?? "null(failed)"} restaurants=${counts.restaurants} cafes=${counts.cafes} museums=${counts.museums} shops=${counts.shops} icon_spots=${counts.icon_spots}`);
 
   return counts;
 }
