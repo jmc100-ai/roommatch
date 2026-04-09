@@ -1774,6 +1774,8 @@
       color:#17120b;
     }
     @media(max-width:760px){
+      /* Mobile only: reduce intro wizard card visual height by ~15%. */
+      .boop-card-media { aspect-ratio:16/10; min-height:178px; }
       .boop-deal-row {
         grid-template-columns:1fr;
         flex:none;
@@ -1803,6 +1805,10 @@
     @media(min-width:980px){
       .nbhd-top { grid-template-columns:minmax(0,1fr) 360px; }
       #boop-summary-slot { padding-top:22px; }
+    }
+    @media(max-width:979px){
+      /* Mobile/tablet: breathing room below summary before first neighborhood card. */
+      #boop-summary-slot { padding-bottom:14px; }
     }
     .nbhd-top-main { min-width:0; max-width:660px; }
     .boop-summary {
