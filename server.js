@@ -1688,7 +1688,7 @@ app.get("/api/vsearch", async (req, res) => {
 
     // If bbox search returned 0 results, retry city-wide as a fallback
     if (!hotelSimMap.size && bboxHotelIds) {
-      console.log(`[vsearch] 0 results in bbox — retrying city-wide`);
+      console.log(`[vsearch] 0 results in geo fence (polygon/bbox) — retrying city-wide`);
       const fallback = await fetchClient.rpc("score_room_types", {
         query_embedding: queryEmbedding,
         search_city: city,

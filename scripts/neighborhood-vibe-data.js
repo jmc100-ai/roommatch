@@ -12,9 +12,9 @@ const PHOTO_RULES = { target: 6, min: 3, max: 8 };
 
 const QUERY_TEMPLATES = {
   parks: [
-    "{neighborhood} {city} park",
-    "{neighborhood} {city} tree lined streets",
-    "{city} neighborhood green space",
+    "{neighborhood} {city} trees lawn path",
+    "{neighborhood} {city} public garden",
+    "{city} urban green space trees",
   ],
   restaurants: [
     "{neighborhood} {city} restaurants outdoor dining",
@@ -101,7 +101,7 @@ const POI_CATEGORIES = ["parks", "restaurants", "cafes", "museums", "shops", "ic
  * Uses the midpoint latitude to correct for longitudinal compression.
  */
 function bboxAreaKm2(bbox) {
-  if (!bbox?.lat_min) return null;
+  if (bbox?.lat_min == null) return null;
   const { lat_min, lat_max, lon_min, lon_max } = bbox;
   const midLat  = (lat_min + lat_max) / 2;
   const latKm   = (lat_max - lat_min) * 111.0;
@@ -122,7 +122,7 @@ function pointInBbox(lat, lng, box) {
  * insetRatio 0.12 → shrink each dimension by 12% total (6% per side).
  */
 function tightFenceFromBbox(bbox, insetRatio = 0.12) {
-  if (!bbox?.lat_min) return null;
+  if (bbox?.lat_min == null) return null;
   const latSpan = bbox.lat_max - bbox.lat_min;
   const lonSpan = bbox.lon_max - bbox.lon_min;
   const padLat = (latSpan * insetRatio) / 2;
@@ -827,13 +827,20 @@ function isBlocklistedLandmark(displayName) {
   return LANDMARK_BLOCKLIST.has(displayName.toLowerCase().trim());
 }
 
+/** Small urban "parks" in Google are often playgrounds; skip for park carousel imagery. */
+function isPlaygroundLikePlaceName(displayName) {
+  if (!displayName) return false;
+  const n = displayName.toLowerCase();
+  return /\b(playground|play area|tot lot|splash pad|jungle gym|swing park)\b/.test(n);
+}
+
 /**
  * fetchGooglePlacesElementPhotos — nearby search inside the neighbourhood bbox,
  * filtered by category type. Returns up to `maxPhotos` photo objects.
  * Falls back gracefully — returns [] on any error.
  */
 async function fetchGooglePlacesElementPhotos(bbox, elementKey, placesKey, maxPhotos = PHOTO_RULES.target, polygonRing = null) {
-  if (!placesKey || !bbox?.lat_min) return [];
+  if (!placesKey || bbox?.lat_min == null) return [];
   const types = PLACES_ELEMENT_TYPES[elementKey];
   if (!types) return []; // street_feel — caller uses Unsplash fallback
 
@@ -910,6 +917,10 @@ async function fetchGooglePlacesElementPhotos(bbox, elementKey, placesKey, maxPh
       console.log(`[photos] skipping blocklisted landmark: ${place.displayName?.text}`);
       continue;
     }
+    if (elementKey === "parks" && isPlaygroundLikePlaceName(place.displayName?.text)) {
+      console.log(`[photos] skipping playground-like park POI: ${place.displayName?.text}`);
+      continue;
+    }
     const photoName = place.photos[0].name;
     const attr = place.photos[0].authorAttributions?.[0];
     try {
@@ -967,6 +978,27 @@ async function fetchUnsplashPhotos(query, unsplashKey, perPage = 8) {
   return data.results || [];
 }
 
+const UNSPLASH_PLAYGROUND_ALT = /\b(playground|swings?|jungle\s*gym|seesaw|see-saw|merry-go-round|playground equipment|kids on slides?|skatepark|skate park)\b/i;
+const UNSPLASH_GREEN_CUE = /\b(park|garden|trees?|lawn|meadow|forest|trail|botanic|greenery|greenway|path|landscape|canopy|grass)\b/i;
+
+/**
+ * Prefer Unsplash results whose alt text looks like a landscape park, not play equipment.
+ */
+function rankParkUnsplashResults(results) {
+  if (!Array.isArray(results) || results.length === 0) return results;
+  const scored = results.map((photo, i) => {
+    const text = `${photo.alt_description || ""} ${photo.description || ""}`;
+    let score = 0;
+    if (UNSPLASH_PLAYGROUND_ALT.test(text)) score -= 3;
+    if (UNSPLASH_GREEN_CUE.test(text)) score += 2;
+    score += Math.max(0, 1 - i * 0.05);
+    return { photo, score };
+  });
+  scored.sort((a, b) => b.score - a.score);
+  const filtered = scored.filter((x) => x.score > -2).map((x) => x.photo);
+  return filtered.length ? filtered : results;
+}
+
 /**
  * fetchElementPhotos — Google Places primary, Unsplash fallback, curated last resort.
  * street_feel has no Places type so it always uses Unsplash.
@@ -993,11 +1025,13 @@ async function fetchElementPhotos(city, neighborhoodName, elementKey, unsplashKe
   if (picks.length < PHOTO_RULES.min) {
     const queries = buildQueries(elementKey, neighborhoodName, city);
     if (queries[0]) {
-      const res = await fetchUnsplashPhotos(queries[0], unsplashKey, PHOTO_RULES.max);
+      let res = await fetchUnsplashPhotos(queries[0], unsplashKey, PHOTO_RULES.max);
+      if (elementKey === "parks") res = rankParkUnsplashResults(res);
       res.forEach((photo) => addPick(normalizePhotoObject(photo, queries[0], "unsplash")));
     }
     if (picks.length < PHOTO_RULES.min && queries[2]) {
-      const res = await fetchUnsplashPhotos(queries[2], unsplashKey, PHOTO_RULES.max);
+      let res = await fetchUnsplashPhotos(queries[2], unsplashKey, PHOTO_RULES.max);
+      if (elementKey === "parks") res = rankParkUnsplashResults(res);
       res.forEach((photo) => addPick(normalizePhotoObject(photo, queries[2], "unsplash_city")));
     }
   }
@@ -1065,4 +1099,5 @@ module.exports = {
   fetchOverpassPOIs,
   computeCityMaxCounts,
   buildNeighborhoodVibeData,
+  isPlaygroundLikePlaceName,
 };

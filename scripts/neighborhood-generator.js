@@ -17,6 +17,7 @@ const {
   ringCentroid,
   maxRadiusFromCentroidM,
   placeInsideNeighborhoodFence,
+  isPlaygroundLikePlaceName,
 } = require("./neighborhood-vibe-data");
 
 // Canonical Gemini prompt for neighborhood generation
@@ -31,13 +32,16 @@ Return ONLY a valid JSON array — no markdown, no explanation, no code fences, 
 Each item must follow this exact structure:
 {
   "name": "Le Marais",
-  "bbox": { "lat_min": 48.851, "lat_max": 48.865, "lon_min": 2.348, "lon_max": 2.365 },
+  "bbox": { "lat_min": 48.851, "lat_max": 48.866, "lon_min": 2.345, "lon_max": 2.365 },
   "polygon": { "ring": [
-    { "lat": 48.851, "lng": 2.348 },
-    { "lat": 48.865, "lng": 2.348 },
+    { "lat": 48.851, "lng": 2.352 },
+    { "lat": 48.854, "lng": 2.345 },
+    { "lat": 48.860, "lng": 2.348 },
+    { "lat": 48.866, "lng": 2.350 },
     { "lat": 48.865, "lng": 2.365 },
-    { "lat": 48.851, "lng": 2.365 },
-    { "lat": 48.851, "lng": 2.348 }
+    { "lat": 48.858, "lng": 2.363 },
+    { "lat": 48.853, "lng": 2.360 },
+    { "lat": 48.851, "lng": 2.352 }
   ]},
   "vibe_short": "Historic, artsy, buzzing café scene",
   "vibe_long": "One of Paris's most atmospheric quarters, Le Marais blends medieval architecture with cutting-edge galleries and some of the city's best falafel. Ideal for first-timers who want to feel immersed in Parisian street life without venturing far from the Louvre.",
@@ -50,10 +54,17 @@ Each item must follow this exact structure:
   "street_energy": "lively"
 }
 
+CRITICAL polygon rules — read carefully:
+- polygon.ring MUST have at least 6 vertices (plus the repeated closing point = at least 7 points total). A 4-corner rectangle is NEVER acceptable.
+- The ring traces the ACTUAL irregular shape of the neighbourhood following real streets, diagonal roads, rivers, rail lines, or park edges — NOT an axis-aligned box.
+- Vertices are irregular and at different lat AND lng values — not snapped to a grid.
+- The last point in the ring must repeat the first point (closed ring).
+- bbox is the minimal axis-aligned box that tightly contains ALL polygon vertices.
+
 Field rules:
 - bbox: approximate decimal degree bounds (must tightly contain the polygon); lat_min/lat_max/lon_min/lon_max
-- polygon.ring: 5–14 vertices tracing a closed walk around the neighbourhood (first point repeated at end).
-  Vertices use "lat" and "lng" (WGS84). The ring must follow real street boundaries / natural edges — not a plain rectangle unless the area is rectangular.
+- polygon.ring: 6–14 vertices (plus closing repeat) tracing the true irregular boundary of the neighbourhood.
+  Vertices use "lat" and "lng" (WGS84). Follow real street boundaries, waterways, railway lines, or park edges.
 - vibe_short: max 6 words, comma-separated — punchy and vivid (no more than 6 words total)
 - vibe_long: exactly 2 sentences — first describes character, second says who it's ideal for
 - visitor_type: "first-timer" | "returning" | "both"
@@ -99,7 +110,7 @@ const TAG_VISUAL = {
   walkable:   "pedestrian street promenade",
   artsy:      "street art mural gallery",
   historic:   "historic architecture buildings",
-  green:      "park trees leafy",
+  green:      "urban park trees grass",
   foodie:     "restaurant terrace outdoor dining",
   nightlife:  "bar nightlife neon",
   shopping:   "boutique shops street",
@@ -107,7 +118,8 @@ const TAG_VISUAL = {
   luxury:     "luxury upscale elegant",
   quiet:      "quiet residential street",
   "local-feel": "local market street life",
-  family:     "family park playground",
+  // Avoid "playground" — Unsplash skews to play structures, not leafy parks.
+  family:     "family friendly walkable neighborhood",
   business:   "modern office district",
   beachfront: "beach waterfront seaside",
 };
@@ -193,6 +205,7 @@ async function fetchGooglePlacesHeroPhoto(name, city, bbox, placesKey, polygonRi
           const plng = place.location?.longitude;
           if (!Number.isFinite(plat) || !Number.isFinite(plng)) continue;
           if (!placeInsideNeighborhoodFence(plat, plng, bbox, poly)) continue;
+          if (isPlaygroundLikePlaceName(place.displayName?.text)) continue;
           const photoUrl = await fetchPlacesPhotoUrl(place.photos[0].name, placesKey);
           if (!photoUrl) continue;
           const attr = place.photos[0].authorAttributions?.[0];
@@ -692,7 +705,7 @@ async function recomputeNeighborhoodVibes(city, db, unsplashKey, googlePlacesKey
     if (!heroPick) {
       // Last resort: fetch directly via Places / Unsplash
       const fallback = await fetchNeighborhoodPhoto(
-        row.name, row.city, unsplashKey, row.vibe_long || "", row.tags || [], row.bbox || null, googlePlacesKey,
+        row.name, row.city, unsplashKey, row.vibe_short || "", row.tags || [], row.bbox || null, googlePlacesKey,
         normalizePolygonRing(row.polygon)
       ).catch(() => null);
       if (fallback) heroPick = { url: fallback.url, photographer: fallback.photographer, profile_url: fallback.profile_url, query_used: fallback.query_used };

@@ -3152,7 +3152,8 @@
   function boopIsGreenParkPhoto(p) {
     const q = String(p?.query || '').toLowerCase();
     if (!q) return true; // no metadata; don't over-reject
-    return /(park|garden|botanic|forest|nature|trail|lake|green)/.test(q);
+    if (/\b(playground|play area|swings?\b|jungle gym|tot lot|splash pad|skatepark)\b/.test(q)) return false;
+    return /(\bpark\b|garden|botanic|forest|nature|trail|lake|meadow|lawn|trees?|\bgreen\b|greenway|greenery)/.test(q);
   }
 
   function boopIsLeafyStreetPhoto(p) {
@@ -5792,6 +5793,8 @@
 
   function selectNeighborhood(name, bbox, polygon) {
     selectedNeighborhood = name ? { name, bbox, polygon: polygon || null } : null;
+    S.nbhd    = name || null;
+    S.nbhdBbox = bbox || null;
     hideNeighborhoodSection();
 
     const chip = document.getElementById('neighborhood-chip');
