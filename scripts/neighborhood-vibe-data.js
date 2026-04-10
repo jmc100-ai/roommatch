@@ -838,10 +838,10 @@ function isParkLikePlaceName(displayName) {
   return (
     // English
     /\b(park|garden|gardens|green|grove|common|meadow|woods|forest|botanic|nature|reserve|trail)\b/.test(n) ||
-    // Spanish (glorieta excluded — traffic roundabout, not a park)
-    /\b(parque|parques|jardín|jardin|jardines|bosque|reserva|verde|alameda|vivero|camellón)\b/.test(n) ||
-    // French (champ = open field/meadow; e.g. Champ de Mars)
-    /\b(parc|jardin|bois|forêt|foret|promenade|champ)\b/.test(n) ||
+    // Spanish (glorieta/camellón excluded — roundabouts and road medians, not parks)
+    /\b(parque|parques|jardín|jardin|jardines|bosque|reserva|verde|alameda|vivero)\b/.test(n) ||
+    // French (promenade excluded — often a commercial pedestrian street; plantée covers Promenade Plantée)
+    /\b(parc|jardin|bois|forêt|foret|champ|plantée|plantee)\b/.test(n) ||
     // Malay / Indonesian
     /\b(taman|hutan|kebun)\b/.test(n)
   );
