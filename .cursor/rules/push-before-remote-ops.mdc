@@ -1,0 +1,26 @@
+---
+description: Commit and push to GitHub before Supabase/Render ops; rerun remote steps after deploy.
+alwaysApply: true
+---
+
+# Push before remote operations
+
+## Before Supabase or Render
+
+1. **Commit** relevant changes with a clear message.
+2. **`git push`** to `origin` (typically `main`) so GitHub matches the worktree.
+3. **Remind the user** that Render (or other hosts) must **deploy** the new commit; DB migrations may already be applied separately.
+
+Do **not** run production API jobs, regeneration scripts, or assume “latest code is live” on Render until the user confirms deploy—or verify the deployed commit if possible.
+
+## After the user says deploy is done
+
+1. **Re-run** whatever remote steps depend on the new code, for example:
+   - New or pending **Supabase migrations** from `supabase/*.sql` (use MCP `apply_migration` / `execute_sql` as appropriate).
+   - **Health or feature checks** against the live URL.
+   - **Neighborhood regeneration** (`GET /api/neighborhoods?city=...`) or backfill endpoints when the change requires fresh server-side generation.
+2. **Verify** in DB or API responses that expected columns/data exist (e.g. `neighborhoods.polygon` populated after regen).
+
+## Rationale
+
+Local changes are meaningless to Render until pushed and deployed; running migrations or long API jobs first wastes time or applies the wrong behavior.

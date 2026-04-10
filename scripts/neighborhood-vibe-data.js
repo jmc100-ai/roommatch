@@ -109,6 +109,168 @@ function bboxAreaKm2(bbox) {
   return Math.max(0.01, latKm * lonKm); // floor at 0.01 km² to avoid div-by-zero
 }
 
+/** Axis-aligned rectangle (4-sided polygon) in WGS84 — used as a tight fence vs Places circle bleed. */
+function pointInBbox(lat, lng, box) {
+  if (!box || box.lat_min == null || box.lat_max == null || box.lon_min == null || box.lon_max == null) return false;
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return false;
+  return lat >= box.lat_min && lat <= box.lat_max && lng >= box.lon_min && lng <= box.lon_max;
+}
+
+/**
+ * Inset bbox on all sides so the fence is smaller than Gemini’s loose box and excludes
+ * edge POIs pulled in by circular search (e.g. Reforma skyline registered just inside circle).
+ * insetRatio 0.12 → shrink each dimension by 12% total (6% per side).
+ */
+function tightFenceFromBbox(bbox, insetRatio = 0.12) {
+  if (!bbox?.lat_min) return null;
+  const latSpan = bbox.lat_max - bbox.lat_min;
+  const lonSpan = bbox.lon_max - bbox.lon_min;
+  const padLat = (latSpan * insetRatio) / 2;
+  const padLon = (lonSpan * insetRatio) / 2;
+  const lat_min = bbox.lat_min + padLat;
+  const lat_max = bbox.lat_max - padLat;
+  const lon_min = bbox.lon_min + padLon;
+  const lon_max = bbox.lon_max - padLon;
+  if (lat_min >= lat_max || lon_min >= lon_max) return bbox;
+  return { lat_min, lat_max, lon_min, lon_max };
+}
+
+/** WGS84 ring: [{ lat, lng }, ...] — first point may duplicate last (closed). */
+function normalizePolygonRing(input) {
+  if (!input) return null;
+  const raw = Array.isArray(input) ? input : (input.ring || input.coordinates);
+  if (!raw?.length) return null;
+  const ring = [];
+  for (const p of raw) {
+    const lat = Number(p.lat ?? p.latitude);
+    const lng = Number(p.lng ?? p.lon ?? p.longitude);
+    if (Number.isFinite(lat) && Number.isFinite(lng)) ring.push({ lat, lng });
+  }
+  if (ring.length < 3) return null;
+  const a = ring[0];
+  const b = ring[ring.length - 1];
+  if (Math.abs(a.lat - b.lat) > 1e-7 || Math.abs(a.lng - b.lng) > 1e-7) {
+    ring.push({ lat: a.lat, lng: a.lng });
+  }
+  return ring;
+}
+
+/**
+ * Ray-casting point-in-polygon. `ring` is closed (last vertex = first).
+ */
+function pointInPolygon(lat, lng, ring) {
+  if (!ring || ring.length < 4) return false;
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return false;
+  let inside = false;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const xi = ring[i].lng, yi = ring[i].lat;
+    const xj = ring[j].lng, yj = ring[j].lat;
+    const inter = ((yi > lat) !== (yj > lat)) &&
+      (lng < (xj - xi) * (lat - yi) / (yj - yi + 1e-20) + xi);
+    if (inter) inside = !inside;
+  }
+  return inside;
+}
+
+function bboxFromRing(ring) {
+  if (!ring?.length) return null;
+  let lat_min = Infinity, lat_max = -Infinity, lon_min = Infinity, lon_max = -Infinity;
+  const n = ring.length > 1 && ring[0].lat === ring[ring.length - 1].lat && ring[0].lng === ring[ring.length - 1].lng
+    ? ring.length - 1
+    : ring.length;
+  for (let i = 0; i < n; i++) {
+    const { lat, lng } = ring[i];
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) continue;
+    lat_min = Math.min(lat_min, lat);
+    lat_max = Math.max(lat_max, lat);
+    lon_min = Math.min(lon_min, lng);
+    lon_max = Math.max(lon_max, lng);
+  }
+  if (!Number.isFinite(lat_min)) return null;
+  return { lat_min, lat_max, lon_min, lon_max };
+}
+
+function ringCentroid(ring) {
+  const open = ring?.length > 1 && ring[0].lat === ring[ring.length - 1].lat && ring[0].lng === ring[ring.length - 1].lng
+    ? ring.length - 1
+    : ring?.length || 0;
+  if (open < 3) return null;
+  let slat = 0, slng = 0;
+  for (let i = 0; i < open; i++) {
+    slat += ring[i].lat;
+    slng += ring[i].lng;
+  }
+  return { lat: slat / open, lng: slng / open };
+}
+
+function haversineM(lat1, lng1, lat2, lng2) {
+  const R = 6371000;
+  const toR = (d) => d * Math.PI / 180;
+  const dLat = toR(lat2 - lat1);
+  const dLng = toR(lng2 - lng1);
+  const a = Math.sin(dLat / 2) ** 2 +
+    Math.cos(toR(lat1)) * Math.cos(toR(lat2)) * Math.sin(dLng / 2) ** 2;
+  return 2 * R * Math.asin(Math.min(1, Math.sqrt(a)));
+}
+
+/** Max distance from centroid to any vertex — caps Places circle radius. */
+function maxRadiusFromCentroidM(ring) {
+  const c = ringCentroid(ring);
+  if (!c) return 500;
+  const open = ring.length > 1 && ring[0].lat === ring[ring.length - 1].lat && ring[0].lng === ring[ring.length - 1].lng
+    ? ring.length - 1
+    : ring.length;
+  let maxD = 0;
+  for (let i = 0; i < open; i++) {
+    maxD = Math.max(maxD, haversineM(c.lat, c.lng, ring[i].lat, ring[i].lng));
+  }
+  return Math.max(120, Math.ceil(maxD * 1.12));
+}
+
+/** Shoelace area of a lat/lng ring in km² (equirectangular; same spirit as polygonAreaSqM). */
+function ringAreaKm2(ring) {
+  const r = normalizePolygonRing(ring);
+  if (!r || r.length < 4) return null;
+  const coords = r.map((p) => ({ lat: p.lat, lon: p.lng }));
+  const m2 = polygonAreaSqM(coords);
+  return m2 > 0 ? m2 / 1_000_000 : null;
+}
+
+function geometryCentroidLatLng(geom) {
+  if (!geom?.length) return null;
+  let slat = 0, slng = 0, n = 0;
+  for (const p of geom) {
+    const la = p.lat ?? p.latitude;
+    const lo = p.lon ?? p.lng ?? p.longitude;
+    if (Number.isFinite(la) && Number.isFinite(lo)) {
+      slat += la;
+      slng += lo;
+      n++;
+    }
+  }
+  if (!n) return null;
+  return { lat: slat / n, lng: slng / n };
+}
+
+function overpassElementLatLng(el) {
+  if (el.type === "node" && el.lat != null && (el.lon != null || el.lng != null)) {
+    return { lat: el.lat, lng: el.lon ?? el.lng };
+  }
+  if (el.center?.lat != null && (el.center.lon != null || el.center.lng != null)) {
+    return { lat: el.center.lat, lng: el.center.lon ?? el.center.lng };
+  }
+  return null;
+}
+
+/**
+ * Places / fence: if polygon ring present, require point inside polygon; else inset bbox.
+ */
+function placeInsideNeighborhoodFence(lat, lng, bbox, polygonRing) {
+  if (polygonRing?.length >= 4) return pointInPolygon(lat, lng, polygonRing);
+  const fence = tightFenceFromBbox(bbox, 0.12);
+  return fence ? pointInBbox(lat, lng, fence) : true;
+}
+
 /**
  * computeCityMaxCounts — given an array of { counts, areaKm2 } objects (one per
  * neighbourhood), returns the per-category maximum **density** (POIs per km²)
@@ -177,22 +339,46 @@ function isGreenElement(t) {
 /**
  * Count green-space features whose mapped polygon area ≥ minSqM.
  * Overpass public servers do not support (if: geom.area()), so we use out geom + this filter.
+ * When polygonRing is set, only counts features whose area-weighted centroid lies inside the ring.
  */
-function countGreenAreasMinSqM(elements, minSqM) {
+function countGreenAreasMinSqM(elements, minSqM, polygonRing) {
+  const needPoly = polygonRing?.length >= 4;
   let n = 0;
   for (const el of elements || []) {
     const t = el.tags || {};
     if (!isGreenElement(t)) continue;
 
     if (el.type === "way" && el.geometry?.length) {
-      if (polygonAreaSqM(el.geometry) >= minSqM) n++;
+      const area = polygonAreaSqM(el.geometry);
+      if (area < minSqM) continue;
+      if (needPoly) {
+        const c = geometryCentroidLatLng(el.geometry);
+        if (!c || !pointInPolygon(c.lat, c.lng, polygonRing)) continue;
+      }
+      n++;
     } else if (el.type === "relation" && el.members?.length) {
       let total = 0;
+      let sumLat = 0, sumLng = 0, wsum = 0;
       for (const m of el.members) {
         if (m.role === "inner") continue;
-        if (m.geometry?.length) total += polygonAreaSqM(m.geometry);
+        if (m.geometry?.length) {
+          const a = polygonAreaSqM(m.geometry);
+          total += a;
+          const c = geometryCentroidLatLng(m.geometry);
+          if (c && a > 0) {
+            sumLat += c.lat * a;
+            sumLng += c.lng * a;
+            wsum += a;
+          }
+        }
       }
-      if (total >= minSqM) n++;
+      if (total < minSqM) continue;
+      if (needPoly) {
+        const clat = wsum > 0 ? sumLat / wsum : null;
+        const clng = wsum > 0 ? sumLng / wsum : null;
+        if (clat == null || !pointInPolygon(clat, clng, polygonRing)) continue;
+      }
+      n++;
     }
   }
   return n;
@@ -203,7 +389,7 @@ function countGreenAreasMinSqM(elements, minSqM) {
  * On persistent 429/504 falls back to a cheap "out count" query (no area filter,
  * but far better than returning 0).
  */
-async function fetchOverpassGreenCount(bbox, minSqM) {
+async function fetchOverpassGreenCount(bbox, minSqM, polygonRing = null) {
   const { lat_min, lat_max, lon_min, lon_max } = bbox || {};
   const bb = `${lat_min},${lon_min},${lat_max},${lon_max}`;
 
@@ -236,7 +422,7 @@ out geom;`;
 
   if (res.ok) {
     const data = await res.json();
-    return countGreenAreasMinSqM(data.elements, minSqM);
+    return countGreenAreasMinSqM(data.elements, minSqM, polygonRing);
   }
 
   // Both geometry attempts failed — throw so the caller can preserve the old count.
@@ -254,13 +440,13 @@ out geom;`;
  * Parks: second request with out geom; counts only polygons ≥ MIN_GREEN_AREA_SQ_M
  * (public Overpass has no geom.area() filter).
  */
-async function fetchOverpassPOIs(bbox) {
+async function fetchOverpassPOIs(bbox, polygonRing = null) {
   const { lat_min, lat_max, lon_min, lon_max } = bbox || {};
   if (lat_min == null) return null;
 
   let parksFiltered = null;   // null = fetch failed → fall back to old park+garden count
   try {
-    parksFiltered = await fetchOverpassGreenCount(bbox, MIN_GREEN_AREA_SQ_M);
+    parksFiltered = await fetchOverpassGreenCount(bbox, MIN_GREEN_AREA_SQ_M, polygonRing);
     console.log(`[overpass] green spaces (≥${MIN_GREEN_AREA_SQ_M} m²): ${parksFiltered}`);
   } catch (e) {
     console.warn(`[overpass] green count failed (${e.message}); falling back to unfiltered park+garden`);
@@ -293,7 +479,7 @@ async function fetchOverpassPOIs(bbox) {
   way["building"~"^(cathedral|basilica|chapel|monastery|church|temple|shrine)$"](${lat_min},${lon_min},${lat_max},${lon_max});
   relation["building"~"^(cathedral|basilica|chapel|monastery|church|temple|shrine)$"](${lat_min},${lon_min},${lat_max},${lon_max});
 );
-out tags;`;
+out tags center;`;
 
   const doFetch = () => fetch(OVERPASS_URL, {
     method: "POST",
@@ -322,7 +508,13 @@ out tags;`;
     icon_spots: 0,
   };
 
+  const polyActive = polygonRing?.length >= 4;
+
   for (const el of (data.elements || [])) {
+    if (polyActive) {
+      const pt = overpassElementLatLng(el);
+      if (!pt || !pointInPolygon(pt.lat, pt.lng, polygonRing)) continue;
+    }
     const t = el.tags || {};
     if (t.amenity === "cafe") {
       counts.cafes++;
@@ -640,18 +832,22 @@ function isBlocklistedLandmark(displayName) {
  * filtered by category type. Returns up to `maxPhotos` photo objects.
  * Falls back gracefully — returns [] on any error.
  */
-async function fetchGooglePlacesElementPhotos(bbox, elementKey, placesKey, maxPhotos = PHOTO_RULES.target) {
+async function fetchGooglePlacesElementPhotos(bbox, elementKey, placesKey, maxPhotos = PHOTO_RULES.target, polygonRing = null) {
   if (!placesKey || !bbox?.lat_min) return [];
   const types = PLACES_ELEMENT_TYPES[elementKey];
   if (!types) return []; // street_feel — caller uses Unsplash fallback
 
-  const centerLat = (bbox.lat_min + bbox.lat_max) / 2;
-  const centerLng = (bbox.lon_min + bbox.lon_max) / 2;
-  // Base radius from bbox size, capped at 3 km
-  const baseRadiusM = Math.min(
-    3000,
-    Math.round(Math.max(bbox.lat_max - bbox.lat_min, bbox.lon_max - bbox.lon_min) * 111000 / 2)
-  );
+  const poly = polygonRing?.length >= 4 ? polygonRing : null;
+  const center = poly ? ringCentroid(poly) : null;
+  const centerLat = center ? center.lat : (bbox.lat_min + bbox.lat_max) / 2;
+  const centerLng = center ? center.lng : (bbox.lon_min + bbox.lon_max) / 2;
+  // Base radius from bbox or polygon span, capped at 3 km
+  const baseRadiusM = poly
+    ? Math.min(3000, maxRadiusFromCentroidM(poly))
+    : Math.min(
+        3000,
+        Math.round(Math.max(bbox.lat_max - bbox.lat_min, bbox.lon_max - bbox.lon_min) * 111000 / 2)
+      );
 
   // icon_spots: use POPULARITY (returns well-known places) but shrink radius to
   // 50% so landmarks at the edges of the bbox (e.g. Chapultepec/Diana Cazadora
@@ -680,7 +876,7 @@ async function fetchGooglePlacesElementPhotos(bbox, elementKey, placesKey, maxPh
       headers: {
         "Content-Type": "application/json",
         "X-Goog-Api-Key": placesKey,
-        "X-Goog-FieldMask": "places.id,places.displayName,places.photos",
+        "X-Goog-FieldMask": "places.id,places.displayName,places.location,places.photos",
       },
       body: JSON.stringify(body),
       signal: AbortSignal.timeout(15000),
@@ -693,6 +889,16 @@ async function fetchGooglePlacesElementPhotos(bbox, elementKey, placesKey, maxPh
   const photos = [];
   for (const place of places) {
     if (!place.photos?.length) continue;
+    const plat = place.location?.latitude;
+    const plng = place.location?.longitude;
+    if (!Number.isFinite(plat) || !Number.isFinite(plng)) {
+      console.log(`[photos] skipping (no coordinates): ${place.displayName?.text || elementKey}`);
+      continue;
+    }
+    if (!placeInsideNeighborhoodFence(plat, plng, bbox, poly)) {
+      console.log(`[photos] skipping outside neighbourhood fence: ${place.displayName?.text || "?"} @ ${plat},${plng}`);
+      continue;
+    }
     // Skip global chain venues — their photos are generic interiors, not neighbourhood-specific.
     if (isChain(place.displayName?.text)) {
       console.log(`[photos] skipping chain: ${place.displayName?.text}`);
@@ -765,7 +971,7 @@ async function fetchUnsplashPhotos(query, unsplashKey, perPage = 8) {
  * fetchElementPhotos — Google Places primary, Unsplash fallback, curated last resort.
  * street_feel has no Places type so it always uses Unsplash.
  */
-async function fetchElementPhotos(city, neighborhoodName, elementKey, unsplashKey, bbox = null, googlePlacesKey = null) {
+async function fetchElementPhotos(city, neighborhoodName, elementKey, unsplashKey, bbox = null, googlePlacesKey = null, polygonRing = null) {
   const dedupe = new Set();
   const picks = [];
 
@@ -779,7 +985,7 @@ async function fetchElementPhotos(city, neighborhoodName, elementKey, unsplashKe
 
   // Primary: Google Places geo-search (real photos from actual venues in the neighbourhood)
   if (googlePlacesKey && bbox) {
-    const placesPhotos = await fetchGooglePlacesElementPhotos(bbox, elementKey, googlePlacesKey);
+    const placesPhotos = await fetchGooglePlacesElementPhotos(bbox, elementKey, googlePlacesKey, PHOTO_RULES.target, polygonRing);
     placesPhotos.forEach((p) => addPick(p));
   }
 
@@ -815,8 +1021,9 @@ async function fetchElementPhotos(city, neighborhoodName, elementKey, unsplashKe
  * scores for all elements except street_feel are derived from real OSM data.
  * Falls back to Gemini-attribute formula when null.
  */
-async function buildNeighborhoodVibeData({ city, neighborhoodName, attributes, tags, vibeLong, hotelCount, unsplashKey, poiCounts = null, cityMaxCounts = null, bbox = null, googlePlacesKey = null }) {
-  const areaKm2 = bboxAreaKm2(bbox);
+async function buildNeighborhoodVibeData({ city, neighborhoodName, attributes, tags, vibeLong, hotelCount, unsplashKey, poiCounts = null, cityMaxCounts = null, bbox = null, polygon = null, googlePlacesKey = null }) {
+  const ring = normalizePolygonRing(polygon);
+  const areaKm2 = ring?.length >= 4 ? (ringAreaKm2(ring) ?? bboxAreaKm2(bbox)) : bboxAreaKm2(bbox);
   const { scores, shopsSubscores } = computeElementScores(attributes, tags, vibeLong, poiCounts, cityMaxCounts, areaKm2);
   const boopVibe = computeBoopVibe(scores, poiCounts);
   const vibeElements = {};
@@ -835,7 +1042,7 @@ async function buildNeighborhoodVibeData({ city, neighborhoodName, attributes, t
       walkability,
       boopVibe,
     );
-    vibePhotos[key] = await fetchElementPhotos(city, neighborhoodName, key, unsplashKey, bbox, googlePlacesKey);
+    vibePhotos[key] = await fetchElementPhotos(city, neighborhoodName, key, unsplashKey, bbox, googlePlacesKey, ring);
   }
 
   return { vibeElements, vibePhotos };
@@ -846,6 +1053,15 @@ module.exports = {
   PHOTO_RULES,
   POI_CATEGORIES,
   bboxAreaKm2,
+  pointInBbox,
+  tightFenceFromBbox,
+  normalizePolygonRing,
+  pointInPolygon,
+  bboxFromRing,
+  ringAreaKm2,
+  ringCentroid,
+  maxRadiusFromCentroidM,
+  placeInsideNeighborhoodFence,
   fetchOverpassPOIs,
   computeCityMaxCounts,
   buildNeighborhoodVibeData,

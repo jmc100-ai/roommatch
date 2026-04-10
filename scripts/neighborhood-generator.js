@@ -5,7 +5,19 @@
  */
 
 const GEMINI_MODEL = "gemini-2.5-flash-lite";
-const { buildNeighborhoodVibeData, fetchOverpassPOIs, computeCityMaxCounts, bboxAreaKm2 } = require("./neighborhood-vibe-data");
+const {
+  buildNeighborhoodVibeData,
+  fetchOverpassPOIs,
+  computeCityMaxCounts,
+  bboxAreaKm2,
+  ringAreaKm2,
+  normalizePolygonRing,
+  pointInPolygon,
+  bboxFromRing,
+  ringCentroid,
+  maxRadiusFromCentroidM,
+  placeInsideNeighborhoodFence,
+} = require("./neighborhood-vibe-data");
 
 // Canonical Gemini prompt for neighborhood generation
 function buildNeighborhoodPrompt(city) {
@@ -20,6 +32,13 @@ Each item must follow this exact structure:
 {
   "name": "Le Marais",
   "bbox": { "lat_min": 48.851, "lat_max": 48.865, "lon_min": 2.348, "lon_max": 2.365 },
+  "polygon": { "ring": [
+    { "lat": 48.851, "lng": 2.348 },
+    { "lat": 48.865, "lng": 2.348 },
+    { "lat": 48.865, "lng": 2.365 },
+    { "lat": 48.851, "lng": 2.365 },
+    { "lat": 48.851, "lng": 2.348 }
+  ]},
   "vibe_short": "Historic, artsy, buzzing café scene",
   "vibe_long": "One of Paris's most atmospheric quarters, Le Marais blends medieval architecture with cutting-edge galleries and some of the city's best falafel. Ideal for first-timers who want to feel immersed in Parisian street life without venturing far from the Louvre.",
   "visitor_type": "first-timer",
@@ -32,7 +51,9 @@ Each item must follow this exact structure:
 }
 
 Field rules:
-- bbox: approximate decimal degree bounds, accurate to ~500m; format is lat_min/lat_max/lon_min/lon_max
+- bbox: approximate decimal degree bounds (must tightly contain the polygon); lat_min/lat_max/lon_min/lon_max
+- polygon.ring: 5–14 vertices tracing a closed walk around the neighbourhood (first point repeated at end).
+  Vertices use "lat" and "lng" (WGS84). The ring must follow real street boundaries / natural edges — not a plain rectangle unless the area is rectangular.
 - vibe_short: max 6 words, comma-separated — punchy and vivid (no more than 6 words total)
 - vibe_long: exactly 2 sentences — first describes character, second says who it's ideal for
 - visitor_type: "first-timer" | "returning" | "both"
@@ -128,18 +149,21 @@ async function fetchPlacesPhotoUrl(photoName, placesKey, maxWidth = 1400) {
  * Strategy 2 (fallback): text search for "{name}, {city}" — used when there
  *   is no bbox or strategy 1 yields no photos.
  */
-async function fetchGooglePlacesHeroPhoto(name, city, bbox, placesKey) {
+async function fetchGooglePlacesHeroPhoto(name, city, bbox, placesKey, polygonRing = null) {
   if (!placesKey) return null;
   const simpleName = name.replace(/\s*\([^)]*\)/g, "").trim();
+  const poly = polygonRing?.length >= 4 ? polygonRing : null;
 
   // ── Strategy 1: nearby landmark search within bbox ─────────────────────────
   if (bbox?.lat_min != null) {
-    const centerLat = (bbox.lat_min + bbox.lat_max) / 2;
-    const centerLng = (bbox.lon_min + bbox.lon_max) / 2;
-    // Use half the diagonal of the bbox as radius, cap at 2 km
-    const latSpan = bbox.lat_max - bbox.lat_min;
-    const lonSpan = bbox.lon_max - bbox.lon_min;
-    const radiusM = Math.min(2000, Math.round(Math.sqrt(latSpan ** 2 + lonSpan ** 2) * 111000 / 2));
+    const center = poly ? ringCentroid(poly) : null;
+    const centerLat = center ? center.lat : (bbox.lat_min + bbox.lat_max) / 2;
+    const centerLng = center ? center.lng : (bbox.lon_min + bbox.lon_max) / 2;
+    const radiusM = poly
+      ? Math.min(2000, maxRadiusFromCentroidM(poly))
+      : Math.min(2000, Math.round(
+          Math.sqrt((bbox.lat_max - bbox.lat_min) ** 2 + (bbox.lon_max - bbox.lon_min) ** 2) * 111000 / 2
+        ));
 
     for (const types of HERO_NEARBY_TYPES) {
       try {
@@ -148,7 +172,7 @@ async function fetchGooglePlacesHeroPhoto(name, city, bbox, placesKey) {
           headers: {
             "Content-Type": "application/json",
             "X-Goog-Api-Key": placesKey,
-            "X-Goog-FieldMask": "places.id,places.displayName,places.photos",
+            "X-Goog-FieldMask": "places.id,places.displayName,places.location,places.photos",
           },
           body: JSON.stringify({
             includedTypes: types,
@@ -165,6 +189,10 @@ async function fetchGooglePlacesHeroPhoto(name, city, bbox, placesKey) {
 
         for (const place of (data.places || [])) {
           if (!place.photos?.length) continue;
+          const plat = place.location?.latitude;
+          const plng = place.location?.longitude;
+          if (!Number.isFinite(plat) || !Number.isFinite(plng)) continue;
+          if (!placeInsideNeighborhoodFence(plat, plng, bbox, poly)) continue;
           const photoUrl = await fetchPlacesPhotoUrl(place.photos[0].name, placesKey);
           if (!photoUrl) continue;
           const attr = place.photos[0].authorAttributions?.[0];
@@ -189,16 +217,21 @@ async function fetchGooglePlacesHeroPhoto(name, city, bbox, placesKey) {
         headers: {
           "Content-Type": "application/json",
           "X-Goog-Api-Key": placesKey,
-          "X-Goog-FieldMask": "places.id,places.displayName,places.photos",
+          "X-Goog-FieldMask": "places.id,places.displayName,places.location,places.photos",
         },
         body: JSON.stringify({ textQuery, maxResultCount: 5 }),
         signal: AbortSignal.timeout(12000),
       });
       if (!res.ok) continue;
       const data = await res.json();
-
       for (const place of (data.places || [])) {
         if (!place.photos?.length) continue;
+        const plat = place.location?.latitude;
+        const plng = place.location?.longitude;
+        if (bbox?.lat_min != null && (!Number.isFinite(plat) || !Number.isFinite(plng) ||
+            !placeInsideNeighborhoodFence(plat, plng, bbox, poly))) {
+          continue;
+        }
         const photoUrl = await fetchPlacesPhotoUrl(place.photos[0].name, placesKey);
         if (!photoUrl) continue;
         const attr = place.photos[0].authorAttributions?.[0];
@@ -220,10 +253,10 @@ async function fetchGooglePlacesHeroPhoto(name, city, bbox, placesKey) {
 /**
  * fetchNeighborhoodPhoto — Google Places primary, Unsplash fallback.
  */
-async function fetchNeighborhoodPhoto(name, city, unsplashKey, vibeShort = "", tags = [], bbox = null, googlePlacesKey = null) {
+async function fetchNeighborhoodPhoto(name, city, unsplashKey, vibeShort = "", tags = [], bbox = null, googlePlacesKey = null, polygonRing = null) {
   // 1. Try Google Places first (geo-accurate real neighbourhood photos)
   if (googlePlacesKey) {
-    const placesPhoto = await fetchGooglePlacesHeroPhoto(name, city, bbox, googlePlacesKey).catch(() => null);
+    const placesPhoto = await fetchGooglePlacesHeroPhoto(name, city, bbox, googlePlacesKey, polygonRing).catch(() => null);
     if (placesPhoto) return placesPhoto;
   }
 
@@ -322,6 +355,23 @@ async function getHotelCountForBbox(city, bbox, db) {
   return count ?? 0;
 }
 
+/** When polygonRing is set, counts hotels whose coordinates fall inside the ring (bbox pre-filter). */
+async function getHotelCountForFence(city, bbox, polygonRing, db) {
+  if (!bbox?.lat_min) return 0;
+  if (!polygonRing || polygonRing.length < 4) return getHotelCountForBbox(city, bbox, db);
+  const { lat_min, lat_max, lon_min, lon_max } = bbox;
+  const { data, error } = await db
+    .from("hotels_cache")
+    .select("lat,lng")
+    .eq("city", city)
+    .gte("lat", lat_min).lte("lat", lat_max)
+    .gte("lng", lon_min).lte("lng", lon_max);
+  if (error || !data?.length) return 0;
+  return data.filter(
+    (h) => h.lat != null && h.lng != null && pointInPolygon(h.lat, h.lng, polygonRing)
+  ).length;
+}
+
 /**
  * generateNeighborhoods — calls Gemini, fetches Unsplash photos, upserts to DB.
  * Returns array of neighborhood rows.
@@ -347,19 +397,24 @@ async function generateNeighborhoods(city, db, geminiKey, unsplashKey, googlePla
   // Process sequentially to stay within Overpass fair-use rate limits
   const rows = [];
   for (const item of items) {
-    const bbox = item.bbox || {};
+    const polygonRing = normalizePolygonRing(item.polygon);
+    let bbox = item.bbox && item.bbox.lat_min != null ? item.bbox : {};
+    if (polygonRing?.length >= 4) {
+      const derived = bboxFromRing(polygonRing);
+      if (derived) bbox = derived;
+    }
 
     // Hotel count (skip if no lat/lng backfill done yet)
     let hotelCount = 0;
     if (bbox.lat_min != null) {
-      hotelCount = await getHotelCountForBbox(city, bbox, db);
+      hotelCount = await getHotelCountForFence(city, bbox, polygonRing, db);
       // Widen bbox by 0.01° if no hotels found (covers sparse backfill)
       if (hotelCount === 0) {
         const widened = {
           lat_min: bbox.lat_min - 0.01, lat_max: bbox.lat_max + 0.01,
           lon_min: bbox.lon_min - 0.01, lon_max: bbox.lon_max + 0.01,
         };
-        hotelCount = await getHotelCountForBbox(city, widened, db);
+        hotelCount = await getHotelCountForFence(city, widened, polygonRing, db);
       }
     }
 
@@ -367,7 +422,7 @@ async function generateNeighborhoods(city, db, geminiKey, unsplashKey, googlePla
     let poiCounts = null;
     if (bbox.lat_min != null) {
       await new Promise((r) => setTimeout(r, 3000));
-      poiCounts = await fetchOverpassPOIs(bbox).catch((e) => {
+      poiCounts = await fetchOverpassPOIs(bbox, polygonRing).catch((e) => {
         console.warn(`[neighborhoods] Overpass failed for ${item.name}: ${e.message}`);
         return null;
       });
@@ -390,6 +445,7 @@ async function generateNeighborhoods(city, db, geminiKey, unsplashKey, googlePla
       city,
       name:         item.name,
       bbox:         bbox,
+      polygon:      polygonRing ? { ring: polygonRing } : null,
       vibe_short:   item.vibe_short,
       vibe_long:    item.vibe_long,
       tags:         item.tags || [],
@@ -399,6 +455,7 @@ async function generateNeighborhoods(city, db, geminiKey, unsplashKey, googlePla
       photo_credit: null,
       hotel_count:  hotelCount,
       _poiCounts:   poiCounts, // transient — used below, not persisted as top-level column
+      _polygonRing: polygonRing || null,
     });
   }
 
@@ -406,7 +463,12 @@ async function generateNeighborhoods(city, db, geminiKey, unsplashKey, googlePla
   // Uses {counts, areaKm2} pairs so scores reflect POI density not raw counts.
   const allNeighbourhoodData = rows
     .filter(r => r._poiCounts && r.bbox?.lat_min != null)
-    .map(r => ({ counts: r._poiCounts, areaKm2: bboxAreaKm2(r.bbox) }));
+    .map(r => ({
+      counts: r._poiCounts,
+      areaKm2: r._polygonRing?.length >= 4
+        ? (ringAreaKm2(r._polygonRing) ?? bboxAreaKm2(r.bbox))
+        : bboxAreaKm2(r.bbox),
+    }));
   const cityMaxCounts = allNeighbourhoodData.length > 0 ? computeCityMaxCounts(allNeighbourhoodData) : null;
   if (cityMaxCounts) {
     console.log(`[neighborhoods] city peak densities for ${city}: ${JSON.stringify(Object.fromEntries(Object.entries(cityMaxCounts).map(([k,v]) => [k, Math.round(v * 10) / 10])))} per km²`);
@@ -427,6 +489,7 @@ async function generateNeighborhoods(city, db, geminiKey, unsplashKey, googlePla
         poiCounts: row._poiCounts || null,
         cityMaxCounts,
         bbox: row.bbox || null,
+        polygon: row.polygon || null,
         googlePlacesKey,
       });
       row.vibe_elements = vibeData.vibeElements;
@@ -448,15 +511,18 @@ async function generateNeighborhoods(city, db, geminiKey, unsplashKey, googlePla
       row.photo_credit = { photographer: heroPick.photographer, profile_url: heroPick.profile_url, query_used: heroPick.query_used };
     } else {
       // Last resort: fetch directly (Places nearby → Unsplash)
-      const photo = await fetchNeighborhoodPhoto(row.name, city, unsplashKey, row.vibe_short, row.tags, row.bbox, googlePlacesKey).catch(() => null);
+      const photo = await fetchNeighborhoodPhoto(
+        row.name, city, unsplashKey, row.vibe_short, row.tags, row.bbox, googlePlacesKey, row._polygonRing
+      ).catch(() => null);
       if (photo) {
         row.photo_url    = photo.url;
         row.photo_credit = { photographer: photo.photographer, profile_url: photo.profile_url, query_used: photo.query_used };
       }
     }
 
-    // Remove transient field — not a DB column
+    // Remove transient fields — not DB columns
     delete row._poiCounts;
+    delete row._polygonRing;
   }
 
   // Upsert all rows
@@ -476,7 +542,7 @@ async function generateNeighborhoods(city, db, geminiKey, unsplashKey, googlePla
 async function backfillNeighborhoodPhotos(city, db, unsplashKey, googlePlacesKey = null) {
   const { data: rows, error } = await db
     .from("neighborhoods")
-    .select("id, name, vibe_short, tags, bbox, vibe_elements, vibe_photos")
+    .select("id, name, vibe_short, tags, bbox, polygon, vibe_elements, vibe_photos")
     .eq("city", city)
     .order("id");
 
@@ -495,7 +561,8 @@ async function backfillNeighborhoodPhotos(city, db, unsplashKey, googlePlacesKey
         continue;
       }
       photo = await fetchNeighborhoodPhoto(
-        row.name, city, unsplashKey, row.vibe_short || "", row.tags || [], row.bbox || null, googlePlacesKey
+        row.name, city, unsplashKey, row.vibe_short || "", row.tags || [], row.bbox || null, googlePlacesKey,
+        normalizePolygonRing(row.polygon)
       ).catch(() => null);
     }
 
@@ -527,7 +594,7 @@ async function backfillNeighborhoodPhotos(city, db, unsplashKey, googlePlacesKey
 async function recomputeNeighborhoodVibes(city, db, unsplashKey, googlePlacesKey = null) {
   const { data: rows, error } = await db
     .from("neighborhoods")
-    .select("id, city, name, bbox, vibe_long, tags, attributes, hotel_count, vibe_photos, photo_url, photo_credit")
+    .select("id, city, name, bbox, polygon, vibe_long, tags, attributes, hotel_count, vibe_photos, photo_url, photo_credit")
     .eq("city", city)
     .order("id");
 
@@ -540,7 +607,7 @@ async function recomputeNeighborhoodVibes(city, db, unsplashKey, googlePlacesKey
   for (const row of rows) {
     if (row.bbox?.lat_min != null) {
       await new Promise((r) => setTimeout(r, 20000));
-      const fetched = await fetchOverpassPOIs(row.bbox).catch((e) => {
+      const fetched = await fetchOverpassPOIs(row.bbox, normalizePolygonRing(row.polygon)).catch((e) => {
         console.warn(`[recompute] Overpass failed for ${row.name}: ${e.message}`);
         return null;
       });
@@ -564,7 +631,13 @@ async function recomputeNeighborhoodVibes(city, db, unsplashKey, googlePlacesKey
   // Compute city-level peak densities from stored counts + bbox areas
   const allNeighbourhoodData = rows
     .filter(r => r.attributes?.poi_counts && r.bbox?.lat_min != null)
-    .map(r => ({ counts: r.attributes.poi_counts, areaKm2: bboxAreaKm2(r.bbox) }));
+    .map(r => {
+      const pr = normalizePolygonRing(r.polygon);
+      return {
+        counts: r.attributes.poi_counts,
+        areaKm2: pr?.length >= 4 ? (ringAreaKm2(pr) ?? bboxAreaKm2(r.bbox)) : bboxAreaKm2(r.bbox),
+      };
+    });
   const cityMaxCounts = allNeighbourhoodData.length > 0 ? computeCityMaxCounts(allNeighbourhoodData) : null;
   if (cityMaxCounts) {
     console.log(`[recompute] city peak densities for ${city}: ${JSON.stringify(Object.fromEntries(Object.entries(cityMaxCounts).map(([k,v]) => [k, Math.round(v * 10) / 10])))} per km²`);
@@ -588,6 +661,7 @@ async function recomputeNeighborhoodVibes(city, db, unsplashKey, googlePlacesKey
       poiCounts,
       cityMaxCounts,
       bbox: row.bbox || null,
+      polygon: row.polygon || null,
       googlePlacesKey,
     });
     // Merge fresh + stored photos (only override categories with real fresh results).
@@ -618,7 +692,8 @@ async function recomputeNeighborhoodVibes(city, db, unsplashKey, googlePlacesKey
     if (!heroPick) {
       // Last resort: fetch directly via Places / Unsplash
       const fallback = await fetchNeighborhoodPhoto(
-        row.name, row.city, unsplashKey, row.vibe_long || "", row.tags || [], row.bbox || null, googlePlacesKey
+        row.name, row.city, unsplashKey, row.vibe_long || "", row.tags || [], row.bbox || null, googlePlacesKey,
+        normalizePolygonRing(row.polygon)
       ).catch(() => null);
       if (fallback) heroPick = { url: fallback.url, photographer: fallback.photographer, profile_url: fallback.profile_url, query_used: fallback.query_used };
     }
@@ -654,7 +729,7 @@ async function recomputeNeighborhoodVibes(city, db, unsplashKey, googlePlacesKey
 async function refreshHotelCounts(city, db) {
   const { data: hoods, error } = await db
     .from("neighborhoods")
-    .select("id, name, bbox")
+    .select("id, name, bbox, polygon")
     .eq("city", city);
 
   if (error || !hoods?.length) return;
@@ -662,7 +737,8 @@ async function refreshHotelCounts(city, db) {
   await Promise.all(hoods.map(async (hood) => {
     const bbox = hood.bbox;
     if (!bbox?.lat_min) return;
-    const count = await getHotelCountForBbox(city, bbox, db);
+    const pr = normalizePolygonRing(hood.polygon);
+    const count = await getHotelCountForFence(city, bbox, pr, db);
     await db.from("neighborhoods").update({ hotel_count: count }).eq("id", hood.id);
   }));
 

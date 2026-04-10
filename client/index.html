@@ -1532,14 +1532,39 @@
       margin:10px 0 14px; height:6px; border-radius:999px; overflow:hidden;
       background:rgba(255,255,255,.08);
     }
+    .boop-progress-row .boop-progress { margin:0; }
+    .boop-progress-row {
+      display:flex;
+      align-items:center;
+      gap:10px;
+      margin:10px 0 14px;
+    }
+    .boop-progress-step {
+      flex:0 0 auto;
+      font-size:12px;
+      font-weight:600;
+      color:var(--accent);
+      letter-spacing:0.04em;
+      white-space:nowrap;
+    }
+    .boop-progress-row .boop-progress {
+      flex:1 1 auto;
+      min-width:48px;
+    }
+    .boop-skip-tray { flex:0 0 auto; }
+    @media (max-width: 760px) {
+      .boop-skip-tray .boop-btn { padding:6px 12px; font-size:12px; }
+      .boop-wrap .boop-q-head { margin-top:6px; }
+      #st-boop .chapter-sub { margin-bottom:0; }
+      #st-boop .boop-progress-row { margin-top:0; margin-bottom:2px; }
+    }
     .boop-progress > i {
       display:block; height:100%; width:0%;
       background:linear-gradient(90deg,#b38a4b 0%,#e3c189 60%,#e6d4b8 100%);
       transition:width .2s ease;
     }
     .boop-q-head { margin-bottom:10px; }
-    .boop-q-step { font-size:11px; color:var(--muted); letter-spacing:.08em; text-transform:uppercase; }
-    .boop-q-title { font-size:28px; line-height:1.2; margin-top:4px; font-family:'Cormorant Garamond',serif; }
+    .boop-q-title { font-size:28px; line-height:1.2; margin-top:0; font-family:'Cormorant Garamond',serif; }
     .boop-q-sub { margin-top:6px; font-size:13px; color:var(--muted); line-height:1.55; }
     .boop-grid { display:grid; grid-template-columns:1fr; gap:12px; margin-top:12px; justify-content:center; }
     @media(min-width:760px){ .boop-grid { grid-template-columns:repeat(2,minmax(320px,430px)); } }
@@ -1774,8 +1799,8 @@
       color:#17120b;
     }
     @media(max-width:760px){
-      /* Mobile only: reduce intro wizard card visual height by ~15%. */
-      .boop-card-media { aspect-ratio:16/10; min-height:178px; }
+      /* Mobile: another ~15% shorter than 16/10 @ 178px */
+      .boop-card-media { aspect-ratio:16/8.5; min-height:151px; }
       .boop-deal-row {
         grid-template-columns:1fr;
         flex:none;
@@ -1856,7 +1881,23 @@
     /* Hero section — self-contained, positioned children stay inside */
     .nbhd-hero-wrap {
       position:relative; height:300px; overflow:hidden;
-      background-size:cover; background-position:center; background-color:#0c0c0e;
+      background-color:#0c0c0e;
+    }
+    .nbhd-hero-scroll {
+      position:absolute; inset:0;
+      z-index:0;
+      display:flex; flex-direction:row; flex-wrap:nowrap;
+      overflow-x:auto; overflow-y:hidden;
+      scroll-behavior:smooth;
+      scrollbar-width:none;
+      -webkit-overflow-scrolling:touch;
+    }
+    .nbhd-hero-scroll::-webkit-scrollbar { display:none; }
+    .nbhd-hero-slide {
+      flex:0 0 100%;
+      width:100%; min-width:100%; height:100%;
+      background-size:cover; background-position:center;
+      background-color:#0c0c0e;
     }
     .nbhd-hero-wrap.nbhd-hero-zoomable { cursor:zoom-in; }
     .nbhd-hero-zoom-icon {
@@ -1919,10 +1960,6 @@
       cursor:pointer;
     }
     .nbhd-hero-dot.active { background:#fff; transform:scale(1.25); }
-    /* Smooth background crossfade */
-    .nbhd-hero-wrap { transition:background-image 0s; }
-    .nbhd-hero-wrap.fading { opacity:0; transition:opacity .18s; }
-    .nbhd-hero-wrap.fading-in { opacity:1; transition:opacity .18s; }
     /* Detail body — normal document flow, below hero */
     .nbhd-detail-new {
       padding:14px; border-top:1px solid rgba(255,255,255,.12);
@@ -1942,7 +1979,12 @@
     .nbhd-el-body { display:grid; grid-template-columns:1.9fr 1fr; gap:12px; margin-bottom:10px; }
     /* Gallery wrap: clips overflowing photos; arrows overlay inside the edges */
     .nbhd-el-gallery-wrap { position:relative; overflow:hidden; border-radius:12px; }
-    .nbhd-el-gallery { display:flex; gap:8px; overflow-x:auto; scrollbar-width:none; scroll-behavior:smooth; }
+    .nbhd-el-gallery {
+      display:flex; gap:8px; overflow-x:auto; scrollbar-width:none; scroll-behavior:smooth;
+      -webkit-overflow-scrolling:touch;
+      overscroll-behavior-x:contain;
+      touch-action:pan-x;
+    }
     .nbhd-el-gallery::-webkit-scrollbar { display:none; }
     .nbhd-el-photo { flex:0 0 220px; height:130px; border-radius:12px; overflow:hidden; border:1px solid rgba(255,255,255,.1); background:#0d0d10; }
     .nbhd-el-photo img { width:100%; height:100%; object-fit:cover; display:block; }
@@ -1958,14 +2000,13 @@
       width:34px; height:34px; border-radius:50%;
       border:1px solid rgba(255,255,255,.25); background:rgba(12,12,14,.88);
       color:#fff; font-size:20px; line-height:1; cursor:pointer;
-      display:none; align-items:center; justify-content:center;
+      display:flex; align-items:center; justify-content:center;
       transition:background .15s, border-color .15s; padding:0;
       user-select:none;
     }
     .nbhd-gal-arrow:hover { background:rgba(201,169,110,.3); border-color:rgba(201,169,110,.6); }
     .nbhd-gal-prev { left:6px; }
     .nbhd-gal-next { right:6px; }
-    @media(min-width:901px){ .nbhd-gal-arrow { display:flex; } }
     .nbhd-el-info { border:1px solid rgba(255,255,255,.09); border-radius:12px; background:var(--row); padding:10px; }
     .nbhd-el-summary { font-size:14px; line-height:1.55; color:var(--muted); margin-bottom:8px; }
     .nbhd-el-facts { margin:0 0 8px 14px; color:rgba(232,228,220,.85); font-size:13px; line-height:1.45; }
@@ -1994,8 +2035,50 @@
       background-size:200% 100%; animation:shimmer 1.5s infinite;
     }
     .nbhd-gen-hint { text-align:center; padding:14px 0 4px; font-size:13px; color:var(--accent); opacity:.75; letter-spacing:.04em; }
+    @media(min-width:901px){
+      .nbhd-hero-scroll { overflow:hidden; }
+    }
     @media(max-width:900px){
       .nbhd-hero-wrap { height:240px; }
+      .nbhd-hero-scroll {
+        scroll-snap-type:x mandatory;
+        overscroll-behavior-x:contain;
+        touch-action:pan-x;
+      }
+      .nbhd-hero-slide { scroll-snap-align:start; }
+      .nbhd-hero-arrow { display:none !important; }
+      /* Dot pager: affordance for swipe + current slide (arrows hidden on mobile) */
+      .nbhd-hero-dots {
+        bottom:68px;
+        left:50%;
+        transform:translateX(-50%);
+        max-width:calc(100% - 40px);
+        padding:6px 12px;
+        border-radius:999px;
+        background:rgba(0,0,0,.22);
+        backdrop-filter:blur(6px);
+        -webkit-backdrop-filter:blur(6px);
+        box-shadow:0 1px 8px rgba(0,0,0,.18);
+        gap:7px;
+        flex-wrap:nowrap;
+        justify-content:center;
+        overflow-x:auto;
+        -webkit-overflow-scrolling:touch;
+        scrollbar-width:none;
+      }
+      .nbhd-hero-dots::-webkit-scrollbar { display:none; }
+      .nbhd-hero-dot {
+        width:6px;
+        height:6px;
+        flex-shrink:0;
+        background:rgba(255,255,255,.28);
+        box-shadow:none;
+      }
+      .nbhd-hero-dot.active {
+        background:rgba(232,213,176,.85);
+        transform:scale(1.12);
+        box-shadow:0 0 0 1px rgba(255,255,255,.22);
+      }
       .nbhd-name-new { font-size:24px; }
       .nbhd-el-body { grid-template-columns:1fr; }
       .nbhd-el-photo { flex:0 0 170px; height:110px; }
@@ -2314,7 +2397,6 @@
       <div class="chapter-inner">
         <div class="chapter-top">
           <button class="back-btn" onclick="goToStep('city')"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 3L5 8l5 5"/></svg> Back to City</button>
-          <div class="eyebrow"><div class="eyebrow-dot"></div>Step 2 of 5 · Quick Boop intro</div>
           <h1 class="chapter-h1">Let's shape your <em>Boop Vibe</em></h1>
           <p class="chapter-sub">A quick visual check-in so neighborhood ranking matches your trip style. You can skip straight to neighborhoods anytime.</p>
         </div>
@@ -2522,7 +2604,8 @@
   let clipES = null;
   let clipDone = 0, clipTotal = 10;
   let _lastHotels     = [];
-  let selectedNeighborhood = null; // {name, bbox: "lat_min,lat_max,lon_min,lon_max"} or null
+  let selectedNeighborhood = null; // { name, bbox?, polygon? } — polygon is geo JSON for /api/vsearch
+  let NEIGHBORHOOD_FLOW_ROWS = []; // indexed rows for fetchAndShowNeighborhoods → selectNeighborhoodFlow
   let selectedCityData     = null; // {name, country_code, lat, lng} from Geoapify autocomplete
   let _currentSort    = 'match';
   let _viewMode       = localStorage.getItem('rmViewMode') || 'cards';
@@ -2777,6 +2860,7 @@
         }
       ]
     },
+    /* Screen 6 dealbreakers — disabled for 5-step wizard; re-enable object to restore.
     {
       id:'dealbreakers',
       label:'Dealbreakers',
@@ -2790,6 +2874,7 @@
         { id:'lowFood', label:'Not enough food options', hint:'I need plenty of restaurants nearby.', meta:'Boost food-dense neighborhoods', image:'https://images.unsplash.com/photo-1448630360428-65456885c650?auto=format&fit=crop&w=1200&q=80' },
       ]
     }
+    */
   ];
 
   // ── Flow helpers ──────────────────────────────────────
@@ -3272,7 +3357,7 @@
       night: pickCityQuestionFallback('night', ['restaurants', 'street_feel']),
       mobility: pickCityQuestionFallback('mobility', ['street_feel']),
       environment: pickCityQuestionFallback('environment', ['parks', 'street_feel']),
-      dealbreakers: pickCityQuestionFallback('dealbreakers', ['street_feel', 'shops', 'restaurants']),
+      // dealbreakers: pickCityQuestionFallback('dealbreakers', ['street_feel', 'shops', 'restaurants']),
     };
 
     BOOP_WIZARD_IMAGES[cityK] = result;
@@ -3501,11 +3586,14 @@
     if (!q) { boopFinish(); return; }
     wrap.className = 'boop-wrap' + (q.type === 'chips' ? ' boop-wrap--deal' : '');
     const p = boopProgressPct();
+    /* Saved vibe banner — restore to show Use saved / Retake on first screen when a profile exists
     const saved = loadBoopProfileForCity(S.city);
     const savedTs = saved?.updatedAt ? new Date(saved.updatedAt).toLocaleDateString() : null;
     const savedUi = (BOOP.idx === 0 && saved)
       ? `<div class="boop-saved"><strong>Saved vibe found</strong>${savedTs ? ` · last updated ${savedTs}` : ''}. <button class="boop-btn subtle" style="margin-left:8px" onclick="boopUseSaved()">Use saved</button> <button class="boop-btn subtle" style="margin-left:6px" onclick="resetBoopState();renderBoopQuestion()">Retake</button></div>`
       : '';
+    */
+    const savedUi = '';
 
     let body = '';
     if (q.type === 'cards') {
@@ -3544,7 +3632,6 @@
         <p class="boop-note boop-deal-toolbar-note">Optional: select as many as needed, then continue.</p>
         <div class="boop-deal-toolbar-actions">
           <a class="boop-deal-back-link" href="#" onclick="event.preventDefault();boopBack();">&lt; back</a>
-          <button type="button" class="boop-btn subtle" onclick="boopSkipToNeighborhood()">Skip</button>
           <button type="button" class="boop-btn primary" onclick="boopFinish()">Continue to neighborhoods</button>
         </div>
       </div>
@@ -3567,16 +3654,22 @@
       `).join('')}</div></div>`;
     }
 
+    const backBtn = BOOP.idx > 0 ? `<button class="boop-btn subtle" onclick="boopBack()">Back</button>` : '<span></span>';
     const nav = q.type === 'cards'
-      ? `<div class="boop-actions">${BOOP.idx > 0 ? `<button class="boop-btn subtle" onclick="boopBack()">Back</button>` : '<span></span>'}<button class="boop-btn subtle" onclick="boopSkipToNeighborhood()">Skip to neighborhoods</button></div>`
+      ? (BOOP.idx > 0 ? `<div class="boop-actions">${backBtn}</div>` : '')
       : q.type === 'chips'
       ? ''
-      : `<div class="boop-actions"><button class="boop-btn subtle" onclick="boopSkipToNeighborhood()">Skip to neighborhoods</button></div>`;
+      : '';
 
+    const stepIdx = BOOP.idx + 1;
+    const stepTotal = BOOP_QUESTIONS.length;
     wrap.innerHTML = `
-      <div class="boop-progress"><i style="width:${p}%"></i></div>
+      <div class="boop-progress-row" role="group" aria-label="Question ${stepIdx} of ${stepTotal}">
+        <span class="boop-progress-step">${stepIdx} of ${stepTotal}</span>
+        <div class="boop-progress"><i style="width:${p}%"></i></div>
+        <div class="boop-skip-tray"><button type="button" class="boop-btn subtle" onclick="boopSkipToNeighborhood()">Skip</button></div>
+      </div>
       <div class="boop-q-head">
-        <div class="boop-q-step">${q.label} · ${BOOP.idx + 1} of ${BOOP_QUESTIONS.length}</div>
         <div class="boop-q-title">${q.title}</div>
         <div class="boop-q-sub">${q.sub || ''}</div>
       </div>
@@ -3584,6 +3677,11 @@
       ${body}
       ${nav}
     `;
+    if (typeof window.matchMedia !== 'undefined' && window.matchMedia('(max-width:760px)').matches) {
+      window.scrollTo(0, 0);
+      document.documentElement.scrollTop = 0;
+      document.body.scrollTop = 0;
+    }
   }
 
   // ── CITY ─────────────────────────────────────────────
@@ -3851,42 +3949,52 @@
     return photos;
   }
 
-  function nbhdHeroNav(btn, dir, ev) {
-    ev.stopPropagation();
-    const wrap = btn.closest('.nbhd-hero-wrap');
+  function nbhdHeroScrollSync(scrollEl) {
+    const wrap = scrollEl.closest('.nbhd-hero-wrap');
+    if (!wrap) return;
+    const w = scrollEl.clientWidth;
+    if (!w) return;
+    const h = NBHD_CARD_DATA[wrap.dataset.card];
+    const n = h ? buildHeroPhotos(h).length : 0;
+    let idx = Math.round(scrollEl.scrollLeft / w);
+    if (n > 0) idx = Math.max(0, Math.min(n - 1, idx));
+    wrap.dataset.heroIdx = String(idx);
+    wrap.querySelectorAll('.nbhd-hero-dot').forEach((d, i) => d.classList.toggle('active', i === idx));
+  }
+
+  function nbhdHeroAdvance(wrap, dir, ev) {
+    if (!wrap) return;
+    if (ev) ev.stopPropagation();
+    const scroll = wrap.querySelector('.nbhd-hero-scroll');
     const cardId = wrap.dataset.card;
     const h = NBHD_CARD_DATA[cardId];
-    if (!h) return;
+    if (!h || !scroll) return;
     const photos = buildHeroPhotos(h);
     if (photos.length < 2) return;
     let idx = parseInt(wrap.dataset.heroIdx || '0', 10);
     idx = (idx + dir + photos.length) % photos.length;
+    const cw = scroll.clientWidth;
+    scroll.scrollTo({ left: idx * cw, behavior: 'smooth' });
     wrap.dataset.heroIdx = String(idx);
-    // Crossfade: briefly fade out, swap, fade in
-    wrap.style.opacity = '0';
-    wrap.style.transition = 'opacity .18s';
-    setTimeout(() => {
-      wrap.style.backgroundImage = `url('${photos[idx]}')`;
-      wrap.style.opacity = '1';
-    }, 180);
     wrap.querySelectorAll('.nbhd-hero-dot').forEach((d, i) => d.classList.toggle('active', i === idx));
+  }
+
+  function nbhdHeroNav(btn, dir, ev) {
+    nbhdHeroAdvance(btn.closest('.nbhd-hero-wrap'), dir, ev);
   }
 
   function nbhdHeroDot(dotEl, idx, ev) {
     ev.stopPropagation();
     const wrap = dotEl.closest('.nbhd-hero-wrap');
+    const scroll = wrap.querySelector('.nbhd-hero-scroll');
     const cardId = wrap.dataset.card;
     const h = NBHD_CARD_DATA[cardId];
-    if (!h) return;
+    if (!h || !scroll) return;
     const photos = buildHeroPhotos(h);
     if (!photos[idx]) return;
+    const cw = scroll.clientWidth;
+    scroll.scrollTo({ left: idx * cw, behavior: 'smooth' });
     wrap.dataset.heroIdx = String(idx);
-    wrap.style.opacity = '0';
-    wrap.style.transition = 'opacity .18s';
-    setTimeout(() => {
-      wrap.style.backgroundImage = `url('${photos[idx]}')`;
-      wrap.style.opacity = '1';
-    }, 180);
     wrap.querySelectorAll('.nbhd-hero-dot').forEach((d, i) => d.classList.toggle('active', i === idx));
   }
 
@@ -3897,6 +4005,8 @@
    */
   function openNbhdHeroLightbox(wrapEl, ev) {
     ev.stopPropagation();
+    const scroll = wrapEl.querySelector('.nbhd-hero-scroll');
+    if (scroll) nbhdHeroScrollSync(scroll);
     const cardId = wrapEl.dataset.card;
     const h = NBHD_CARD_DATA[cardId];
     if (!h) return;
@@ -4015,9 +4125,9 @@
     const boopVibe = nbhdBoopVibeScore(h);
     const heroPhotos = buildHeroPhotos(h);
     const firstPhoto = heroPhotos[0] || '';
-    const mediaStyle = firstPhoto
-      ? `background-image:url('${escHtml(firstPhoto)}');`
-      : `background:${h.bg || 'linear-gradient(160deg,#1a1008 0%,#0e0a06 100%)'};`;
+    const slidesHtml = heroPhotos.length
+      ? heroPhotos.map(url => `<div class="nbhd-hero-slide" style="background-image:url('${escHtml(url)}')"></div>`).join('')
+      : `<div class="nbhd-hero-slide" style="background:${h.bg || 'linear-gradient(160deg,#1a1008 0%,#0e0a06 100%)'}"></div>`;
     const credit = h.photo_credit
       ? `<div class="nbhd-credit-new">Photo: <a href="${escHtml(h.photo_credit.profile_url||'')}" target="_blank" rel="noopener">${escHtml(h.photo_credit.photographer||'')}</a></div>`
       : '';
@@ -4034,7 +4144,8 @@
     const zoomable  = firstPhoto ? ' nbhd-hero-zoomable' : '';
     const zoomClick = firstPhoto ? ' onclick="openNbhdHeroLightbox(this,event)"' : '';
     return `<div class="nbhd-card-new">
-      <div class="nbhd-hero-wrap${zoomable}" style="${mediaStyle}" data-card="${escHtml(cardId)}" data-hero-idx="0"${zoomClick}>
+      <div class="nbhd-hero-wrap${zoomable}" data-card="${escHtml(cardId)}" data-hero-idx="0"${zoomClick}>
+        <div class="nbhd-hero-scroll" onscroll="nbhdHeroScrollSync(this)">${slidesHtml}</div>
         <div class="nbhd-hero-zoom-icon">⤢</div>
         <div class="nbhd-hero-grad"></div>
         <div class="nbhd-hero-top">
@@ -4057,7 +4168,7 @@
             <div class="nbhd-hotel-count-new">${count} hotels</div>
             <div class="nbhd-hotel-sub-new">in this area</div>
           </div>
-          <button class="nbhd-pick-btn-new" onclick="pickNbhd('${escHtml(h.name)}','${escHtml(bbox)}')">Choose →</button>
+          <button class="nbhd-pick-btn-new" onclick="pickNbhdFromCard('${escHtml(cardId)}')">Choose →</button>
         </div>
         ${credit}
       </div>
@@ -4075,11 +4186,21 @@
     </div>`;
   }
 
-  function pickNbhd(name, bbox) {
+  function pickNbhdFromCard(cardId) {
+    const h = NBHD_CARD_DATA[cardId];
+    if (!h) return;
+    const bbox = h.bbox
+      ? `${h.bbox.lat_min},${h.bbox.lat_max},${h.bbox.lon_min},${h.bbox.lon_max}`
+      : '';
+    pickNbhd(h.name, bbox, h.polygon || null);
+  }
+
+  function pickNbhd(name, bbox, polygon) {
     S.nbhd    = name;
     S.nbhdBbox = bbox || null;
-    // Also update selectedNeighborhood for existing startVectorSearch compatibility
-    selectedNeighborhood = name && !name.startsWith('All of') ? { name, bbox } : null;
+    selectedNeighborhood = name && !name.startsWith('All of')
+      ? { name, bbox, polygon: polygon || null }
+      : null;
     refreshStory('style');
     buildVibeStyles();
     const isAll = name.startsWith('All of');
@@ -4520,6 +4641,7 @@
 
   async function startVectorSearch(query, city, btn, bbox) {
     const activeBbox = bbox ?? selectedNeighborhood?.bbox ?? null;
+    const activePoly = selectedNeighborhood?.polygon;
     const nbhdLabel  = selectedNeighborhood?.name;
     const statusSuffix = nbhdLabel ? ` in ${nbhdLabel}, ${city}` : ` in ${city}`;
     setStatus(`Searching for "${query}"${statusSuffix}…`, true);
@@ -4535,7 +4657,11 @@
 
     try {
       const vsearchParams = { query, city };
-      if (activeBbox) vsearchParams.bbox = activeBbox;
+      if (activePoly) {
+        vsearchParams.polygon = typeof activePoly === 'string' ? activePoly : JSON.stringify(activePoly);
+      } else if (activeBbox) {
+        vsearchParams.bbox = activeBbox;
+      }
       const resp = await fetch(`${BACKEND}/api/vsearch?` + new URLSearchParams(vsearchParams));
       if (!resp.ok) {
         let errMsg = `Search failed (${resp.status})`;
@@ -5578,7 +5704,8 @@
         return;
       }
 
-      grid.innerHTML = hoods.map(renderNeighborhoodCard).join('') + renderExploreAllCard(city);
+      NEIGHBORHOOD_FLOW_ROWS = hoods;
+      grid.innerHTML = hoods.map((h, i) => renderNeighborhoodCard(h, i)).join('') + renderExploreAllCard(city);
     } catch {
       hideNeighborhoodSection();
     }
@@ -5597,7 +5724,7 @@
       </div>`).join('');
   }
 
-  function renderNeighborhoodCard(hood) {
+  function renderNeighborhoodCard(hood, idx) {
     const esc = s => (s || '').replace(/"/g, '&quot;').replace(/</g, '&lt;');
     const bboxStr = hood.bbox
       ? `${hood.bbox.lat_min},${hood.bbox.lat_max},${hood.bbox.lon_min},${hood.bbox.lon_max}`
@@ -5623,7 +5750,7 @@
         <div class="nbhd-card-footer">
           <span class="nbhd-card-count">${count}</span>
           ${visitorLabel ? `<span class="nbhd-card-visitor">${visitorLabel}</span>` : ''}
-          <button class="nbhd-pick-btn-new" onclick="selectNeighborhood('${esc(hood.name)}','${bboxStr}')">Choose →</button>
+          <button type="button" class="nbhd-pick-btn-new" onclick="selectNeighborhoodFlow(${idx})">Choose →</button>
         </div>
       </div>
     </div>`;
@@ -5638,8 +5765,17 @@
     </div>`;
   }
 
-  function selectNeighborhood(name, bbox) {
-    selectedNeighborhood = name ? { name, bbox } : null;
+  function selectNeighborhoodFlow(idx) {
+    const hood = NEIGHBORHOOD_FLOW_ROWS[idx];
+    if (!hood) return;
+    const bboxStr = hood.bbox
+      ? `${hood.bbox.lat_min},${hood.bbox.lat_max},${hood.bbox.lon_min},${hood.bbox.lon_max}`
+      : '';
+    selectNeighborhood(hood.name, bboxStr, hood.polygon || null);
+  }
+
+  function selectNeighborhood(name, bbox, polygon) {
+    selectedNeighborhood = name ? { name, bbox, polygon: polygon || null } : null;
     hideNeighborhoodSection();
 
     const chip = document.getElementById('neighborhood-chip');

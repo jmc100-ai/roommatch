@@ -20,6 +20,11 @@ function loadNeighborhoodGenerator() {
 function loadBackfillLatlng() {
   return require("./scripts/backfill-latlng");
 }
+const {
+  normalizePolygonRing,
+  pointInPolygon,
+  bboxFromRing,
+} = require("./scripts/neighborhood-vibe-data");
 
 // ── Password gate helpers ─────────────────────────────────────────────────────
 const SITE_PASSWORD = process.env.SITE_PASSWORD || "";
@@ -1605,10 +1610,34 @@ app.get("/api/vsearch", async (req, res) => {
     // 3. intentType from HyDE (photo-type focus for scoring).
     const intentType = extractIntentType(hydeText, query);
 
-    // ── bbox pre-filter: if bbox param provided, resolve hotel_ids within bounding box ──
+    // ── Geo pre-filter: polygon (preferred) or bbox → hotel_ids for score_room_types ──
     let bboxHotelIds = null;
+    const polygonParam = req.query.polygon;
+    if (polygonParam) {
+      try {
+        const ring = normalizePolygonRing(JSON.parse(polygonParam));
+        if (ring?.length >= 4) {
+          const pb = bboxFromRing(ring);
+          if (pb?.lat_min != null) {
+            const { data: polyHotels } = await supabase
+              .from("hotels_cache")
+              .select("hotel_id, lat, lng")
+              .eq("city", city)
+              .gte("lat", pb.lat_min).lte("lat", pb.lat_max)
+              .gte("lng", pb.lon_min).lte("lng", pb.lon_max);
+            bboxHotelIds = (polyHotels || [])
+              .filter((h) => h.lat != null && h.lng != null && pointInPolygon(h.lat, h.lng, ring))
+              .map((h) => h.hotel_id);
+            console.log(`[vsearch] polygon filter: ${bboxHotelIds.length} hotels in polygon`);
+            if (bboxHotelIds.length === 0) bboxHotelIds = null;
+          }
+        }
+      } catch (e) {
+        console.warn("[vsearch] polygon parse failed:", e.message);
+      }
+    }
     const bboxParam = req.query.bbox;
-    if (bboxParam) {
+    if (!bboxHotelIds && bboxParam) {
       const parts = bboxParam.split(",").map(Number);
       if (parts.length === 4 && parts.every(n => !isNaN(n))) {
         const [lat_min, lat_max, lon_min, lon_max] = parts;
@@ -1620,7 +1649,6 @@ app.get("/api/vsearch", async (req, res) => {
           .gte("lng", lon_min).lte("lng", lon_max);
         bboxHotelIds = bboxHotels?.map(h => h.hotel_id) ?? [];
         console.log(`[vsearch] bbox filter: ${bboxHotelIds.length} hotels in bbox`);
-        // If bbox resolves to zero hotels (lat/lng not yet backfilled), ignore bbox to avoid empty results
         if (bboxHotelIds.length === 0) bboxHotelIds = null;
       }
     }
