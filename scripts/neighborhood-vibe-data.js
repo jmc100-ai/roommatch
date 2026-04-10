@@ -827,6 +827,26 @@ function isBlocklistedLandmark(displayName) {
   return LANDMARK_BLOCKLIST.has(displayName.toLowerCase().trim());
 }
 
+/**
+ * Positive check: does a Google Places display name look like an actual green space?
+ * Used for the `parks` element to reject businesses/roundabouts/stores that
+ * Google Maps happens to type as "park" (meeting points, print shops, tour operators, etc.)
+ */
+function isParkLikePlaceName(displayName) {
+  if (!displayName) return false;
+  const n = displayName.toLowerCase();
+  return (
+    // English
+    /\b(park|garden|gardens|green|grove|common|meadow|woods|forest|botanic|nature|reserve|trail|greenway)\b/.test(n) ||
+    // Spanish
+    /\b(parque|jardín|jardin|jardines|bosque|reserva|verde|alameda|vivero|camellón|glorieta\s+(?!de\s+la))\b/.test(n) ||
+    // French
+    /\b(parc|jardin|bois|forêt|promenade)\b/.test(n) ||
+    // Malay / Indonesian
+    /\b(taman|hutan|kebun)\b/.test(n)
+  );
+}
+
 /** Small urban "parks" in Google are often playgrounds; skip for park carousel imagery. */
 function isPlaygroundLikePlaceName(displayName) {
   if (!displayName) return false;
@@ -926,9 +946,16 @@ async function fetchGooglePlacesElementPhotos(bbox, elementKey, placesKey, maxPh
       console.log(`[photos] skipping blocklisted landmark: ${place.displayName?.text}`);
       continue;
     }
-    if (elementKey === "parks" && isPlaygroundLikePlaceName(place.displayName?.text)) {
-      console.log(`[photos] skipping playground-like park POI: ${place.displayName?.text}`);
-      continue;
+    if (elementKey === "parks") {
+      const pname = place.displayName?.text;
+      if (isPlaygroundLikePlaceName(pname)) {
+        console.log(`[photos] skipping playground-like park POI: ${pname}`);
+        continue;
+      }
+      if (!isParkLikePlaceName(pname)) {
+        console.log(`[photos] skipping non-green park POI: ${pname}`);
+        continue;
+      }
     }
     const photoName = place.photos[0].name;
     const attr = place.photos[0].authorAttributions?.[0];
@@ -1109,4 +1136,5 @@ module.exports = {
   computeCityMaxCounts,
   buildNeighborhoodVibeData,
   isPlaygroundLikePlaceName,
+  isParkLikePlaceName,
 };

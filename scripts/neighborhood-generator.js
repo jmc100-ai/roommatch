@@ -18,6 +18,7 @@ const {
   maxRadiusFromCentroidM,
   placeInsideNeighborhoodFence,
   isPlaygroundLikePlaceName,
+  isParkLikePlaceName,
 } = require("./neighborhood-vibe-data");
 
 // Canonical Gemini prompt for neighborhood generation
@@ -206,6 +207,8 @@ async function fetchGooglePlacesHeroPhoto(name, city, bbox, placesKey, polygonRi
           if (!Number.isFinite(plat) || !Number.isFinite(plng)) continue;
           if (!placeInsideNeighborhoodFence(plat, plng, bbox, poly)) continue;
           if (isPlaygroundLikePlaceName(place.displayName?.text)) continue;
+          // For park pass: also require the name to actually look like a green space.
+          if (types.includes("park") && !isParkLikePlaceName(place.displayName?.text)) continue;
           const photoUrl = await fetchPlacesPhotoUrl(place.photos[0].name, placesKey);
           if (!photoUrl) continue;
           const attr = place.photos[0].authorAttributions?.[0];
