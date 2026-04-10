@@ -357,6 +357,97 @@ function pickHeroFromVibePhotos(vibeElements, vibePhotos) {
   };
 }
 
+/**
+ * osmSimplifyRing — reduce a GeoJSON coordinate array to at most maxPts vertices.
+ * Uses evenly-spaced sampling; keeps the shape representative.
+ * Input/output: [[lng, lat], ...] with a closing duplicate at the end.
+ */
+function osmSimplifyRing(coords, maxPts) {
+  let pts = coords;
+  // Remove closing duplicate if present
+  const frst = pts[0], last = pts[pts.length - 1];
+  if (frst[0] === last[0] && frst[1] === last[1]) pts = pts.slice(0, -1);
+  if (pts.length <= maxPts) return [...pts, pts[0]];
+  const step = pts.length / maxPts;
+  const out = [];
+  for (let i = 0; i < maxPts; i++) out.push(pts[Math.round(i * step) % pts.length]);
+  out.push(out[0]); // re-close
+  return out;
+}
+
+/**
+ * fetchOsmBoundary — query Nominatim for the real OSM administrative/neighbourhood polygon.
+ * Returns a normalised ring [{lat, lng}, ...] (closed) or null if not found / no match.
+ * Nominatim ToS: User-Agent required, max 1 req/sec. Callers must space invocations.
+ */
+async function fetchOsmBoundary(name, city, hintBbox = null) {
+  const q = encodeURIComponent(`${name}, ${city}`);
+  const url = `https://nominatim.openstreetmap.org/search?q=${q}&format=json&polygon_geojson=1&limit=5&addressdetails=0`;
+  let res;
+  try {
+    res = await fetch(url, {
+      headers: { "User-Agent": "TravelBoop/1.0 (https://www.travelboop.com; neighbourhood-boundary-lookup)" },
+      signal: AbortSignal.timeout(12000),
+    });
+  } catch (e) {
+    console.warn(`[osm-boundary] fetch error for "${name}": ${e.message}`);
+    return null;
+  }
+  if (!res.ok) {
+    console.warn(`[osm-boundary] Nominatim HTTP ${res.status} for "${name}"`);
+    return null;
+  }
+  const results = await res.json();
+  if (!Array.isArray(results) || !results.length) return null;
+
+  // Pick the best result: prefer OSM relations, require a Polygon/MultiPolygon geojson,
+  // and reject anything whose bbox doesn't plausibly overlap the hint bbox.
+  let best = null;
+  for (const r of results) {
+    if (!r.geojson) continue;
+    if (!["Polygon", "MultiPolygon"].includes(r.geojson.type)) continue;
+    // Filter by hint bbox overlap (±0.05° tolerance for Gemini approximation errors)
+    if (hintBbox?.lat_min != null && r.boundingbox) {
+      const bb = r.boundingbox; // Nominatim: ["lat_min","lat_max","lon_min","lon_max"]
+      const ob = { lat_min: +bb[0], lat_max: +bb[1], lon_min: +bb[2], lon_max: +bb[3] };
+      const tol = 0.05;
+      if (ob.lat_max < hintBbox.lat_min - tol || ob.lat_min > hintBbox.lat_max + tol ||
+          ob.lon_max < hintBbox.lon_min - tol || ob.lon_min > hintBbox.lon_max + tol) continue;
+    }
+    best = r;
+    if (r.osm_type === "relation") break; // relations are the most authoritative boundaries
+  }
+  if (!best?.geojson) return null;
+
+  // Extract outer ring coords ([lng, lat] GeoJSON order)
+  let coords;
+  if (best.geojson.type === "Polygon") {
+    coords = best.geojson.coordinates[0];
+  } else {
+    // MultiPolygon: take the ring with the most vertices (usually the main contiguous area)
+    coords = best.geojson.coordinates
+      .map((poly) => poly[0])
+      .sort((a, b) => b.length - a.length)[0];
+  }
+  if (!coords?.length) return null;
+
+  // Simplify to ≤50 vertices — still far more accurate than Gemini's 6-point guesses
+  const simplified = osmSimplifyRing(coords, 50);
+
+  // Convert GeoJSON [lng, lat] → {lat, lng}, round to 6dp
+  const ring = simplified.map(([lng, lat]) => ({
+    lat: Math.round(lat * 1e6) / 1e6,
+    lng: Math.round(lng * 1e6) / 1e6,
+  }));
+  if (ring.length < 4) return null;
+
+  // Ensure closed ring
+  const first = ring[0], last2 = ring[ring.length - 1];
+  if (first.lat !== last2.lat || first.lng !== last2.lng) ring.push({ lat: first.lat, lng: first.lng });
+
+  return ring;
+}
+
 async function getHotelCountForBbox(city, bbox, db) {
   const { lat_min, lat_max, lon_min, lon_max } = bbox;
   const { count } = await db
@@ -370,7 +461,7 @@ async function getHotelCountForBbox(city, bbox, db) {
 
 /** When polygonRing is set, counts hotels whose coordinates fall inside the ring (bbox pre-filter). */
 async function getHotelCountForFence(city, bbox, polygonRing, db) {
-  if (!bbox?.lat_min) return 0;
+  if (bbox?.lat_min == null) return 0;
   if (!polygonRing || polygonRing.length < 4) return getHotelCountForBbox(city, bbox, db);
   const { lat_min, lat_max, lon_min, lon_max } = bbox;
   const { data, error } = await db
@@ -407,15 +498,34 @@ async function generateNeighborhoods(city, db, geminiKey, unsplashKey, googlePla
     throw new Error(`Gemini returned empty neighborhoods array for ${city}`);
   }
 
-  // Process sequentially to stay within Overpass fair-use rate limits
+  // Process sequentially to stay within Overpass + Nominatim fair-use rate limits
   const rows = [];
   for (const item of items) {
-    const polygonRing = normalizePolygonRing(item.polygon);
+    // Start with Gemini's polygon as a fallback
+    let polygonRing = normalizePolygonRing(item.polygon);
     let bbox = item.bbox && item.bbox.lat_min != null ? item.bbox : {};
     if (polygonRing?.length >= 4) {
       const derived = bboxFromRing(polygonRing);
       if (derived) bbox = derived;
     }
+
+    // Try to fetch a real OSM boundary — more accurate than Gemini's approximation.
+    // Nominatim ToS: 1 req/sec max. Sequential loop + Overpass 3s gap keeps us well under that.
+    try {
+      const osmRing = await fetchOsmBoundary(item.name, city, bbox.lat_min != null ? bbox : null);
+      if (osmRing) {
+        polygonRing = osmRing;
+        const osmBbox = bboxFromRing(osmRing);
+        if (osmBbox) bbox = osmBbox;
+        console.log(`[neighborhoods] OSM boundary for "${item.name}": ${osmRing.length - 1} vertices`);
+      } else {
+        console.log(`[neighborhoods] No OSM boundary for "${item.name}" — using Gemini polygon`);
+      }
+    } catch (e) {
+      console.warn(`[neighborhoods] OSM lookup failed for "${item.name}": ${e.message}`);
+    }
+    // Small pause after Nominatim call before hotel-count DB query
+    await new Promise((r) => setTimeout(r, 1100));
 
     // Hotel count (skip if no lat/lng backfill done yet)
     let hotelCount = 0;
