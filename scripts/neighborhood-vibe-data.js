@@ -831,7 +831,16 @@ function isBlocklistedLandmark(displayName) {
 function isPlaygroundLikePlaceName(displayName) {
   if (!displayName) return false;
   const n = displayName.toLowerCase();
-  return /\b(playground|play area|tot lot|splash pad|jungle gym|swing park)\b/.test(n);
+  return (
+    // English
+    /\b(playground|play area|tot lot|splash pad|jungle gym|swing park|skatepark|skate park)\b/.test(n) ||
+    // Spanish — "juegos infantiles" = children's play area, "parque infantil" = children's park
+    /\b(juegos\s+infantiles|parque\s+infantil|área\s+de\s+juegos|zona\s+de\s+juegos|tobogán|columpio)\b/.test(n) ||
+    // French
+    /\b(aire\s+de\s+jeux|jeux\s+pour\s+enfants|terrain\s+de\s+jeux)\b/.test(n) ||
+    // Malay / Indonesian (KL)
+    /\b(taman\s+permainan|gelanggang\s+permainan)\b/.test(n)
+  );
 }
 
 /**
