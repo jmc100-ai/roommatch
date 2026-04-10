@@ -3763,6 +3763,7 @@
   }
 
   function normalizeSignalsByCity(hoods) {
+    if (!hoods?.length) return {};
     const dims = ['walkability','green','foodie','culture','shopping','nightlife','calm','central','local','iconic','luxury','touristy'];
     const raw = hoods.map(h => ({ name: h.name, s: deriveNbhdSignals(h) }));
     const minMax = {};
@@ -4051,8 +4052,15 @@
     if (panel) panel.innerHTML = nbhdElementPanelHTML(h, elementKey, cardId);
   }
 
-  async function fetchAndShowNeighborhoodsNew(city, isRetry) {
+  /** Max 202 polls (~4 min) so we never spin forever if the server stays on "generating". */
+  const NBHD_GENERATE_MAX_POLLS = 80;
+
+  async function fetchAndShowNeighborhoodsNew(city, isRetry, pollCount = 0) {
     const grid = document.getElementById('nbhd-grid');
+    if (!grid) {
+      console.error('[nbhd] #nbhd-grid not found');
+      return;
+    }
 
     // Show skeletons with a hint on first call
     if (!isRetry) {
@@ -4068,10 +4076,18 @@
         const data = await resp.json();
         // 202 = still generating — poll again in 3s
         if (resp.status === 202 || data.status === 'generating') {
+          if (pollCount >= NBHD_GENERATE_MAX_POLLS) {
+            const allCity = 'All of ' + city;
+            grid.innerHTML = `<div class="nbhd-gen-hint" style="color:var(--muted);max-width:42ch">
+              Neighbourhood data is taking longer than expected. You can search the whole city instead.
+            </div>
+            <button type="button" class="boop-summary-edit" style="margin-top:12px" onclick='pickNbhd(${JSON.stringify(allCity)}, null)'>Search all of ${escHtml(city)} →</button>`;
+            return;
+          }
           grid.innerHTML = Array.from({length:6}, () =>
             `<div class="nbhd-skel-new"></div>`).join('') +
-            `<div class="nbhd-gen-hint">✦ Finding your ${city} neighbourhood vibes with AI… (~5s)</div>`;
-          setTimeout(() => fetchAndShowNeighborhoodsNew(city, true), 3000);
+            `<div class="nbhd-gen-hint">✦ Finding your ${escHtml(city)} neighbourhood vibes with AI… (${pollCount + 1}/${NBHD_GENERATE_MAX_POLLS})</div>`;
+          setTimeout(() => fetchAndShowNeighborhoodsNew(city, true, pollCount + 1), 3000);
           return;
         }
         const hoods = rankNeighborhoodsByBoop(data.neighborhoods || []);
