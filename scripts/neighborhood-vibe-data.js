@@ -1346,44 +1346,45 @@ async function fetchElementPhotos(city, neighborhoodName, elementKey, unsplashKe
     }
   }
 
-  // Step 3: Unsplash + Pexels supplement.
-  // Logic: if Places+Wikimedia returned < min → push hard to target (6).
-  //         This covers both 0 (empty) and 1–(min−1) (sparse fence).
-  //         if ≥ min → skip entirely to conserve API rate-limits.
-  const specificTarget = picks.length < PHOTO_RULES.min ? PHOTO_RULES.target : PHOTO_RULES.min;
-  if (picks.length < specificTarget) {
-    // Unsplash specific
+  // Step 3a: Unsplash specific — conservative (protect 50 req/hr free limit).
+  //   Only runs when Places+Wikimedia returned < min (sparse/empty).
+  const unsplashSpecificTarget = picks.length < PHOTO_RULES.min ? PHOTO_RULES.target : PHOTO_RULES.min;
+  if (picks.length < unsplashSpecificTarget) {
     for (const q of specificQueries) {
-      if (picks.length >= specificTarget) break;
+      if (picks.length >= unsplashSpecificTarget) break;
       let res = await fetchUnsplashPhotos(q, unsplashKey, PHOTO_RULES.max);
       if (elementKey === "parks") res = rankParkUnsplashResults(res);
       res.forEach((photo) => addPick(normalizePhotoObject(photo, q, "unsplash_specific")));
     }
-    // Pexels specific — second pass if still short
-    if (picks.length < specificTarget) {
-      for (const q of specificQueries) {
-        if (picks.length >= specificTarget) break;
-        const res = await fetchPexelsPhotos(q, pexelsKey, PHOTO_RULES.max);
-        res.forEach((p) => addPick(p));
-      }
+  }
+
+  // Step 3b: Pexels specific — aggressive (200 req/hr, runs whenever below target).
+  //   Catches the case where Places returned exactly min (3) photos and Unsplash
+  //   didn't fire, yet we still want to reach the full target of 6.
+  if (picks.length < PHOTO_RULES.target) {
+    for (const q of specificQueries) {
+      if (picks.length >= PHOTO_RULES.target) break;
+      const res = await fetchPexelsPhotos(q, pexelsKey, PHOTO_RULES.max);
+      res.forEach((p) => addPick(p));
     }
   }
 
-  // Step 4: Generic template queries — Unsplash then Pexels — only if still below min
+  // Step 4: Generic template queries — Unsplash (conservative, below min) then
+  //   Pexels (aggressive, below target).
+  const genericQueries = buildQueries(elementKey, neighborhoodName, city).filter(Boolean);
   if (picks.length < PHOTO_RULES.min) {
-    const genericQueries = buildQueries(elementKey, neighborhoodName, city).filter(Boolean);
     for (const q of genericQueries) {
       if (picks.length >= PHOTO_RULES.min) break;
       let res = await fetchUnsplashPhotos(q, unsplashKey, PHOTO_RULES.max);
       if (elementKey === "parks") res = rankParkUnsplashResults(res);
       res.forEach((photo) => addPick(normalizePhotoObject(photo, q, "unsplash")));
     }
-    if (picks.length < PHOTO_RULES.min) {
-      for (const q of genericQueries) {
-        if (picks.length >= PHOTO_RULES.min) break;
-        const res = await fetchPexelsPhotos(q, pexelsKey, PHOTO_RULES.max);
-        res.forEach((p) => addPick(p));
-      }
+  }
+  if (picks.length < PHOTO_RULES.target) {
+    for (const q of genericQueries) {
+      if (picks.length >= PHOTO_RULES.target) break;
+      const res = await fetchPexelsPhotos(q, pexelsKey, PHOTO_RULES.max);
+      res.forEach((p) => addPick(p));
     }
   }
 
