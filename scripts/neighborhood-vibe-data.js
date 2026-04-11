@@ -1435,12 +1435,15 @@ async function fetchElementPhotos(city, neighborhoodName, elementKey, unsplashKe
   // of named venues (e.g. "Café La Habana interior") which degrades quality.
   const WIKI_CATEGORIES = new Set(["museums", "icon_spots", "parks", "street_feel"]);
   if (picks.length < PHOTO_RULES.target && WIKI_CATEGORIES.has(elementKey)) {
-    const wikiQueries = specificQueries.length > 0
-      ? specificQueries
+    // Primary: specific named-place queries (proper nouns work best for Wikimedia
+    // file title matching).  Generic descriptions ("jacaranda tree lined street")
+    // rarely match, so also try a short "{neighborhood} {city}" fallback query.
+    const wikiQueryList = specificQueries.length > 0
+      ? [...specificQueries, `${neighborhoodName} ${city}`]
       : (elementKey === "museums" || elementKey === "icon_spots")
-        ? [`${neighborhoodName} ${city} ${elementKey === "museums" ? "museum gallery" : "landmark monument"}`]
-        : [];
-    for (const q of wikiQueries) {
+        ? [`${neighborhoodName} ${city} ${elementKey === "museums" ? "museum gallery" : "landmark monument"}`, `${neighborhoodName} ${city}`]
+        : [`${neighborhoodName} ${city}`];
+    for (const q of wikiQueryList) {
       if (picks.length >= PHOTO_RULES.target) break;
       const wikiPhotos = await fetchWikimediaPhotos(q, PHOTO_RULES.target - picks.length);
       wikiPhotos.forEach((p) => addPick(p));
