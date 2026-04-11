@@ -787,9 +787,10 @@ const PLACES_ELEMENT_TYPES = {
   restaurants: ["restaurant"],
   cafes:       ["cafe", "coffee_shop"],
   museums:     ["museum", "art_gallery"],
-  // home_goods_store removed — returns hardware / big-box chains (Home Depot, etc.)
+  // Big-box chains (Home Depot, Elektra, Sodimac) are now blocked by CHAIN_BLOCKLIST
+  // so home_goods_store is safe to include for boutique home & lifestyle stores.
   // gift_shop also removed: tends to pull souvenir stalls or airport shops.
-  shops:       ["clothing_store", "book_store", "florist", "jewelry_store", "gift_shop"],
+  shops:       ["clothing_store", "book_store", "florist", "jewelry_store", "home_goods_store"],
   // historical_landmark + worship buildings — these return outdoor architectural photos.
   // tourist_attraction is intentionally excluded: it matches museums/restaurants/bars
   // which return interior shots. church/mosque/hindu_temple cover major religious
@@ -1276,11 +1277,6 @@ async function buildNeighborhoodVibeData({ city, neighborhoodName, attributes, t
   const vibeElements = {};
   const vibePhotos = {};
 
-  // Cross-category URL deduplication: the same Google Places venue can appear
-  // in multiple categories (e.g. a café-bookshop in both cafes and shops).
-  // Track all used photo URLs globally so no photo repeats across categories.
-  const globalUsedUrls = new Set();
-
   for (const element of ELEMENTS) {
     const key = element.key;
     const walkability = computeWalkabilityScore(key, attributes);
@@ -1296,14 +1292,7 @@ async function buildNeighborhoodVibeData({ city, neighborhoodName, attributes, t
     );
     // Per-element photo queries from Gemini (specific named places)
     const elementPhotoQueries = (photoQueries && photoQueries[key]) ? photoQueries[key] : null;
-    const rawPhotos = await fetchElementPhotos(city, neighborhoodName, key, unsplashKey, bbox, googlePlacesKey, ring, geminiKey, elementPhotoQueries);
-    // Remove photos already used in a previous category
-    vibePhotos[key] = rawPhotos.filter((p) => {
-      const u = (p.url || "").split("?")[0];
-      if (!u || globalUsedUrls.has(u)) return false;
-      globalUsedUrls.add(u);
-      return true;
-    });
+    vibePhotos[key] = await fetchElementPhotos(city, neighborhoodName, key, unsplashKey, bbox, googlePlacesKey, ring, geminiKey, elementPhotoQueries);
   }
 
   return { vibeElements, vibePhotos };
