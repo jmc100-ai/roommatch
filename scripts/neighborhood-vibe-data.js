@@ -1034,14 +1034,17 @@ async function geminiVisionCheck(photoUrl, geminiKey, yesQuestion) {
 
 /**
  * geminiVisionIsOutdoorFoodPhoto — checks whether a restaurant or cafe photo
- * shows outdoor/street-level content rather than a purely interior shot.
- * Outdoor terraces, sidewalk seating, street-facing facades = YES.
- * Interior dining rooms without visible exterior = NO.
+ * shows outdoor/street-level content.
+ *
+ * Calibrated generously: accept any photo where the EXTERIOR of a venue is
+ * visible — facade, canopy, outdoor chairs, terrace, or street context.
+ * Only hard-reject photos that are EXCLUSIVELY indoor (closed room interior)
+ * with zero outdoor or exterior visual context.
  */
 async function geminiVisionIsOutdoorFoodPhoto(photoUrl, geminiKey) {
   return geminiVisionCheck(
     photoUrl, geminiKey,
-    "Does this photo show outdoor dining, a cafe or restaurant terrace, sidewalk seating, or a street-level exterior view of a food venue? Answer YES for outdoor/street-facing scenes. Answer NO if the photo mainly shows an indoor dining room, food plating close-up, or kitchen interior with no outdoor context."
+    "Does this photo show ANY outdoor or street-level element related to a cafe or restaurant? This includes: outdoor seating or terrace, sidewalk tables, the building facade or canopy, a street view with the venue visible, or people eating outside. Answer YES if any outdoor or exterior element is visible. Answer NO only if the photo EXCLUSIVELY shows a fully enclosed interior room (walls, ceiling, floor) with no outdoor context at all, OR shows only a food dish close-up with no venue visible."
   );
 }
 
@@ -1335,11 +1338,12 @@ function normalizePhotoObject(photo, query, source, isFallback = false) {
 
 async function fetchUnsplashPhotos(query, unsplashKey, perPage = 8) {
   if (!unsplashKey) return [];
-  // 3-second throttle between calls keeps us within the 50 req/hr free limit
-  await new Promise((r) => setTimeout(r, 3000));
   const url = `https://api.unsplash.com/search/photos?query=${encodeURIComponent(query)}&per_page=${perPage}&orientation=landscape`;
   const res = await fetch(url, { headers: { Authorization: `Client-ID ${unsplashKey}` }, signal: AbortSignal.timeout(10000) });
-  if (!res.ok) return [];
+  if (!res.ok) {
+    if (res.status === 429) console.warn(`[unsplash] rate-limited on "${query}" — skipping`);
+    return [];
+  }
   const data = await res.json();
   return data.results || [];
 }
@@ -1422,16 +1426,26 @@ async function fetchElementPhotos(city, neighborhoodName, elementKey, unsplashKe
     }
   }
 
-  // ── Step 2: Wikimedia Commons (museums + icon_spots only) ────────────────────
-  if (picks.length < PHOTO_RULES.target && (elementKey === "museums" || elementKey === "icon_spots")) {
-    const wikiQueries = specificQueries.length > 0
-      ? specificQueries
-      : [`${neighborhoodName} ${city} ${elementKey === "museums" ? "museum gallery" : "landmark monument"}`];
-    for (const q of wikiQueries) {
+  // ── Step 2: Wikimedia Commons ─────────────────────────────────────────────────
+  // Runs for ALL categories using Gemini-generated specific named-place queries.
+  // Wikimedia has professional CC-licensed photos of museums, landmarks, famous
+  // cafes, specific parks, and iconic streets — all by name. Falls back to a
+  // generic query for museums/icon_spots (which Wikimedia covers reliably);
+  // other categories only run if specific named queries are available.
+  if (picks.length < PHOTO_RULES.target && specificQueries.length > 0) {
+    for (const q of specificQueries) {
       if (picks.length >= PHOTO_RULES.target) break;
       const wikiPhotos = await fetchWikimediaPhotos(q, PHOTO_RULES.target - picks.length);
       wikiPhotos.forEach((p) => addPick(p));
     }
+  }
+  // Generic Wikimedia fallback — only for museums and icon_spots where any
+  // representative photo is better than none.
+  if (picks.length < PHOTO_RULES.target && specificQueries.length === 0 &&
+      (elementKey === "museums" || elementKey === "icon_spots")) {
+    const q = `${neighborhoodName} ${city} ${elementKey === "museums" ? "museum gallery" : "landmark monument"}`;
+    const wikiPhotos = await fetchWikimediaPhotos(q, PHOTO_RULES.target - picks.length);
+    wikiPhotos.forEach((p) => addPick(p));
   }
 
   // ── Step 3: Unsplash specific queries — conservative (50 req/hr limit) ───────
