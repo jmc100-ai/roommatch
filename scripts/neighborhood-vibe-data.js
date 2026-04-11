@@ -353,12 +353,39 @@ function isGreenElement(t) {
 }
 
 /**
+ * Radially expand a polygon ring by bufferDeg degrees outward from its centroid.
+ * Used to give park centroids a small tolerance — large parks straddle admin
+ * boundaries, so a 200m buffer prevents undercounting neighbourhood parks.
+ */
+function expandPolygonRing(ring, bufferDeg) {
+  if (!ring?.length) return ring;
+  const centroid = ringCentroid(ring);
+  if (!centroid) return ring;
+  return ring.map((pt) => {
+    const dlat = pt.lat - centroid.lat;
+    const dlng = pt.lng - centroid.lng;
+    const dist  = Math.sqrt(dlat * dlat + dlng * dlng);
+    if (dist === 0) return pt;
+    const scale = (dist + bufferDeg) / dist;
+    return { lat: centroid.lat + dlat * scale, lng: centroid.lng + dlng * scale };
+  });
+}
+
+// ~200 m expressed in degrees latitude (≈0.0018°).  Large parks often straddle
+// the admin boundary; this buffer ensures their centroid still counts them for the
+// adjacent neighbourhood without pulling in parks a full block away.
+const PARK_RING_BUFFER_DEG = 0.0018;
+
+/**
  * Count green-space features whose mapped polygon area ≥ minSqM.
  * Overpass public servers do not support (if: geom.area()), so we use out geom + this filter.
  * When polygonRing is set, only counts features whose area-weighted centroid lies inside the ring.
+ * A small radial buffer (PARK_RING_BUFFER_DEG) is applied to the ring so large boundary
+ * parks (e.g. Parque México at the edge of Condesa) are not excluded by centroid precision.
  */
 function countGreenAreasMinSqM(elements, minSqM, polygonRing) {
-  const needPoly = polygonRing?.length >= 4;
+  const bufferedRing = polygonRing ? expandPolygonRing(polygonRing, PARK_RING_BUFFER_DEG) : null;
+  const needPoly = bufferedRing?.length >= 4;
   let n = 0;
   for (const el of elements || []) {
     const t = el.tags || {};
@@ -369,7 +396,7 @@ function countGreenAreasMinSqM(elements, minSqM, polygonRing) {
       if (area < minSqM) continue;
       if (needPoly) {
         const c = geometryCentroidLatLng(el.geometry);
-        if (!c || !pointInPolygon(c.lat, c.lng, polygonRing)) continue;
+        if (!c || !pointInPolygon(c.lat, c.lng, bufferedRing)) continue;
       }
       n++;
     } else if (el.type === "relation" && el.members?.length) {
@@ -392,7 +419,7 @@ function countGreenAreasMinSqM(elements, minSqM, polygonRing) {
       if (needPoly) {
         const clat = wsum > 0 ? sumLat / wsum : null;
         const clng = wsum > 0 ? sumLng / wsum : null;
-        if (clat == null || !pointInPolygon(clat, clng, polygonRing)) continue;
+        if (clat == null || !pointInPolygon(clat, clng, bufferedRing)) continue;
       }
       n++;
     }
