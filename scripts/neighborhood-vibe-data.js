@@ -994,6 +994,70 @@ async function geminiVisionIsGreenParkPhoto(photoUrl, geminiKey) {
 }
 
 /**
+ * geminiVisionCheck — generic YES/NO vision gate using Gemini Flash Lite.
+ * Accepts a plain-English YES question; returns true for YES, false for NO.
+ * Always fails open (returns true on any error) so a vision API hiccup never
+ * blocks the whole pipeline.
+ */
+async function geminiVisionCheck(photoUrl, geminiKey, yesQuestion) {
+  if (!geminiKey || !photoUrl) return true;
+  try {
+    const smallUrl = photoUrl.replace(/maxWidthPx=\d+/, "maxWidthPx=400");
+    const imgRes = await fetch(smallUrl, { signal: AbortSignal.timeout(8000) });
+    if (!imgRes.ok) return true;
+    const imgBuf = await imgRes.arrayBuffer();
+    const imgB64 = Buffer.from(imgBuf).toString("base64");
+    const mime   = imgRes.headers.get("content-type") || "image/jpeg";
+
+    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=${geminiKey}`;
+    const res = await fetch(apiUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        contents: [{ parts: [
+          { text: `${yesQuestion} Reply with a single word: YES or NO.` },
+          { inlineData: { mimeType: mime, data: imgB64 } },
+        ]}],
+        generationConfig: { temperature: 0, maxOutputTokens: 5 },
+      }),
+      signal: AbortSignal.timeout(15000),
+    });
+    if (!res.ok) return true;
+    const data   = await res.json();
+    const answer = (data.candidates?.[0]?.content?.parts?.[0]?.text || "").trim().toUpperCase();
+    return answer.startsWith("YES");
+  } catch (e) {
+    console.warn(`[vision] check failed (allowing): ${e.message}`);
+    return true;
+  }
+}
+
+/**
+ * geminiVisionIsOutdoorFoodPhoto — checks whether a restaurant or cafe photo
+ * shows outdoor/street-level content rather than a purely interior shot.
+ * Outdoor terraces, sidewalk seating, street-facing facades = YES.
+ * Interior dining rooms without visible exterior = NO.
+ */
+async function geminiVisionIsOutdoorFoodPhoto(photoUrl, geminiKey) {
+  return geminiVisionCheck(
+    photoUrl, geminiKey,
+    "Does this photo show outdoor dining, a cafe or restaurant terrace, sidewalk seating, or a street-level exterior view of a food venue? Answer YES for outdoor/street-facing scenes. Answer NO if the photo mainly shows an indoor dining room, food plating close-up, or kitchen interior with no outdoor context."
+  );
+}
+
+/**
+ * geminiVisionIsArchitecturalPhoto — used for Pexels photos tagged as
+ * museums or icon_spots. Accepts only photos showing the building/monument
+ * exterior; rejects interiors, fashion shoots, and generic cityscapes.
+ */
+async function geminiVisionIsArchitecturalPhoto(photoUrl, geminiKey, elementKey) {
+  const q = elementKey === "museums"
+    ? "Does this photo show the exterior architecture of a museum, art gallery, or cultural institution building? Answer YES for building exteriors, facades, or plazas in front of a cultural building. Answer NO for interior rooms, artworks without building context, fashion shoots, or generic street scenes."
+    : "Does this photo show a recognisable historic landmark, monument, statue, famous building, or architectural icon? Answer YES for clear landmark/monument photos. Answer NO for generic city views without an obvious landmark, interior shots, or people posing as the main subject.";
+  return geminiVisionCheck(photoUrl, geminiKey, q);
+}
+
+/**
  * fetchGooglePlacesElementPhotos — nearby search inside the neighbourhood bbox,
  * filtered by category type. Returns up to `maxPhotos` photo objects.
  * Falls back gracefully — returns [] on any error.
@@ -1271,8 +1335,10 @@ function normalizePhotoObject(photo, query, source, isFallback = false) {
 
 async function fetchUnsplashPhotos(query, unsplashKey, perPage = 8) {
   if (!unsplashKey) return [];
+  // 3-second throttle between calls keeps us within the 50 req/hr free limit
+  await new Promise((r) => setTimeout(r, 3000));
   const url = `https://api.unsplash.com/search/photos?query=${encodeURIComponent(query)}&per_page=${perPage}&orientation=landscape`;
-  const res = await fetch(url, { headers: { Authorization: `Client-ID ${unsplashKey}` } });
+  const res = await fetch(url, { headers: { Authorization: `Client-ID ${unsplashKey}` }, signal: AbortSignal.timeout(10000) });
   if (!res.ok) return [];
   const data = await res.json();
   return data.results || [];
@@ -1311,31 +1377,53 @@ function rankParkUnsplashResults(results) {
  */
 async function fetchElementPhotos(city, neighborhoodName, elementKey, unsplashKey, bbox = null, googlePlacesKey = null, polygonRing = null, geminiKey = null, photoQueries = null, pexelsKey = null) {
   const dedupe = new Set();
-  const picks = [];
+  const picks  = [];
+  // Track outdoor-classified photos separately so indoor ones are used only as last resort
+  // for restaurants and cafes.
+  const outdoorPicks = [];
 
-  const addPick = (obj) => {
+  const addPick = (obj, isOutdoor = true) => {
     if (!obj?.url) return;
     const key = obj.url.split("?")[0];
     if (dedupe.has(key)) return;
     dedupe.add(key);
     picks.push(obj);
+    if (isOutdoor) outdoorPicks.push(obj);
   };
 
   const specificQueries = Array.isArray(photoQueries) && photoQueries.length > 0
     ? photoQueries
     : [];
 
-  // Step 1: Google Places geo-search (real photos from actual venues in the neighbourhood)
+  // ── Step 1: Google Places geo-search ────────────────────────────────────────
   if (googlePlacesKey && bbox) {
     const placesPhotos = await fetchGooglePlacesElementPhotos(bbox, elementKey, googlePlacesKey, PHOTO_RULES.target, polygonRing, geminiKey, neighborhoodName);
-    placesPhotos.forEach((p) => addPick(p));
+
+    if ((elementKey === "restaurants" || elementKey === "cafes") && geminiKey && placesPhotos.length > 0) {
+      // For food venues: vision-check each photo for outdoor/street-level content.
+      // Classify outdoor vs. indoor; add outdoor ones first.  Indoor photos are
+      // only added if we would otherwise fall below PHOTO_RULES.min.
+      const classified = await Promise.all(
+        placesPhotos.map(async (p) => {
+          const outdoor = await geminiVisionIsOutdoorFoodPhoto(p.url, geminiKey);
+          if (!outdoor) console.log(`[vision] ${elementKey} indoor photo skipped (unless needed): ${p.query || ""}`);
+          return { p, outdoor };
+        })
+      );
+      classified.filter((x) => x.outdoor).forEach((x) => addPick(x.p, true));
+      // Include indoor photos only to reach minimum
+      if (picks.length < PHOTO_RULES.min) {
+        classified.filter((x) => !x.outdoor).forEach((x) => {
+          if (picks.length < PHOTO_RULES.min) addPick(x.p, false);
+        });
+      }
+    } else {
+      placesPhotos.forEach((p) => addPick(p));
+    }
   }
 
-  // Step 2: Wikimedia Commons — free, unlimited, excellent for named cultural institutions.
-  // Run for museums and icon_spots whenever below target; skip other categories (Wikimedia
-  // doesn't have useful photos for cafes/restaurants/street_feel/parks/shops by query).
+  // ── Step 2: Wikimedia Commons (museums + icon_spots only) ────────────────────
   if (picks.length < PHOTO_RULES.target && (elementKey === "museums" || elementKey === "icon_spots")) {
-    // Use Gemini-generated specific named-place queries first; fall back to generic
     const wikiQueries = specificQueries.length > 0
       ? specificQueries
       : [`${neighborhoodName} ${city} ${elementKey === "museums" ? "museum gallery" : "landmark monument"}`];
@@ -1346,8 +1434,8 @@ async function fetchElementPhotos(city, neighborhoodName, elementKey, unsplashKe
     }
   }
 
-  // Step 3a: Unsplash specific — conservative (protect 50 req/hr free limit).
-  //   Only runs when Places+Wikimedia returned < min (sparse/empty).
+  // ── Step 3: Unsplash specific queries — conservative (50 req/hr limit) ───────
+  // Only fires when Places+Wikimedia left us below min — each call is delayed 3s.
   const unsplashSpecificTarget = picks.length < PHOTO_RULES.min ? PHOTO_RULES.target : PHOTO_RULES.min;
   if (picks.length < unsplashSpecificTarget) {
     for (const q of specificQueries) {
@@ -1358,21 +1446,27 @@ async function fetchElementPhotos(city, neighborhoodName, elementKey, unsplashKe
     }
   }
 
-  // Step 3b: Pexels specific — aggressive (200 req/hr, runs whenever below target).
-  //   Catches the case where Places returned exactly min (3) photos and Unsplash
-  //   didn't fire, yet we still want to reach the full target of 6.
-  if (picks.length < PHOTO_RULES.target) {
+  // ── Step 4: Pexels specific queries — museums and icon_spots ONLY ───────────
+  // Pexels lifestyle/fashion results degrade quality for other categories.
+  // Vision-gate each Pexels photo to ensure it shows the actual building.
+  if (picks.length < PHOTO_RULES.target && (elementKey === "museums" || elementKey === "icon_spots")) {
     for (const q of specificQueries) {
       if (picks.length >= PHOTO_RULES.target) break;
       const res = await fetchPexelsPhotos(q, pexelsKey, PHOTO_RULES.max);
-      res.forEach((p) => addPick(p));
+      for (const p of res) {
+        if (picks.length >= PHOTO_RULES.target) break;
+        if (geminiKey) {
+          const ok = await geminiVisionIsArchitecturalPhoto(p.url, geminiKey, elementKey);
+          if (!ok) { console.log(`[vision] pexels ${elementKey} rejected (non-architectural): ${q}`); continue; }
+        }
+        addPick(p);
+      }
     }
   }
 
-  // Step 4: Generic template queries — Unsplash (conservative, below min) then
-  //   Pexels (aggressive, below target).
-  const genericQueries = buildQueries(elementKey, neighborhoodName, city).filter(Boolean);
+  // ── Step 5: Generic Unsplash templates — only when below min ────────────────
   if (picks.length < PHOTO_RULES.min) {
+    const genericQueries = buildQueries(elementKey, neighborhoodName, city).filter(Boolean);
     for (const q of genericQueries) {
       if (picks.length >= PHOTO_RULES.min) break;
       let res = await fetchUnsplashPhotos(q, unsplashKey, PHOTO_RULES.max);
@@ -1380,15 +1474,8 @@ async function fetchElementPhotos(city, neighborhoodName, elementKey, unsplashKe
       res.forEach((photo) => addPick(normalizePhotoObject(photo, q, "unsplash")));
     }
   }
-  if (picks.length < PHOTO_RULES.target) {
-    for (const q of genericQueries) {
-      if (picks.length >= PHOTO_RULES.target) break;
-      const res = await fetchPexelsPhotos(q, pexelsKey, PHOTO_RULES.max);
-      res.forEach((p) => addPick(p));
-    }
-  }
 
-  // Step 5: Last resort — curated static fallbacks — only when we have zero photos at all
+  // ── Step 6: Curated static fallbacks — absolute last resort (zero photos only)
   if (picks.length === 0) {
     (FALLBACK_PHOTOS[elementKey] || []).forEach((url) =>
       addPick(normalizePhotoObject(url, "fallback", "fallback_curated", true))
@@ -1457,4 +1544,7 @@ module.exports = {
   isParkLikePlaceName,
   isMuseumLikePlaceName,
   isValidIconSpotName,
+  geminiVisionCheck,
+  geminiVisionIsOutdoorFoodPhoto,
+  geminiVisionIsArchitecturalPhoto,
 };
