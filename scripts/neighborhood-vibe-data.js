@@ -893,18 +893,22 @@ function isParkLikePlaceName(displayName) {
 }
 
 /**
- * isMuseumLikePlaceName — positive check for museums/galleries.
- * Rejects places whose name doesn't suggest a museum or gallery (e.g. bazaars,
- * bookstore-cafes, community centers that Google mistags as art_gallery).
+ * isMuseumLikePlaceName — negative filter for museums/galleries.
+ * Rejects names that clearly indicate a non-museum venue (bazaars, cafés,
+ * bakeries, bookstore-cafes) that Google mistags as museum or art_gallery.
+ * Intentionally permissive: many legitimate cultural institutions have names
+ * that don't contain "museum" (e.g. "Monnaie de Paris", "Centre Pompidou",
+ * "Fondation Cartier"), so we reject only obvious negatives.
  */
 function isMuseumLikePlaceName(displayName) {
-  if (!displayName) return false;
+  if (!displayName) return true; // no name — don't reject
   const n = displayName.toLowerCase();
-  return (
-    /\b(museum|museo|musée|musee|gallery|galería|galeria|galerie|galeria de arte)\b/.test(n) ||
-    /\b(exhibition|heritage|archaeological|paleontology|paleontología|science center|planetarium)\b/.test(n) ||
-    /\b(palacio de bellas artes|maison de|casa de la cultura|centro cultural|cultural center)\b/.test(n)
-  );
+  // Reject clearly non-museum venues
+  if (/\b(bazar|bazaar|mercado|tianguis|market|flea\s+market|pulgas)\b/.test(n)) return false;
+  if (/\blibros\s+y\s+caf[eé]\b/.test(n)) return false; // bookstore-cafe
+  if (/\b(boulangerie|panadería|pastelería|bakery)\b/.test(n)) return false;
+  if (/\b(restaurant|restaurante)\b/.test(n)) return false;
+  return true;
 }
 
 /**
