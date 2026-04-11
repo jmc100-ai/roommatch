@@ -1427,25 +1427,24 @@ async function fetchElementPhotos(city, neighborhoodName, elementKey, unsplashKe
   }
 
   // ── Step 2: Wikimedia Commons ─────────────────────────────────────────────────
-  // Runs for ALL categories using Gemini-generated specific named-place queries.
-  // Wikimedia has professional CC-licensed photos of museums, landmarks, famous
-  // cafes, specific parks, and iconic streets — all by name. Falls back to a
-  // generic query for museums/icon_spots (which Wikimedia covers reliably);
-  // other categories only run if specific named queries are available.
-  if (picks.length < PHOTO_RULES.target && specificQueries.length > 0) {
-    for (const q of specificQueries) {
+  // Restricted to categories where Wikimedia reliably provides OUTDOOR photos:
+  //   museums, icon_spots — building exteriors, monuments, plazas
+  //   parks             — park grounds, green spaces
+  //   street_feel       — named boulevards, plazas, street views
+  // NOT used for cafes/restaurants/shops — Wikimedia returns interior shots
+  // of named venues (e.g. "Café La Habana interior") which degrades quality.
+  const WIKI_CATEGORIES = new Set(["museums", "icon_spots", "parks", "street_feel"]);
+  if (picks.length < PHOTO_RULES.target && WIKI_CATEGORIES.has(elementKey)) {
+    const wikiQueries = specificQueries.length > 0
+      ? specificQueries
+      : (elementKey === "museums" || elementKey === "icon_spots")
+        ? [`${neighborhoodName} ${city} ${elementKey === "museums" ? "museum gallery" : "landmark monument"}`]
+        : [];
+    for (const q of wikiQueries) {
       if (picks.length >= PHOTO_RULES.target) break;
       const wikiPhotos = await fetchWikimediaPhotos(q, PHOTO_RULES.target - picks.length);
       wikiPhotos.forEach((p) => addPick(p));
     }
-  }
-  // Generic Wikimedia fallback — only for museums and icon_spots where any
-  // representative photo is better than none.
-  if (picks.length < PHOTO_RULES.target && specificQueries.length === 0 &&
-      (elementKey === "museums" || elementKey === "icon_spots")) {
-    const q = `${neighborhoodName} ${city} ${elementKey === "museums" ? "museum gallery" : "landmark monument"}`;
-    const wikiPhotos = await fetchWikimediaPhotos(q, PHOTO_RULES.target - picks.length);
-    wikiPhotos.forEach((p) => addPick(p));
   }
 
   // ── Step 3: Unsplash specific queries — conservative (50 req/hr limit) ───────
