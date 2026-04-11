@@ -1411,6 +1411,86 @@ async function fetchUnsplashPhotos(query, unsplashKey, perPage = 8) {
   return data.results || [];
 }
 
+/**
+ * fetchFlickrPhotos — geo-bounded search using the Flickr API.
+ *
+ * Unlike Unsplash (keyword search), Flickr returns photos that were *physically
+ * geotagged* inside the supplied bounding box, so photos are guaranteed to show
+ * the actual neighbourhood being queried.  Sorted by interestingness (Flickr's
+ * quality/engagement signal) and filtered to Creative-Commons-licensed images.
+ *
+ * Returns an array of normalised photo objects ready for addPick().
+ * Rate limit: 3600 req/hr on the free API tier (72× more than Unsplash).
+ */
+async function fetchFlickrPhotos(bbox, tags, flickrKey, perPage = 8) {
+  if (!flickrKey || !bbox) return [];
+  const { lat_min, lat_max, lon_min, lon_max } = bbox;
+  if (lat_min == null) return [];
+
+  // CC licenses: 1=BY-NC-SA 2=BY-NC 3=BY-NC-ND 4=BY 5=BY-SA 6=BY-ND 9=CC0 10=PDM
+  const params = new URLSearchParams({
+    method:        "flickr.photos.search",
+    api_key:       flickrKey,
+    bbox:          `${lon_min},${lat_min},${lon_max},${lat_max}`,
+    tags,
+    tag_mode:      "any",
+    license:       "1,2,4,5,6,9,10",
+    safe_search:   "1",
+    content_type:  "1",
+    sort:          "interestingness-desc",
+    extras:        "url_m,url_l,url_c,url_z,owner_name,description",
+    per_page:      String(Math.min(perPage, 50)),
+    format:        "json",
+    nojsoncallback:"1",
+  });
+
+  try {
+    const res = await fetch(`https://api.flickr.com/services/rest/?${params}`, {
+      signal: AbortSignal.timeout(12000),
+    });
+    if (!res.ok) {
+      console.warn(`[flickr] API error ${res.status} for tags="${tags}"`);
+      return [];
+    }
+    const data = await res.json();
+    if (data.stat !== "ok") {
+      console.warn(`[flickr] API returned stat=${data.stat} for tags="${tags}"`);
+      return [];
+    }
+    const photos = data.photos?.photo || [];
+    const result = photos
+      .map((p) => {
+        const url = p.url_l || p.url_c || p.url_z || p.url_m;
+        if (!url) return null;
+        return {
+          url,
+          query: tags,
+          source: "flickr",
+          attribution: {
+            photographer: p.ownername || "Flickr user",
+            profile_url:  `https://www.flickr.com/photos/${p.owner}`,
+          },
+        };
+      })
+      .filter(Boolean);
+    console.log(`[flickr] "${tags}" bbox → ${result.length} photos`);
+    return result;
+  } catch (e) {
+    console.warn(`[flickr] fetch failed (${e.message})`);
+    return [];
+  }
+}
+
+// Flickr tag sets per element category — tuned for travel photography.
+// Keep tags broad so the geo-bbox does the heavy filtering.
+const FLICKR_TAGS = {
+  cafes:       "cafe,coffee,coffeehouse,terrace",
+  restaurants: "restaurant,food,dining,terrace,outdoor",
+  shops:       "shopping,boutique,market,street,shop",
+  street_feel: "street,urban,architecture,neighborhood,alley",
+  parks:       "park,garden,green,nature",
+};
+
 const UNSPLASH_PLAYGROUND_ALT = /\b(playground|swings?|jungle\s*gym|seesaw|see-saw|merry-go-round|playground equipment|kids on slides?|skatepark|skate park)\b/i;
 const UNSPLASH_GREEN_CUE = /\b(park|garden|trees?|lawn|meadow|forest|trail|botanic|greenery|greenway|path|landscape|canopy|grass)\b/i;
 
@@ -1433,17 +1513,20 @@ function rankParkUnsplashResults(results) {
 }
 
 /**
- * fetchElementPhotos — Google Places primary, Unsplash (specific then generic) fallback,
- * curated last resort.
+ * fetchElementPhotos — Google Places primary, Flickr geo-bbox secondary,
+ * Wikimedia / Unsplash / Pexels fallbacks, curated last resort.
  *
- * photoQueries: Gemini-generated specific named-place queries for this element
- * (e.g. ["Parque España Mexico City", "Parque Luis Cabrera Roma"]).
- * Used as the first Unsplash queries before falling back to generic templates.
- * Especially important for street_feel (no Places type) and any element where
- * Places returns fewer than PHOTO_RULES.min photos.
+ * photoQueries: Gemini-generated specific named-place queries for this element.
+ * flickrKey: optional Flickr API key; when provided, Flickr replaces generic
+ *   Unsplash queries for geo-specific categories (cafes/restaurants/shops/
+ *   street_feel/parks).
+ * sharedDedupeSet: optional Set shared across ALL categories of one neighbourhood
+ *   call — prevents the same photo from appearing in e.g. both cafes and shops.
  */
-async function fetchElementPhotos(city, neighborhoodName, elementKey, unsplashKey, bbox = null, googlePlacesKey = null, polygonRing = null, geminiKey = null, photoQueries = null, pexelsKey = null) {
-  const dedupe = new Set();
+async function fetchElementPhotos(city, neighborhoodName, elementKey, unsplashKey, bbox = null, googlePlacesKey = null, polygonRing = null, geminiKey = null, photoQueries = null, pexelsKey = null, flickrKey = null, sharedDedupeSet = null) {
+  // Local dedupe tracks URLs within this call; sharedDedupeSet tracks URLs
+  // across all category calls for the same neighbourhood.
+  const localDedupe  = new Set();
   const picks  = [];
   // Track outdoor-classified photos separately so indoor ones are used only as last resort
   // for restaurants and cafes.
@@ -1452,8 +1535,10 @@ async function fetchElementPhotos(city, neighborhoodName, elementKey, unsplashKe
   const addPick = (obj, isOutdoor = true) => {
     if (!obj?.url) return;
     const key = obj.url.split("?")[0];
-    if (dedupe.has(key)) return;
-    dedupe.add(key);
+    if (localDedupe.has(key)) return;
+    if (sharedDedupeSet?.has(key)) return;
+    localDedupe.add(key);
+    sharedDedupeSet?.add(key);
     picks.push(obj);
     if (isOutdoor) outdoorPicks.push(obj);
   };
@@ -1489,7 +1574,33 @@ async function fetchElementPhotos(city, neighborhoodName, elementKey, unsplashKe
     }
   }
 
-  // ── Step 2: Wikimedia Commons ─────────────────────────────────────────────────
+  // ── Step 2: Flickr geo-bbox search ───────────────────────────────────────────
+  // Flickr photos are physically geotagged at the location so they are guaranteed
+  // to show the actual neighbourhood (unlike Unsplash keyword search).  Used for
+  // categories where geo-accuracy matters most.  Sorted by interestingness.
+  const FLICKR_CATEGORIES = new Set(["cafes", "restaurants", "shops", "street_feel", "parks"]);
+  if (flickrKey && picks.length < PHOTO_RULES.target && FLICKR_CATEGORIES.has(elementKey) && bbox) {
+    const fTags = FLICKR_TAGS[elementKey] || "street,neighborhood";
+    const fPhotos = await fetchFlickrPhotos(bbox, fTags, flickrKey, PHOTO_RULES.target - picks.length + 2);
+    const isFoodCat = elementKey === "restaurants" || elementKey === "cafes";
+    for (const fp of fPhotos) {
+      if (picks.length >= PHOTO_RULES.target) break;
+      if (isFoodCat && geminiKey) {
+        const outdoor = await geminiVisionIsOutdoorFoodPhoto(fp.url, geminiKey);
+        if (outdoor) {
+          addPick(fp, true);
+        } else if (picks.length < PHOTO_RULES.min) {
+          addPick(fp, false);
+        } else {
+          console.log(`[vision] flickr ${elementKey} indoor rejected`);
+        }
+      } else {
+        addPick(fp);
+      }
+    }
+  }
+
+  // ── Step 3: Wikimedia Commons ─────────────────────────────────────────────────
   // Restricted to categories where Wikimedia reliably provides OUTDOOR photos:
   //   museums, icon_spots — building exteriors, monuments, plazas
   //   parks             — park grounds, green spaces
@@ -1534,15 +1645,17 @@ async function fetchElementPhotos(city, neighborhoodName, elementKey, unsplashKe
     }
   };
 
-  // ── Step 3: Unsplash specific queries — named-place queries only ─────────────
-  // Fires when below target AND specific named queries exist.  For street_feel
-  // there is no Google Places type so Unsplash is the primary source — always
-  // try to reach target.  For other categories that have Google Places, fire
-  // only when Places left us below min (to conserve the 50 req/hr budget).
-  const unsplashSpecificTarget = (elementKey === "street_feel" || picks.length < PHOTO_RULES.min)
+  // ── Step 4: Unsplash specific queries ────────────────────────────────────────
+  // When Flickr is available, skip Unsplash for geo-categories (Flickr is
+  // strictly better: geo-accurate, higher rate-limit, no cross-hood duplicates).
+  // For non-geo categories (museums/icon_spots/street_feel without Flickr) and
+  // when Flickr is absent, use Unsplash as before.
+  const unsplashGeoCategories = new Set(["cafes", "restaurants", "shops", "street_feel", "parks"]);
+  const skipUnsplashSpecific = flickrKey && unsplashGeoCategories.has(elementKey);
+  const unsplashSpecificTarget = (!skipUnsplashSpecific && (elementKey === "street_feel" || picks.length < PHOTO_RULES.min))
     ? PHOTO_RULES.target
     : PHOTO_RULES.min;
-  if (picks.length < unsplashSpecificTarget && specificQueries.length > 0) {
+  if (!skipUnsplashSpecific && picks.length < unsplashSpecificTarget && specificQueries.length > 0) {
     for (const q of specificQueries) {
       if (picks.length >= unsplashSpecificTarget) break;
       let res = await fetchUnsplashPhotos(q, unsplashKey, PHOTO_RULES.max);
@@ -1554,7 +1667,7 @@ async function fetchElementPhotos(city, neighborhoodName, elementKey, unsplashKe
     }
   }
 
-  // ── Step 4: Pexels specific queries — museums and icon_spots ONLY ───────────
+  // ── Step 5: Pexels specific queries — museums and icon_spots ONLY ───────────
   // Pexels lifestyle/fashion results degrade quality for other categories.
   // Vision-gate each Pexels photo to ensure it shows the actual building.
   if (picks.length < PHOTO_RULES.target && (elementKey === "museums" || elementKey === "icon_spots")) {
@@ -1572,8 +1685,9 @@ async function fetchElementPhotos(city, neighborhoodName, elementKey, unsplashKe
     }
   }
 
-  // ── Step 5: Generic Unsplash templates — only when below min ────────────────
-  if (picks.length < PHOTO_RULES.min) {
+  // ── Step 6: Generic Unsplash templates — absolute fallback when below min ────
+  // Skip for geo-categories when Flickr is configured (better source available).
+  if (picks.length < PHOTO_RULES.min && !(flickrKey && unsplashGeoCategories.has(elementKey))) {
     const genericQueries = buildQueries(elementKey, neighborhoodName, city).filter(Boolean);
     for (const q of genericQueries) {
       if (picks.length >= PHOTO_RULES.min) break;
@@ -1605,13 +1719,17 @@ async function fetchElementPhotos(city, neighborhoodName, elementKey, unsplashKe
  * scores for all elements except street_feel are derived from real OSM data.
  * Falls back to Gemini-attribute formula when null.
  */
-async function buildNeighborhoodVibeData({ city, neighborhoodName, attributes, tags, vibeLong, hotelCount, unsplashKey, poiCounts = null, cityMaxCounts = null, bbox = null, polygon = null, googlePlacesKey = null, geminiKey = null, photoQueries = null, pexelsKey = null }) {
+async function buildNeighborhoodVibeData({ city, neighborhoodName, attributes, tags, vibeLong, hotelCount, unsplashKey, poiCounts = null, cityMaxCounts = null, bbox = null, polygon = null, googlePlacesKey = null, geminiKey = null, photoQueries = null, pexelsKey = null, flickrKey = null }) {
   const ring = normalizePolygonRing(polygon);
   const areaKm2 = ring?.length >= 4 ? (ringAreaKm2(ring) ?? bboxAreaKm2(bbox)) : bboxAreaKm2(bbox);
   const { scores, shopsSubscores } = computeElementScores(attributes, tags, vibeLong, poiCounts, cityMaxCounts, areaKm2);
   const boopVibe = computeBoopVibe(scores, poiCounts);
   const vibeElements = {};
   const vibePhotos = {};
+
+  // Shared URL dedupe set prevents the same photo from appearing in multiple
+  // categories (e.g. a coffee-shop photo ending up in both cafes AND shops).
+  const sharedDedupeSet = new Set();
 
   for (const element of ELEMENTS) {
     const key = element.key;
@@ -1628,7 +1746,7 @@ async function buildNeighborhoodVibeData({ city, neighborhoodName, attributes, t
     );
     // Per-element photo queries from Gemini (specific named places)
     const elementPhotoQueries = (photoQueries && photoQueries[key]) ? photoQueries[key] : null;
-    vibePhotos[key] = await fetchElementPhotos(city, neighborhoodName, key, unsplashKey, bbox, googlePlacesKey, ring, geminiKey, elementPhotoQueries, pexelsKey);
+    vibePhotos[key] = await fetchElementPhotos(city, neighborhoodName, key, unsplashKey, bbox, googlePlacesKey, ring, geminiKey, elementPhotoQueries, pexelsKey, flickrKey, sharedDedupeSet);
   }
 
   return { vibeElements, vibePhotos };
@@ -1651,6 +1769,7 @@ module.exports = {
   fetchOverpassPOIs,
   computeCityMaxCounts,
   buildNeighborhoodVibeData,
+  fetchFlickrPhotos,
   isPlaygroundLikePlaceName,
   isParkLikePlaceName,
   isMuseumLikePlaceName,

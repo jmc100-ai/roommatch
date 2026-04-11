@@ -507,7 +507,7 @@ async function getHotelCountForFence(city, bbox, polygonRing, db) {
  * generateNeighborhoods — calls Gemini, fetches Unsplash photos, upserts to DB.
  * Returns array of neighborhood rows.
  */
-async function generateNeighborhoods(city, db, geminiKey, unsplashKey, googlePlacesKey = null, pexelsKey = null) {
+async function generateNeighborhoods(city, db, geminiKey, unsplashKey, googlePlacesKey = null, pexelsKey = null, flickrKey = null) {
   const prompt = buildNeighborhoodPrompt(city);
   const raw    = await callGemini(prompt, geminiKey);
 
@@ -658,6 +658,7 @@ async function generateNeighborhoods(city, db, geminiKey, unsplashKey, googlePla
         geminiKey,
         photoQueries: row.photo_queries || null,
         pexelsKey,
+        flickrKey,
       });
       row.vibe_elements = vibeData.vibeElements;
       row.vibe_photos   = vibeData.vibePhotos;
@@ -706,7 +707,7 @@ async function generateNeighborhoods(city, db, geminiKey, unsplashKey, googlePla
  * existing rows without regenerating Gemini data.  Useful when UNSPLASH_KEY is first
  * set or when photo quality needs improvement.
  */
-async function backfillNeighborhoodPhotos(city, db, unsplashKey, googlePlacesKey = null, pexelsKey = null) {
+async function backfillNeighborhoodPhotos(city, db, unsplashKey, googlePlacesKey = null, pexelsKey = null, flickrKey = null) {
   const { data: rows, error } = await db
     .from("neighborhoods")
     .select("id, name, vibe_short, tags, bbox, polygon, vibe_elements, vibe_photos")
@@ -758,7 +759,7 @@ async function backfillNeighborhoodPhotos(city, db, unsplashKey, googlePlacesKey
  * Uses stored poi_counts from attributes when present; re-fetches from Overpass
  * when missing so older rows are automatically enriched on first recompute.
  */
-async function recomputeNeighborhoodVibes(city, db, unsplashKey, googlePlacesKey = null, geminiKey = null, pexelsKey = null) {
+async function recomputeNeighborhoodVibes(city, db, unsplashKey, googlePlacesKey = null, geminiKey = null, pexelsKey = null, flickrKey = null) {
   const { data: rows, error } = await db
     .from("neighborhoods")
     .select("id, city, name, bbox, polygon, vibe_long, tags, attributes, hotel_count, vibe_photos, photo_url, photo_credit, photo_queries")
@@ -833,6 +834,7 @@ async function recomputeNeighborhoodVibes(city, db, unsplashKey, googlePlacesKey
       googlePlacesKey,
       geminiKey,
       pexelsKey,
+      flickrKey,
     });
     // Merge fresh + stored photos (only override categories with real fresh results).
     const mergedForHero = { ...(row.vibe_photos || {}) };
@@ -920,7 +922,7 @@ async function refreshHotelCounts(city, db) {
  * calls Gemini to generate specific named-place queries per element, then re-runs
  * only the photo fetch (no Overpass, no scoring recompute). Fast and cheap.
  */
-async function backfillPhotoQueries(city, db, geminiKey, unsplashKey, googlePlacesKey = null, pexelsKey = null) {
+async function backfillPhotoQueries(city, db, geminiKey, unsplashKey, googlePlacesKey = null, pexelsKey = null, flickrKey = null) {
   if (!geminiKey) throw new Error("GEMINI_KEY required");
 
   const { data: rows, error } = await db
@@ -1007,6 +1009,7 @@ Example output format:
         geminiKey,
         photoQueries,
         pexelsKey,
+        flickrKey,
       });
       await db.from("neighborhoods").update({
         vibe_photos: vibeData.vibePhotos,
