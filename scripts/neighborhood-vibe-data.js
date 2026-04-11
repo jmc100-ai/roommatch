@@ -1347,10 +1347,10 @@ async function fetchElementPhotos(city, neighborhoodName, elementKey, unsplashKe
   }
 
   // Step 3: Unsplash + Pexels supplement.
-  // Logic: if Places+Wikimedia returned 0 → push hard to target (6).
-  //         if returned 1–(min−1) → push to min (3).
-  //         if ≥ min → skip to conserve API rate-limits.
-  const specificTarget = picks.length === 0 ? PHOTO_RULES.target : PHOTO_RULES.min;
+  // Logic: if Places+Wikimedia returned < min → push hard to target (6).
+  //         This covers both 0 (empty) and 1–(min−1) (sparse fence).
+  //         if ≥ min → skip entirely to conserve API rate-limits.
+  const specificTarget = picks.length < PHOTO_RULES.min ? PHOTO_RULES.target : PHOTO_RULES.min;
   if (picks.length < specificTarget) {
     // Unsplash specific
     for (const q of specificQueries) {
