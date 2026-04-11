@@ -371,10 +371,16 @@ function expandPolygonRing(ring, bufferDeg) {
   });
 }
 
-// ~200 m expressed in degrees latitude (≈0.0018°).  Large parks often straddle
-// the admin boundary; this buffer ensures their centroid still counts them for the
-// adjacent neighbourhood without pulling in parks a full block away.
-const PARK_RING_BUFFER_DEG = 0.0018;
+// ~400 m expressed in degrees latitude (≈0.0036°).  Large parks (e.g. Parque México
+// in Condesa) often straddle or sit just outside the strict admin boundary — their
+// OSM centroid can be 300-400 m below the polygon edge.  A 400 m buffer covers that
+// without pulling in parks from a different neighbourhood a full km away.
+const PARK_RING_BUFFER_DEG = 0.0036;
+
+// Expand the Overpass query bbox by this many degrees in every direction so that
+// park ways whose centroid is just outside the original bbox are still returned with
+// their full geometry (needed for area + centroid calculations below).
+const PARK_BBOX_EXPAND_DEG = 0.003;
 
 /**
  * Count green-space features whose mapped polygon area ≥ minSqM.
@@ -429,12 +435,19 @@ function countGreenAreasMinSqM(elements, minSqM, polygonRing) {
 
 /**
  * Fetch park/garden/green-space polygons with geometry and filter by area in Node.
- * On persistent 429/504 falls back to a cheap "out count" query (no area filter,
- * but far better than returning 0).
+ * Falls back to a lightweight "out count" query when the geometry query times out
+ * (e.g. for large neighbourhoods like Polanco whose bbox spans several km²).
+ *
+ * The Overpass query bbox is expanded by PARK_BBOX_EXPAND_DEG in all directions so
+ * parks whose centroid is just outside the original bbox are still returned with full
+ * geometry for area + centroid calculation.
  */
 async function fetchOverpassGreenCount(bbox, minSqM, polygonRing = null) {
   const { lat_min, lat_max, lon_min, lon_max } = bbox || {};
-  const bb = `${lat_min},${lon_min},${lat_max},${lon_max}`;
+
+  // Slightly expanded bbox for the Overpass fetch so boundary parks are returned.
+  const e  = PARK_BBOX_EXPAND_DEG;
+  const bb = `${lat_min - e},${lon_min - e},${lat_max + e},${lon_max + e}`;
 
   // Heavy query: fetch full geometry so we can filter by polygon area.
   // landuse=grass excluded — in dense cities it tags every median strip and lawn.
@@ -449,6 +462,17 @@ async function fetchOverpassGreenCount(bbox, minSqM, polygonRing = null) {
 );
 out geom;`;
 
+  // Lightweight fallback — no area filter, counts any matched element.  Used when
+  // the geometry query times out on large neighbourhoods.
+  const qCount = `[out:json][timeout:20];
+(
+  way["leisure"~"^(park|garden|nature_reserve|recreation_ground)$"](${bb});
+  relation["leisure"~"^(park|garden|nature_reserve|recreation_ground)$"](${bb});
+  way["landuse"~"^(village_green|forest)$"](${bb});
+  relation["landuse"~"^(village_green|forest)$"](${bb});
+);
+out count;`;
+
   const doFetch = (query, timeoutMs) => fetch(OVERPASS_URL, {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
@@ -456,7 +480,7 @@ out geom;`;
     signal: AbortSignal.timeout(timeoutMs),
   });
 
-  // Try geometry query with a single 15s back-off retry on rate-limit.
+  // Try geometry query with a single 15s back-off retry on rate-limit / gateway timeout.
   let res = await doFetch(qGeom, 30000);
   if (res.status === 429 || res.status === 504) {
     await new Promise((r) => setTimeout(r, 15_000));
@@ -468,7 +492,19 @@ out geom;`;
     return countGreenAreasMinSqM(data.elements, minSqM, polygonRing);
   }
 
-  // Both geometry attempts failed — throw so the caller can preserve the old count.
+  // Geometry query failed — try the lightweight count-only fallback.
+  console.warn(`[overpass] geometry query failed (${res.status}); trying count-only fallback`);
+  const resCnt = await doFetch(qCount, 25000).catch(() => null);
+  if (resCnt?.ok) {
+    const d = await resCnt.json().catch(() => null);
+    const total = d?.elements?.[0]?.tags?.total;
+    if (total != null) {
+      console.warn(`[overpass] count-only fallback returned ${total} (no area filter)`);
+      return parseInt(total, 10);
+    }
+  }
+
+  // Both attempts failed — throw so the caller preserves the old count.
   throw new Error(`Overpass green count ${res.status}`);
 }
 
