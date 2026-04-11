@@ -617,6 +617,7 @@ async function generateNeighborhoods(city, db, geminiKey, unsplashKey, googlePla
         bbox: row.bbox || null,
         polygon: row.polygon || null,
         googlePlacesKey,
+        geminiKey,
       });
       row.vibe_elements = vibeData.vibeElements;
       row.vibe_photos   = vibeData.vibePhotos;
@@ -717,7 +718,7 @@ async function backfillNeighborhoodPhotos(city, db, unsplashKey, googlePlacesKey
  * Uses stored poi_counts from attributes when present; re-fetches from Overpass
  * when missing so older rows are automatically enriched on first recompute.
  */
-async function recomputeNeighborhoodVibes(city, db, unsplashKey, googlePlacesKey = null) {
+async function recomputeNeighborhoodVibes(city, db, unsplashKey, googlePlacesKey = null, geminiKey = null) {
   const { data: rows, error } = await db
     .from("neighborhoods")
     .select("id, city, name, bbox, polygon, vibe_long, tags, attributes, hotel_count, vibe_photos, photo_url, photo_credit")
@@ -789,6 +790,7 @@ async function recomputeNeighborhoodVibes(city, db, unsplashKey, googlePlacesKey
       bbox: row.bbox || null,
       polygon: row.polygon || null,
       googlePlacesKey,
+      geminiKey,
     });
     // Merge fresh + stored photos (only override categories with real fresh results).
     const mergedForHero = { ...(row.vibe_photos || {}) };

@@ -2667,7 +2667,7 @@ app.post("/api/backfill-neighborhood-vibes", async (req, res) => {
 
   (async () => {
     try {
-      const updated = await loadNeighborhoodGenerator().recomputeNeighborhoodVibes(city, db, process.env.UNSPLASH_KEY, process.env.GOOGLE_PLACES_KEY);
+      const updated = await loadNeighborhoodGenerator().recomputeNeighborhoodVibes(city, db, process.env.UNSPLASH_KEY, process.env.GOOGLE_PLACES_KEY, process.env.GEMINI_KEY);
       console.log(`[backfill-neighborhood-vibes] ${city}: ${updated} neighborhoods refreshed`);
     } catch (e) {
       console.error(`[backfill-neighborhood-vibes] ${city} failed:`, e.message);

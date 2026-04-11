@@ -864,11 +864,52 @@ function isPlaygroundLikePlaceName(displayName) {
 }
 
 /**
+ * geminiVisionIsGreenParkPhoto — calls Gemini Flash Lite to verify a Google Places
+ * photo actually shows a green park/garden rather than playground equipment or urban
+ * infrastructure. Returns true (accept) on any error so we fail open, not closed.
+ */
+async function geminiVisionIsGreenParkPhoto(photoUrl, geminiKey) {
+  if (!geminiKey || !photoUrl) return true;
+  try {
+    // Fetch the image at a small size to keep token cost low
+    const smallUrl = photoUrl.replace(/maxWidthPx=\d+/, "maxWidthPx=400");
+    const imgRes = await fetch(smallUrl, { signal: AbortSignal.timeout(8000) });
+    if (!imgRes.ok) return true;
+    const imgBuf  = await imgRes.arrayBuffer();
+    const imgB64  = Buffer.from(imgBuf).toString("base64");
+    const mime    = imgRes.headers.get("content-type") || "image/jpeg";
+
+    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=${geminiKey}`;
+    const res = await fetch(apiUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        contents: [{ parts: [
+          { text: "Does this photo primarily show a green park, garden, or natural green landscape (grass, trees, plants, flowers)? Answer YES if it does. Answer NO if the photo mainly shows: playground equipment (slides, swings, climbing frames), rubber/asphalt play surfaces, or children's play structures. Reply with a single word: YES or NO." },
+          { inlineData: { mimeType: mime, data: imgB64 } },
+        ]}],
+        generationConfig: { temperature: 0, maxOutputTokens: 5 },
+      }),
+      signal: AbortSignal.timeout(15000),
+    });
+    if (!res.ok) return true;
+    const data   = await res.json();
+    const answer = (data.candidates?.[0]?.content?.parts?.[0]?.text || "").trim().toUpperCase();
+    const isGreen = answer.startsWith("YES");
+    if (!isGreen) console.log(`[vision] rejected non-green park photo (answer: ${answer}): ${photoUrl.slice(0, 80)}…`);
+    return isGreen;
+  } catch (e) {
+    console.warn(`[vision] park photo check failed (allowing): ${e.message}`);
+    return true; // fail open
+  }
+}
+
+/**
  * fetchGooglePlacesElementPhotos — nearby search inside the neighbourhood bbox,
  * filtered by category type. Returns up to `maxPhotos` photo objects.
  * Falls back gracefully — returns [] on any error.
  */
-async function fetchGooglePlacesElementPhotos(bbox, elementKey, placesKey, maxPhotos = PHOTO_RULES.target, polygonRing = null) {
+async function fetchGooglePlacesElementPhotos(bbox, elementKey, placesKey, maxPhotos = PHOTO_RULES.target, polygonRing = null, geminiKey = null) {
   if (!placesKey || bbox?.lat_min == null) return [];
   const types = PLACES_ELEMENT_TYPES[elementKey];
   if (!types) return []; // street_feel — caller uses Unsplash fallback
@@ -967,6 +1008,12 @@ async function fetchGooglePlacesElementPhotos(bbox, elementKey, placesKey, maxPh
       if (!mediaRes.ok) continue;
       const mediaData = await mediaRes.json();
       if (!mediaData.photoUri) continue;
+      // For parks: vision-check the actual photo content so playground images
+      // uploaded to a "park" Place are caught even when the name looks legitimate.
+      if (elementKey === "parks" && geminiKey) {
+        const isGreen = await geminiVisionIsGreenParkPhoto(mediaData.photoUri, geminiKey);
+        if (!isGreen) continue;
+      }
       photos.push({
         url:        mediaData.photoUri,
         source:     "google_places",
@@ -1039,7 +1086,7 @@ function rankParkUnsplashResults(results) {
  * fetchElementPhotos — Google Places primary, Unsplash fallback, curated last resort.
  * street_feel has no Places type so it always uses Unsplash.
  */
-async function fetchElementPhotos(city, neighborhoodName, elementKey, unsplashKey, bbox = null, googlePlacesKey = null, polygonRing = null) {
+async function fetchElementPhotos(city, neighborhoodName, elementKey, unsplashKey, bbox = null, googlePlacesKey = null, polygonRing = null, geminiKey = null) {
   const dedupe = new Set();
   const picks = [];
 
@@ -1053,7 +1100,7 @@ async function fetchElementPhotos(city, neighborhoodName, elementKey, unsplashKe
 
   // Primary: Google Places geo-search (real photos from actual venues in the neighbourhood)
   if (googlePlacesKey && bbox) {
-    const placesPhotos = await fetchGooglePlacesElementPhotos(bbox, elementKey, googlePlacesKey, PHOTO_RULES.target, polygonRing);
+    const placesPhotos = await fetchGooglePlacesElementPhotos(bbox, elementKey, googlePlacesKey, PHOTO_RULES.target, polygonRing, geminiKey);
     placesPhotos.forEach((p) => addPick(p));
   }
 
@@ -1091,7 +1138,7 @@ async function fetchElementPhotos(city, neighborhoodName, elementKey, unsplashKe
  * scores for all elements except street_feel are derived from real OSM data.
  * Falls back to Gemini-attribute formula when null.
  */
-async function buildNeighborhoodVibeData({ city, neighborhoodName, attributes, tags, vibeLong, hotelCount, unsplashKey, poiCounts = null, cityMaxCounts = null, bbox = null, polygon = null, googlePlacesKey = null }) {
+async function buildNeighborhoodVibeData({ city, neighborhoodName, attributes, tags, vibeLong, hotelCount, unsplashKey, poiCounts = null, cityMaxCounts = null, bbox = null, polygon = null, googlePlacesKey = null, geminiKey = null }) {
   const ring = normalizePolygonRing(polygon);
   const areaKm2 = ring?.length >= 4 ? (ringAreaKm2(ring) ?? bboxAreaKm2(bbox)) : bboxAreaKm2(bbox);
   const { scores, shopsSubscores } = computeElementScores(attributes, tags, vibeLong, poiCounts, cityMaxCounts, areaKm2);
@@ -1112,7 +1159,7 @@ async function buildNeighborhoodVibeData({ city, neighborhoodName, attributes, t
       walkability,
       boopVibe,
     );
-    vibePhotos[key] = await fetchElementPhotos(city, neighborhoodName, key, unsplashKey, bbox, googlePlacesKey, ring);
+    vibePhotos[key] = await fetchElementPhotos(city, neighborhoodName, key, unsplashKey, bbox, googlePlacesKey, ring, geminiKey);
   }
 
   return { vibeElements, vibePhotos };
