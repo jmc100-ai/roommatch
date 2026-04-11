@@ -785,11 +785,11 @@ const PLACES_ELEMENT_TYPES = {
   // garden covers formal gardens that show up as parks in many cities.
   parks:       ["park", "urban_park", "national_park", "botanical_garden", "garden"],
   restaurants: ["restaurant"],
-  cafes:       ["cafe"],
+  cafes:       ["cafe", "coffee_shop"],
   museums:     ["museum", "art_gallery"],
-  // shopping_mall removed — mall interiors are generic and chain-heavy.
+  // home_goods_store removed — returns hardware / big-box chains (Home Depot, etc.)
   // gift_shop also removed: tends to pull souvenir stalls or airport shops.
-  shops:       ["clothing_store", "book_store", "florist", "home_goods_store"],
+  shops:       ["clothing_store", "book_store", "florist", "jewelry_store", "gift_shop"],
   // historical_landmark + worship buildings — these return outdoor architectural photos.
   // tourist_attraction is intentionally excluded: it matches museums/restaurants/bars
   // which return interior shots. church/mosque/hindu_temple cover major religious
@@ -813,6 +813,13 @@ const CHAIN_BLOCKLIST = new Set([
   "circle k", "oxxo", "vips", "sanborns", "walmart", "costco", "carrefour",
   "liverpool", "palacio de hierro",   // Mexican department store chains
   "sears", "h&m", "zara", "forever 21", "gap", "old navy",
+  // Gas stations — their cafe/convenience sub-sections can appear as "cafe" results
+  "pemex", "bp", "shell", "total energies", "totalenergies", "esso", "chevron",
+  "mobil", "petro seven", "petro 7", "exxon", "texaco", "repsol",
+  // Big-box home improvement / electronics chains — wrong for neighbourhood shopping
+  "home depot", "the home depot", "elektra", "sodimac", "liverpool",
+  "soriana", "sam's club", "sams club", "chedraui", "mega", "superama",
+  "office depot", "officemax", "best buy", "radioshack",
 ]);
 
 function isChain(displayName) {
@@ -883,6 +890,45 @@ function isParkLikePlaceName(displayName) {
     // Malay / Indonesian
     /\b(taman|hutan|kebun)\b/.test(n)
   );
+}
+
+/**
+ * isMuseumLikePlaceName — positive check for museums/galleries.
+ * Rejects places whose name doesn't suggest a museum or gallery (e.g. bazaars,
+ * bookstore-cafes, community centers that Google mistags as art_gallery).
+ */
+function isMuseumLikePlaceName(displayName) {
+  if (!displayName) return false;
+  const n = displayName.toLowerCase();
+  return (
+    /\b(museum|museo|musée|musee|gallery|galería|galeria|galerie|galeria de arte)\b/.test(n) ||
+    /\b(exhibition|heritage|archaeological|paleontology|paleontología|science center|planetarium)\b/.test(n) ||
+    /\b(palacio de bellas artes|maison de|casa de la cultura|centro cultural|cultural center)\b/.test(n)
+  );
+}
+
+/**
+ * Reject patterns for icon_spots — non-architecturally-significant venues that
+ * Google Places sometimes returns under church/historical_landmark types.
+ * A Kingdom Hall hallway or generic community church is not a traveler icon spot.
+ */
+const ICON_SPOT_REJECT_PATTERNS = [
+  /kingdom\s+hall/i,
+  /salón\s+del\s+reino/i,
+  /sala\s+del\s+reino/i,
+  /iglesia\s+cristiana\s+(ciudad|refugio|nuevo|vida)\b/i,
+  /asamblea\s+de\s+dios/i,
+  /iglesia\s+(bautista|evangélica|evangelica|adventista|pentecostal)\b/i,
+  /seventh.?day\s+adventist/i,
+  /church\s+of\s+(christ|god|jesus\s+christ\s+of\s+latter)/i,
+  /comunidad\s+de\s+jesús/i,
+  /\bword\s+of\s+(faith|life)\b/i,
+];
+
+function isValidIconSpotName(displayName) {
+  if (!displayName) return true; // no name → don't reject
+  const n = displayName.toLowerCase();
+  return !ICON_SPOT_REJECT_PATTERNS.some((p) => p.test(n));
 }
 
 /** Small urban "parks" in Google are often playgrounds; skip for park carousel imagery. */
@@ -1043,6 +1089,23 @@ async function fetchGooglePlacesElementPhotos(bbox, elementKey, placesKey, maxPh
         continue;
       }
     }
+    // Museums: positive-check name — reject bazaars, bookstore-cafes, etc. that
+    // Google mistags as art_gallery or whose name gives no museum signal.
+    if (elementKey === "museums") {
+      const pname = place.displayName?.text;
+      if (pname && !isMuseumLikePlaceName(pname)) {
+        console.log(`[photos] skipping non-museum POI in museums category: ${pname}`);
+        continue;
+      }
+    }
+    // Icon spots: reject generic community halls / non-architectural religious venues.
+    if (elementKey === "icon_spots") {
+      const pname = place.displayName?.text;
+      if (!isValidIconSpotName(pname)) {
+        console.log(`[photos] skipping non-iconic place in icon_spots: ${pname}`);
+        continue;
+      }
+    }
     const photoName = place.photos[0].name;
     const attr = place.photos[0].authorAttributions?.[0];
     try {
@@ -1155,20 +1218,22 @@ async function fetchElementPhotos(city, neighborhoodName, elementKey, unsplashKe
     placesPhotos.forEach((p) => addPick(p));
   }
 
-  // Unsplash fallback — runs when Places is unavailable or returns fewer than min photos.
-  if (picks.length < PHOTO_RULES.min) {
-    // Step 1: Gemini-generated specific named-place queries (most accurate)
+  // Unsplash supplement — runs whenever Places returns fewer than target photos.
+  // Specific named-place queries run up to target; generic fallback runs only if still below min.
+  if (picks.length < PHOTO_RULES.target) {
+    // Step 1: Gemini-generated specific named-place queries (most accurate, supplement to target)
     const specificQueries = Array.isArray(photoQueries) && photoQueries.length > 0
       ? photoQueries
       : [];
     for (const q of specificQueries) {
-      if (picks.length >= PHOTO_RULES.min) break;
+      if (picks.length >= PHOTO_RULES.target) break;
       let res = await fetchUnsplashPhotos(q, unsplashKey, PHOTO_RULES.max);
       if (elementKey === "parks") res = rankParkUnsplashResults(res);
       res.forEach((photo) => addPick(normalizePhotoObject(photo, q, "unsplash_specific")));
     }
 
-    // Step 2: Generic template queries — try each in turn until we reach min
+    // Step 2: Generic template queries — try each in turn until we reach min (not target,
+    // to conserve Unsplash rate-limit for more targeted categories)
     if (picks.length < PHOTO_RULES.min) {
       const genericQueries = buildQueries(elementKey, neighborhoodName, city).filter(Boolean);
       for (const q of genericQueries) {
@@ -1207,6 +1272,11 @@ async function buildNeighborhoodVibeData({ city, neighborhoodName, attributes, t
   const vibeElements = {};
   const vibePhotos = {};
 
+  // Cross-category URL deduplication: the same Google Places venue can appear
+  // in multiple categories (e.g. a café-bookshop in both cafes and shops).
+  // Track all used photo URLs globally so no photo repeats across categories.
+  const globalUsedUrls = new Set();
+
   for (const element of ELEMENTS) {
     const key = element.key;
     const walkability = computeWalkabilityScore(key, attributes);
@@ -1222,7 +1292,14 @@ async function buildNeighborhoodVibeData({ city, neighborhoodName, attributes, t
     );
     // Per-element photo queries from Gemini (specific named places)
     const elementPhotoQueries = (photoQueries && photoQueries[key]) ? photoQueries[key] : null;
-    vibePhotos[key] = await fetchElementPhotos(city, neighborhoodName, key, unsplashKey, bbox, googlePlacesKey, ring, geminiKey, elementPhotoQueries);
+    const rawPhotos = await fetchElementPhotos(city, neighborhoodName, key, unsplashKey, bbox, googlePlacesKey, ring, geminiKey, elementPhotoQueries);
+    // Remove photos already used in a previous category
+    vibePhotos[key] = rawPhotos.filter((p) => {
+      const u = (p.url || "").split("?")[0];
+      if (!u || globalUsedUrls.has(u)) return false;
+      globalUsedUrls.add(u);
+      return true;
+    });
   }
 
   return { vibeElements, vibePhotos };
@@ -1247,4 +1324,6 @@ module.exports = {
   buildNeighborhoodVibeData,
   isPlaygroundLikePlaceName,
   isParkLikePlaceName,
+  isMuseumLikePlaceName,
+  isValidIconSpotName,
 };
