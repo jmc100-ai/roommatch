@@ -1223,22 +1223,25 @@ async function fetchElementPhotos(city, neighborhoodName, elementKey, unsplashKe
     placesPhotos.forEach((p) => addPick(p));
   }
 
-  // Unsplash supplement — runs whenever Places returns fewer than target photos.
-  // Specific named-place queries run up to target; generic fallback runs only if still below min.
-  if (picks.length < PHOTO_RULES.target) {
-    // Step 1: Gemini-generated specific named-place queries (most accurate, supplement to target)
+  // Unsplash supplement — triggered when Places returns fewer than needed:
+  //   • Google Places returned 0: push specific queries up to target (6) — empty category, try hard.
+  //   • Google Places returned 1–(min−1): push specific queries to min (3) — small gap, top up.
+  //   • Google Places returned ≥ min: skip specific queries entirely to conserve Unsplash rate-limit.
+  // Generic fallback only fires if still below min after all specific queries.
+  const specificTarget = picks.length === 0 ? PHOTO_RULES.target : PHOTO_RULES.min;
+  if (picks.length < specificTarget) {
+    // Step 1: Gemini-generated specific named-place queries (most accurate)
     const specificQueries = Array.isArray(photoQueries) && photoQueries.length > 0
       ? photoQueries
       : [];
     for (const q of specificQueries) {
-      if (picks.length >= PHOTO_RULES.target) break;
+      if (picks.length >= specificTarget) break;
       let res = await fetchUnsplashPhotos(q, unsplashKey, PHOTO_RULES.max);
       if (elementKey === "parks") res = rankParkUnsplashResults(res);
       res.forEach((photo) => addPick(normalizePhotoObject(photo, q, "unsplash_specific")));
     }
 
-    // Step 2: Generic template queries — try each in turn until we reach min (not target,
-    // to conserve Unsplash rate-limit for more targeted categories)
+    // Step 2: Generic template queries — only if still below min
     if (picks.length < PHOTO_RULES.min) {
       const genericQueries = buildQueries(elementKey, neighborhoodName, city).filter(Boolean);
       for (const q of genericQueries) {
