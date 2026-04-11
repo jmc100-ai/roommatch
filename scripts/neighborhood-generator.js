@@ -913,4 +913,113 @@ async function refreshHotelCounts(city, db) {
   console.log(`[neighborhoods] hotel_count refreshed for ${city} (${hoods.length} neighborhoods)`);
 }
 
-module.exports = { generateNeighborhoods, refreshHotelCounts, recomputeNeighborhoodVibes, backfillNeighborhoodPhotos };
+/**
+ * backfillPhotoQueries — for existing neighborhoods that have empty photo_queries,
+ * calls Gemini to generate specific named-place queries per element, then re-runs
+ * only the photo fetch (no Overpass, no scoring recompute). Fast and cheap.
+ */
+async function backfillPhotoQueries(city, db, geminiKey, unsplashKey, googlePlacesKey = null) {
+  if (!geminiKey) throw new Error("GEMINI_KEY required");
+
+  const { data: rows, error } = await db
+    .from("neighborhoods")
+    .select("id, city, name, bbox, polygon, vibe_short, vibe_long, tags, attributes, hotel_count, photo_queries")
+    .eq("city", city)
+    .order("id");
+
+  if (error) throw new Error(`load neighborhoods failed: ${error.message}`);
+  if (!rows?.length) return 0;
+
+  let updated = 0;
+  for (const row of rows) {
+    // Skip rows that already have photo_queries populated
+    const alreadyHas = row.photo_queries && Object.keys(row.photo_queries).length > 0;
+    if (alreadyHas) {
+      console.log(`[photo-queries] ${row.name}: already has queries, skipping`);
+      continue;
+    }
+
+    // Targeted Gemini prompt — only asks for photo_queries, uses stored vibe data
+    const prompt = `You are a travel photo researcher. For the neighborhood "${row.name}" in ${city}, generate specific Unsplash search queries for 7 visual elements.
+
+Neighborhood context:
+- Vibe: ${row.vibe_short || ""}
+- Description: ${row.vibe_long || ""}
+- Tags: ${(row.tags || []).join(", ")}
+
+Return ONLY a valid JSON object (no markdown, no explanation) with exactly these keys:
+parks, restaurants, cafes, street_feel, icon_spots, museums, shops
+
+Each key maps to an array of exactly 2 search strings. Rules:
+- Use NAMED real places, streets, landmarks — NOT generic category words
+- Be specific enough that a photographer would use this as a caption
+- parks: named park or garden (e.g. "Parque España Mexico City")
+- restaurants: a well-known local restaurant or food street
+- cafes: a well-known local cafe or cafe-lined street
+- street_feel: the most visually distinctive street or feature (e.g. "Roma Norte jacaranda tree lined")
+- icon_spots: the defining landmark or tower (e.g. "Torre Mayor Polanco skyline")
+- museums: a specific museum name
+- shops: a specific shopping street or market
+
+Example output format:
+{"parks":["Parque España Mexico City","Parque Luis Cabrera Roma Norte"],"restaurants":["Contramar restaurant Mexico City","Roma Norte terrace dining"],"cafes":["Panaderia Rosetta Mexico City","independent cafe Roma Norte"],"street_feel":["Roma Norte jacaranda tree lined street","Colonia Roma art deco boulevard"],"icon_spots":["Fuente de la Cibeles Mexico City","Roma Norte art nouveau facade"],"museums":["Museo del Objeto del Objeto Mexico City","Casa Lamm Roma Norte"],"shops":["vintage shops Colonia Roma","design boutique Roma Norte"]}`;
+
+    let photoQueries = null;
+    try {
+      const raw = await callGemini(prompt, geminiKey);
+      const cleaned = raw.replace(/^```(?:json)?\s*/i, "").replace(/\s*```\s*$/, "").trim();
+      const parsed = JSON.parse(cleaned);
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+        photoQueries = Object.fromEntries(
+          Object.entries(parsed)
+            .filter(([, v]) => Array.isArray(v) && v.length > 0)
+            .map(([k, v]) => [k, v.filter(q => typeof q === "string" && q.trim()).slice(0, 3)])
+        );
+        console.log(`[photo-queries] ${row.name}: generated queries for ${Object.keys(photoQueries).join(", ")}`);
+      }
+    } catch (e) {
+      console.warn(`[photo-queries] Gemini failed for ${row.name}: ${e.message}`);
+      continue;
+    }
+
+    if (!photoQueries || Object.keys(photoQueries).length === 0) continue;
+
+    // Persist photo_queries
+    await db.from("neighborhoods").update({ photo_queries: photoQueries }).eq("id", row.id);
+
+    // Re-fetch only element photos using new queries (no scoring recompute)
+    const { buildNeighborhoodVibeData: bvd } = require("./neighborhood-vibe-data");
+    try {
+      const polygonRing = normalizePolygonRing(row.polygon);
+      const vibeData = await bvd({
+        city: row.city,
+        neighborhoodName: row.name,
+        attributes: row.attributes || {},
+        tags: row.tags || [],
+        vibeLong: row.vibe_long || "",
+        hotelCount: row.hotel_count || 0,
+        unsplashKey,
+        bbox: row.bbox || null,
+        polygon: row.polygon || null,
+        googlePlacesKey,
+        geminiKey,
+        photoQueries,
+      });
+      await db.from("neighborhoods").update({
+        vibe_photos: vibeData.vibePhotos,
+        vibe_last_computed_at: new Date().toISOString(),
+      }).eq("id", row.id);
+      updated++;
+      console.log(`[photo-queries] ${row.name}: photos refreshed`);
+    } catch (e) {
+      console.warn(`[photo-queries] photo refresh failed for ${row.name}: ${e.message}`);
+    }
+
+    // Brief pause between neighborhoods to stay within Gemini rate limits
+    await new Promise(r => setTimeout(r, 1500));
+  }
+
+  return updated;
+}
+
+module.exports = { generateNeighborhoods, refreshHotelCounts, recomputeNeighborhoodVibes, backfillNeighborhoodPhotos, backfillPhotoQueries };

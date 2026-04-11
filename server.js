@@ -2699,6 +2699,32 @@ app.post("/api/backfill-neighborhood-photos", async (req, res) => {
   })();
 });
 
+// POST /api/backfill-neighborhood-photo-queries {"secret":"roommatch-2026","city":"Paris"}
+// For existing neighborhoods with empty photo_queries: calls Gemini to generate specific
+// named-place queries per element, then re-fetches only element photos. ~2min per city.
+app.post("/api/backfill-neighborhood-photo-queries", async (req, res) => {
+  const { city, secret } = req.body || {};
+  if (secret !== (process.env.INDEX_SECRET || "roommatch-index")) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
+  if (!city) return res.status(400).json({ error: "city required" });
+  if (!supabase) return res.status(500).json({ error: "Supabase not configured" });
+
+  const db = supabaseAdmin || supabase;
+  res.json({ message: `backfill-neighborhood-photo-queries started for ${city}` });
+
+  (async () => {
+    try {
+      const updated = await loadNeighborhoodGenerator().backfillPhotoQueries(
+        city, db, process.env.GEMINI_KEY, process.env.UNSPLASH_KEY, process.env.GOOGLE_PLACES_KEY
+      );
+      console.log(`[backfill-neighborhood-photo-queries] ${city}: ${updated} neighborhoods updated`);
+    } catch (e) {
+      console.error(`[backfill-neighborhood-photo-queries] ${city} failed:`, e.message);
+    }
+  })();
+});
+
 // ── Backfill lat/lng endpoint (protected) ─────────────────────────────────────
 // POST /api/backfill-latlng {"secret":"roommatch-2026","city":"Paris"}
 app.post("/api/backfill-latlng", async (req, res) => {
