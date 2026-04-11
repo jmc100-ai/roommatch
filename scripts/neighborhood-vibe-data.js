@@ -12,9 +12,10 @@ const PHOTO_RULES = { target: 6, min: 3, max: 8 };
 
 const QUERY_TEMPLATES = {
   parks: [
-    "{neighborhood} {city} trees lawn path",
+    "{neighborhood} {city} park trees",
     "{neighborhood} {city} public garden",
-    "{city} urban green space trees",
+    "{city} park trees green",
+    "{city} urban park",
   ],
   restaurants: [
     "{neighborhood} {city} restaurants outdoor dining",
@@ -779,7 +780,10 @@ const PLACES_MEDIA_BASE  = "https://places.googleapis.com/v1";
 // Places API (New) type values per element category.
 // street_feel has no clean Places type — falls back to Unsplash.
 const PLACES_ELEMENT_TYPES = {
-  parks:       ["park", "national_park", "botanical_garden"],
+  // urban_park covers small neighbourhood parks (e.g. Parque España in Roma Norte)
+  // that Places often tags separately from the generic "park" type.
+  // garden covers formal gardens that show up as parks in many cities.
+  parks:       ["park", "urban_park", "national_park", "botanical_garden", "garden"],
   restaurants: ["restaurant"],
   cafes:       ["cafe"],
   museums:     ["museum", "art_gallery"],
@@ -964,16 +968,23 @@ async function fetchGooglePlacesElementPhotos(bbox, elementKey, placesKey, maxPh
   // 50% so landmarks at the edges of the bbox (e.g. Chapultepec/Diana Cazadora
   // appearing in Condesa results) are excluded. The tighter circle stays centred
   // on the neighbourhood and picks the most-popular spots actually *within* it.
-  // parks: use DISTANCE so large parks at the centre rank first.
+  // parks: use POPULARITY so well-known parks (Parque España, Vondelpark, etc.)
+  // surface first regardless of exact centroid distance. Many smaller neighbourhood
+  // parks that are physically central have no photos in Places so DISTANCE fails
+  // to find anything useful. POPULARITY surfaces parks people actually photograph.
   // All other categories: full radius + POPULARITY.
-  const rankPref = elementKey === "parks" ? "DISTANCE" : "POPULARITY";
+  const rankPref = "POPULARITY";
   const radiusM  = elementKey === "icon_spots"
     ? Math.round(baseRadiusM * 0.50)
     : baseRadiusM;
 
+  // For parks we cast a wider net (20 candidates) because name-based and vision
+  // filters reject a high proportion of results (plazas, skate parks, etc.).
+  const maxResultCount = elementKey === "parks" ? Math.min(20, maxPhotos * 3) : maxPhotos;
+
   const body = {
     includedTypes: types,
-    maxResultCount: maxPhotos,
+    maxResultCount,
     rankPreference: rankPref,
     locationRestriction: {
       circle: { center: { latitude: centerLat, longitude: centerLng }, radius: radiusM },
@@ -1157,18 +1168,14 @@ async function fetchElementPhotos(city, neighborhoodName, elementKey, unsplashKe
       res.forEach((photo) => addPick(normalizePhotoObject(photo, q, "unsplash_specific")));
     }
 
-    // Step 2: Generic template queries (fallback when specific queries don't fill the gap)
+    // Step 2: Generic template queries — try each in turn until we reach min
     if (picks.length < PHOTO_RULES.min) {
-      const genericQueries = buildQueries(elementKey, neighborhoodName, city);
-      if (genericQueries[0]) {
-        let res = await fetchUnsplashPhotos(genericQueries[0], unsplashKey, PHOTO_RULES.max);
+      const genericQueries = buildQueries(elementKey, neighborhoodName, city).filter(Boolean);
+      for (const q of genericQueries) {
+        if (picks.length >= PHOTO_RULES.min) break;
+        let res = await fetchUnsplashPhotos(q, unsplashKey, PHOTO_RULES.max);
         if (elementKey === "parks") res = rankParkUnsplashResults(res);
-        res.forEach((photo) => addPick(normalizePhotoObject(photo, genericQueries[0], "unsplash")));
-      }
-      if (picks.length < PHOTO_RULES.min && genericQueries[2]) {
-        let res = await fetchUnsplashPhotos(genericQueries[2], unsplashKey, PHOTO_RULES.max);
-        if (elementKey === "parks") res = rankParkUnsplashResults(res);
-        res.forEach((photo) => addPick(normalizePhotoObject(photo, genericQueries[2], "unsplash_city")));
+        res.forEach((photo) => addPick(normalizePhotoObject(photo, q, "unsplash")));
       }
     }
   }
