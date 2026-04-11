@@ -1468,11 +1468,15 @@ async function fetchElementPhotos(city, neighborhoodName, elementKey, unsplashKe
     }
   };
 
-  // ── Step 3: Unsplash specific queries — conservative (50 req/hr limit) ───────
-  // Only fires when Places+Wikimedia left us below target (if already below min)
-  // or below min (if above min already).
-  const unsplashSpecificTarget = picks.length < PHOTO_RULES.min ? PHOTO_RULES.target : PHOTO_RULES.min;
-  if (picks.length < unsplashSpecificTarget) {
+  // ── Step 3: Unsplash specific queries — named-place queries only ─────────────
+  // Fires when below target AND specific named queries exist.  For street_feel
+  // there is no Google Places type so Unsplash is the primary source — always
+  // try to reach target.  For other categories that have Google Places, fire
+  // only when Places left us below min (to conserve the 50 req/hr budget).
+  const unsplashSpecificTarget = (elementKey === "street_feel" || picks.length < PHOTO_RULES.min)
+    ? PHOTO_RULES.target
+    : PHOTO_RULES.min;
+  if (picks.length < unsplashSpecificTarget && specificQueries.length > 0) {
     for (const q of specificQueries) {
       if (picks.length >= unsplashSpecificTarget) break;
       let res = await fetchUnsplashPhotos(q, unsplashKey, PHOTO_RULES.max);
