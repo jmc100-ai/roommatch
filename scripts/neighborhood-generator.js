@@ -75,7 +75,31 @@ Field rules:
 - walkability_tourist_spots: "excellent" | "good" | "limited"
 - green_spaces: "lots" | "some" | "minimal"
 - skyline_character: "low-rise historic" | "modern high-rise" | "mixed" | "tree-lined"
-- street_energy: "lively" | "moderate" | "quiet"`;
+- street_energy: "lively" | "moderate" | "quiet"
+- photo_queries: object — 2 specific Unsplash search strings per element key.
+  Keys must be exactly: parks, restaurants, cafes, street_feel, icon_spots, museums, shops.
+  Each value is an array of 2 strings. Use NAMED real places, streets, or landmarks — NOT
+  generic category words. Be specific enough that a photographer would use this as a caption.
+  Rules:
+  * parks: a named park or garden (e.g. "Parque España Mexico City", "Luxembourg Gardens Paris")
+  * restaurants: a well-known local restaurant name or distinctive food street
+  * cafes: a well-known local cafe name or a distinctive cafe-lined street
+  * street_feel: the most visually distinctive street or visual feature of the neighbourhood
+    (e.g. "Roma Norte jacaranda tree lined street", "Montmartre cobblestone steps")
+  * icon_spots: the defining landmark, tower, or square (e.g. "Torre Mayor Polanco skyline",
+    "Sacré-Cœur Montmartre", "Eiffel Tower 7th arrondissement")
+  * museums: a specific museum name (e.g. "Musée d'Orsay Paris", "Museo Frida Kahlo Coyoacan")
+  * shops: a specific shopping street, market, or boutique area
+  Example for Roma Norte, Mexico City:
+  "photo_queries": {
+    "parks": ["Parque España Mexico City", "Parque Luis Cabrera Roma Norte"],
+    "restaurants": ["Contramar restaurant Mexico City", "Roma Norte outdoor terrace dining"],
+    "cafes": ["Panaderia Rosetta Mexico City", "independent cafe Roma Norte street"],
+    "street_feel": ["Roma Norte jacaranda tree lined street", "Colonia Roma art deco boulevard"],
+    "icon_spots": ["Fuente de la Cibeles Mexico City", "Roma Norte art nouveau facade"],
+    "museums": ["Museo del Objeto del Objeto Mexico City", "Casa Lamm Roma Norte"],
+    "shops": ["vintage shops Colonia Roma", "design boutique Roma Norte"]
+  }`;
 }
 
 async function callGemini(prompt, geminiKey) {
@@ -567,21 +591,35 @@ async function generateNeighborhoods(city, db, geminiKey, unsplashKey, googlePla
       ...(poiCounts ? { poi_counts: poiCounts } : {}),
     };
 
+    // Validate photo_queries structure from Gemini — must be an object with array values
+    const rawPQ = item.photo_queries;
+    const photoQueries = (rawPQ && typeof rawPQ === "object" && !Array.isArray(rawPQ))
+      ? Object.fromEntries(
+          Object.entries(rawPQ)
+            .filter(([, v]) => Array.isArray(v) && v.length > 0)
+            .map(([k, v]) => [k, v.filter(q => typeof q === "string" && q.trim()).slice(0, 3)])
+        )
+      : {};
+    if (Object.keys(photoQueries).length > 0) {
+      console.log(`[neighborhoods] photo_queries for "${item.name}": ${Object.keys(photoQueries).join(", ")}`);
+    }
+
     rows.push({
       city,
-      name:         item.name,
-      bbox:         bbox,
-      polygon:      polygonRing ? { ring: polygonRing } : null,
-      vibe_short:   item.vibe_short,
-      vibe_long:    item.vibe_long,
-      tags:         item.tags || [],
-      visitor_type: item.visitor_type,
+      name:          item.name,
+      bbox:          bbox,
+      polygon:       polygonRing ? { ring: polygonRing } : null,
+      vibe_short:    item.vibe_short,
+      vibe_long:     item.vibe_long,
+      tags:          item.tags || [],
+      visitor_type:  item.visitor_type,
       attributes,
-      photo_url:    null, // set after vibe photos are computed below
-      photo_credit: null,
-      hotel_count:  hotelCount,
-      _poiCounts:   poiCounts, // transient — used below, not persisted as top-level column
-      _polygonRing: polygonRing || null,
+      photo_queries: photoQueries,
+      photo_url:     null, // set after vibe photos are computed below
+      photo_credit:  null,
+      hotel_count:   hotelCount,
+      _poiCounts:    poiCounts, // transient — used below, not persisted as top-level column
+      _polygonRing:  polygonRing || null,
     });
   }
 
@@ -618,6 +656,7 @@ async function generateNeighborhoods(city, db, geminiKey, unsplashKey, googlePla
         polygon: row.polygon || null,
         googlePlacesKey,
         geminiKey,
+        photoQueries: row.photo_queries || null,
       });
       row.vibe_elements = vibeData.vibeElements;
       row.vibe_photos   = vibeData.vibePhotos;
@@ -721,7 +760,7 @@ async function backfillNeighborhoodPhotos(city, db, unsplashKey, googlePlacesKey
 async function recomputeNeighborhoodVibes(city, db, unsplashKey, googlePlacesKey = null, geminiKey = null) {
   const { data: rows, error } = await db
     .from("neighborhoods")
-    .select("id, city, name, bbox, polygon, vibe_long, tags, attributes, hotel_count, vibe_photos, photo_url, photo_credit")
+    .select("id, city, name, bbox, polygon, vibe_long, tags, attributes, hotel_count, vibe_photos, photo_url, photo_credit, photo_queries")
     .eq("city", city)
     .order("id");
 
@@ -788,6 +827,7 @@ async function recomputeNeighborhoodVibes(city, db, unsplashKey, googlePlacesKey
       poiCounts,
       cityMaxCounts,
       bbox: row.bbox || null,
+      photoQueries: row.photo_queries || null,
       polygon: row.polygon || null,
       googlePlacesKey,
       geminiKey,

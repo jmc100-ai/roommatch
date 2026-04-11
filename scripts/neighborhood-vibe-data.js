@@ -822,9 +822,28 @@ const LANDMARK_BLOCKLIST = new Set([
   "torre mayor", "torre reforma",
 ]);
 
-function isBlocklistedLandmark(displayName) {
+// Landmarks that are blocklisted globally EXCEPT in their home neighbourhood,
+// where they are the defining visual identity.
+// key = normalized landmark name, value = canonical neighbourhood name (case-insensitive match).
+const LANDMARK_HOME_NEIGHBORHOOD = {
+  "torre mayor":                    "polanco",
+  "torre reforma":                  "polanco",
+  "ángel de la independencia":      "juárez",
+  "angel de la independencia":      "juárez",
+  "monumento a la independencia":   "juárez",
+  "diana the huntress fountain":    "juárez",
+  "fuente de diana la cazadora":    "juárez",
+  "fuente de diana cazadora":       "juárez",
+};
+
+function isBlocklistedLandmark(displayName, currentNeighborhood = null) {
   if (!displayName) return false;
-  return LANDMARK_BLOCKLIST.has(displayName.toLowerCase().trim());
+  const norm = displayName.toLowerCase().trim();
+  if (!LANDMARK_BLOCKLIST.has(norm)) return false;
+  // If the landmark belongs to this specific neighbourhood, allow it through.
+  const home = LANDMARK_HOME_NEIGHBORHOOD[norm];
+  if (home && currentNeighborhood && home === currentNeighborhood.toLowerCase().trim()) return false;
+  return true;
 }
 
 /**
@@ -909,7 +928,7 @@ async function geminiVisionIsGreenParkPhoto(photoUrl, geminiKey) {
  * filtered by category type. Returns up to `maxPhotos` photo objects.
  * Falls back gracefully — returns [] on any error.
  */
-async function fetchGooglePlacesElementPhotos(bbox, elementKey, placesKey, maxPhotos = PHOTO_RULES.target, polygonRing = null, geminiKey = null) {
+async function fetchGooglePlacesElementPhotos(bbox, elementKey, placesKey, maxPhotos = PHOTO_RULES.target, polygonRing = null, geminiKey = null, neighborhoodName = null) {
   if (!placesKey || bbox?.lat_min == null) return [];
   const types = PLACES_ELEMENT_TYPES[elementKey];
   if (!types) return []; // street_feel — caller uses Unsplash fallback
@@ -983,7 +1002,7 @@ async function fetchGooglePlacesElementPhotos(bbox, elementKey, placesKey, maxPh
     }
     // Skip well-known mega-landmarks that belong to a specific iconic location
     // (e.g. Chapultepec Park) and bleed into adjacent neighbourhoods via POPULARITY.
-    if (isBlocklistedLandmark(place.displayName?.text)) {
+    if (isBlocklistedLandmark(place.displayName?.text, neighborhoodName)) {
       console.log(`[photos] skipping blocklisted landmark: ${place.displayName?.text}`);
       continue;
     }
@@ -1083,10 +1102,16 @@ function rankParkUnsplashResults(results) {
 }
 
 /**
- * fetchElementPhotos — Google Places primary, Unsplash fallback, curated last resort.
- * street_feel has no Places type so it always uses Unsplash.
+ * fetchElementPhotos — Google Places primary, Unsplash (specific then generic) fallback,
+ * curated last resort.
+ *
+ * photoQueries: Gemini-generated specific named-place queries for this element
+ * (e.g. ["Parque España Mexico City", "Parque Luis Cabrera Roma"]).
+ * Used as the first Unsplash queries before falling back to generic templates.
+ * Especially important for street_feel (no Places type) and any element where
+ * Places returns fewer than PHOTO_RULES.min photos.
  */
-async function fetchElementPhotos(city, neighborhoodName, elementKey, unsplashKey, bbox = null, googlePlacesKey = null, polygonRing = null, geminiKey = null) {
+async function fetchElementPhotos(city, neighborhoodName, elementKey, unsplashKey, bbox = null, googlePlacesKey = null, polygonRing = null, geminiKey = null, photoQueries = null) {
   const dedupe = new Set();
   const picks = [];
 
@@ -1100,22 +1125,36 @@ async function fetchElementPhotos(city, neighborhoodName, elementKey, unsplashKe
 
   // Primary: Google Places geo-search (real photos from actual venues in the neighbourhood)
   if (googlePlacesKey && bbox) {
-    const placesPhotos = await fetchGooglePlacesElementPhotos(bbox, elementKey, googlePlacesKey, PHOTO_RULES.target, polygonRing, geminiKey);
+    const placesPhotos = await fetchGooglePlacesElementPhotos(bbox, elementKey, googlePlacesKey, PHOTO_RULES.target, polygonRing, geminiKey, neighborhoodName);
     placesPhotos.forEach((p) => addPick(p));
   }
 
-  // Fallback: Unsplash text search
+  // Unsplash fallback — runs when Places is unavailable or returns fewer than min photos.
   if (picks.length < PHOTO_RULES.min) {
-    const queries = buildQueries(elementKey, neighborhoodName, city);
-    if (queries[0]) {
-      let res = await fetchUnsplashPhotos(queries[0], unsplashKey, PHOTO_RULES.max);
+    // Step 1: Gemini-generated specific named-place queries (most accurate)
+    const specificQueries = Array.isArray(photoQueries) && photoQueries.length > 0
+      ? photoQueries
+      : [];
+    for (const q of specificQueries) {
+      if (picks.length >= PHOTO_RULES.min) break;
+      let res = await fetchUnsplashPhotos(q, unsplashKey, PHOTO_RULES.max);
       if (elementKey === "parks") res = rankParkUnsplashResults(res);
-      res.forEach((photo) => addPick(normalizePhotoObject(photo, queries[0], "unsplash")));
+      res.forEach((photo) => addPick(normalizePhotoObject(photo, q, "unsplash_specific")));
     }
-    if (picks.length < PHOTO_RULES.min && queries[2]) {
-      let res = await fetchUnsplashPhotos(queries[2], unsplashKey, PHOTO_RULES.max);
-      if (elementKey === "parks") res = rankParkUnsplashResults(res);
-      res.forEach((photo) => addPick(normalizePhotoObject(photo, queries[2], "unsplash_city")));
+
+    // Step 2: Generic template queries (fallback when specific queries don't fill the gap)
+    if (picks.length < PHOTO_RULES.min) {
+      const genericQueries = buildQueries(elementKey, neighborhoodName, city);
+      if (genericQueries[0]) {
+        let res = await fetchUnsplashPhotos(genericQueries[0], unsplashKey, PHOTO_RULES.max);
+        if (elementKey === "parks") res = rankParkUnsplashResults(res);
+        res.forEach((photo) => addPick(normalizePhotoObject(photo, genericQueries[0], "unsplash")));
+      }
+      if (picks.length < PHOTO_RULES.min && genericQueries[2]) {
+        let res = await fetchUnsplashPhotos(genericQueries[2], unsplashKey, PHOTO_RULES.max);
+        if (elementKey === "parks") res = rankParkUnsplashResults(res);
+        res.forEach((photo) => addPick(normalizePhotoObject(photo, genericQueries[2], "unsplash_city")));
+      }
     }
   }
 
@@ -1138,7 +1177,7 @@ async function fetchElementPhotos(city, neighborhoodName, elementKey, unsplashKe
  * scores for all elements except street_feel are derived from real OSM data.
  * Falls back to Gemini-attribute formula when null.
  */
-async function buildNeighborhoodVibeData({ city, neighborhoodName, attributes, tags, vibeLong, hotelCount, unsplashKey, poiCounts = null, cityMaxCounts = null, bbox = null, polygon = null, googlePlacesKey = null, geminiKey = null }) {
+async function buildNeighborhoodVibeData({ city, neighborhoodName, attributes, tags, vibeLong, hotelCount, unsplashKey, poiCounts = null, cityMaxCounts = null, bbox = null, polygon = null, googlePlacesKey = null, geminiKey = null, photoQueries = null }) {
   const ring = normalizePolygonRing(polygon);
   const areaKm2 = ring?.length >= 4 ? (ringAreaKm2(ring) ?? bboxAreaKm2(bbox)) : bboxAreaKm2(bbox);
   const { scores, shopsSubscores } = computeElementScores(attributes, tags, vibeLong, poiCounts, cityMaxCounts, areaKm2);
@@ -1159,7 +1198,9 @@ async function buildNeighborhoodVibeData({ city, neighborhoodName, attributes, t
       walkability,
       boopVibe,
     );
-    vibePhotos[key] = await fetchElementPhotos(city, neighborhoodName, key, unsplashKey, bbox, googlePlacesKey, ring, geminiKey);
+    // Per-element photo queries from Gemini (specific named places)
+    const elementPhotoQueries = (photoQueries && photoQueries[key]) ? photoQueries[key] : null;
+    vibePhotos[key] = await fetchElementPhotos(city, neighborhoodName, key, unsplashKey, bbox, googlePlacesKey, ring, geminiKey, elementPhotoQueries);
   }
 
   return { vibeElements, vibePhotos };
