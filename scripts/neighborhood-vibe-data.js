@@ -50,9 +50,9 @@ const QUERY_TEMPLATES = {
 
 const FALLBACK_PHOTOS = {
   parks: [
+    "https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?w=900&q=80",
+    "https://images.unsplash.com/photo-1501854140801-50d01698950b?w=900&q=80",
     "https://images.unsplash.com/photo-1519331379826-f10be5486c6f?w=900&q=80",
-    "https://images.unsplash.com/photo-1517167685284-96a27681ad75?w=900&q=80",
-    "https://images.unsplash.com/photo-1473445361085-b9a07f55608b?w=900&q=80",
   ],
   restaurants: [
     "https://images.unsplash.com/photo-1414235077428-338989a2e8c0?w=900&q=80",
@@ -1158,8 +1158,8 @@ async function fetchElementPhotos(city, neighborhoodName, elementKey, unsplashKe
     }
   }
 
-  // Last resort: curated static fallbacks
-  if (picks.length < PHOTO_RULES.min) {
+  // Last resort: curated static fallbacks — only when we have zero photos at all
+  if (picks.length === 0) {
     (FALLBACK_PHOTOS[elementKey] || []).forEach((url) =>
       addPick(normalizePhotoObject(url, "fallback", "fallback_curated", true))
     );
