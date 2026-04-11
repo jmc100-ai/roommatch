@@ -1447,15 +1447,40 @@ async function fetchElementPhotos(city, neighborhoodName, elementKey, unsplashKe
     }
   }
 
+  // Helper: add a photo with an optional outdoor vision check.
+  // For restaurants and cafes: classify outdoor vs indoor; accept indoor only
+  // when we still need to reach minimum (avoids empty galleries).
+  const isFoodCategory = elementKey === "restaurants" || elementKey === "cafes";
+  const addCheckedPick = async (obj, forceAccept = false) => {
+    if (!obj?.url) return;
+    if (isFoodCategory && geminiKey && !forceAccept) {
+      const isOutdoor = await geminiVisionIsOutdoorFoodPhoto(obj.url, geminiKey);
+      if (isOutdoor) {
+        addPick(obj, true);
+      } else if (picks.length < PHOTO_RULES.min) {
+        // Accept indoor only as a last-resort to reach minimum
+        addPick(obj, false);
+      } else {
+        console.log(`[vision] ${elementKey} unsplash indoor rejected: ${obj.query || ""}`);
+      }
+    } else {
+      addPick(obj);
+    }
+  };
+
   // ── Step 3: Unsplash specific queries — conservative (50 req/hr limit) ───────
-  // Only fires when Places+Wikimedia left us below min — each call is delayed 3s.
+  // Only fires when Places+Wikimedia left us below target (if already below min)
+  // or below min (if above min already).
   const unsplashSpecificTarget = picks.length < PHOTO_RULES.min ? PHOTO_RULES.target : PHOTO_RULES.min;
   if (picks.length < unsplashSpecificTarget) {
     for (const q of specificQueries) {
       if (picks.length >= unsplashSpecificTarget) break;
       let res = await fetchUnsplashPhotos(q, unsplashKey, PHOTO_RULES.max);
       if (elementKey === "parks") res = rankParkUnsplashResults(res);
-      res.forEach((photo) => addPick(normalizePhotoObject(photo, q, "unsplash_specific")));
+      for (const photo of res) {
+        if (picks.length >= unsplashSpecificTarget) break;
+        await addCheckedPick(normalizePhotoObject(photo, q, "unsplash_specific"));
+      }
     }
   }
 
@@ -1484,7 +1509,10 @@ async function fetchElementPhotos(city, neighborhoodName, elementKey, unsplashKe
       if (picks.length >= PHOTO_RULES.min) break;
       let res = await fetchUnsplashPhotos(q, unsplashKey, PHOTO_RULES.max);
       if (elementKey === "parks") res = rankParkUnsplashResults(res);
-      res.forEach((photo) => addPick(normalizePhotoObject(photo, q, "unsplash")));
+      for (const photo of res) {
+        if (picks.length >= PHOTO_RULES.min) break;
+        await addCheckedPick(normalizePhotoObject(photo, q, "unsplash"));
+      }
     }
   }
 
