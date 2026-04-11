@@ -266,9 +266,24 @@ function overpassElementLatLng(el) {
  * Places / fence: if polygon ring present, require point inside polygon; else inset bbox.
  */
 function placeInsideNeighborhoodFence(lat, lng, bbox, polygonRing) {
-  if (polygonRing?.length >= 4) return pointInPolygon(lat, lng, polygonRing);
-  const fence = tightFenceFromBbox(bbox, 0.12);
-  return fence ? pointInBbox(lat, lng, fence) : true;
+  if (polygonRing?.length >= 4) {
+    if (pointInPolygon(lat, lng, polygonRing)) return true;
+    // For simple bbox-derived polygons (≤6 pts = no real OSM boundary, just Gemini rectangle),
+    // allow a ~400m buffer. Gemini bbox precision is ~0.001°–0.003° off, and genuine
+    // neighbourhood places at the edges get incorrectly rejected without this tolerance.
+    // Real OSM polygons (7+ pts) are accurate enough that strict boundary is correct.
+    if (polygonRing.length <= 6 && bbox?.lat_min != null) {
+      const BUF = 0.004; // ~400 m per side
+      const expanded = {
+        lat_min: bbox.lat_min - BUF, lat_max: bbox.lat_max + BUF,
+        lon_min: bbox.lon_min - BUF, lon_max: bbox.lon_max + BUF,
+      };
+      return pointInBbox(lat, lng, expanded);
+    }
+    return false;
+  }
+  // No polygon stored at all — use raw bbox (no inset, avoids over-excluding edge places)
+  return bbox ? pointInBbox(lat, lng, bbox) : true;
 }
 
 /**
