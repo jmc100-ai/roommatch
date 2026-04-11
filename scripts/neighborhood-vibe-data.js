@@ -1140,6 +1140,110 @@ async function fetchGooglePlacesElementPhotos(bbox, elementKey, placesKey, maxPh
   return photos;
 }
 
+// ── Wikimedia Commons photo helpers ──────────────────────────────────────────
+
+/**
+ * fetchWikimediaPhotos — searches Wikimedia Commons for images matching a query.
+ * Free, no API key, no meaningful rate limit. Excellent for named museums,
+ * galleries, and historic landmarks — every notable cultural institution in the
+ * world has CC-licensed photos on Commons.
+ *
+ * Uses the MediaWiki generator search so one call returns both search results
+ * and image URLs (thumburl at 900px width).
+ */
+async function fetchWikimediaPhotos(query, maxPhotos = PHOTO_RULES.target) {
+  try {
+    const params = new URLSearchParams({
+      action:       "query",
+      generator:    "search",
+      gsrsearch:    `${query} filetype:bitmap`,
+      gsrnamespace: "6",      // File namespace only
+      gsrlimit:     String(Math.min(20, maxPhotos * 4)),
+      prop:         "imageinfo",
+      iiprop:       "url|extmetadata",
+      iiurlwidth:   "900",
+      format:       "json",
+      origin:       "*",
+    });
+    const url = `https://commons.wikimedia.org/w/api.php?${params}`;
+    const res = await fetch(url, { signal: AbortSignal.timeout(12000) });
+    if (!res.ok) return [];
+    const data = await res.json();
+    const pages = Object.values(data.query?.pages || {});
+
+    const photos = [];
+    for (const page of pages) {
+      const info = page.imageinfo?.[0];
+      if (!info?.thumburl) continue;
+
+      // Skip non-photo formats
+      const title = (page.title || "").toLowerCase();
+      if (/\.(svg|pdf|tiff?|xcf|ogg|ogv|webm|flac|mp3|wav)$/.test(title)) continue;
+
+      // Skip strongly portrait images (e.g. portrait paintings) — cards are landscape
+      const w = Number(info.extmetadata?.ImageWidth?.value  || 0);
+      const h = Number(info.extmetadata?.ImageHeight?.value || 0);
+      if (w > 0 && h > 0 && h > w * 1.4) continue;
+
+      // Skip tiny thumbnails
+      if (w > 0 && w < 400) continue;
+
+      const artist  = (info.extmetadata?.Artist?.value || "").replace(/<[^>]+>/g, "").trim() || null;
+      const license = info.extmetadata?.LicenseShortName?.value || null;
+
+      photos.push({
+        url:        info.thumburl,
+        source:     "wikimedia",
+        query,
+        is_fallback: false,
+        attribution: {
+          photographer: artist ? `${artist}${license ? ` (${license})` : ""}` : `Wikimedia Commons${license ? ` (${license})` : ""}`,
+          profile_url:  `https://commons.wikimedia.org/wiki/${encodeURIComponent(page.title || "")}`,
+        },
+      });
+      if (photos.length >= maxPhotos) break;
+    }
+    console.log(`[wikimedia] "${query}" → ${photos.length} photos`);
+    return photos;
+  } catch (e) {
+    console.warn(`[wikimedia] fetch failed for "${query}": ${e.message}`);
+    return [];
+  }
+}
+
+// ── Pexels photo helpers ──────────────────────────────────────────────────────
+
+/**
+ * fetchPexelsPhotos — searches Pexels for landscape photos matching a query.
+ * Free tier: 200 req/hr, 20 000 req/month. Attribution required.
+ * Used as a second Unsplash-tier fallback for all categories.
+ */
+async function fetchPexelsPhotos(query, pexelsKey, perPage = 8) {
+  if (!pexelsKey) return [];
+  try {
+    const url = `https://api.pexels.com/v1/search?query=${encodeURIComponent(query)}&per_page=${perPage}&orientation=landscape`;
+    const res = await fetch(url, {
+      headers: { Authorization: pexelsKey },
+      signal: AbortSignal.timeout(10000),
+    });
+    if (!res.ok) return [];
+    const data = await res.json();
+    return (data.photos || []).map((p) => ({
+      url:        p.src.large2x || p.src.large || p.src.original,
+      source:     "pexels",
+      query,
+      is_fallback: false,
+      attribution: {
+        photographer: p.photographer,
+        profile_url:  p.photographer_url,
+      },
+    }));
+  } catch (e) {
+    console.warn(`[pexels] fetch failed for "${query}": ${e.message}`);
+    return [];
+  }
+}
+
 // ── Unsplash photo helpers ────────────────────────────────────────────────────
 
 function buildQueries(elementKey, neighborhoodName, city) {
@@ -1205,7 +1309,7 @@ function rankParkUnsplashResults(results) {
  * Especially important for street_feel (no Places type) and any element where
  * Places returns fewer than PHOTO_RULES.min photos.
  */
-async function fetchElementPhotos(city, neighborhoodName, elementKey, unsplashKey, bbox = null, googlePlacesKey = null, polygonRing = null, geminiKey = null, photoQueries = null) {
+async function fetchElementPhotos(city, neighborhoodName, elementKey, unsplashKey, bbox = null, googlePlacesKey = null, polygonRing = null, geminiKey = null, photoQueries = null, pexelsKey = null) {
   const dedupe = new Set();
   const picks = [];
 
@@ -1217,43 +1321,73 @@ async function fetchElementPhotos(city, neighborhoodName, elementKey, unsplashKe
     picks.push(obj);
   };
 
-  // Primary: Google Places geo-search (real photos from actual venues in the neighbourhood)
+  const specificQueries = Array.isArray(photoQueries) && photoQueries.length > 0
+    ? photoQueries
+    : [];
+
+  // Step 1: Google Places geo-search (real photos from actual venues in the neighbourhood)
   if (googlePlacesKey && bbox) {
     const placesPhotos = await fetchGooglePlacesElementPhotos(bbox, elementKey, googlePlacesKey, PHOTO_RULES.target, polygonRing, geminiKey, neighborhoodName);
     placesPhotos.forEach((p) => addPick(p));
   }
 
-  // Unsplash supplement — triggered when Places returns fewer than needed:
-  //   • Google Places returned 0: push specific queries up to target (6) — empty category, try hard.
-  //   • Google Places returned 1–(min−1): push specific queries to min (3) — small gap, top up.
-  //   • Google Places returned ≥ min: skip specific queries entirely to conserve Unsplash rate-limit.
-  // Generic fallback only fires if still below min after all specific queries.
+  // Step 2: Wikimedia Commons — free, unlimited, excellent for named cultural institutions.
+  // Run for museums and icon_spots whenever below target; skip other categories (Wikimedia
+  // doesn't have useful photos for cafes/restaurants/street_feel/parks/shops by query).
+  if (picks.length < PHOTO_RULES.target && (elementKey === "museums" || elementKey === "icon_spots")) {
+    // Use Gemini-generated specific named-place queries first; fall back to generic
+    const wikiQueries = specificQueries.length > 0
+      ? specificQueries
+      : [`${neighborhoodName} ${city} ${elementKey === "museums" ? "museum gallery" : "landmark monument"}`];
+    for (const q of wikiQueries) {
+      if (picks.length >= PHOTO_RULES.target) break;
+      const wikiPhotos = await fetchWikimediaPhotos(q, PHOTO_RULES.target - picks.length);
+      wikiPhotos.forEach((p) => addPick(p));
+    }
+  }
+
+  // Step 3: Unsplash + Pexels supplement.
+  // Logic: if Places+Wikimedia returned 0 → push hard to target (6).
+  //         if returned 1–(min−1) → push to min (3).
+  //         if ≥ min → skip to conserve API rate-limits.
   const specificTarget = picks.length === 0 ? PHOTO_RULES.target : PHOTO_RULES.min;
   if (picks.length < specificTarget) {
-    // Step 1: Gemini-generated specific named-place queries (most accurate)
-    const specificQueries = Array.isArray(photoQueries) && photoQueries.length > 0
-      ? photoQueries
-      : [];
+    // Unsplash specific
     for (const q of specificQueries) {
       if (picks.length >= specificTarget) break;
       let res = await fetchUnsplashPhotos(q, unsplashKey, PHOTO_RULES.max);
       if (elementKey === "parks") res = rankParkUnsplashResults(res);
       res.forEach((photo) => addPick(normalizePhotoObject(photo, q, "unsplash_specific")));
     }
-
-    // Step 2: Generic template queries — only if still below min
-    if (picks.length < PHOTO_RULES.min) {
-      const genericQueries = buildQueries(elementKey, neighborhoodName, city).filter(Boolean);
-      for (const q of genericQueries) {
-        if (picks.length >= PHOTO_RULES.min) break;
-        let res = await fetchUnsplashPhotos(q, unsplashKey, PHOTO_RULES.max);
-        if (elementKey === "parks") res = rankParkUnsplashResults(res);
-        res.forEach((photo) => addPick(normalizePhotoObject(photo, q, "unsplash")));
+    // Pexels specific — second pass if still short
+    if (picks.length < specificTarget) {
+      for (const q of specificQueries) {
+        if (picks.length >= specificTarget) break;
+        const res = await fetchPexelsPhotos(q, pexelsKey, PHOTO_RULES.max);
+        res.forEach((p) => addPick(p));
       }
     }
   }
 
-  // Last resort: curated static fallbacks — only when we have zero photos at all
+  // Step 4: Generic template queries — Unsplash then Pexels — only if still below min
+  if (picks.length < PHOTO_RULES.min) {
+    const genericQueries = buildQueries(elementKey, neighborhoodName, city).filter(Boolean);
+    for (const q of genericQueries) {
+      if (picks.length >= PHOTO_RULES.min) break;
+      let res = await fetchUnsplashPhotos(q, unsplashKey, PHOTO_RULES.max);
+      if (elementKey === "parks") res = rankParkUnsplashResults(res);
+      res.forEach((photo) => addPick(normalizePhotoObject(photo, q, "unsplash")));
+    }
+    if (picks.length < PHOTO_RULES.min) {
+      for (const q of genericQueries) {
+        if (picks.length >= PHOTO_RULES.min) break;
+        const res = await fetchPexelsPhotos(q, pexelsKey, PHOTO_RULES.max);
+        res.forEach((p) => addPick(p));
+      }
+    }
+  }
+
+  // Step 5: Last resort — curated static fallbacks — only when we have zero photos at all
   if (picks.length === 0) {
     (FALLBACK_PHOTOS[elementKey] || []).forEach((url) =>
       addPick(normalizePhotoObject(url, "fallback", "fallback_curated", true))
@@ -1272,7 +1406,7 @@ async function fetchElementPhotos(city, neighborhoodName, elementKey, unsplashKe
  * scores for all elements except street_feel are derived from real OSM data.
  * Falls back to Gemini-attribute formula when null.
  */
-async function buildNeighborhoodVibeData({ city, neighborhoodName, attributes, tags, vibeLong, hotelCount, unsplashKey, poiCounts = null, cityMaxCounts = null, bbox = null, polygon = null, googlePlacesKey = null, geminiKey = null, photoQueries = null }) {
+async function buildNeighborhoodVibeData({ city, neighborhoodName, attributes, tags, vibeLong, hotelCount, unsplashKey, poiCounts = null, cityMaxCounts = null, bbox = null, polygon = null, googlePlacesKey = null, geminiKey = null, photoQueries = null, pexelsKey = null }) {
   const ring = normalizePolygonRing(polygon);
   const areaKm2 = ring?.length >= 4 ? (ringAreaKm2(ring) ?? bboxAreaKm2(bbox)) : bboxAreaKm2(bbox);
   const { scores, shopsSubscores } = computeElementScores(attributes, tags, vibeLong, poiCounts, cityMaxCounts, areaKm2);
@@ -1295,7 +1429,7 @@ async function buildNeighborhoodVibeData({ city, neighborhoodName, attributes, t
     );
     // Per-element photo queries from Gemini (specific named places)
     const elementPhotoQueries = (photoQueries && photoQueries[key]) ? photoQueries[key] : null;
-    vibePhotos[key] = await fetchElementPhotos(city, neighborhoodName, key, unsplashKey, bbox, googlePlacesKey, ring, geminiKey, elementPhotoQueries);
+    vibePhotos[key] = await fetchElementPhotos(city, neighborhoodName, key, unsplashKey, bbox, googlePlacesKey, ring, geminiKey, elementPhotoQueries, pexelsKey);
   }
 
   return { vibeElements, vibePhotos };
