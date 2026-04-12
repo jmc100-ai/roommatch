@@ -1618,11 +1618,12 @@ async function fetchElementPhotos(city, neighborhoodName, elementKey, unsplashKe
     }
   }
 
-  // ── Step 3: Unsplash fallback (only when Flickr key is absent) ───────────────
-  // Graceful degradation so the pipeline produces something during the transition
-  // period before a Flickr key is added.  When flickrKey is present this entire
-  // block is skipped — Flickr is strictly better (geo-accurate, permanent URLs).
-  if (!flickrKey && picks.length < PHOTO_RULES.min) {
+  // ── Step 3: Unsplash supplement (named queries, fills gaps under minimum) ────
+  // Always fires when under PHOTO_RULES.min regardless of flickrKey — Flickr is
+  // geo-accurate but has sparse coverage in smaller/less-photographed hoods,
+  // especially for cafes and restaurants.  Wikimedia covers parks/museums/etc.;
+  // this catches the remaining gap.
+  if (picks.length < PHOTO_RULES.min) {
     // 3a: named-place specific queries
     const unsplashTarget = elementKey === "street_feel" ? PHOTO_RULES.target : PHOTO_RULES.min;
     for (const q of specificQueries) {
