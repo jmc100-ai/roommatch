@@ -1106,6 +1106,45 @@ async function geminiVisionCheck(photoUrl, geminiKey, yesQuestion) {
 }
 
 /**
+ * geminiVisionIsTravelPhoto — universal hard-stop for ALL photo sources and ALL
+ * categories.  Catches the three failure modes that vision-gating food photos
+ * alone cannot catch:
+ *
+ *  • B&W / monochrome photos (common on Flickr's artistic community)
+ *  • Distressing/inappropriate subjects (homeless people, people in danger)
+ *  • Completely off-category content (person in warehouse for a parks slot)
+ *
+ * This check can NEVER be bypassed by the "below min" heuristic — an image
+ * that fails here should never appear in the product under any circumstances.
+ *
+ * Fails open (returns true) on any API error so a transient Gemini hiccup
+ * does not empty a neighbourhood's photo set.
+ */
+const TRAVEL_PHOTO_CONTEXT = {
+  parks:      "a green park, garden, plaza, or outdoor recreational/nature space",
+  restaurants:"a restaurant, bar, or outdoor dining area",
+  cafes:      "a café, coffee shop, or casual dining venue",
+  street_feel:"a street scene, neighbourhood architecture, or outdoor urban space",
+  icon_spots: "a landmark, monument, historic building, or recognisable attraction",
+  museums:    "a museum, gallery, or cultural institution",
+  shops:      "a shop, market, boutique, or shopping street",
+};
+
+async function geminiVisionIsTravelPhoto(photoUrl, geminiKey, elementKey) {
+  const context = TRAVEL_PHOTO_CONTEXT[elementKey] || "a neighbourhood scene";
+  return geminiVisionCheck(
+    photoUrl, geminiKey,
+    `Is this photo suitable to appear in a travel neighbourhood guide representing ${context}?
+ANSWER NO (hard reject) if ANY of the following apply:
+- Photo is black & white or heavily monochrome (desaturated, no vivid colours)
+- Main subject is a person sleeping on the street, a homeless person, someone in visible distress, or a person in a clearly unsafe/negative situation
+- Photo shows content completely unrelated to ${context} (e.g. a person sitting inside a truck for a park entry, industrial storage, purely a portrait with no neighbourhood context)
+- Photo contains explicit, offensive, or politically charged content
+Otherwise ANSWER YES.`
+  );
+}
+
+/**
  * geminiVisionIsOutdoorFoodPhoto — checks whether a restaurant or cafe photo
  * shows outdoor/street-level content.
  *
@@ -1579,6 +1618,19 @@ async function fetchElementPhotos(city, neighborhoodName, elementKey, unsplashKe
   const isFoodCategory = elementKey === "restaurants" || elementKey === "cafes";
   const addWithFoodCheck = async (obj) => {
     if (!obj?.url) return;
+
+    // ── Universal hard-stop (ALL categories, ALL sources) ───────────────────────
+    // Rejects B&W photos, homeless/distress subjects, and completely off-category
+    // content.  This check can never be bypassed by the "below min" heuristic.
+    if (geminiKey) {
+      const isSuitable = await geminiVisionIsTravelPhoto(obj.url, geminiKey, elementKey);
+      if (!isSuitable) {
+        console.log(`[vision] ${elementKey} hard-rejected (B&W/inappropriate/off-category): ${obj.query || obj.url.slice(-40)}`);
+        return;
+      }
+    }
+
+    // ── Food outdoor soft-gate (cafes / restaurants only) ───────────────────────
     if (isFoodCategory && geminiKey) {
       const isOutdoor = await geminiVisionIsOutdoorFoodPhoto(obj.url, geminiKey);
       if (isOutdoor) {
@@ -1737,6 +1789,7 @@ module.exports = {
   isMuseumLikePlaceName,
   isValidIconSpotName,
   geminiVisionCheck,
+  geminiVisionIsTravelPhoto,
   geminiVisionIsOutdoorFoodPhoto,
   geminiVisionIsArchitecturalPhoto,
 };
