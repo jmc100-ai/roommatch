@@ -490,21 +490,13 @@ async function getHotelCountForBbox(city, bbox, db) {
   return count ?? 0;
 }
 
-/** When polygonRing is set, counts hotels whose coordinates fall inside the ring (bbox pre-filter). */
+/** Counts hotels whose coordinates fall inside the bbox.
+ * Deliberately uses bbox only (not polygon) so that hotels 100-200m outside
+ * the precise colonia polygon boundary are still attributed to the neighbourhood
+ * for display purposes.  Polygon precision is reserved for POI density scoring.
+ */
 async function getHotelCountForFence(city, bbox, polygonRing, db) {
-  if (bbox?.lat_min == null) return 0;
-  if (!polygonRing || polygonRing.length < 4) return getHotelCountForBbox(city, bbox, db);
-  const { lat_min, lat_max, lon_min, lon_max } = bbox;
-  const { data, error } = await db
-    .from("hotels_cache")
-    .select("lat,lng")
-    .eq("city", city)
-    .gte("lat", lat_min).lte("lat", lat_max)
-    .gte("lng", lon_min).lte("lng", lon_max);
-  if (error || !data?.length) return 0;
-  return data.filter(
-    (h) => h.lat != null && h.lng != null && pointInPolygon(h.lat, h.lng, polygonRing)
-  ).length;
+  return getHotelCountForBbox(city, bbox, db);
 }
 
 /**
