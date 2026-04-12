@@ -555,10 +555,14 @@ async function fetchOverpassPOIs(bbox, polygonRing = null) {
   // street plaques inflated boulevard-heavy neighbourhoods like Reforma/Juárez.
   // historic=building excluded for the same reason (tags every old facade).
   // Only ways/relations for historic tags so node-level clutter is suppressed.
+  // amenity=arts_centre included: OSM-tagged cultural venues (galleries, arts spaces,
+  // cultural centres) — a named venue, not a decorative object, so it's a legitimate signal.
   const q = `[out:json][timeout:30];
 (
   node["amenity"~"^(restaurant|fast_food|bar|pub|food_court)$"](${lat_min},${lon_min},${lat_max},${lon_max});
   node["amenity"="cafe"](${lat_min},${lon_min},${lat_max},${lon_max});
+  node["amenity"="arts_centre"](${lat_min},${lon_min},${lat_max},${lon_max});
+  way["amenity"="arts_centre"](${lat_min},${lon_min},${lat_max},${lon_max});
   node["tourism"~"^(museum|gallery)$"](${lat_min},${lon_min},${lat_max},${lon_max});
   way["tourism"~"^(museum|gallery)$"](${lat_min},${lon_min},${lat_max},${lon_max});
   relation["tourism"~"^(museum|gallery)$"](${lat_min},${lon_min},${lat_max},${lon_max});
@@ -617,6 +621,8 @@ out tags center;`;
       counts.museums++;
     } else if (t.shop) {
       counts.shops++;
+    } else if (t.amenity === "arts_centre") {
+      counts.icon_spots++;
     } else if (
       ["attraction", "viewpoint"].includes(t.tourism) ||
       ["monument", "memorial", "castle", "ruins", "archaeological_site",
