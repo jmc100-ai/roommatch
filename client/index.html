@@ -3930,7 +3930,11 @@
       || tryTier(c => !c.fb)
       || tryTier(() => true);
   }
-  /** Hero strip: one photo per vibe, ordered by vibe score (highest first). Skips street_feel. */
+  // Elements that get a second hero slide when enough photos are available.
+  const NBHD_HERO_DOUBLE = new Set(['icon_spots', 'parks', 'museums']);
+
+  /** Hero strip: one photo per vibe element (two for icon_spots/parks/museums),
+   *  ordered by vibe score highest first. Skips street_feel. */
   function buildHeroPhotos(h) {
     const vibePhotos = h.vibe_photos || {};
     const vibeElements = h.vibe_elements || {};
@@ -3941,10 +3945,13 @@
     const photos = [];
     const seen = new Set();
     for (const e of ordered) {
-      const url = pickOneHeroUrlFromElement(vibePhotos[e.key], seen, h);
-      if (url) {
-        photos.push(url);
-        seen.add(url);
+      const slots = NBHD_HERO_DOUBLE.has(e.key) ? 2 : 1;
+      for (let i = 0; i < slots; i++) {
+        const url = pickOneHeroUrlFromElement(vibePhotos[e.key], seen, h);
+        if (url) {
+          photos.push(url);
+          seen.add(url);
+        }
       }
     }
     if (!photos.length && h.photo_url) photos.push(h.photo_url);
