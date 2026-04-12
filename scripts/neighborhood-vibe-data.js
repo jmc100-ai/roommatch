@@ -1618,14 +1618,16 @@ async function fetchElementPhotos(city, neighborhoodName, elementKey, unsplashKe
     }
   }
 
-  // ── Step 3: Unsplash supplement (named queries, fills gaps under minimum) ────
-  // Always fires when under PHOTO_RULES.min regardless of flickrKey — Flickr is
-  // geo-accurate but has sparse coverage in smaller/less-photographed hoods,
-  // especially for cafes and restaurants.  Wikimedia covers parks/museums/etc.;
-  // this catches the remaining gap.
-  if (picks.length < PHOTO_RULES.min) {
+  // ── Step 3: Unsplash supplement ───────────────────────────────────────────────
+  // Food categories (cafes, restaurants) have sparse Flickr geo-tag coverage in
+  // many cities, so we supplement up to the full target (6) for those.  For all
+  // other categories Wikimedia already handles the high-quality landmark fill;
+  // Unsplash only bridges emergency gaps (< min=3) for non-food categories.
+  const isFoodForUnsplash = elementKey === "cafes" || elementKey === "restaurants";
+  const unsplashFireThreshold = isFoodForUnsplash ? PHOTO_RULES.target : PHOTO_RULES.min;
+  if (picks.length < unsplashFireThreshold) {
     // 3a: named-place specific queries
-    const unsplashTarget = elementKey === "street_feel" ? PHOTO_RULES.target : PHOTO_RULES.min;
+    const unsplashTarget = PHOTO_RULES.target;
     for (const q of specificQueries) {
       if (picks.length >= unsplashTarget) break;
       let res = await fetchUnsplashPhotos(q, unsplashKey, PHOTO_RULES.max);
