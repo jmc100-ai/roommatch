@@ -1439,14 +1439,18 @@ async function fetchFlickrPhotos(bbox, tags, flickrKey, perPage = 8) {
   const { lat_min, lat_max, lon_min, lon_max } = bbox;
   if (lat_min == null) return [];
 
-  // CC licenses: 1=BY-NC-SA 2=BY-NC 3=BY-NC-ND 4=BY 5=BY-SA 6=BY-ND 9=CC0 10=PDM
+  // Commercial-safe licenses only (no NC variants):
+  //   4=CC BY 2.0  5=CC BY-SA 2.0  6=CC BY-ND 2.0  7=No known copyright
+  //   9=CC0        10=Public Domain 11=CC BY 4.0   12=CC BY-SA 4.0
+  //   13=CC BY-ND 4.0
+  // Excluded: 1=BY-NC-SA  2=BY-NC  3=BY-NC-ND  14=BY-NC 4.0  15=BY-NC-SA 4.0  16=BY-NC-ND 4.0
   const params = new URLSearchParams({
     method:        "flickr.photos.search",
     api_key:       flickrKey,
     bbox:          `${lon_min},${lat_min},${lon_max},${lat_max}`,
     tags,
     tag_mode:      "any",
-    license:       "1,2,4,5,6,9,10",
+    license:       "4,5,6,7,9,10,11,12,13",
     safe_search:   "1",
     content_type:  "1",
     sort:          "interestingness-desc",
