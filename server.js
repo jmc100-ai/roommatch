@@ -2675,6 +2675,30 @@ app.post("/api/backfill-neighborhood-vibes", async (req, res) => {
   })();
 });
 
+// POST /api/backfill-neighborhood-polygons {"secret":"roommatch-2026","city":"Mexico City","force":false}
+// Fetches authoritative OSM/Nominatim polygons for all neighborhoods of a city.
+// Skips rows already having ≥20-vertex OSM polygon unless force=true.
+app.post("/api/backfill-neighborhood-polygons", async (req, res) => {
+  const { city, secret, force = false } = req.body || {};
+  if (secret !== (process.env.INDEX_SECRET || "roommatch-index")) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
+  if (!city) return res.status(400).json({ error: "city required" });
+  if (!supabase) return res.status(500).json({ error: "Supabase not configured" });
+
+  const db = supabaseAdmin || supabase;
+  res.json({ message: `backfill-neighborhood-polygons started for ${city} (force=${force})` });
+
+  (async () => {
+    try {
+      const result = await loadNeighborhoodGenerator().backfillNeighborhoodPolygons(city, db, force);
+      console.log(`[backfill-neighborhood-polygons] ${city}: ${result.updated} updated, ${result.skipped} skipped`);
+    } catch (e) {
+      console.error(`[backfill-neighborhood-polygons] ${city} failed:`, e.message);
+    }
+  })();
+});
+
 // POST /api/refresh-hotel-counts {"secret":"roommatch-2026","city":"Mexico City"}
 // Recomputes hotel_count for all neighborhoods of a city from hotels_cache lat/lng.
 // Fast (~1s). Responds with updated counts.

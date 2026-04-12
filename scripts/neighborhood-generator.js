@@ -1071,4 +1071,75 @@ Example output format:
   return updated;
 }
 
-module.exports = { generateNeighborhoods, refreshHotelCounts, recomputeNeighborhoodVibes, backfillNeighborhoodPhotos, backfillPhotoQueries };
+/**
+ * backfillNeighborhoodPolygons — for each existing neighborhood row in the DB,
+ * fetch an authoritative OSM/Nominatim polygon and update polygon + bbox.
+ * Skips rows that already have an OSM-quality polygon (≥20 vertices).
+ * Nominatim ToS: 1 req/sec max — enforced by 1100 ms sequential gap.
+ */
+async function backfillNeighborhoodPolygons(city, db, force = false) {
+  const { data: rows, error } = await db
+    .from("neighborhoods")
+    .select("id, name, bbox, polygon")
+    .eq("city", city)
+    .order("id");
+
+  if (error) throw new Error(`load neighborhoods failed: ${error.message}`);
+  if (!rows?.length) return { updated: 0, skipped: 0 };
+
+  let updated = 0, skipped = 0;
+
+  for (const row of rows) {
+    const existingRing = normalizePolygonRing(row.polygon);
+
+    // If already has an OSM-quality ring (≥20 vertices) and not forcing, skip
+    if (!force && existingRing?.length >= 20) {
+      console.log(`[poly-backfill] "${row.name}" already has ${existingRing.length - 1}-vertex polygon — skipping`);
+      skipped++;
+      await new Promise(r => setTimeout(r, 300));
+      continue;
+    }
+
+    // Nominatim 1 req/sec ToS gap
+    await new Promise(r => setTimeout(r, 1100));
+
+    let osmRing = null;
+    try {
+      osmRing = await fetchOsmBoundary(row.name, city, row.bbox?.lat_min != null ? row.bbox : null);
+    } catch (e) {
+      console.warn(`[poly-backfill] OSM lookup failed for "${row.name}": ${e.message}`);
+    }
+
+    if (!osmRing) {
+      console.log(`[poly-backfill] No OSM boundary found for "${row.name}" — keeping existing`);
+      skipped++;
+      continue;
+    }
+
+    const newBbox = bboxFromRing(osmRing);
+    const updatePayload = {
+      polygon: { ring: osmRing },
+      ...(newBbox ? { bbox: newBbox } : {}),
+    };
+
+    const { error: upErr } = await db
+      .from("neighborhoods")
+      .update(updatePayload)
+      .eq("id", row.id);
+
+    if (upErr) {
+      console.error(`[poly-backfill] DB update failed for "${row.name}": ${upErr.message}`);
+      skipped++;
+    } else {
+      const verts = osmRing.length - 1;
+      const oldVerts = existingRing ? existingRing.length - 1 : 0;
+      console.log(`[poly-backfill] "${row.name}": updated ${oldVerts} → ${verts} vertices`);
+      updated++;
+    }
+  }
+
+  console.log(`[poly-backfill] ${city}: ${updated} updated, ${skipped} skipped`);
+  return { updated, skipped };
+}
+
+module.exports = { generateNeighborhoods, refreshHotelCounts, recomputeNeighborhoodVibes, backfillNeighborhoodPhotos, backfillPhotoQueries, backfillNeighborhoodPolygons };
