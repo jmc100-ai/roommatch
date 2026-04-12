@@ -1501,6 +1501,8 @@ const FLICKR_TAGS = {
   shops:       "shopping,boutique,market,street,shop",
   street_feel: "street,urban,architecture,neighborhood,alley",
   parks:       "park,garden,green,nature",
+  museums:     "museum,art,gallery,architecture",
+  icon_spots:  "landmark,monument,architecture,historic",
 };
 
 const UNSPLASH_PLAYGROUND_ALT = /\b(playground|swings?|jungle\s*gym|seesaw|see-saw|merry-go-round|playground equipment|kids on slides?|skatepark|skate park)\b/i;
@@ -1525,24 +1527,24 @@ function rankParkUnsplashResults(results) {
 }
 
 /**
- * fetchElementPhotos — Google Places primary, Flickr geo-bbox secondary,
- * Wikimedia / Unsplash / Pexels fallbacks, curated last resort.
+ * fetchElementPhotos — simplified 3-source pipeline:
  *
- * photoQueries: Gemini-generated specific named-place queries for this element.
- * flickrKey: optional Flickr API key; when provided, Flickr replaces generic
- *   Unsplash queries for geo-specific categories (cafes/restaurants/shops/
- *   street_feel/parks).
- * sharedDedupeSet: optional Set shared across ALL categories of one neighbourhood
- *   call — prevents the same photo from appearing in e.g. both cafes and shops.
+ *   Step 1 — Flickr geo-bbox  (primary; all 7 categories; CC-licensed permanent URLs)
+ *   Step 2 — Wikimedia named  (secondary; museums / icon_spots / parks / street_feel)
+ *   Step 3 — Unsplash fallback (graceful degradation when no flickrKey)
+ *   Step 4 — Static curated   (absolute last resort, zero-photos guard only)
+ *
+ * flickrKey: Flickr Pro API key. When present, Google Places, Pexels, and generic
+ *   Unsplash templates are all bypassed. Flickr geo-bbox returns photos physically
+ *   taken inside the neighbourhood — permanently URL-stable and legally cacheable.
+ * sharedDedupeSet: Set shared across all category calls for one neighbourhood so
+ *   the same photo cannot appear in two categories (e.g. cafes AND shops).
  */
 async function fetchElementPhotos(city, neighborhoodName, elementKey, unsplashKey, bbox = null, googlePlacesKey = null, polygonRing = null, geminiKey = null, photoQueries = null, pexelsKey = null, flickrKey = null, sharedDedupeSet = null) {
   // Local dedupe tracks URLs within this call; sharedDedupeSet tracks URLs
   // across all category calls for the same neighbourhood.
-  const localDedupe  = new Set();
-  const picks  = [];
-  // Track outdoor-classified photos separately so indoor ones are used only as last resort
-  // for restaurants and cafes.
-  const outdoorPicks = [];
+  const localDedupe = new Set();
+  const picks = [];
 
   const addPick = (obj, isOutdoor = true) => {
     if (!obj?.url) return;
@@ -1552,78 +1554,54 @@ async function fetchElementPhotos(city, neighborhoodName, elementKey, unsplashKe
     localDedupe.add(key);
     sharedDedupeSet?.add(key);
     picks.push(obj);
-    if (isOutdoor) outdoorPicks.push(obj);
   };
 
   const specificQueries = Array.isArray(photoQueries) && photoQueries.length > 0
     ? photoQueries
     : [];
 
-  // ── Step 1: Google Places geo-search ────────────────────────────────────────
-  if (googlePlacesKey && bbox) {
-    const placesPhotos = await fetchGooglePlacesElementPhotos(bbox, elementKey, googlePlacesKey, PHOTO_RULES.target, polygonRing, geminiKey, neighborhoodName);
-
-    if ((elementKey === "restaurants" || elementKey === "cafes") && geminiKey && placesPhotos.length > 0) {
-      // For food venues: vision-check each photo for outdoor/street-level content.
-      // Classify outdoor vs. indoor; add outdoor ones first.  Indoor photos are
-      // only added if we would otherwise fall below PHOTO_RULES.min.
-      const classified = await Promise.all(
-        placesPhotos.map(async (p) => {
-          const outdoor = await geminiVisionIsOutdoorFoodPhoto(p.url, geminiKey);
-          if (!outdoor) console.log(`[vision] ${elementKey} indoor photo skipped (unless needed): ${p.query || ""}`);
-          return { p, outdoor };
-        })
-      );
-      classified.filter((x) => x.outdoor).forEach((x) => addPick(x.p, true));
-      // Include indoor photos only to reach minimum
-      if (picks.length < PHOTO_RULES.min) {
-        classified.filter((x) => !x.outdoor).forEach((x) => {
-          if (picks.length < PHOTO_RULES.min) addPick(x.p, false);
-        });
+  // Outdoor vision-gate for food categories: prefer outdoor/street shots; accept
+  // indoor only when we can't reach the minimum count without them.
+  const isFoodCategory = elementKey === "restaurants" || elementKey === "cafes";
+  const addWithFoodCheck = async (obj) => {
+    if (!obj?.url) return;
+    if (isFoodCategory && geminiKey) {
+      const isOutdoor = await geminiVisionIsOutdoorFoodPhoto(obj.url, geminiKey);
+      if (isOutdoor) {
+        addPick(obj, true);
+      } else if (picks.length < PHOTO_RULES.min) {
+        console.log(`[vision] ${elementKey} indoor accepted (below min): ${obj.query || ""}`);
+        addPick(obj, false);
+      } else {
+        console.log(`[vision] ${elementKey} indoor rejected: ${obj.query || ""}`);
       }
     } else {
-      placesPhotos.forEach((p) => addPick(p));
+      addPick(obj);
     }
-  }
+  };
 
-  // ── Step 2: Flickr geo-bbox search ───────────────────────────────────────────
-  // Flickr photos are physically geotagged at the location so they are guaranteed
-  // to show the actual neighbourhood (unlike Unsplash keyword search).  Used for
-  // categories where geo-accuracy matters most.  Sorted by interestingness.
-  const FLICKR_CATEGORIES = new Set(["cafes", "restaurants", "shops", "street_feel", "parks"]);
-  if (flickrKey && picks.length < PHOTO_RULES.target && FLICKR_CATEGORIES.has(elementKey) && bbox) {
+  // ── Step 1: Flickr geo-bbox (primary for ALL categories) ─────────────────────
+  // Photos are physically geotagged inside the neighbourhood bbox — geo-accurate,
+  // CC-licensed, and URL-permanent.  Sorted by interestingness (Flickr quality
+  // signal).  Replaces Google Places, Pexels, and generic Unsplash templates.
+  if (flickrKey && bbox) {
     const fTags = FLICKR_TAGS[elementKey] || "street,neighborhood";
-    const fPhotos = await fetchFlickrPhotos(bbox, fTags, flickrKey, PHOTO_RULES.target - picks.length + 2);
-    const isFoodCat = elementKey === "restaurants" || elementKey === "cafes";
+    // Fetch extra candidates so the food outdoor-filter has headroom to reject some.
+    const wantExtra = isFoodCategory ? PHOTO_RULES.target + 6 : PHOTO_RULES.target + 2;
+    const fPhotos = await fetchFlickrPhotos(bbox, fTags, flickrKey, wantExtra);
     for (const fp of fPhotos) {
       if (picks.length >= PHOTO_RULES.target) break;
-      if (isFoodCat && geminiKey) {
-        const outdoor = await geminiVisionIsOutdoorFoodPhoto(fp.url, geminiKey);
-        if (outdoor) {
-          addPick(fp, true);
-        } else if (picks.length < PHOTO_RULES.min) {
-          addPick(fp, false);
-        } else {
-          console.log(`[vision] flickr ${elementKey} indoor rejected`);
-        }
-      } else {
-        addPick(fp);
-      }
+      await addWithFoodCheck(fp);
     }
   }
 
-  // ── Step 3: Wikimedia Commons ─────────────────────────────────────────────────
-  // Restricted to categories where Wikimedia reliably provides OUTDOOR photos:
-  //   museums, icon_spots — building exteriors, monuments, plazas
-  //   parks             — park grounds, green spaces
-  //   street_feel       — named boulevards, plazas, street views
-  // NOT used for cafes/restaurants/shops — Wikimedia returns interior shots
-  // of named venues (e.g. "Café La Habana interior") which degrades quality.
+  // ── Step 2: Wikimedia named search (supplements Flickr for landmark categories)
+  // Wikimedia named-place queries ("Museo Soumaya Mexico City") reliably surface
+  // the specific canonical exterior/editorial photo of a landmark.  Used for
+  // museums, icon_spots, parks, and street_feel — NOT cafes/restaurants/shops
+  // (Wikimedia returns interior shots for named commercial venues).
   const WIKI_CATEGORIES = new Set(["museums", "icon_spots", "parks", "street_feel"]);
   if (picks.length < PHOTO_RULES.target && WIKI_CATEGORIES.has(elementKey)) {
-    // Primary: specific named-place queries (proper nouns work best for Wikimedia
-    // file title matching).  Generic descriptions ("jacaranda tree lined street")
-    // rarely match, so also try a short "{neighborhood} {city}" fallback query.
     const wikiQueryList = specificQueries.length > 0
       ? [...specificQueries, `${neighborhoodName} ${city}`]
       : (elementKey === "museums" || elementKey === "icon_spots")
@@ -1636,83 +1614,38 @@ async function fetchElementPhotos(city, neighborhoodName, elementKey, unsplashKe
     }
   }
 
-  // Helper: add a photo with an optional outdoor vision check.
-  // For restaurants and cafes: classify outdoor vs indoor; accept indoor only
-  // when we still need to reach minimum (avoids empty galleries).
-  const isFoodCategory = elementKey === "restaurants" || elementKey === "cafes";
-  const addCheckedPick = async (obj, forceAccept = false) => {
-    if (!obj?.url) return;
-    if (isFoodCategory && geminiKey && !forceAccept) {
-      const isOutdoor = await geminiVisionIsOutdoorFoodPhoto(obj.url, geminiKey);
-      if (isOutdoor) {
-        addPick(obj, true);
-      } else if (picks.length < PHOTO_RULES.min) {
-        // Accept indoor only as a last-resort to reach minimum
-        addPick(obj, false);
-      } else {
-        console.log(`[vision] ${elementKey} unsplash indoor rejected: ${obj.query || ""}`);
-      }
-    } else {
-      addPick(obj);
-    }
-  };
-
-  // ── Step 4: Unsplash specific queries ────────────────────────────────────────
-  // When Flickr is available, skip Unsplash for geo-categories (Flickr is
-  // strictly better: geo-accurate, higher rate-limit, no cross-hood duplicates).
-  // For non-geo categories (museums/icon_spots/street_feel without Flickr) and
-  // when Flickr is absent, use Unsplash as before.
-  const unsplashGeoCategories = new Set(["cafes", "restaurants", "shops", "street_feel", "parks"]);
-  const skipUnsplashSpecific = flickrKey && unsplashGeoCategories.has(elementKey);
-  const unsplashSpecificTarget = (!skipUnsplashSpecific && (elementKey === "street_feel" || picks.length < PHOTO_RULES.min))
-    ? PHOTO_RULES.target
-    : PHOTO_RULES.min;
-  if (!skipUnsplashSpecific && picks.length < unsplashSpecificTarget && specificQueries.length > 0) {
+  // ── Step 3: Unsplash fallback (only when Flickr key is absent) ───────────────
+  // Graceful degradation so the pipeline produces something during the transition
+  // period before a Flickr key is added.  When flickrKey is present this entire
+  // block is skipped — Flickr is strictly better (geo-accurate, permanent URLs).
+  if (!flickrKey && picks.length < PHOTO_RULES.min) {
+    // 3a: named-place specific queries
+    const unsplashTarget = elementKey === "street_feel" ? PHOTO_RULES.target : PHOTO_RULES.min;
     for (const q of specificQueries) {
-      if (picks.length >= unsplashSpecificTarget) break;
+      if (picks.length >= unsplashTarget) break;
       let res = await fetchUnsplashPhotos(q, unsplashKey, PHOTO_RULES.max);
       if (elementKey === "parks") res = rankParkUnsplashResults(res);
       for (const photo of res) {
-        if (picks.length >= unsplashSpecificTarget) break;
-        await addCheckedPick(normalizePhotoObject(photo, q, "unsplash_specific"));
+        if (picks.length >= unsplashTarget) break;
+        await addWithFoodCheck(normalizePhotoObject(photo, q, "unsplash_specific"));
       }
     }
-  }
-
-  // ── Step 5: Pexels specific queries — museums and icon_spots ONLY ───────────
-  // Pexels lifestyle/fashion results degrade quality for other categories.
-  // Vision-gate each Pexels photo to ensure it shows the actual building.
-  if (picks.length < PHOTO_RULES.target && (elementKey === "museums" || elementKey === "icon_spots")) {
-    for (const q of specificQueries) {
-      if (picks.length >= PHOTO_RULES.target) break;
-      const res = await fetchPexelsPhotos(q, pexelsKey, PHOTO_RULES.max);
-      for (const p of res) {
-        if (picks.length >= PHOTO_RULES.target) break;
-        if (geminiKey) {
-          const ok = await geminiVisionIsArchitecturalPhoto(p.url, geminiKey, elementKey);
-          if (!ok) { console.log(`[vision] pexels ${elementKey} rejected (non-architectural): ${q}`); continue; }
-        }
-        addPick(p);
-      }
-    }
-  }
-
-  // ── Step 6: Generic Unsplash templates — absolute fallback when below min ────
-  // Skip for geo-categories when Flickr is configured (better source available).
-  if (picks.length < PHOTO_RULES.min && !(flickrKey && unsplashGeoCategories.has(elementKey))) {
-    const genericQueries = buildQueries(elementKey, neighborhoodName, city).filter(Boolean);
-    for (const q of genericQueries) {
-      if (picks.length >= PHOTO_RULES.min) break;
-      let res = await fetchUnsplashPhotos(q, unsplashKey, PHOTO_RULES.max);
-      if (elementKey === "parks") res = rankParkUnsplashResults(res);
-      for (const photo of res) {
+    // 3b: generic templates — last resort when specific queries also came up short
+    if (picks.length < PHOTO_RULES.min) {
+      const genericQueries = buildQueries(elementKey, neighborhoodName, city).filter(Boolean);
+      for (const q of genericQueries) {
         if (picks.length >= PHOTO_RULES.min) break;
-        await addCheckedPick(normalizePhotoObject(photo, q, "unsplash"));
+        let res = await fetchUnsplashPhotos(q, unsplashKey, PHOTO_RULES.max);
+        if (elementKey === "parks") res = rankParkUnsplashResults(res);
+        for (const photo of res) {
+          if (picks.length >= PHOTO_RULES.min) break;
+          await addWithFoodCheck(normalizePhotoObject(photo, q, "unsplash"));
+        }
       }
     }
   }
 
-  // ── Step 6: Curated static fallbacks — absolute last resort (zero photos only)
+  // ── Step 4: Static curated fallbacks — zero-photos guard only ────────────────
   if (picks.length === 0) {
     (FALLBACK_PHOTOS[elementKey] || []).forEach((url) =>
       addPick(normalizePhotoObject(url, "fallback", "fallback_curated", true))
