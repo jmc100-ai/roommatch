@@ -920,6 +920,10 @@ async function recomputeNeighborhoodVibes(city, db, unsplashKey, googlePlacesKey
 
     if (heroPick?.url) assignedHeroUrls.add(heroPick.url);
 
+    // Refresh hotel_count in the same update pass.
+    const pr = normalizePolygonRing(row.polygon);
+    const freshHotelCount = await getHotelCountForFence(row.city, row.bbox || {}, pr, db);
+
     const updatePayload = {
       vibe_elements: vibeData.vibeElements,
       vibe_photos:   mergedVibePhotos,
@@ -927,6 +931,7 @@ async function recomputeNeighborhoodVibes(city, db, unsplashKey, googlePlacesKey
       vibe_last_computed_at: new Date().toISOString(),
       photo_url:    heroPick?.url    || row.photo_url || null,
       photo_credit: heroPick ? { photographer: heroPick.photographer, profile_url: heroPick.profile_url, query_used: heroPick.query_used } : (row.photo_credit || null),
+      hotel_count:  freshHotelCount,
     };
 
     const { error: upErr } = await db
@@ -934,6 +939,7 @@ async function recomputeNeighborhoodVibes(city, db, unsplashKey, googlePlacesKey
       .update(updatePayload)
       .eq("id", row.id);
     if (upErr) throw new Error(`update ${row.name} failed: ${upErr.message}`);
+    console.log(`[recompute] ${row.name}: hotel_count=${freshHotelCount}`);
   }
 
   return rows.length;

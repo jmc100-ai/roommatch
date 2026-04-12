@@ -2675,6 +2675,27 @@ app.post("/api/backfill-neighborhood-vibes", async (req, res) => {
   })();
 });
 
+// POST /api/refresh-hotel-counts {"secret":"roommatch-2026","city":"Mexico City"}
+// Recomputes hotel_count for all neighborhoods of a city from hotels_cache lat/lng.
+// Fast (~1s). Responds with updated counts.
+app.post("/api/refresh-hotel-counts", async (req, res) => {
+  const { city, secret } = req.body || {};
+  if (secret !== (process.env.INDEX_SECRET || "roommatch-index")) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
+  if (!city) return res.status(400).json({ error: "city required" });
+  if (!supabase) return res.status(500).json({ error: "Supabase not configured" });
+
+  const db = supabaseAdmin || supabase;
+  try {
+    await loadNeighborhoodGenerator().refreshHotelCounts(city, db);
+    const { data } = await db.from("neighborhoods").select("name, hotel_count").eq("city", city).order("hotel_count", { ascending: false });
+    return res.json({ updated: data?.length || 0, counts: data });
+  } catch (e) {
+    return res.status(500).json({ error: e.message });
+  }
+});
+
 // POST /api/backfill-neighborhood-photos {"secret":"roommatch-2026","city":"Paris"}
 // Re-fetches only hero photos (photo_url/photo_credit) using improved Unsplash queries.
 // Does NOT regenerate Gemini data. Responds immediately; runs in background.
