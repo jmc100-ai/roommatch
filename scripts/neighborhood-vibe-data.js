@@ -677,12 +677,18 @@ function computeWalkabilityScore(elementKey, attributes = {}) {
 /**
  * computeBoopVibe — neighbourhood-level aggregate score shown in every element panel.
  *
- * Formula: mean of all element scores × POI-richness scaling.
- * The scaling factor √(totalPOIs / 600) rewards data-rich neighbourhoods (more POIs =
- * more to actually do) and gently discounts sparse areas.  Caps at 1.0 beyond 600
- * total POIs so dense cities don't all cluster at 99–100.
+ * Formula: mean of all element scores × density-aware POI scaling.
+ *
+ * Element scores already use density-normalised √-scaling (poiCountToScore), so
+ * a small-but-dense neighbourhood like Condesa already gets fair per-category
+ * scores.  The boopVibe scaling must therefore also use *density* — not absolute
+ * count — to avoid double-penalising compact areas.
+ *
+ * Threshold: 30 POIs/km² is the floor for "data-rich enough to trust."  Any
+ * neighbourhood denser than that gets scaling ≈ 1.0.  Truly sparse areas
+ * (suburban fringes, <30/km²) are gently discounted.
  */
-function computeBoopVibe(elementScores, poiCounts = null) {
+function computeBoopVibe(elementScores, poiCounts = null, areaKm2 = null) {
   const scoreValues = Object.values(elementScores).filter((v) => typeof v === "number");
   if (!scoreValues.length) return 50;
 
@@ -691,7 +697,14 @@ function computeBoopVibe(elementScores, poiCounts = null) {
   let poiScaling = 0.75; // conservative default when Overpass data absent
   if (poiCounts) {
     const totalPOIs = Object.values(poiCounts).reduce((a, b) => a + (b || 0), 0);
-    if (totalPOIs > 0) poiScaling = Math.min(1, Math.sqrt(totalPOIs / 600));
+    if (totalPOIs > 0) {
+      if (areaKm2 && areaKm2 > 0) {
+        const density = totalPOIs / areaKm2;
+        poiScaling = Math.min(1, Math.sqrt(density / 30));
+      } else {
+        poiScaling = Math.min(1, Math.sqrt(totalPOIs / 600));
+      }
+    }
   }
 
   return clamp(Math.round(meanScore * poiScaling));
@@ -1613,10 +1626,11 @@ async function fetchElementPhotos(city, neighborhoodName, elementKey, unsplashKe
     ? photoQueries
     : [];
 
-  // Outdoor vision-gate for food categories: prefer outdoor/street shots; accept
-  // indoor only when we can't reach the minimum count without them.
+  // Vision soft-gates: prefer outdoor/exterior shots for food and museum
+  // categories; accept indoor only when we can't reach the minimum count.
   const isFoodCategory = elementKey === "restaurants" || elementKey === "cafes";
-  const addWithFoodCheck = async (obj) => {
+  const isMuseumCategory = elementKey === "museums";
+  const addWithVisionGate = async (obj) => {
     if (!obj?.url) return;
 
     // ── Universal hard-stop (ALL categories, ALL sources) ───────────────────────
@@ -1641,6 +1655,19 @@ async function fetchElementPhotos(city, neighborhoodName, elementKey, unsplashKe
       } else {
         console.log(`[vision] ${elementKey} indoor rejected: ${obj.query || ""}`);
       }
+    // ── Museum exterior soft-gate ───────────────────────────────────────────────
+    // Prefer photos showing building exterior / facade / plaza.  Accept interior
+    // shots only when below min so cards aren't empty.
+    } else if (isMuseumCategory && geminiKey) {
+      const isExterior = await geminiVisionIsArchitecturalPhoto(obj.url, geminiKey, elementKey);
+      if (isExterior) {
+        addPick(obj, true);
+      } else if (picks.length < PHOTO_RULES.min) {
+        console.log(`[vision] ${elementKey} interior accepted (below min): ${obj.query || ""}`);
+        addPick(obj, false);
+      } else {
+        console.log(`[vision] ${elementKey} interior rejected: ${obj.query || ""}`);
+      }
     } else {
       addPick(obj);
     }
@@ -1652,12 +1679,12 @@ async function fetchElementPhotos(city, neighborhoodName, elementKey, unsplashKe
   // signal).  Replaces Google Places, Pexels, and generic Unsplash templates.
   if (flickrKey && bbox) {
     const fTags = FLICKR_TAGS[elementKey] || "street,neighborhood";
-    // Fetch extra candidates so the food outdoor-filter has headroom to reject some.
-    const wantExtra = isFoodCategory ? PHOTO_RULES.target + 6 : PHOTO_RULES.target + 2;
+    // Fetch extra candidates so the vision gate has headroom to reject some.
+    const wantExtra = (isFoodCategory || isMuseumCategory) ? PHOTO_RULES.target + 6 : PHOTO_RULES.target + 2;
     const fPhotos = await fetchFlickrPhotos(bbox, fTags, flickrKey, wantExtra);
     for (const fp of fPhotos) {
       if (picks.length >= PHOTO_RULES.target) break;
-      await addWithFoodCheck(fp);
+      await addWithVisionGate(fp);
     }
   }
 
@@ -1675,8 +1702,16 @@ async function fetchElementPhotos(city, neighborhoodName, elementKey, unsplashKe
         : [`${neighborhoodName} ${city}`];
     for (const q of wikiQueryList) {
       if (picks.length >= PHOTO_RULES.target) break;
-      const wikiPhotos = await fetchWikimediaPhotos(q, PHOTO_RULES.target - picks.length);
-      wikiPhotos.forEach((p) => addPick(p));
+      const wantWiki = isMuseumCategory ? PHOTO_RULES.target + 4 : PHOTO_RULES.target - picks.length;
+      const wikiPhotos = await fetchWikimediaPhotos(q, wantWiki);
+      for (const p of wikiPhotos) {
+        if (picks.length >= PHOTO_RULES.target) break;
+        if (isMuseumCategory) {
+          await addWithVisionGate(p);
+        } else {
+          addPick(p);
+        }
+      }
     }
   }
 
@@ -1696,7 +1731,7 @@ async function fetchElementPhotos(city, neighborhoodName, elementKey, unsplashKe
       if (elementKey === "parks") res = rankParkUnsplashResults(res);
       for (const photo of res) {
         if (picks.length >= unsplashTarget) break;
-        await addWithFoodCheck(normalizePhotoObject(photo, q, "unsplash_specific"));
+        await addWithVisionGate(normalizePhotoObject(photo, q, "unsplash_specific"));
       }
     }
     // 3b: generic templates — last resort when specific queries also came up short
@@ -1708,7 +1743,7 @@ async function fetchElementPhotos(city, neighborhoodName, elementKey, unsplashKe
         if (elementKey === "parks") res = rankParkUnsplashResults(res);
         for (const photo of res) {
           if (picks.length >= PHOTO_RULES.min) break;
-          await addWithFoodCheck(normalizePhotoObject(photo, q, "unsplash"));
+          await addWithVisionGate(normalizePhotoObject(photo, q, "unsplash"));
         }
       }
     }
@@ -1737,7 +1772,7 @@ async function buildNeighborhoodVibeData({ city, neighborhoodName, attributes, t
   const ring = normalizePolygonRing(polygon);
   const areaKm2 = ring?.length >= 4 ? (ringAreaKm2(ring) ?? bboxAreaKm2(bbox)) : bboxAreaKm2(bbox);
   const { scores, shopsSubscores } = computeElementScores(attributes, tags, vibeLong, poiCounts, cityMaxCounts, areaKm2);
-  const boopVibe = computeBoopVibe(scores, poiCounts);
+  const boopVibe = computeBoopVibe(scores, poiCounts, areaKm2);
   const vibeElements = {};
   const vibePhotos = {};
 

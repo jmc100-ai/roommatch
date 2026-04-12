@@ -642,6 +642,10 @@ async function generateNeighborhoods(city, db, geminiKey, unsplashKey, googlePla
     console.log(`[neighborhoods] city peak densities for ${city}: ${JSON.stringify(Object.fromEntries(Object.entries(cityMaxCounts).map(([k,v]) => [k, Math.round(v * 10) / 10])))} per km²`);
   }
 
+  // Track hero photo_url values already assigned in this run so each
+  // neighborhood gets a unique primary hero across the city.
+  const assignedHeroUrls = new Set();
+
   // Compute per-element vibe payloads and photos, then derive hero from top elements.
   // Sequential to avoid hammering Google Places.
   for (const row of rows) {
@@ -677,12 +681,28 @@ async function generateNeighborhoods(city, db, geminiKey, unsplashKey, googlePla
     }
 
     // Hero photo: pick from top-scoring vibe elements (geo-accurate, reflects character)
-    const heroPick = pickHeroFromVibePhotos(row.vibe_elements, row.vibe_photos);
+    let heroPick = pickHeroFromVibePhotos(row.vibe_elements, row.vibe_photos);
+
+    // If the chosen hero is already assigned to another neighborhood in this run,
+    // try the next photo from the pool rather than clashing.
+    if (heroPick?.url && assignedHeroUrls.has(heroPick.url)) {
+      console.log(`[dedup] ${row.name}: hero collision detected, picking alternate`);
+      const pool = Object.entries(row.vibe_photos || {})
+        .flatMap(([, arr]) => (Array.isArray(arr) ? arr : []))
+        .filter(p => {
+          const u = typeof p === 'string' ? p : p?.url;
+          return u && !assignedHeroUrls.has(u);
+        });
+      if (pool.length > 0) {
+        const alt = pool[Math.floor(Math.random() * pool.length)];
+        heroPick = { url: typeof alt === 'string' ? alt : alt.url, photographer: alt?.attribution?.photographer || "Google Maps contributor", profile_url: alt?.attribution?.profile_url || null, query_used: "dedup_alt" };
+      }
+    }
+
     if (heroPick) {
       row.photo_url    = heroPick.url;
       row.photo_credit = { photographer: heroPick.photographer, profile_url: heroPick.profile_url, query_used: heroPick.query_used };
     } else {
-      // Last resort: fetch directly (Places nearby → Unsplash)
       const photo = await fetchNeighborhoodPhoto(
         row.name, city, unsplashKey, row.vibe_short, row.tags, row.bbox, googlePlacesKey, row._polygonRing
       ).catch(() => null);
@@ -691,6 +711,8 @@ async function generateNeighborhoods(city, db, geminiKey, unsplashKey, googlePla
         row.photo_credit = { photographer: photo.photographer, profile_url: photo.profile_url, query_used: photo.query_used };
       }
     }
+
+    if (heroPick?.url) assignedHeroUrls.add(heroPick.url);
 
     // Remove transient fields — not DB columns
     delete row._poiCounts;
@@ -721,10 +743,27 @@ async function backfillNeighborhoodPhotos(city, db, unsplashKey, googlePlacesKey
   if (error) throw new Error(`load neighborhoods failed: ${error.message}`);
   if (!rows?.length) return 0;
 
+  const assignedHeroUrls = new Set();
+
   let updated = 0;
   for (const row of rows) {
     // Primary: pick hero from top-scoring vibe elements (no extra API call)
     let photo = pickHeroFromVibePhotos(row.vibe_elements, row.vibe_photos);
+
+    // Dedup: if this hero is already used by another neighborhood, pick an alternate
+    if (photo?.url && assignedHeroUrls.has(photo.url)) {
+      console.log(`[dedup] ${row.name}: hero collision detected, picking alternate`);
+      const pool = Object.entries(row.vibe_photos || {})
+        .flatMap(([, arr]) => (Array.isArray(arr) ? arr : []))
+        .filter(p => {
+          const u = typeof p === 'string' ? p : p?.url;
+          return u && !assignedHeroUrls.has(u);
+        });
+      if (pool.length > 0) {
+        const alt = pool[Math.floor(Math.random() * pool.length)];
+        photo = { url: typeof alt === 'string' ? alt : alt.url, photographer: alt?.attribution?.photographer || "Google Maps contributor", profile_url: alt?.attribution?.profile_url || null, query_used: "dedup_alt" };
+      }
+    }
 
     // Fallback: fetch directly via Places / Unsplash
     if (!photo) {
@@ -737,6 +776,8 @@ async function backfillNeighborhoodPhotos(city, db, unsplashKey, googlePlacesKey
         normalizePolygonRing(row.polygon)
       ).catch(() => null);
     }
+
+    if (photo?.url) assignedHeroUrls.add(photo.url);
 
     if (photo) {
       const { error: upErr } = await db
