@@ -1159,9 +1159,14 @@ async function fetchGooglePlacesElementPhotos(bbox, elementKey, placesKey, maxPh
     ? Math.round(baseRadiusM * 0.50)
     : baseRadiusM;
 
-  // For parks we cast a wider net (20 candidates) because name-based and vision
-  // filters reject a high proportion of results (plazas, skate parks, etc.).
-  const maxResultCount = elementKey === "parks" ? Math.min(20, maxPhotos * 3) : maxPhotos;
+  // Cast a wider net for categories where filters reject a high proportion:
+  // - parks: name + vision filters reject plazas, skate parks, etc. → 3×
+  // - restaurants/cafes: outdoor vision filter rejects ~70% (interior shots) → 2.5×
+  // - shops: vision check + chain filter rejects a lot → 2×
+  // Without this multiplier Google Places returns only ~2 outdoor food photos per hood.
+  const CANDIDATE_MULT = { parks: 3, restaurants: 3, cafes: 3, shops: 2 };
+  const mult = CANDIDATE_MULT[elementKey] ?? 1;
+  const maxResultCount = Math.min(20, maxPhotos * mult);
 
   const body = {
     includedTypes: types,
@@ -1241,30 +1246,37 @@ async function fetchGooglePlacesElementPhotos(bbox, elementKey, placesKey, maxPh
         continue;
       }
     }
-    const photoName = place.photos[0].name;
-    const attr = place.photos[0].authorAttributions?.[0];
-    try {
-      const mediaRes = await fetch(
-        `${PLACES_MEDIA_BASE}/${photoName}/media?maxWidthPx=900&skipHttpRedirect=true`,
-        { headers: { "X-Goog-Api-Key": placesKey }, signal: AbortSignal.timeout(10000) }
-      );
-      if (!mediaRes.ok) continue;
-      const mediaData = await mediaRes.json();
-      if (!mediaData.photoUri) continue;
-      // For parks: vision-check the actual photo content so playground images
-      // uploaded to a "park" Place are caught even when the name looks legitimate.
-      if (elementKey === "parks" && geminiKey) {
-        const isGreen = await geminiVisionIsGreenParkPhoto(mediaData.photoUri, geminiKey);
-        if (!isGreen) continue;
-      }
-      photos.push({
-        url:        mediaData.photoUri,
-        source:     "google_places",
-        query:      place.displayName?.text || elementKey,
-        is_fallback: false,
-        attribution: attr ? { photographer: attr.displayName, profile_url: attr.uri } : null,
-      });
-    } catch { continue; }
+    // For food/shop categories fetch up to 2 photos per venue to maximise the
+    // number of outdoor candidates available for the vision filter.
+    const PHOTOS_PER_VENUE = (elementKey === "restaurants" || elementKey === "cafes" || elementKey === "shops") ? 2 : 1;
+    const candidatePhotos = place.photos.slice(0, PHOTOS_PER_VENUE);
+    for (const photoMeta of candidatePhotos) {
+      if (photos.length >= maxPhotos) break;
+      const photoName = photoMeta.name;
+      const attr = photoMeta.authorAttributions?.[0];
+      try {
+        const mediaRes = await fetch(
+          `${PLACES_MEDIA_BASE}/${photoName}/media?maxWidthPx=900&skipHttpRedirect=true`,
+          { headers: { "X-Goog-Api-Key": placesKey }, signal: AbortSignal.timeout(10000) }
+        );
+        if (!mediaRes.ok) continue;
+        const mediaData = await mediaRes.json();
+        if (!mediaData.photoUri) continue;
+        // For parks: vision-check the actual photo content so playground images
+        // uploaded to a "park" Place are caught even when the name looks legitimate.
+        if (elementKey === "parks" && geminiKey) {
+          const isGreen = await geminiVisionIsGreenParkPhoto(mediaData.photoUri, geminiKey);
+          if (!isGreen) continue;
+        }
+        photos.push({
+          url:        mediaData.photoUri,
+          source:     "google_places",
+          query:      place.displayName?.text || elementKey,
+          is_fallback: false,
+          attribution: attr ? { photographer: attr.displayName, profile_url: attr.uri } : null,
+        });
+      } catch { continue; }
+    }
     if (photos.length >= maxPhotos) break;
   }
   return photos;
