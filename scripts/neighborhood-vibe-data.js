@@ -91,8 +91,11 @@ const FALLBACK_PHOTOS = {
 
 const OVERPASS_URL = "https://overpass-api.de/api/interpreter";
 
-/** Drop micro-polygons smaller than this; 250 m² ≈ ~16 m × 16 m square. */
-const MIN_GREEN_AREA_SQ_M = 250;
+/** Drop micro-polygons smaller than this.
+ * 2000 m² ≈ 45 m × 45 m — eliminates boulevard median strips and tiny
+ * ornamental planters while keeping real neighbourhood parks and plazas.
+ * (Was 250 m², which was counting every Reforma camellón as a "park".) */
+const MIN_GREEN_AREA_SQ_M = 2000;
 
 // POI categories that can be scored from real counts.
 const POI_CATEGORIES = ["parks", "restaurants", "cafes", "museums", "shops", "icon_spots"];
@@ -546,11 +549,12 @@ async function fetchOverpassPOIs(bbox, polygonRing = null) {
 
   // Main union (no park/garden — those are in fetchOverpassGreenCount).
   //
-  // Icon spots: must capture both nodes (small statues, plaques) AND polygon
-  // features (cathedrals, palaces, archaeological sites like Templo Mayor).
-  // tourism=artwork included for public sculptures and murals.
-  // historic=palace/archaeological_site added for civic landmarks that are
-  // mapped as way/relation footprints in OSM (not as tourism=attraction nodes).
+  // Icon spots: captures named attractions, viewpoints, significant monuments,
+  // and landmark buildings (cathedrals, palaces, archaeological sites).
+  // tourism=artwork intentionally excluded — murals, decorative sculptures and
+  // street plaques inflated boulevard-heavy neighbourhoods like Reforma/Juárez.
+  // historic=building excluded for the same reason (tags every old facade).
+  // Only ways/relations for historic tags so node-level clutter is suppressed.
   const q = `[out:json][timeout:30];
 (
   node["amenity"~"^(restaurant|fast_food|bar|pub|food_court)$"](${lat_min},${lon_min},${lat_max},${lon_max});
@@ -559,12 +563,12 @@ async function fetchOverpassPOIs(bbox, polygonRing = null) {
   way["tourism"~"^(museum|gallery)$"](${lat_min},${lon_min},${lat_max},${lon_max});
   relation["tourism"~"^(museum|gallery)$"](${lat_min},${lon_min},${lat_max},${lon_max});
   node["shop"](${lat_min},${lon_min},${lat_max},${lon_max});
-  node["tourism"~"^(attraction|viewpoint|artwork)$"](${lat_min},${lon_min},${lat_max},${lon_max});
+  node["tourism"~"^(attraction|viewpoint)$"](${lat_min},${lon_min},${lat_max},${lon_max});
   way["tourism"~"^(attraction|viewpoint)$"](${lat_min},${lon_min},${lat_max},${lon_max});
   relation["tourism"~"^(attraction|viewpoint)$"](${lat_min},${lon_min},${lat_max},${lon_max});
-  node["historic"~"^(monument|memorial|castle|ruins|archaeological_site|palace|building)$"](${lat_min},${lon_min},${lat_max},${lon_max});
-  way["historic"~"^(monument|memorial|castle|ruins|archaeological_site|palace|building|fortification)$"](${lat_min},${lon_min},${lat_max},${lon_max});
-  relation["historic"~"^(monument|memorial|castle|ruins|archaeological_site|palace|building|fortification)$"](${lat_min},${lon_min},${lat_max},${lon_max});
+  node["historic"~"^(monument|memorial|castle|ruins|archaeological_site|palace|fortification)$"](${lat_min},${lon_min},${lat_max},${lon_max});
+  way["historic"~"^(monument|memorial|castle|ruins|archaeological_site|palace|fortification)$"](${lat_min},${lon_min},${lat_max},${lon_max});
+  relation["historic"~"^(monument|memorial|castle|ruins|archaeological_site|palace|fortification)$"](${lat_min},${lon_min},${lat_max},${lon_max});
   way["building"~"^(cathedral|basilica|chapel|monastery|church|temple|shrine)$"](${lat_min},${lon_min},${lat_max},${lon_max});
   relation["building"~"^(cathedral|basilica|chapel|monastery|church|temple|shrine)$"](${lat_min},${lon_min},${lat_max},${lon_max});
 );
@@ -614,9 +618,9 @@ out tags center;`;
     } else if (t.shop) {
       counts.shops++;
     } else if (
-      ["attraction", "viewpoint", "artwork"].includes(t.tourism) ||
+      ["attraction", "viewpoint"].includes(t.tourism) ||
       ["monument", "memorial", "castle", "ruins", "archaeological_site",
-       "palace", "building", "fortification"].includes(t.historic) ||
+       "palace", "fortification"].includes(t.historic) ||
       ["cathedral", "basilica", "chapel", "monastery",
        "church", "temple", "shrine"].includes(t.building)
     ) {
