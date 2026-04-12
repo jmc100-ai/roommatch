@@ -493,6 +493,16 @@ out count;`;
   }
 
   // Geometry query failed — try the lightweight count-only fallback.
+  // IMPORTANT: the count-only query has NO polygon ring filter and NO area filter,
+  // so it can massively overcount for large neighbourhoods (e.g. Coyoacán returns
+  // 571 because the bbox covers surrounding forests).  If we have a polygonRing we
+  // should be filtering inside it — without geometry we can't do that accurately,
+  // so return null here to signal "unknown" and let the caller preserve the DB value.
+  if (polygonRing?.length >= 4) {
+    console.warn(`[overpass] geometry query failed (${res.status}); polygon ring present — returning null to avoid overcount`);
+    throw new Error(`Overpass green count ${res.status}`);
+  }
+
   console.warn(`[overpass] geometry query failed (${res.status}); trying count-only fallback`);
   const resCnt = await doFetch(qCount, 25000).catch(() => null);
   if (resCnt?.ok) {
