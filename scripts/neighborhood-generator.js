@@ -61,6 +61,10 @@ CRITICAL polygon rules — read carefully:
 - Vertices are irregular and at different lat AND lng values — not snapped to a grid.
 - The last point in the ring must repeat the first point (closed ring).
 - bbox is the minimal axis-aligned box that tightly contains ALL polygon vertices.
+- SIZE CONSTRAINT: each neighbourhood polygon must cover 1–8 km² (the walkable core a hotel guest experiences on foot).
+  Use the COLONIA / QUARTIER / NEIGHBOURHOOD boundary — NOT the administrative borough or arrondissement boundary.
+  A bbox spanning more than ~0.04° in either direction is almost certainly too large and maps an entire borough.
+  Example bad: Coyoacán alcaldía (0.06° × 0.11° = 65 km²). Example good: Colonia Coyoacán centre (0.027° × 0.030° = ~9 km²).
 
 Field rules:
 - bbox: approximate decimal degree bounds (must tightly contain the polygon); lat_min/lat_max/lon_min/lon_max
