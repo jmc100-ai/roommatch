@@ -432,18 +432,45 @@ async function fetchOsmBoundary(name, city, hintBbox = null) {
   if (!Array.isArray(results) || !results.length) return null;
 
   // Pick the best result: prefer OSM relations, require a Polygon/MultiPolygon geojson,
-  // and reject anything whose bbox doesn't plausibly overlap the hint bbox.
+  // and reject anything whose bbox doesn't plausibly overlap OR is far too large vs the hint.
+  //
+  // The size guard prevents using an administrative borough when the hint describes a walkable
+  // neighbourhood core — e.g. "Coyoacán, Mexico City" returns the full Alcaldía (~54 km²)
+  // when we want the colonia village (~3 km²).  Allow up to MAX_AREA_RATIO × hint area.
+  const MAX_AREA_RATIO = 4; // OSM bbox must not exceed 4× hint bbox in either lat or lon span
+
+  // Compute hint spans once
+  const hintLatSpan = hintBbox?.lat_min != null ? (hintBbox.lat_max - hintBbox.lat_min) : null;
+  const hintLonSpan = hintBbox?.lat_min != null ? (hintBbox.lon_max - hintBbox.lon_min) : null;
+
   let best = null;
   for (const r of results) {
     if (!r.geojson) continue;
     if (!["Polygon", "MultiPolygon"].includes(r.geojson.type)) continue;
-    // Filter by hint bbox overlap (±0.05° tolerance for Gemini approximation errors)
+
     if (hintBbox?.lat_min != null && r.boundingbox) {
       const bb = r.boundingbox; // Nominatim: ["lat_min","lat_max","lon_min","lon_max"]
       const ob = { lat_min: +bb[0], lat_max: +bb[1], lon_min: +bb[2], lon_max: +bb[3] };
       const tol = 0.05;
+
+      // Overlap check
       if (ob.lat_max < hintBbox.lat_min - tol || ob.lat_min > hintBbox.lat_max + tol ||
-          ob.lon_max < hintBbox.lon_min - tol || ob.lon_min > hintBbox.lon_max + tol) continue;
+          ob.lon_max < hintBbox.lon_min - tol || ob.lon_min > hintBbox.lon_max + tol) {
+        console.log(`[osm-boundary] "${name}" candidate rejected: bbox no overlap`);
+        continue;
+      }
+
+      // Size guard: reject if OSM result is much larger than hint in lat or lon span
+      const osmLatSpan = ob.lat_max - ob.lat_min;
+      const osmLonSpan = ob.lon_max - ob.lon_min;
+      if (hintLatSpan > 0 && osmLatSpan > hintLatSpan * MAX_AREA_RATIO) {
+        console.log(`[osm-boundary] "${name}" candidate rejected: too large (lat span ${osmLatSpan.toFixed(3)} > ${(hintLatSpan * MAX_AREA_RATIO).toFixed(3)})`);
+        continue;
+      }
+      if (hintLonSpan > 0 && osmLonSpan > hintLonSpan * MAX_AREA_RATIO) {
+        console.log(`[osm-boundary] "${name}" candidate rejected: too large (lon span ${osmLonSpan.toFixed(3)} > ${(hintLonSpan * MAX_AREA_RATIO).toFixed(3)})`);
+        continue;
+      }
     }
     best = r;
     if (r.osm_type === "relation") break; // relations are the most authoritative boundaries
