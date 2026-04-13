@@ -1107,7 +1107,7 @@ Example output format:
 async function backfillNeighborhoodPolygons(city, db, force = false) {
   const { data: rows, error } = await db
     .from("neighborhoods")
-    .select("id, name, bbox, polygon")
+    .select("id, name, bbox, polygon, manual_override")
     .eq("city", city)
     .order("id");
 
@@ -1118,6 +1118,14 @@ async function backfillNeighborhoodPolygons(city, db, force = false) {
 
   for (const row of rows) {
     const existingRing = normalizePolygonRing(row.polygon);
+
+    // Never overwrite manually curated polygons (unless force=true)
+    if (!force && row.manual_override) {
+      console.log(`[poly-backfill] "${row.name}" has manual_override=true — skipping`);
+      skipped++;
+      await new Promise(r => setTimeout(r, 300));
+      continue;
+    }
 
     // If already has an OSM-quality ring (≥20 vertices) and not forcing, skip
     if (!force && existingRing?.length >= 20) {
