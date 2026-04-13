@@ -755,7 +755,7 @@ async function generateNeighborhoods(city, db, geminiKey, unsplashKey, googlePla
   // Gemini's approximation.
   const { data: manualRows } = await db
     .from("neighborhoods")
-    .select("name, polygon, bbox, manual_override")
+    .select("name, polygon, bbox, manual_override, attributes")
     .eq("city", city)
     .eq("manual_override", true);
   const manualMap = new Map((manualRows || []).map(r => [r.name, r]));
@@ -766,7 +766,13 @@ async function generateNeighborhoods(city, db, geminiKey, unsplashKey, googlePla
       row.polygon       = saved.polygon;
       row.bbox          = saved.bbox;
       row.manual_override = true;
-      console.log(`[neighborhoods] "${row.name}": preserved manual_override polygon (${(saved.polygon?.ring?.length ?? 0) - 1} verts)`);
+      // Also preserve the stored poi_counts so the vibe scores computed in this run
+      // use the previously-validated data rather than the freshly-fetched (possibly
+      // incomplete) counts from this generation pass.
+      if (saved.attributes?.poi_counts) {
+        row.attributes = { ...(row.attributes || {}), poi_counts: saved.attributes.poi_counts };
+      }
+      console.log(`[neighborhoods] "${row.name}": preserved manual_override polygon (${(saved.polygon?.ring?.length ?? 0) - 1} verts)${saved.attributes?.poi_counts ? ' + poi_counts' : ''}`);
     }
   }
 
