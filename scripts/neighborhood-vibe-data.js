@@ -298,15 +298,44 @@ function placeInsideNeighborhoodFence(lat, lng, bbox, polygonRing) {
  * Density-based ceilings mean large neighbourhoods aren't artificially
  * over-scored versus small ones that pack the same category into less space.
  */
+/**
+ * computeCityMaxCounts — city-wide density ceiling per POI category.
+ *
+ * Uses the 75th-percentile density across all neighbourhoods rather than
+ * the absolute maximum.  This prevents a single hyper-dense outlier (e.g.
+ * a very compact neighbourhood with a tiny polygon) from setting an
+ * unreachable ceiling that makes every other neighbourhood score poorly.
+ *
+ * Effect: the top-quartile neighbourhood naturally approaches 100%; the
+ * absolute-densest one may score 100–115% before the clamp, but the
+ * floor at 10 and ceiling at 100 in poiCountToScore handle that.
+ *
+ * Works identically for any city — no city-specific constants needed.
+ */
 function computeCityMaxCounts(allNeighbourhoodData) {
   const cityMax = {};
   for (const cat of POI_CATEGORIES) {
-    const densities = allNeighbourhoodData.map(({ counts, areaKm2 }) => {
-      const count = counts?.[cat] || 0;
-      const area  = areaKm2 && areaKm2 > 0 ? areaKm2 : 1;
-      return count / area;
-    });
-    cityMax[cat] = Math.max(0.001, ...densities);
+    const densities = allNeighbourhoodData
+      .map(({ counts, areaKm2 }) => {
+        const count = counts?.[cat] || 0;
+        const area  = areaKm2 && areaKm2 > 0 ? areaKm2 : 1;
+        return count / area;
+      })
+      .filter(d => d > 0)
+      .sort((a, b) => a - b);
+
+    if (!densities.length) {
+      cityMax[cat] = 0.001;
+      continue;
+    }
+
+    // 75th-percentile index (0-based), interpolated
+    const idx  = (densities.length - 1) * 0.75;
+    const lo   = Math.floor(idx);
+    const frac = idx - lo;
+    const p75  = densities[lo] + frac * ((densities[lo + 1] ?? densities[lo]) - densities[lo]);
+
+    cityMax[cat] = Math.max(0.001, p75);
   }
   return cityMax;
 }
