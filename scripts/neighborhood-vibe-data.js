@@ -483,7 +483,7 @@ async function fetchOverpassGreenCount(bbox, minSqM, polygonRing = null) {
 
   // Heavy query: fetch full geometry so we can filter by polygon area.
   // landuse=grass excluded — in dense cities it tags every median strip and lawn.
-  const qGeom = `[out:json][timeout:30];
+  const qGeom = `[out:json][timeout:45];
 (
   way["leisure"~"^(park|garden|nature_reserve|recreation_ground)$"](${bb});
   relation["leisure"~"^(park|garden|nature_reserve|recreation_ground)$"](${bb});
@@ -512,11 +512,11 @@ out count;`;
     signal: AbortSignal.timeout(timeoutMs),
   });
 
-  // Try geometry query with a single 15s back-off retry on rate-limit / gateway timeout.
-  let res = await doFetch(qGeom, 30000);
-  if (res.status === 429 || res.status === 504) {
-    await new Promise((r) => setTimeout(r, 15_000));
-    res = await doFetch(qGeom, 30000);
+  // Try geometry query with a single 20s back-off retry on rate-limit or timeout.
+  let res = await doFetch(qGeom, 45000);
+  if (res.status === 429 || res.status === 504 || res.status === 429) {
+    await new Promise((r) => setTimeout(r, 20_000));
+    res = await doFetch(qGeom, 45000);
   }
 
   if (res.ok) {
@@ -574,7 +574,7 @@ async function fetchOverpassPOIs(bbox, polygonRing = null) {
   }
 
   // Pause between green query and main union — gives Overpass time to recover.
-  await new Promise((r) => setTimeout(r, 10000));
+  await new Promise((r) => setTimeout(r, 15000));
 
   // Main union (no park/garden — those are in fetchOverpassGreenCount).
   //
