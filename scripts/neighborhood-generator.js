@@ -658,6 +658,38 @@ async function generateNeighborhoods(city, db, geminiKey, unsplashKey, googlePla
     });
   }
 
+  // ── Apply manual_override preservation EARLY ──────────────────────────────
+  // Must happen before cityMaxCounts and vibeData computation so that the
+  // hand-tuned polygon, bbox, and poi_counts are used throughout (not just
+  // before the final upsert).  Without this, a wide Gemini-generated polygon
+  // could inflate _poiCounts for a manual_override neighborhood (e.g. Reforma
+  // counting 624 restaurants from the wide bbox instead of 236 from the
+  // corridor polygon) and corrupt both cityMaxCounts normalization and the
+  // vibe_elements scores stored to the DB.
+  const { data: manualRows } = await db
+    .from("neighborhoods")
+    .select("name, polygon, bbox, manual_override, attributes")
+    .eq("city", city)
+    .eq("manual_override", true);
+  const manualMap = new Map((manualRows || []).map(r => [r.name, r]));
+
+  for (const row of rows) {
+    const saved = manualMap.get(row.name);
+    if (saved) {
+      row.polygon         = saved.polygon;
+      row.bbox            = saved.bbox;
+      row.manual_override = true;
+      if (saved.attributes?.poi_counts) {
+        row.attributes    = { ...(row.attributes || {}), poi_counts: saved.attributes.poi_counts };
+        row._poiCounts    = saved.attributes.poi_counts; // use validated counts for cityMaxCounts + vibeData
+      }
+      if (saved.polygon?.ring?.length >= 4) {
+        row._polygonRing  = normalizePolygonRing(saved.polygon); // use saved ring for area calculation
+      }
+      console.log(`[neighborhoods] "${row.name}": preserved manual_override polygon (${(saved.polygon?.ring?.length ?? 0) - 1} verts)${saved.attributes?.poi_counts ? ' + poi_counts' : ''}`);
+    }
+  }
+
   // Compute city-level peak densities for per-city score normalisation.
   // Uses {counts, areaKm2} pairs so scores reflect POI density not raw counts.
   const allNeighbourhoodData = rows
@@ -750,29 +782,17 @@ async function generateNeighborhoods(city, db, geminiKey, unsplashKey, googlePla
     delete row._polygonRing;
   }
 
-  // Before upserting: fetch any rows that have manual_override=true so we preserve
-  // their hand-tuned polygon and bbox.  The upsert would otherwise replace them with
-  // Gemini's approximation.
-  const { data: manualRows } = await db
-    .from("neighborhoods")
-    .select("name, polygon, bbox, manual_override, attributes")
-    .eq("city", city)
-    .eq("manual_override", true);
-  const manualMap = new Map((manualRows || []).map(r => [r.name, r]));
-
+  // Final safety pass before upsert: re-apply manual_override fields in case the
+  // vibeData loop mutated attributes (manualMap already fetched above).
   for (const row of rows) {
     const saved = manualMap.get(row.name);
     if (saved) {
-      row.polygon       = saved.polygon;
-      row.bbox          = saved.bbox;
+      row.polygon         = saved.polygon;
+      row.bbox            = saved.bbox;
       row.manual_override = true;
-      // Also preserve the stored poi_counts so the vibe scores computed in this run
-      // use the previously-validated data rather than the freshly-fetched (possibly
-      // incomplete) counts from this generation pass.
       if (saved.attributes?.poi_counts) {
         row.attributes = { ...(row.attributes || {}), poi_counts: saved.attributes.poi_counts };
       }
-      console.log(`[neighborhoods] "${row.name}": preserved manual_override polygon (${(saved.polygon?.ring?.length ?? 0) - 1} verts)${saved.attributes?.poi_counts ? ' + poi_counts' : ''}`);
     }
   }
 
