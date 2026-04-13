@@ -2675,6 +2675,46 @@ app.post("/api/backfill-neighborhood-vibes", async (req, res) => {
   })();
 });
 
+// POST /api/regenerate-neighborhoods {"secret":"roommatch-2026","city":"Mexico City"}
+// Wipes all neighborhood rows for the city (except manual_override=true) and runs a
+// fresh Gemini generation from scratch.  Use after prompt or scoring changes.
+app.post("/api/regenerate-neighborhoods", async (req, res) => {
+  const { city, secret, keep_manual = true } = req.body || {};
+  if (secret !== (process.env.INDEX_SECRET || "roommatch-index")) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
+  if (!city) return res.status(400).json({ error: "city required" });
+  if (!supabase) return res.status(500).json({ error: "Supabase not configured" });
+
+  const geminiKey   = process.env.GEMINI_KEY;
+  const unsplashKey = process.env.UNSPLASH_KEY;
+  if (!geminiKey) return res.status(500).json({ error: "GEMINI_KEY not set" });
+
+  const db = supabaseAdmin || supabase;
+  res.json({ message: `regenerate-neighborhoods started for ${city} (keep_manual=${keep_manual})` });
+
+  (async () => {
+    try {
+      // Delete existing rows (skip manual_override=true when keep_manual is set)
+      let deleteQ = db.from("neighborhoods").delete().eq("city", city);
+      if (keep_manual) deleteQ = deleteQ.eq("manual_override", false);
+      const { error: delErr } = await deleteQ;
+      if (delErr) throw new Error(`delete failed: ${delErr.message}`);
+      console.log(`[regenerate-neighborhoods] deleted existing rows for ${city} (keep_manual=${keep_manual})`);
+
+      const rows = await loadNeighborhoodGenerator().generateNeighborhoods(
+        city, db, geminiKey, unsplashKey,
+        process.env.GOOGLE_PLACES_KEY || null,
+        process.env.PEXELS_KEY || null,
+        process.env.FLICKR_KEY || null
+      );
+      console.log(`[regenerate-neighborhoods] ${city}: ${rows.length} neighborhoods generated`);
+    } catch (e) {
+      console.error(`[regenerate-neighborhoods] ${city} failed:`, e.message);
+    }
+  })();
+});
+
 // POST /api/backfill-neighborhood-polygons {"secret":"roommatch-2026","city":"Mexico City","force":false}
 // Fetches authoritative OSM/Nominatim polygons for all neighborhoods of a city.
 // Skips rows already having ≥20-vertex OSM polygon unless force=true.

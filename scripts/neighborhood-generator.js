@@ -750,6 +750,26 @@ async function generateNeighborhoods(city, db, geminiKey, unsplashKey, googlePla
     delete row._polygonRing;
   }
 
+  // Before upserting: fetch any rows that have manual_override=true so we preserve
+  // their hand-tuned polygon and bbox.  The upsert would otherwise replace them with
+  // Gemini's approximation.
+  const { data: manualRows } = await db
+    .from("neighborhoods")
+    .select("name, polygon, bbox, manual_override")
+    .eq("city", city)
+    .eq("manual_override", true);
+  const manualMap = new Map((manualRows || []).map(r => [r.name, r]));
+
+  for (const row of rows) {
+    const saved = manualMap.get(row.name);
+    if (saved) {
+      row.polygon       = saved.polygon;
+      row.bbox          = saved.bbox;
+      row.manual_override = true;
+      console.log(`[neighborhoods] "${row.name}": preserved manual_override polygon (${(saved.polygon?.ring?.length ?? 0) - 1} verts)`);
+    }
+  }
+
   // Upsert all rows
   const { error } = await db
     .from("neighborhoods")
