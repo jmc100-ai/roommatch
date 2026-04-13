@@ -678,7 +678,17 @@ if (SITE_PASSWORD) {
   });
 }
 
-app.use(express.static(path.join(__dirname, "client")));
+// Disable caching for HTML so new deploys are always picked up immediately.
+// JS/CSS/images use default caching (fine for a single-file app with no hashes).
+app.use(express.static(path.join(__dirname, "client"), {
+  setHeaders(res, filePath) {
+    if (filePath.endsWith(".html")) {
+      res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+      res.setHeader("Pragma", "no-cache");
+      res.setHeader("Expires", "0");
+    }
+  },
+}));
 
 // ── Photo fields debug — shows raw LiteAPI photo object structure ─────────────
 app.get("/api/debug-photos", async (req, res) => {
