@@ -1973,8 +1973,14 @@
     .nbhd-el-tab {
       border:1px solid rgba(255,255,255,.14); background:var(--row); color:rgba(255,255,255,.78);
       border-radius:10px; padding:8px 10px; min-width:136px; white-space:nowrap; cursor:pointer; font-size:12px;
+      transition: border-color .15s, background .15s, box-shadow .15s;
     }
-    .nbhd-el-tab.active { border-color:rgba(201,169,110,.45); background:rgba(201,169,110,.08); color:var(--accent); }
+    .nbhd-el-tab.active {
+      border-color: rgba(201,169,110,.9);
+      background: rgba(201,169,110,.14);
+      color: var(--accent);
+      box-shadow: 0 0 0 3px rgba(201,169,110,.28), 0 0 10px rgba(201,169,110,.12);
+    }
     /* Gallery ~65% / text ~35% (was ~55/45) — more room for photo strip */
     .nbhd-el-body { display:grid; grid-template-columns:1.9fr 1fr; gap:12px; margin-bottom:10px; }
     /* Gallery wrap: clips overflowing photos; arrows overlay inside the edges */
