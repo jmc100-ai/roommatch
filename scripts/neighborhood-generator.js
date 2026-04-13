@@ -25,7 +25,17 @@ const {
 function buildNeighborhoodPrompt(city) {
   return `Act as a local travel expert with deep knowledge of hotel neighborhoods.
 
-For ${city}, return the top 7 neighborhoods where travelers typically stay.
+For ${city}, return the top 8–10 distinct areas where travelers typically stay.
+Cover ALL of these zone types that exist in the city — do NOT omit any category that applies:
+1. Iconic first-timer neighborhoods (historic centre, top cultural district)
+2. Trendy / bohemian areas (café culture, art galleries, local dining)
+3. Upscale / luxury residential areas
+4. Major hotel & business corridors (grand boulevards, financial districts with 4-5 star hotels)
+   — these are often NOT residential but ARE major hotel zones; include them (e.g. Paseo de la Reforma
+   in Mexico City, Champs-Élysées in Paris, Mayfair in London, Midtown in NYC)
+5. Authentic local neighborhoods for returning travelers
+Do NOT bundle two distinct areas into one entry (e.g. "Reforma/Juárez" should be two separate entries).
+If a grand boulevard or hotel strip is distinct from the colonia it runs through, list it separately.
 Include a mix of areas for first-time visitors AND returning travelers who want to go deeper.
 
 Return ONLY a valid JSON array — no markdown, no explanation, no code fences, just the array.
@@ -61,10 +71,12 @@ CRITICAL polygon rules — read carefully:
 - Vertices are irregular and at different lat AND lng values — not snapped to a grid.
 - The last point in the ring must repeat the first point (closed ring).
 - bbox is the minimal axis-aligned box that tightly contains ALL polygon vertices.
-- SIZE CONSTRAINT: each neighbourhood polygon must cover 1–8 km² (the walkable core a hotel guest experiences on foot).
+- SIZE CONSTRAINT: each neighbourhood polygon must cover 1–12 km² (the area a hotel guest experiences on foot).
   Use the COLONIA / QUARTIER / NEIGHBOURHOOD boundary — NOT the administrative borough or arrondissement boundary.
-  A bbox spanning more than ~0.04° in either direction is almost certainly too large and maps an entire borough.
+  A bbox spanning more than ~0.05° in BOTH directions is almost certainly too large (maps an entire borough).
+  Exception: linear hotel corridors (grand boulevards, riverfronts) may be elongated — up to ~0.06° long × ~0.02° wide.
   Example bad: Coyoacán alcaldía (0.06° × 0.11° = 65 km²). Example good: Colonia Coyoacán centre (0.027° × 0.030° = ~9 km²).
+  Example corridor: Reforma hotel district, Mexico City (0.050° lon × 0.016° lat = ~8 km²) — elongated shape is correct for a boulevard zone.
 
 Field rules:
 - bbox: approximate decimal degree bounds (must tightly contain the polygon); lat_min/lat_max/lon_min/lon_max
