@@ -3724,13 +3724,14 @@
 
   // ── NEIGHBOURHOOD ────────────────────────────────────
   const NBHD_ELEMENT_ORDER = [
-    { key: 'parks', label: 'Parks' },
-    { key: 'restaurants', label: 'Food' },
-    { key: 'cafes', label: 'Cafes' },
-    { key: 'street_feel', label: 'Street Feel' },
-    { key: 'icon_spots', label: 'Icon Spots' },
-    { key: 'museums', label: 'Museums' },
-    { key: 'shops', label: 'Shops' },
+    { key: 'parks',       label: 'Parks'        },
+    { key: 'greenery',    label: 'Green Streets' },
+    { key: 'restaurants', label: 'Food'          },
+    { key: 'cafes',       label: 'Cafes'         },
+    { key: 'street_feel', label: 'Street Feel'   },
+    { key: 'icon_spots',  label: 'Icon Spots'    },
+    { key: 'museums',     label: 'Museums'       },
+    { key: 'shops',       label: 'Shops'         },
   ];
   const NBHD_CARD_DATA = {};
   // Set of photo_url values used as the primary hero of any neighborhood in the
@@ -3936,7 +3937,7 @@
       || tryTier(() => true);
   }
   // Elements that get a second hero slide when enough photos are available.
-  const NBHD_HERO_DOUBLE = new Set(['icon_spots', 'parks', 'museums']);
+  const NBHD_HERO_DOUBLE = new Set(['icon_spots', 'parks', 'greenery', 'museums']);
 
   /** Hero strip: one photo per vibe element (two for icon_spots/parks/museums),
    *  ordered by vibe score highest first. Skips street_feel. */

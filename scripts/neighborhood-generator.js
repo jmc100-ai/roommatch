@@ -90,10 +90,13 @@ Field rules:
 - walkability_dining: "excellent" | "good" | "limited"
 - walkability_tourist_spots: "excellent" | "good" | "limited"
 - green_spaces: "lots" | "some" | "minimal"
+  (Represents tree-lined street canopy and leafy walkability, NOT just park count.
+   "lots" = neighbourhood famously defined by leafy streets, boulevard trees, jacarandas, canopied avenues.
+   "some" = a mix of tree-lined and open streets. "minimal" = mostly open/concrete streets.)
 - skyline_character: "low-rise historic" | "modern high-rise" | "mixed" | "tree-lined"
 - street_energy: "lively" | "moderate" | "quiet"
 - photo_queries: object — 2 specific Unsplash search strings per element key.
-  Keys must be exactly: parks, restaurants, cafes, street_feel, icon_spots, museums, shops.
+  Keys must be exactly: parks, restaurants, cafes, street_feel, icon_spots, museums, shops, greenery.
   Each value is an array of 2 strings. Use NAMED real places, streets, or landmarks — NOT
   generic category words. Be specific enough that a photographer would use this as a caption.
   Rules:
@@ -106,6 +109,9 @@ Field rules:
     "Sacré-Cœur Montmartre", "Eiffel Tower 7th arrondissement")
   * museums: a specific museum name (e.g. "Musée d'Orsay Paris", "Museo Frida Kahlo Coyoacan")
   * shops: a specific shopping street, market, or boutique area
+  * greenery: the most photogenic tree-lined street, leafy boulevard, or canopied avenue
+    (e.g. "Roma Norte jacaranda avenue", "Paseo de la Reforma tree-lined boulevard",
+    "Champs-Elysées tree-lined Paris", "Avenue Montaigne Paris")
   Example for Roma Norte, Mexico City:
   "photo_queries": {
     "parks": ["Parque España Mexico City", "Parque Luis Cabrera Roma Norte"],
@@ -114,7 +120,8 @@ Field rules:
     "street_feel": ["Roma Norte jacaranda tree lined street", "Colonia Roma art deco boulevard"],
     "icon_spots": ["Fuente de la Cibeles Mexico City", "Roma Norte art nouveau facade"],
     "museums": ["Museo del Objeto del Objeto Mexico City", "Casa Lamm Roma Norte"],
-    "shops": ["vintage shops Colonia Roma", "design boutique Roma Norte"]
+    "shops": ["vintage shops Colonia Roma", "design boutique Roma Norte"],
+    "greenery": ["Roma Norte jacaranda tree lined avenue", "Colonia Roma leafy boulevard"]
   }`;
 }
 
@@ -1080,7 +1087,7 @@ Neighborhood context:
 - Tags: ${(row.tags || []).join(", ")}
 
 Return ONLY a valid JSON object (no markdown, no explanation) with exactly these keys:
-parks, restaurants, cafes, street_feel, icon_spots, museums, shops
+parks, restaurants, cafes, street_feel, icon_spots, museums, shops, greenery
 
 Each key maps to an array of exactly 2 search strings. Rules:
 - Use NAMED real places, streets, landmarks — NOT generic category words
@@ -1092,9 +1099,11 @@ Each key maps to an array of exactly 2 search strings. Rules:
 - icon_spots: the defining landmark or tower (e.g. "Torre Mayor Polanco skyline")
 - museums: a specific museum name
 - shops: a specific shopping street or market
+- greenery: the most photogenic tree-lined street, leafy boulevard, or canopied avenue
+  (e.g. "Roma Norte jacaranda avenue", "Paseo de la Reforma tree-lined boulevard")
 
 Example output format:
-{"parks":["Parque España Mexico City","Parque Luis Cabrera Roma Norte"],"restaurants":["Contramar restaurant Mexico City","Roma Norte terrace dining"],"cafes":["Panaderia Rosetta Mexico City","independent cafe Roma Norte"],"street_feel":["Roma Norte jacaranda tree lined street","Colonia Roma art deco boulevard"],"icon_spots":["Fuente de la Cibeles Mexico City","Roma Norte art nouveau facade"],"museums":["Museo del Objeto del Objeto Mexico City","Casa Lamm Roma Norte"],"shops":["vintage shops Colonia Roma","design boutique Roma Norte"]}`;
+{"parks":["Parque España Mexico City","Parque Luis Cabrera Roma Norte"],"restaurants":["Contramar restaurant Mexico City","Roma Norte terrace dining"],"cafes":["Panaderia Rosetta Mexico City","independent cafe Roma Norte"],"street_feel":["Roma Norte jacaranda tree lined street","Colonia Roma art deco boulevard"],"icon_spots":["Fuente de la Cibeles Mexico City","Roma Norte art nouveau facade"],"museums":["Museo del Objeto del Objeto Mexico City","Casa Lamm Roma Norte"],"shops":["vintage shops Colonia Roma","design boutique Roma Norte"],"greenery":["Roma Norte jacaranda tree lined avenue","Colonia Roma leafy boulevard"]}`;
 
     let photoQueries = null;
     try {

@@ -1,11 +1,12 @@
 const ELEMENTS = [
-  { key: "parks", label: "Parks", icon: "PARK" },
-  { key: "restaurants", label: "Restaurants", icon: "FOOD" },
-  { key: "cafes", label: "Cafes", icon: "CAFE" },
-  { key: "street_feel", label: "Street Feel", icon: "STREET" },
-  { key: "icon_spots", label: "Icon Spots", icon: "ICON" },
-  { key: "museums", label: "Museums", icon: "MUSEUM" },
-  { key: "shops", label: "Shops", icon: "SHOP" },
+  { key: "parks",       label: "Parks",        icon: "PARK"    },
+  { key: "greenery",    label: "Green Streets", icon: "TREE"    },
+  { key: "restaurants", label: "Restaurants",  icon: "FOOD"    },
+  { key: "cafes",       label: "Cafes",         icon: "CAFE"    },
+  { key: "street_feel", label: "Street Feel",  icon: "STREET"  },
+  { key: "icon_spots",  label: "Icon Spots",   icon: "ICON"    },
+  { key: "museums",     label: "Museums",       icon: "MUSEUM"  },
+  { key: "shops",       label: "Shops",         icon: "SHOP"    },
 ];
 
 const PHOTO_RULES = { target: 6, min: 3, max: 8 };
@@ -16,6 +17,12 @@ const QUERY_TEMPLATES = {
     "{neighborhood} {city} public garden",
     "{city} park trees green",
     "{city} urban park",
+  ],
+  greenery: [
+    "{neighborhood} {city} tree-lined street",
+    "{neighborhood} {city} leafy boulevard",
+    "{city} shaded avenue canopy trees",
+    "{neighborhood} {city} green canopy sidewalk",
   ],
   restaurants: [
     "{neighborhood} {city} restaurants outdoor dining",
@@ -54,6 +61,11 @@ const FALLBACK_PHOTOS = {
     "https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?w=900&q=80",
     "https://images.unsplash.com/photo-1501854140801-50d01698950b?w=900&q=80",
     "https://images.unsplash.com/photo-1519331379826-f10be5486c6f?w=900&q=80",
+  ],
+  greenery: [
+    "https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=900&q=80",
+    "https://images.unsplash.com/photo-1598928506311-c55ded91a20c?w=900&q=80",
+    "https://images.unsplash.com/photo-1476480862126-209bfaa8edc8?w=900&q=80",
   ],
   restaurants: [
     "https://images.unsplash.com/photo-1414235077428-338989a2e8c0?w=900&q=80",
@@ -98,7 +110,12 @@ const OVERPASS_URL = "https://overpass-api.de/api/interpreter";
 const MIN_GREEN_AREA_SQ_M = 2000;
 
 // POI categories that can be scored from real counts.
-const POI_CATEGORIES = ["parks", "restaurants", "cafes", "museums", "shops", "icon_spots"];
+const POI_CATEGORIES = ["parks", "restaurants", "cafes", "museums", "shops", "icon_spots", "trees"];
+
+// Subset of POI_CATEGORIES used for boopVibe density check.
+// Trees are in POI_CATEGORIES for normalization but excluded here because
+// their counts (hundreds–thousands) would dominate the density signal.
+const BOOP_DENSITY_CATEGORIES = ["parks", "restaurants", "cafes", "museums", "shops", "icon_spots"];
 
 /**
  * bboxAreaKm2 — approximate area of a lat/lng bounding box in km².
@@ -601,6 +618,7 @@ async function fetchOverpassPOIs(bbox, polygonRing = null) {
   relation["historic"~"^(monument|memorial|castle|ruins|archaeological_site|palace|fortification)$"](${lat_min},${lon_min},${lat_max},${lon_max});
   way["building"~"^(cathedral|basilica|chapel|monastery|church|temple|shrine)$"](${lat_min},${lon_min},${lat_max},${lon_max});
   relation["building"~"^(cathedral|basilica|chapel|monastery|church|temple|shrine)$"](${lat_min},${lon_min},${lat_max},${lon_max});
+  node["natural"="tree"](${lat_min},${lon_min},${lat_max},${lon_max});
 );
 out tags center;`;
 
@@ -629,6 +647,7 @@ out tags center;`;
     museums: 0,
     shops: 0,
     icon_spots: 0,
+    trees: 0,
   };
 
   const polyActive = polygonRing?.length >= 4;
@@ -657,10 +676,12 @@ out tags center;`;
        "church", "temple", "shrine"].includes(t.building)
     ) {
       counts.icon_spots++;
+    } else if (t.natural === "tree") {
+      counts.trees++;
     }
   }
 
-  console.log(`[overpass] final counts: parks=${counts.parks ?? "null(failed)"} restaurants=${counts.restaurants} cafes=${counts.cafes} museums=${counts.museums} shops=${counts.shops} icon_spots=${counts.icon_spots}`);
+  console.log(`[overpass] final counts: parks=${counts.parks ?? "null(failed)"} restaurants=${counts.restaurants} cafes=${counts.cafes} museums=${counts.museums} shops=${counts.shops} icon_spots=${counts.icon_spots} trees=${counts.trees}`);
 
   return counts;
 }
@@ -700,6 +721,7 @@ function computeWalkabilityScore(elementKey, attributes = {}) {
 
   switch (elementKey) {
     case "parks":       return clamp(Math.round(green));
+    case "greenery":    return clamp(Math.round(green));
     case "restaurants": return clamp(Math.round(wDining));
     case "cafes":       return clamp(Math.round(wDining * 0.7 + energy * 0.3));
     case "museums":     return clamp(Math.round(wTour));
@@ -732,7 +754,9 @@ function computeBoopVibe(elementScores, poiCounts = null, areaKm2 = null) {
 
   let poiScaling = 0.75; // conservative default when Overpass data absent
   if (poiCounts) {
-    const totalPOIs = Object.values(poiCounts).reduce((a, b) => a + (b || 0), 0);
+    // Sum only the standard amenity categories — exclude "trees" which is in the
+    // hundreds/thousands and would otherwise dominate the density calculation.
+    const totalPOIs = BOOP_DENSITY_CATEGORIES.reduce((a, cat) => a + (poiCounts[cat] || 0), 0);
     if (totalPOIs > 0) {
       if (areaKm2 && areaKm2 > 0) {
         const density = totalPOIs / areaKm2;
@@ -765,6 +789,7 @@ function computeBoopVibe(elementScores, poiCounts = null, areaKm2 = null) {
 // walkable urban neighbourhood (~4 km²).  Used only when Overpass data is absent.
 const GLOBAL_FALLBACK_MAX = {
   parks: 5, restaurants: 75, cafes: 25, museums: 8, shops: 120, icon_spots: 8,
+  trees: 500,  // street trees per km² — ~500 is a densely tree-lined urban neighbourhood
 };
 
 function poiCountToScore(count, category, areaKm2 = null, cityMaxDensities = null) {
@@ -798,9 +823,16 @@ function computeElementScores(attributes = {}, tags = [], vibeLong = "", poiCoun
   const hasRealCounts = poiCounts && Object.values(poiCounts).some((v) => v > 0);
 
   let scores;
+  const greenAttr = catScore(attributes.green_spaces, { lots: 88, some: 62, minimal: 35 });
+
   if (hasRealCounts) {
+    // greenery blends OSM tree density (objective) with Gemini green_spaces (holistic).
+    // Even with 0 mapped trees the Gemini attribute provides a floor, so a well-known
+    // leafy neighbourhood isn't penalised in cities with sparse OSM tree coverage.
+    const treeScore = poiCountToScore(poiCounts.trees || 0, "trees", areaKm2, cityMaxCounts);
     scores = {
       parks:       poiCountToScore(poiCounts.parks,       "parks",       areaKm2, cityMaxCounts),
+      greenery:    clamp(Math.round(treeScore * 0.55 + greenAttr * 0.45)),
       restaurants: poiCountToScore(poiCounts.restaurants, "restaurants", areaKm2, cityMaxCounts),
       cafes:       poiCountToScore(poiCounts.cafes,       "cafes",       areaKm2, cityMaxCounts),
       museums:     poiCountToScore(poiCounts.museums,     "museums",     areaKm2, cityMaxCounts),
@@ -814,6 +846,9 @@ function computeElementScores(attributes = {}, tags = [], vibeLong = "", poiCoun
     });
     scores = {
       parks:       clamp(green * 0.756 + wTour * 0.244 + (hasTag(tags, "green") ? 8 : 0)),
+      // When no Overpass data, greenery is purely attribute-driven: green_spaces captures
+      // tree-lined character, with a bonus for "tree-lined" skyline and "green" tag.
+      greenery:    clamp(greenAttr + (skyline === 76 ? 8 : 0) + (hasTag(tags, "green") ? 8 : 0)),
       restaurants: clamp(wDining * 0.64 + energy * 0.26 + (hasTag(tags, "foodie") ? 10 : 0)),
       cafes:       clamp(wDining * 0.45 + wTour * 0.25 + (hasTag(tags, "local-feel") ? 8 : 0) + (hasTag(tags, "shopping") ? 5 : 0)),
       museums:     clamp(skyline * 0.26 + wTour * 0.34 + (hasTag(tags, "artsy") ? 8 : 0) + (text.includes("museum") || text.includes("gallery") ? 16 : 0)),
@@ -843,6 +878,11 @@ function elementFacts(elementKey, score, hotelCount, shopsSubscores = null, poiC
     real != null ? `${real} parks & gardens mapped in the area` : `${Math.max(2, Math.round(score / 12))} notable green areas in easy reach`,
     `${Math.max(4, Math.round((100 - score) / 14))}-${Math.max(8, Math.round((100 - score) / 10))} min walk to larger green spaces`,
     `Morning calm profile: ${Math.max(38, Math.round(score * 0.84))}%`,
+  ];
+  if (elementKey === "greenery") return [
+    poiCounts?.trees != null ? `${poiCounts.trees} street trees mapped in the area` : `${score >= 80 ? "Very leafy" : score >= 60 ? "Tree-lined" : "Some tree canopy"} street character`,
+    `Green canopy coverage: ${score}%`,
+    `Summer shade & walkability: ${Math.max(30, Math.round(score * 0.9))}%`,
   ];
   if (elementKey === "restaurants") return [
     real != null ? `${real} restaurants, bars & eateries` : `${Math.round(score / 8 + hotelCount / 6)} dining venues per km² (estimated)`,
@@ -919,6 +959,8 @@ const PLACES_ELEMENT_TYPES = {
   // landmarks (Parroquia de la Sagrada Familia, mosques in KL, etc.) that Google
   // Places doesn't always tag as historical_landmark.
   icon_spots:  ["historical_landmark", "church", "mosque", "hindu_temple", "synagogue"],
+  // greenery: tree-lined streets — no matching Places type; falls back to Unsplash/Flickr queries.
+  greenery:    null,
   street_feel: null,
 };
 
