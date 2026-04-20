@@ -160,12 +160,13 @@ $function$;
 
 
 -- ── get_primary_nbhd ────────────────────────────────────────────────────────
--- For a given hotel (already in hotels_cache with lat/lng populated), return
--- the neighbourhood whose bbox contains the hotel AND has the smallest area
--- (i.e. most specific / micro-neighbourhood wins over an umbrella district).
---
--- Returns a single row with the neighbourhood id + name + vibe metadata so a
--- single call can populate the results-card pill.
+-- For a given hotel (lat/lng populated in hotels_cache), return the nearest
+-- neighbourhood by bbox-centroid distance using a planar approximation with
+-- longitude cos-correction. The polygons/bboxes we store are typically much
+-- smaller than the real neighbourhood (OSM landmark features rather than
+-- administrative outlines) so strict bbox containment leaves most hotels
+-- unlabelled. Nearest-centroid is how a human answers "which area is this
+-- hotel in?" and produces ~99% coverage on Paris and KL.
 CREATE OR REPLACE FUNCTION public.get_primary_nbhd(
   p_hotel_id text
 )
@@ -204,22 +205,26 @@ BEGIN
   FROM neighborhoods n
   WHERE n.city = v_city
     AND n.bbox IS NOT NULL
-    AND (n.bbox->>'lat_min')::double precision <= v_lat
-    AND (n.bbox->>'lat_max')::double precision >= v_lat
-    AND (n.bbox->>'lon_min')::double precision <= v_lng
-    AND (n.bbox->>'lon_max')::double precision >= v_lng
-  ORDER BY n.bbox_area NULLS LAST
+    AND n.bbox ? 'lat_min' AND n.bbox ? 'lat_max'
+    AND n.bbox ? 'lon_min' AND n.bbox ? 'lon_max'
+  ORDER BY SQRT(
+    POWER((v_lat - (((n.bbox->>'lat_min')::double precision + (n.bbox->>'lat_max')::double precision) / 2.0)) * 111.32, 2) +
+    POWER((v_lng - (((n.bbox->>'lon_min')::double precision + (n.bbox->>'lon_max')::double precision) / 2.0)) * 111.32 * COS(RADIANS(v_lat)), 2)
+  )
   LIMIT 1;
 END;
 $function$;
 
 
 -- ── get_primary_nbhds_for_hotels ────────────────────────────────────────────
--- Batch version: one RPC call returns primary nbhd for a list of hotel_ids.
--- Used by /api/vsearch to attach a nbhd to every result hotel without N calls.
+-- Batch version: one RPC call returns the primary nbhd for a list of hotels.
+-- Used by /api/vsearch to attach a nbhd to every result hotel in one round-
+-- trip. Uses nearest-centroid distance (planar approx with lng cos-correction)
+-- and caps at 8km — hotels farther than 8km from any labelled neighbourhood
+-- fall through unlabeled (they're genuinely outside the set we care about).
 -- Note: RETURNS TABLE column names collide with plpgsql locals, so we alias
--- everything inside the CTEs to unique names (hid / nid / nname …) and only
--- expose the canonical column names in the final projection.
+-- every inner column (hid / nid / nname / nvibe / nattrs) and only expose the
+-- canonical names in the final projection.
 CREATE OR REPLACE FUNCTION public.get_primary_nbhds_for_hotels(
   p_hotel_ids text[]
 )
@@ -241,30 +246,41 @@ BEGIN
     WHERE hc.hotel_id = ANY(p_hotel_ids)
       AND hc.lat IS NOT NULL AND hc.lng IS NOT NULL
   ),
-  joined AS (
+  nbhd_centroids AS (
     SELECT
-      hp.hid        AS hid,
       n.id          AS nid,
+      n.city        AS ncity,
       n.name        AS nname,
       n.vibe_short  AS nvibe,
       n.attributes  AS nattrs,
-      n.bbox_area   AS narea,
+      ((n.bbox->>'lat_min')::double precision + (n.bbox->>'lat_max')::double precision) / 2.0 AS clat,
+      ((n.bbox->>'lon_min')::double precision + (n.bbox->>'lon_max')::double precision) / 2.0 AS clng
+    FROM neighborhoods n
+    WHERE n.bbox IS NOT NULL
+      AND n.bbox ? 'lat_min' AND n.bbox ? 'lat_max'
+      AND n.bbox ? 'lon_min' AND n.bbox ? 'lon_max'
+  ),
+  ranked AS (
+    SELECT
+      hp.hid,
+      nc.nid, nc.nname, nc.nvibe, nc.nattrs,
+      SQRT(
+        POWER((hp.lat - nc.clat) * 111.32, 2) +
+        POWER((hp.lng - nc.clng) * 111.32 * COS(RADIANS(hp.lat)), 2)
+      ) AS dist_km,
       ROW_NUMBER() OVER (
         PARTITION BY hp.hid
-        ORDER BY n.bbox_area NULLS LAST
+        ORDER BY SQRT(
+          POWER((hp.lat - nc.clat) * 111.32, 2) +
+          POWER((hp.lng - nc.clng) * 111.32 * COS(RADIANS(hp.lat)), 2)
+        )
       ) AS rn
     FROM hotel_pts hp
-    JOIN neighborhoods n
-      ON  n.city = hp.city
-      AND n.bbox IS NOT NULL
-      AND (n.bbox->>'lat_min')::double precision <= hp.lat
-      AND (n.bbox->>'lat_max')::double precision >= hp.lat
-      AND (n.bbox->>'lon_min')::double precision <= hp.lng
-      AND (n.bbox->>'lon_max')::double precision >= hp.lng
+    JOIN nbhd_centroids nc ON nc.ncity = hp.city
   )
-  SELECT j.hid, j.nid, j.nname, j.nvibe, j.nattrs
-  FROM joined j
-  WHERE j.rn = 1;
+  SELECT r.hid, r.nid, r.nname, r.nvibe, r.nattrs
+  FROM ranked r
+  WHERE r.rn = 1 AND r.dist_km < 8.0;
 END;
 $function$;
 
