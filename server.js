@@ -14,6 +14,9 @@ const { createClient } = require("@supabase/supabase-js");
 function loadIndexCity() {
   return require("./scripts/index-city").indexCity;
 }
+function loadIndexCityAmenities() {
+  return require("./scripts/index-city").indexCityAmenities;
+}
 function loadNeighborhoodGenerator() {
   return require("./scripts/neighborhood-generator");
 }
@@ -366,6 +369,7 @@ const VSEARCH_FEATURE_FLAGS = [
   { label: 'high ceilings',            flag: 'high_ceilings',          queryMatch: /\bhigh ceilings?\b|\bvaulted ceiling\b/i },
   { label: 'floor-to-ceiling windows', flag: 'floor_to_ceiling_windows', queryMatch: /\bfloor[- ]to[- ]ceiling windows?\b|\bpanoramic windows?\b/i },
   { label: 'balcony',                  flag: 'balcony',                queryMatch: /\bbalcon(y|ies)\b/i },
+  { label: 'work desk',                flag: 'work_desk',              queryMatch: /\b(work\s*)?desks?\b|\bwork(space|station)\b/i },
   { label: 'terrace',                  flag: 'terrace',                queryMatch: /\bterrace\b/i },
   { label: 'Eiffel Tower view',        flag: 'landmark_view',          queryMatch: /\bEiffel Tower\b|\bEiffel view\b/i },
   { label: 'city view',                flag: 'city_view',              queryMatch: /\bcity view\b/i },
@@ -1480,6 +1484,17 @@ app.get("/api/clip-search", async (req, res) => {
 app.get("/api/vsearch", async (req, res) => {
   const { query } = req.query;
   const cityInput = (req.query.city || "").trim();
+  // BOOP v4 optional inputs:
+  //   hotel_query — separate HyDE seed for hotel-level vibe (lobby/bar/etc.). When
+  //     provided, we run score_hotels in parallel and attach hotelScore per result.
+  //   must_haves  — comma-separated feature-flag names (e.g. "balcony,work_desk")
+  //     to union with query-text detection. Lets the client send picks explicitly
+  //     without needing the query text to contain all the keywords.
+  const hotelQuery = (req.query.hotel_query || "").trim() || null;
+  const mustHavesRaw = (req.query.must_haves || "").trim();
+  const clientMustHaves = mustHavesRaw
+    ? mustHavesRaw.split(",").map(s => s.trim()).filter(Boolean)
+    : [];
   if (!query || !cityInput) return res.status(400).json({ error: "query and city required" });
   if (!supabase)       return res.status(500).json({ error: "Supabase not configured" });
   const city = await resolveCityName(cityInput, supabaseAdmin || supabase, ["indexed_cities", "hotels_cache"]);
@@ -1548,7 +1563,10 @@ app.get("/api/vsearch", async (req, res) => {
     const GALLERY_LIMIT = 250;
 
     // Feature flags from raw query — before HyDE so soft-flag coverage can run in parallel with HyDE + Phase A.
-    const detectedFlags = VSEARCH_FEATURE_FLAGS.filter(f => f.queryMatch.test(query));
+    // Union with any explicit client-supplied must_haves (BOOP v4 screen 6 picks).
+    const textFlagSet = new Set(VSEARCH_FEATURE_FLAGS.filter(f => f.queryMatch.test(query)).map(f => f.flag));
+    for (const mh of clientMustHaves) textFlagSet.add(mh);
+    const detectedFlags = VSEARCH_FEATURE_FLAGS.filter(f => textFlagSet.has(f.flag));
     const flagMode =
       (process.env.VSEARCH_FLAG_MODE || "soft").toLowerCase() === "strict" ||
       String(req.query.flag_mode || "").toLowerCase() === "strict"
@@ -1619,6 +1637,27 @@ app.get("/api/vsearch", async (req, res) => {
 
     // 3. intentType from HyDE (photo-type focus for scoring).
     const intentType = extractIntentType(hydeText, query);
+
+    // BOOP v4: embed hotel_query in parallel with everything downstream. We
+    // DON'T run HyDE expansion on it — the client already builds a rich
+    // hotel-vibe seed like "polished luxury hotel in quiet central Paris with
+    // a modern lobby, intimate bar, spa and rooftop pool" which is embedded
+    // directly against hotel_profile_index.blended.
+    let hotelQueryEmbedding = null;
+    const hotelEmbedPromise = hotelQuery
+      ? fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/gemini-embedding-001:embedContent?key=${process.env.GEMINI_KEY}`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ content: { parts: [{ text: hotelQuery }] } }),
+            signal: AbortSignal.timeout(8000),
+          }
+        )
+          .then(r => r.ok ? r.json() : null)
+          .then(d => { hotelQueryEmbedding = d?.embedding?.values?.slice(0, 768) || null; })
+          .catch(e => { console.warn("[vsearch] hotel_query embed failed:", e.message); })
+      : Promise.resolve();
 
     // ── Geo pre-filter: polygon (preferred) or bbox → hotel_ids for score_room_types ──
     let bboxHotelIds = null;
@@ -1759,13 +1798,60 @@ app.get("/api/vsearch", async (req, res) => {
 
     console.log(`[vsearch] ranked: ${rankedHotels.length} hotels from room-type scoring`);
 
-    // ── Phase B: photo fetch (zero vector computation) ──────────────────────────
+    // ── Phase B: photo fetch + hotel-vibe scoring + primary-nbhd lookup (parallel) ──
     // fetch_hotel_photos returns photo metadata; similarity per photo comes from
     // room_types_index scores already computed in Phase A.
+    // score_hotels scores the SAME top-N hotels against hotel_profile_index using
+    // the hotel_query embedding (BOOP v4). get_primary_nbhds_for_hotels tags each
+    // with the smallest-bbox neighbourhood its lat/lng falls inside.
     const topHotelIds = rankedHotels.slice(0, GALLERY_LIMIT).map(h => h.hotel_id);
-    const photosResult = await fetchClient.rpc("fetch_hotel_photos", { hotel_ids: topHotelIds });
+
+    // Ensure hotel_query embedding is ready before score_hotels runs.
+    await hotelEmbedPromise;
+
+    const [photosResult, hotelScoreResult, primaryNbhdResult] = await Promise.all([
+      fetchClient.rpc("fetch_hotel_photos", { hotel_ids: topHotelIds }),
+      hotelQueryEmbedding
+        ? fetchClient.rpc("score_hotels", {
+            query_embedding: hotelQueryEmbedding,
+            search_city: city,
+            hotel_ids: topHotelIds,
+          })
+        : Promise.resolve({ data: [], error: null }),
+      fetchClient.rpc("get_primary_nbhds_for_hotels", { p_hotel_ids: topHotelIds }),
+    ]);
     const tPhaseB = Date.now();
-    console.log(`[vsearch] phaseB: ${tPhaseB - tPhaseA}ms`);
+    console.log(`[vsearch] phaseB: ${tPhaseB - tPhaseA}ms (photos + hotel_score + primary_nbhd)`);
+
+    // Build hotelVibeSimMap (hotel_id → cosine similarity) and adaptive 0-100 remap.
+    const hotelVibeSimMap = new Map();
+    let hotelSimMaxRaw = 0;
+    if (hotelScoreResult.error) {
+      console.warn(`[vsearch] score_hotels error (non-fatal): ${hotelScoreResult.error.message}`);
+    } else {
+      for (const r of (hotelScoreResult.data || [])) {
+        hotelVibeSimMap.set(r.hotel_id, r.similarity);
+        if (r.similarity > hotelSimMaxRaw) hotelSimMaxRaw = r.similarity;
+      }
+    }
+    const HOTEL_SIM_MAX = hotelSimMaxRaw > 0 ? hotelSimMaxRaw : 0.9;
+    const HOTEL_SIM_MIN = Math.max(HOTEL_SIM_MAX - 0.30, 0);
+    const hotelSimSpan  = Math.max(HOTEL_SIM_MAX - HOTEL_SIM_MIN, 1e-9);
+
+    // Build primaryNbhdMap (hotel_id → { id, name, vibe_short, attributes })
+    const primaryNbhdMap = new Map();
+    if (primaryNbhdResult.error) {
+      console.warn(`[vsearch] get_primary_nbhds_for_hotels error (non-fatal): ${primaryNbhdResult.error.message}`);
+    } else {
+      for (const r of (primaryNbhdResult.data || [])) {
+        primaryNbhdMap.set(r.hotel_id, {
+          id: r.neighborhood_id,
+          name: r.name,
+          vibe_short: r.vibe_short,
+          attributes: r.attributes || null,
+        });
+      }
+    }
 
     if (photosResult.error) throw new Error("fetch_hotel_photos: " + photosResult.error.message);
     const photos = photosResult.data || [];
@@ -1854,6 +1940,13 @@ app.get("/api/vsearch", async (req, res) => {
       const hotelPhotos    = hotelPhotosMap.get(hotelId) || [];
       const fallbackName   = hotelPhotos[0]?.hotel_name || null;
 
+      // BOOP v4: hotelScore + primary_nbhd (same shape for photo + non-photo branches).
+      const rawHotelSim = hotelVibeSimMap.get(hotelId);
+      const hotelScore = rawHotelSim != null
+        ? Math.round(Math.max(0, Math.min(100, (rawHotelSim - HOTEL_SIM_MIN) / hotelSimSpan * 100)))
+        : null;
+      const primaryNbhd = primaryNbhdMap.get(hotelId) || null;
+
       // Hotels without photo data (beyond GALLERY_LIMIT): return stub with no room types.
       // They appear in the sorted list with their match score from room_types_index.
       if (!hasPhotos) {
@@ -1870,6 +1963,8 @@ app.get("/api/vsearch", async (req, res) => {
           roomTypes:   [],
           isMatched:   score > 0,
           vectorScore: score,
+          hotelScore,
+          primary_nbhd: primaryNbhd,
         };
       }
 
@@ -1954,6 +2049,8 @@ app.get("/api/vsearch", async (req, res) => {
         roomTypes:   roomTypes.slice(0, 8),
         isMatched:   score > 0,
         vectorScore: score,
+        hotelScore,
+        primary_nbhd: primaryNbhd,
       };
     });
 
@@ -2220,6 +2317,7 @@ function extractFeatureFlags(featureSummary) {
       /^BATHTUB:\s*(?:jacuzzi|hot tub)/im.test(f))                                    flags.in_room_jacuzzi = true;
   if (/^BIDET:\s*yes/im.test(f))                                                      flags.bidet = true;
   if (/^SEPARATE TOILET ROOM:\s*yes/im.test(f))                                       flags.separate_toilet_room = true;
+  if (/^DESK:\s*(?:small|large) desk/im.test(f))                                      flags.work_desk = true;
 
   // Bedroom / Closet
   if (/^BED:.*\bking\b/im.test(f))                                                    flags.king_bed = true;
@@ -2859,6 +2957,44 @@ app.post("/api/index-city", async (req, res) => {
       console.error(`[indexer] FAILED for ${city}:`, e.message);
     });
   res.json({ message: `Indexing ${city} started`, city, limit: limit || 200 });
+});
+
+// BOOP v4: incremental pass that only pulls hotel-level amenity photos +
+// description embeddings for existing indexed cities. Leaves room data alone.
+// Trigger after deploying v4 to backfill Paris/KL without re-indexing rooms.
+app.post("/api/index-city-amenities", async (req, res) => {
+  const { city: cityRaw, limit, secret } = req.body || {};
+  const city = normalizeCityName(cityRaw);
+  if (secret !== (process.env.INDEX_SECRET || "roommatch-index")) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
+  if (!city) return res.status(400).json({ error: "city required" });
+  loadIndexCityAmenities()(city, { limit: limit || null })
+    .catch(e => console.error(`[amenity_only] FAILED for ${city}:`, e.message));
+  res.json({
+    message: `Amenity-only indexing for ${city} started`,
+    city, limit: limit || null,
+    note: "Processes hotel-level photos + descriptions. Room photos untouched. Check Render logs for progress."
+  });
+});
+
+// BOOP v4: manually trigger rebuild of hotel_profile_index for a city.
+// Useful if amenity indexing completed but the aggregation step failed.
+app.post("/api/rebuild-hotel-profile-index", async (req, res) => {
+  const { city: cityRaw, secret } = req.body || {};
+  const city = normalizeCityName(cityRaw);
+  if (secret !== (process.env.INDEX_SECRET || "roommatch-index")) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
+  if (!city) return res.status(400).json({ error: "city required" });
+  try {
+    const db = supabaseAdmin || supabase;
+    const { data, error } = await db.rpc("rebuild_hotel_profile_index_city", { p_city: city });
+    if (error) throw error;
+    res.json({ city, rows_updated: data, message: "hotel_profile_index rebuilt" });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
 });
 
 app.get("*", (req, res) => {

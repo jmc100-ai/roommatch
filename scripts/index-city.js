@@ -166,6 +166,7 @@ function extractFeatureFlags(featureSummary) {
       /^BATHTUB:\s*(?:jacuzzi|hot tub)/im.test(f))                                    flags.in_room_jacuzzi = true;
   if (/^BIDET:\s*yes/im.test(f))                                                      flags.bidet = true;
   if (/^SEPARATE TOILET ROOM:\s*yes/im.test(f))                                       flags.separate_toilet_room = true;
+  if (/^DESK:\s*(?:small|large) desk/im.test(f))                                      flags.work_desk = true;
 
   // Bedroom / Closet
   if (/^BED:.*\bking\b/im.test(f))                                                    flags.king_bed = true;
@@ -395,6 +396,213 @@ async function geminiEmbed(text) {
     console.warn(`  [embed] exception: ${e.message}`);
     return null;
   }
+}
+
+// Hotel-level amenity photo types — distinct from room photo_types.
+// Must stay in sync with rebuild_hotel_profile_index_city() photo_type filter.
+const AMENITY_PHOTO_TYPES = ['lobby', 'bar', 'restaurant', 'pool', 'spa', 'exterior', 'fitness'];
+
+// Heuristic classifier for hotel-level amenity photos based on LiteAPI caption
+// + imageClass* metadata. Returns one of AMENITY_PHOTO_TYPES or null (skip).
+// Gemini confirms/overrides this at caption time.
+function classifyAmenityPhoto(photo) {
+  const desc = [
+    photo.imageDescription || "", photo.imageClass1 || "", photo.imageClass2 || "",
+    photo.tag || "", photo.category || "", photo.caption || "",
+    photo.type || "", photo.label || "",
+  ].join(" ").toLowerCase();
+  if (/lobby|reception|entrance|concierge|foyer/.test(desc))       return 'lobby';
+  if (/bar|lounge(?! chair)|cocktail|drinks/.test(desc))           return 'bar';
+  if (/restaurant|dining|breakfast|buffet|meal|food/.test(desc))   return 'restaurant';
+  if (/pool|swim/.test(desc))                                      return 'pool';
+  if (/spa|sauna|hammam|wellness|steam room/.test(desc))           return 'spa';
+  if (/gym|fitness|workout/.test(desc))                            return 'fitness';
+  if (/exterior|facade|facade|entrance|building|outside|terrace\b|courtyard/.test(desc)) return 'exterior';
+  return null; // skip — too ambiguous to embed as a hotel-level vibe signal
+}
+
+// Caption an amenity (hotel-level) photo. Uses a shorter prompt focused on
+// atmosphere + style (not room-feature checklists). Returns { caption, type }
+// where `type` is the Gemini-confirmed amenity type.
+async function geminiCaptionAmenity(imageUrl, hintType, retries = 3) {
+  try {
+    await captionThrottle();
+    const imgRes = await fetch(imageUrl, {
+      headers: { "User-Agent": "Mozilla/5.0" },
+      signal: AbortSignal.timeout(10000),
+    });
+    if (!imgRes.ok) return null;
+    const b64  = Buffer.from(await imgRes.arrayBuffer()).toString("base64");
+    const mime = imgRes.headers.get("content-type")?.split(";")[0] || "image/jpeg";
+
+    const hintLine = hintType
+      ? `LiteAPI metadata suggests this is a hotel ${hintType} photo (use this as a hint, but correct the TYPE field if you see something else).`
+      : `LiteAPI metadata did not classify this photo.`;
+
+    const prompt = `You are analyzing a HOTEL-LEVEL (not room-level) photo — lobby, bar, restaurant, pool, spa, exterior, or fitness centre. ${hintLine}
+
+Return ONLY the filled-in list below. No commentary.
+
+TYPE: (lobby / bar / restaurant / pool / spa / exterior / fitness / other)
+VIBE: 3-5 adjectives that capture the atmosphere (e.g. "polished modern minimalist" or "opulent baroque gilded" or "casual airy tropical")
+STYLE: (Modern / Contemporary / Classic / Traditional / Luxury / Opulent / Minimalist / Boutique / Eclectic / Art Deco / Mid-Century / Scandinavian / Industrial / Rustic / Mediterranean / Asian / Zen / Baroque / Ornate / Tropical)
+MATERIALS: key materials visible (e.g. "marble, brass, velvet" or "concrete, steel, wood")
+COLOR MOOD: (light and airy / warm and cosy / dark and moody / bright and colorful / monochrome)
+NOTABLE: any standout feature (e.g. "grand chandelier", "rooftop terrace", "infinity pool", "fireplace"). Write "none" if nothing stands out.`;
+
+    const gr = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=${GEMINI_KEY}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contents: [{ parts: [
+            { inline_data: { mime_type: mime, data: b64 } },
+            { text: prompt }
+          ]}],
+          generationConfig: { maxOutputTokens: 200, temperature: 0.1 }
+        }),
+        signal: AbortSignal.timeout(25000),
+      }
+    );
+    const rawText = await gr.text();
+    if (!gr.ok) {
+      if ((gr.status === 503 || gr.status === 429) && retries > 0) {
+        const wait = Math.pow(2, 4 - retries) * 2000;
+        console.warn(`  [gemini·amenity] ${gr.status} — retrying in ${wait/1000}s (${retries} left)`);
+        await new Promise(r => setTimeout(r, wait));
+        return geminiCaptionAmenity(imageUrl, hintType, retries - 1);
+      }
+      console.warn(`  [gemini·amenity] ${gr.status}: ${rawText.slice(0,200)}`);
+      return null;
+    }
+    let gd;
+    try { gd = JSON.parse(rawText); }
+    catch(e) { console.warn(`  [gemini·amenity] JSON parse failed: ${rawText.slice(0,100)}`); return null; }
+
+    const caption = gd?.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
+    if (!caption) return null;
+
+    // Extract Gemini-confirmed type. Fall back to hint if parse fails.
+    const typeMatch = caption.match(/TYPE:\s*([a-z ]+)/i)?.[1]?.trim().toLowerCase() || "";
+    const confirmed = AMENITY_PHOTO_TYPES.find(t => typeMatch.includes(t));
+    const finalType = confirmed || hintType || 'other';
+    return { caption, type: finalType };
+  } catch(e) {
+    console.warn(`  [gemini·amenity] error: ${e.message}`);
+    return null;
+  }
+}
+
+// Process one hotel's amenity photos + description. Shared between the main
+// indexer's per-hotel loop and the 'amenity_only' backfill mode.
+async function processHotelAmenities({ db, hotelId, hotelName, city, cc, detail, stars, rating }) {
+  // 1. Collect amenity photos (up to 10 per hotel).
+  const mainPhotoUrl = detail.main_photo || detail.mainPhoto || "";
+  const rawHotelPhotos = [
+    ...(detail.hotelImages || []),
+    ...(detail.photos      || []),
+    ...(detail.images      || []),
+    ...(detail.gallery     || []),
+    ...(detail.hotelPhotos || []),
+  ];
+
+  // Normalise to [{ url, ...rawMeta }] and dedupe by URL
+  const seenUrls = new Set();
+  const photoObjs = [];
+  for (const p of rawHotelPhotos) {
+    const url = typeof p === 'string' ? p : (p?.urlHd || p?.url || p?.hd_url || p?.imageUrl || "");
+    if (!url || seenUrls.has(url)) continue;
+    if (url === mainPhotoUrl) continue;
+    seenUrls.add(url);
+    photoObjs.push(typeof p === 'string' ? { url } : { ...p, url });
+    if (photoObjs.length >= 12) break;
+  }
+
+  // 2. Classify — skip photos we can't confidently bucket (too ambiguous).
+  //    Gemini may still re-classify below; the hint helps.
+  const candidates = [];
+  for (const p of photoObjs) {
+    const hint = classifyAmenityPhoto(p);
+    candidates.push({ url: p.url, hint });
+    if (candidates.length >= 10) break;
+  }
+  if (!candidates.length) return { amenityCount: 0, descEmbedded: false };
+
+  // 3. Skip already-indexed amenity photos (idempotent re-runs)
+  const { data: existing } = await db
+    .from("room_embeddings")
+    .select("photo_url")
+    .eq("hotel_id", hotelId)
+    .in("photo_url", candidates.map(c => c.url));
+  const seenUrls2 = new Set((existing || []).map(e => e.photo_url));
+  const fresh = candidates.filter(c => !seenUrls2.has(c.url));
+
+  // 4. Caption + embed + upsert each fresh amenity photo.
+  let amenityCount = 0;
+  for (let i = 0; i < fresh.length; i += PHOTO_CONCURRENCY) {
+    const chunk = fresh.slice(i, i + PHOTO_CONCURRENCY);
+    await Promise.all(chunk.map(async (p) => {
+      const cap = await geminiCaptionAmenity(p.url, p.hint);
+      if (!cap) return;
+      const embedText = `AMENITY TYPE: ${cap.type}\n${cap.caption}`;
+      const embedding = await geminiEmbed(embedText);
+      if (!embedding) return;
+      await acquireDb();
+      try {
+        const { error } = await db.from("room_embeddings").upsert({
+          hotel_id: hotelId, city, country_code: cc,
+          hotel_name: hotelName,
+          room_name: null,
+          room_type_id: null,
+          photo_url: p.url,
+          photo_type: cap.type,    // lobby / bar / pool / ...
+          caption: embedText,
+          feature_summary: null,   // amenity photos don't populate room-level flags
+          feature_flags: {},
+          embedding,
+          feature_embedding: embedding,  // same vector — blended vs room logic is handled upstream
+          star_rating: stars, guest_rating: rating,
+        }, { onConflict: "hotel_id,photo_url" });
+        if (!error) amenityCount++;
+        else console.warn(`  [amenity·db] ${error.message}`);
+      } finally {
+        releaseDb();
+      }
+    }));
+  }
+
+  // 5. Description + description_embedding (one per hotel)
+  const desc = (detail.description || detail.hotelDescription || "").trim();
+  let descEmbedded = false;
+  if (desc) {
+    // Only re-embed if description changed or embedding missing
+    const { data: existingHotel } = await db
+      .from("hotels_cache")
+      .select("description, description_embedding")
+      .eq("hotel_id", hotelId)
+      .single();
+    const needsEmbed = !existingHotel?.description_embedding || existingHotel?.description !== desc;
+    if (needsEmbed) {
+      const truncated = desc.slice(0, 2000); // cap on prompt size
+      const descVec = await geminiEmbed(truncated);
+      if (descVec) {
+        await acquireDb();
+        try {
+          const { error } = await db.from("hotels_cache").update({
+            description: truncated,
+            description_embedding: descVec,
+            cached_at: new Date().toISOString(),
+          }).eq("hotel_id", hotelId);
+          if (!error) descEmbedded = true;
+        } finally {
+          releaseDb();
+        }
+      }
+    }
+  }
+
+  return { amenityCount, descEmbedded };
 }
 
 function classifyPhoto(photo, roomName, photoIndex = 0) {
@@ -634,8 +842,21 @@ ${caption}`;
         })); // end Promise.all photo chunk
       } // end photo chunk loop
 
+      // Hotel-level amenity photos + description (BOOP v4 hotel-vibe signal).
+      // Non-fatal: if this fails the room indexing still counts.
+      let amenityEmbedded = 0;
+      try {
+        const amenityResult = await processHotelAmenities({
+          db, hotelId, hotelName, city, cc, detail, stars, rating,
+        });
+        amenityEmbedded = amenityResult.amenityCount || 0;
+        totalEmbeds += amenityEmbedded;
+      } catch (e) {
+        console.warn(`  [amenity] ${hotelName.slice(0,30)} failed: ${e.message}`);
+      }
+
       hotelsDone++;
-      console.log(`[indexer] [${hotelsDone}/${hotels.length}] ${hotelName.slice(0,35)} — ${embedded} embeddings`);
+      console.log(`[indexer] [${hotelsDone}/${hotels.length}] ${hotelName.slice(0,35)} — ${embedded} room + ${amenityEmbedded} amenity embeddings`);
 
       // Keep both index tables current (best-effort, non-blocking)
       if (embedded > 0) {
@@ -688,6 +909,16 @@ ${caption}`;
     console.log(`[indexer] room_types_index rebuilt: ${rebuildCount} rows`);
   }
 
+  // Rebuild hotel_profile_index so Hotel Vibe scores work for BOOP v4 searches.
+  // Non-fatal: if the RPC doesn't exist yet (pre-migration) we log and move on.
+  console.log(`[indexer] rebuilding hotel_profile_index for ${city}...`);
+  const { data: hpiCount, error: hpiErr } = await db.rpc("rebuild_hotel_profile_index_city", { p_city: city });
+  if (hpiErr) {
+    console.warn(`[indexer] hotel_profile_index rebuild error (non-fatal): ${hpiErr.message}`);
+  } else {
+    console.log(`[indexer] hotel_profile_index rebuilt: ${hpiCount} rows`);
+  }
+
   // Auto-generate neighborhoods if none exist; refresh hotel_count if they do
   try {
     const { generateNeighborhoods, refreshHotelCounts } = require("./neighborhood-generator");
@@ -710,15 +941,91 @@ ${caption}`;
   return { hotelsDone, totalEmbeds };
 }
 
-module.exports = { indexCity };
+// ── indexCityAmenities ────────────────────────────────────────────────────────
+// Incremental pass: for each hotel already in hotels_cache for the city,
+// fetch /data/hotel/{id}, extract hotel-level amenity photos + description,
+// caption + embed them, and append to room_embeddings + hotels_cache.
+// Skips anything already embedded (idempotent). Leaves room photos untouched.
+//
+// Used by:
+//   - /api/index-city-amenities endpoint (backfill existing cities for BOOP v4)
+//   - CLI: node scripts/index-city.js --mode amenity_only --city Paris
+async function indexCityAmenities(city, opts = {}) {
+  if (!LITEAPI_KEY || !GEMINI_KEY || !SUPABASE_URL || !SUPABASE_KEY) {
+    throw new Error(`[amenity_only] Missing required env vars`);
+  }
+  const db = getSupabase();
+  const cc = COUNTRY_CODES[city.toLowerCase()] || "";
+  const limit = opts.limit ?? null;
+
+  console.log(`\n[amenity_only] Starting: ${city} ${limit ? `(limit ${limit})` : '(all hotels)'}`);
+
+  // Load hotels for this city (optionally limited) — process in batches
+  let q = db
+    .from("hotels_cache")
+    .select("hotel_id,name,star_rating,guest_rating")
+    .eq("city", city)
+    .order("star_rating", { ascending: false });
+  if (limit) q = q.limit(limit);
+  const { data: hotels, error } = await q;
+  if (error) throw new Error(`hotels_cache read: ${error.message}`);
+  if (!hotels?.length) {
+    console.log(`[amenity_only] No hotels found in hotels_cache for ${city}. Run full index first.`);
+    return { hotelsDone: 0, amenityEmbeds: 0, descEmbeds: 0 };
+  }
+  console.log(`[amenity_only] ${hotels.length} hotels to scan`);
+
+  let hotelsDone = 0, amenityEmbeds = 0, descEmbeds = 0;
+
+  for (let i = 0; i < hotels.length; i += BATCH_SIZE) {
+    const batch = hotels.slice(i, i + BATCH_SIZE);
+    await Promise.all(batch.map(async (h) => {
+      try {
+        const detailRes = await liteGet(`/data/hotel?hotelId=${h.hotel_id}`);
+        if (!detailRes.ok) return;
+        const detail = detailRes.data?.data || {};
+        const r = await processHotelAmenities({
+          db,
+          hotelId:   h.hotel_id,
+          hotelName: h.name || detail.name || "Hotel",
+          city, cc,
+          detail,
+          stars:  h.star_rating  || 0,
+          rating: h.guest_rating || 0,
+        });
+        amenityEmbeds += r.amenityCount || 0;
+        if (r.descEmbedded) descEmbeds += 1;
+      } catch (e) {
+        console.warn(`  [amenity_only] ${h.hotel_id}: ${e.message}`);
+      } finally {
+        hotelsDone++;
+      }
+    }));
+    console.log(`[amenity_only] progress: ${hotelsDone}/${hotels.length} hotels · ${amenityEmbeds} amenity photos · ${descEmbeds} descriptions`);
+  }
+
+  // Rebuild the blended hotel_profile_index now that fresh embeddings exist
+  console.log(`[amenity_only] rebuilding hotel_profile_index for ${city}...`);
+  const { data: hpiCount, error: hpiErr } = await db.rpc("rebuild_hotel_profile_index_city", { p_city: city });
+  if (hpiErr) console.warn(`[amenity_only] hpi rebuild error: ${hpiErr.message}`);
+  else console.log(`[amenity_only] hotel_profile_index rebuilt: ${hpiCount} rows`);
+
+  console.log(`[amenity_only] ✅ ${city} — ${hotelsDone} hotels, ${amenityEmbeds} amenity embeds, ${descEmbeds} descriptions`);
+  return { hotelsDone, amenityEmbeds, descEmbeds, hpiCount };
+}
+
+module.exports = { indexCity, indexCityAmenities };
 
 // CLI entry point
 if (require.main === module) {
   const args = process.argv.slice(2);
   const get  = n => { const i = args.indexOf(`--${n}`); return i >= 0 ? args[i+1] : null; };
+  const mode  = get("mode") || "full";
   const city  = get("city")  || "Paris";
   const limit = parseInt(get("limit") || "200");
-  indexCity(city, limit)
-    .then(() => process.exit(0))
-    .catch(e => { console.error(e); process.exit(1); });
+  const run = mode === "amenity_only"
+    ? indexCityAmenities(city, { limit: isNaN(limit) ? null : limit })
+    : indexCity(city, limit);
+  run.then(() => process.exit(0))
+     .catch(e => { console.error(e); process.exit(1); });
 }
