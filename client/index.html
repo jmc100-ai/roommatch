@@ -5973,29 +5973,71 @@
   // Dot-product of the user's saved prefs × the neighbourhood's attribute
   // vector, normalised to 0-100. Falls back gracefully when either side is
   // missing (returns 0 → pill hidden).
+
+  // Nbhd rows in Supabase were generated with a categorical schema
+  // (green_spaces="some", street_energy="lively", …) but BOOP prefs are
+  // numeric weights on { central, local, calm, walkability, nightlife, green,
+  // cafes, foodie, luxury, shopping, culture, iconic }. Translate one to the
+  // other so the dot product is meaningful. Unknown categories → neutral (5).
+  const _NBHD_CAT_SCORE = {
+    minimal:2, some:5, abundant:8, plenty:8, extensive:8, significant:7,
+    quiet:2, moderate:5, lively:8, vibrant:8, bustling:9,
+    limited:3, good:6, excellent:8, outstanding:9, fair:4,
+    high:3, medium:5, low:7  // transport_dependency — low dep = high walkability
+  };
+  function _nbhdCatToNum(s) {
+    const v = _NBHD_CAT_SCORE[String(s || '').toLowerCase()];
+    return Number.isFinite(v) ? v : 5;
+  }
+  function _nbhdAttrsToBoopAxes(attrs) {
+    if (!attrs) return {};
+    // Support both the categorical legacy schema and numeric attrs (future).
+    const already = Object.values(attrs).every(v => Number.isFinite(Number(v)));
+    if (already) return attrs;
+    const green     = _nbhdCatToNum(attrs.green_spaces);
+    const energy    = _nbhdCatToNum(attrs.street_energy);
+    const transport = _nbhdCatToNum(attrs.transport_dependency);
+    const walkD     = _nbhdCatToNum(attrs.walkability_dining);
+    const walkT     = _nbhdCatToNum(attrs.walkability_tourist_spots);
+    const skyline   = String(attrs.skyline_character || '').toLowerCase();
+    return {
+      green,
+      calm:        Math.max(0, 10 - energy),
+      nightlife:   energy,
+      walkability: Math.round((walkD + walkT + transport) / 3),
+      central:     transport,
+      iconic:      walkT,
+      cafes:       walkD,
+      foodie:      walkD,
+      luxury:      skyline.includes('modern high-rise') ? 7 : 5,
+      culture:     /historic|classic|old|heritage/.test(skyline) ? 8 : 5,
+      local:       Math.max(0, 10 - walkT),
+      shopping:    Math.round((walkD + energy) / 2)
+    };
+  }
+
   function computeNbhdVibe(h) {
     const nbhd = h?.primary_nbhd;
     if (!nbhd || !nbhd.attributes) return 0;
     const profile = S.boopProfile || loadBoopProfileForCity(S.city);
     const prefs = profile?.prefs;
     if (!prefs) return 0;
-    const attrs = nbhd.attributes;
-    // Only score keys present on both sides. Attributes are 1-10; prefs are
-    // the BOOP weighted integers (often ±0-30). We normalise each side and
-    // sum, scaled to 0-100.
+    const attrs = _nbhdAttrsToBoopAxes(nbhd.attributes);
+    // Dot-product over BOOP pref axes (keys both sides now agree on).
+    // Attributes are 0-10 (centered at 5); prefs are BOOP weighted integers
+    // (~±0-30). Normalise each side and sum, scaled to 0-100.
     let dot = 0, norm = 0;
     for (const k of Object.keys(attrs)) {
       const a = Number(attrs[k]);
       const p = Number(prefs[k] || 0);
       if (!Number.isFinite(a) || !Number.isFinite(p)) continue;
-      // Pref normalised to −1..+1 by dividing by 30; attr centered at 5 → −0.5..+0.5.
       const pN = Math.max(-1, Math.min(1, p / 30));
       const aN = (a - 5) / 5;
       dot  += pN * aN;
       norm += Math.abs(pN);
     }
     if (norm < 0.01) return 0;
-    // dot is roughly −norm..+norm; map to 0..100 (0.5 = neutral).
+    // dot ∈ [-norm, +norm]; map to 0..100 (0.5 = neutral).
     const raw = 0.5 + (dot / Math.max(norm, 0.01)) * 0.5;
     return Math.max(0, Math.min(100, Math.round(raw * 100)));
   }
