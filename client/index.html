@@ -3055,102 +3055,88 @@
   const BOOP_WIZARD_IMAGES = {}; // cityKey -> { questionId: { optionId: url } }
   const BOOP_WIZARD_CITY_FALLBACKS = {}; // cityKey -> { questionId: url }
   const BOOP_WIZARD_FETCHING = new Set();
+  // BOOP v4 wizard — 6 screens matching the original mockup:
+  //   1. Trip context       (3 cards — first-timer / been-before / expert)
+  //   2. Room style         (A/B    — sleek & modern  ↔ warm & cozy)
+  //   3. Neighbourhood pace (A/B    — vibrant & busy  ↔ quiet & residential)
+  //   4. Hotel personality  (A/B    — polished comfort ↔ unique personality)
+  //   5. Neighbourhood loc  (A/B    — popular central  ↔ trendy local)
+  //   6. Must-haves grid    (multi-select chips + optional free-text)
+  //
+  // Screens 2-5 are deliberately binary so the user can make a clear gut call
+  // from two photos, mirroring the original wizard comp. Weights from each
+  // answer accumulate into BOOP.prefs which becomes profile.prefs and drives
+  // the nbhd-vibe dot product; trip/roomStyle/hotelPersonality also drive
+  // the room + hotel HyDE seeds in buildBoopSeeds().
   const BOOP_QUESTIONS = [
     {
       id:'trip',
       label:'Trip context',
-      title:'What kind of trip is this?',
-      sub:'Tap one to continue.',
+      title:'Have you been to this city before?',
+      sub:'Bias toward iconic corners or deeper local finds.',
       type:'cards',
       options:[
-        { id:'first', emoji:'🗺️', title:'First time here', note:'Central, iconic, easier navigation', image:'https://images.unsplash.com/photo-1499856871958-5b9627545d1a?auto=format&fit=crop&w=1200&q=80', weights:{ central:20, iconic:18, calm:8, local:-6 } },
-        { id:'repeat', emoji:'🔍', title:'Been before, want something new', note:'Local texture and less touristy picks', image:'https://images.unsplash.com/photo-1518638150340-f706e86654de?auto=format&fit=crop&w=1200&q=80', weights:{ local:18, culture:8, central:-3 } },
-        { id:'expert', emoji:'🧭', title:'I know the city well', note:'Hidden gems and deeper neighborhood fit', image:'https://images.unsplash.com/photo-1505764706515-aa95265c5abc?auto=format&fit=crop&w=1200&q=80', weights:{ local:20, calm:6, central:-8, iconic:-5 } },
+        { id:'first',  emoji:'🗺️', title:'First time',        note:'Central, iconic, easy to navigate.', image:'https://images.unsplash.com/photo-1499856871958-5b9627545d1a?auto=format&fit=crop&w=1200&q=80', weights:{ central:20, iconic:18, calm:8, local:-6 } },
+        { id:'repeat', emoji:'🔍', title:'Been before',       note:'Something new each visit.',         image:'https://images.unsplash.com/photo-1518638150340-f706e86654de?auto=format&fit=crop&w=1200&q=80', weights:{ local:18, culture:8, central:-3 } },
+        { id:'expert', emoji:'🧭', title:'I know it well',    note:'Hidden corners, less touristy.',     image:'https://images.unsplash.com/photo-1505764706515-aa95265c5abc?auto=format&fit=crop&w=1200&q=80', weights:{ local:20, calm:6, central:-8, iconic:-5 } },
       ]
     },
+    // Screen 2 — "Which would you rather wake up in?" (room style A/B)
+    // Drives roomSeed; doesn't affect nbhd/hotel atmosphere weights.
     {
-      id:'morning',
-      label:'Morning anchor',
-      title:'Pick your perfect morning',
-      sub:'One choice helps set your vibe baseline.',
+      id:'roomStyle',
+      label:'Room style',
+      title:'Which would you rather wake up in?',
+      sub:'The room that feels more like you.',
       type:'cards',
       options:[
-        { id:'cafe', emoji:'☕', title:'Coffee and pastries', note:'Cafe streets + walkability', image:'https://images.unsplash.com/photo-1442512595331-e89e73853f31?auto=format&fit=crop&w=1200&q=80', weights:{ cafes:18, walkability:10, foodie:8, local:6 } },
-        { id:'park', emoji:'🌳', title:'Park walk or jog', note:'Leafy and calm atmosphere', image:'https://images.unsplash.com/photo-1519331379826-f10be5486c6f?auto=format&fit=crop&w=1200&q=80', weights:{ green:22, calm:10, walkability:6 } },
-        { id:'shopping', emoji:'🛍️', title:'Shopping and brunch', note:'Upscale and polished', image:'https://images.unsplash.com/photo-1481437156560-3205f6a55735?auto=format&fit=crop&w=1200&q=80', weights:{ shopping:20, luxury:12, central:6 } },
-        { id:'historic', emoji:'🏛️', title:'Historic streets', note:'Architecture + culture', image:'https://images.unsplash.com/photo-1467269204594-9661b134dd2b?auto=format&fit=crop&w=1200&q=80', weights:{ culture:16, iconic:10, central:8 } },
+        { id:'sleek', emoji:'✨', title:'Sleek & Modern', note:'Clean lines, soft greys, minimal.',       image:'https://images.unsplash.com/photo-1631049307264-da0ec9d70304?auto=format&fit=crop&w=1200&q=80' },
+        { id:'cozy',  emoji:'🕯️', title:'Warm & Cozy',     note:'Layered textures, wood, warm light.',    image:'https://images.unsplash.com/photo-1596394516093-501ba68a0ba6?auto=format&fit=crop&w=1200&q=80' },
       ]
     },
+    // Screen 3 — "Step outside — what feels right?" (nbhd pace A/B)
     {
-      id:'night',
-      label:'Night energy',
-      title:'What does your night look like?',
-      sub:'Quiet dinner or lively social energy.',
+      id:'nbhdPace',
+      label:'Neighbourhood pace',
+      title:'Step outside — what feels right?',
+      sub:'Street energy right outside your hotel.',
       type:'cards',
       options:[
-        { id:'chill', emoji:'🍷', title:'Wine bar and calm dinner', note:'Relaxed pace', image:'https://images.unsplash.com/photo-1470337458703-46ad1756a187?auto=format&fit=crop&w=1200&q=80', weights:{ calm:16, nightlife:-9, foodie:8 } },
-        { id:'street', emoji:'🌮', title:'Street food and casual spots', note:'Local + vibrant', image:'https://images.unsplash.com/photo-1552332386-f8dd00dc2f85?auto=format&fit=crop&w=1200&q=80', weights:{ foodie:16, local:12, nightlife:4 } },
-        { id:'trendy', emoji:'🍸', title:'Trendy restaurants and cocktails', note:'Modern social scene', image:'https://images.unsplash.com/photo-1514933651103-005eec06c04b?auto=format&fit=crop&w=1200&q=80', weights:{ nightlife:10, shopping:8, luxury:6 } },
-        { id:'late', emoji:'🎶', title:'Bars and music', note:'Late and lively', image:'https://images.unsplash.com/photo-1492684223066-81342ee5ff30?auto=format&fit=crop&w=1200&q=80', weights:{ nightlife:20, calm:-12, central:5 } },
+        { id:'vibrant', emoji:'🌆', title:'Vibrant & Busy',       note:'Cafés, shops, movement, buzz.',  image:'https://images.unsplash.com/photo-1477959858617-67f85cf4f1df?auto=format&fit=crop&w=1200&q=80', weights:{ nightlife:14, central:6, calm:-10, walkability:6 } },
+        { id:'quiet',   emoji:'🌿', title:'Quiet & Residential',  note:'Leafy, calm, local pace.',       image:'https://images.unsplash.com/photo-1519331379826-f10be5486c6f?auto=format&fit=crop&w=1200&q=80', weights:{ calm:16, nightlife:-10, green:8, local:6 } },
       ]
     },
+    // Screen 4 — "What matters more?" (hotel personality A/B)
+    // Drives hotelSeed + luxury/local prefs axis.
     {
-      id:'mobility',
-      label:'Mobility',
-      title:'How do you want to get around?',
-      sub:'Walk-first or ride-flexible.',
+      id:'hotelPersonality',
+      label:'Hotel personality',
+      title:'What matters more?',
+      sub:'Two ways a hotel can win.',
       type:'cards',
       options:[
-        { id:'walk', emoji:'🚶', title:'Walk almost everywhere', note:'High walkability', image:'https://images.unsplash.com/photo-1501426026826-31c667bdf23d?auto=format&fit=crop&w=1200&q=80', weights:{ walkability:20, central:8 } },
-        { id:'mix', emoji:'⚖️', title:'Walk plus short rides', note:'Balanced flexibility', image:'https://images.unsplash.com/photo-1476480862126-209bfaa8edc8?auto=format&fit=crop&w=1200&q=80', weights:{ walkability:10, local:6 } },
-        { id:'ride', emoji:'🚕', title:'Uber for great spots', note:'Distance is fine', image:'https://images.unsplash.com/photo-1449965408869-eaa3f722e40d?auto=format&fit=crop&w=1200&q=80', weights:{ central:-8, local:8, calm:4 } },
+        { id:'polished', emoji:'🥂', title:'Polished Comfort',   note:'Refined service, calm luxury.',     image:'https://images.unsplash.com/photo-1566073771259-6a8506099945?auto=format&fit=crop&w=1200&q=80', weights:{ luxury:14, central:4 } },
+        { id:'unique',   emoji:'🎨', title:'Unique Personality', note:'Boutique, characterful, design-led.', image:'https://images.unsplash.com/photo-1564501049412-61c2a3083791?auto=format&fit=crop&w=1200&q=80', weights:{ local:10, culture:8 } },
       ]
     },
+    // Screen 5 — "Where would you stay?" (nbhd location A/B)
+    // (Mockup shows a mini-map; we use representative photos for now — map
+    // preview variant is a future polish item.)
     {
-      id:'environment',
-      label:'Environment tradeoff',
-      title:'What matters more around you?',
-      sub:'Pick the atmosphere that best matches your trip style.',
+      id:'nbhdLocation',
+      label:'Neighbourhood location',
+      title:'Where would you stay?',
+      sub:'Iconic central area or trendy local pocket.',
       type:'cards',
       options:[
-        {
-          id:'calm_green',
-          emoji:'🌳',
-          title:'Quiet + Green',
-          note:'Leafy streets, calmer pace, less noise.',
-          image:'https://images.unsplash.com/photo-1519331379826-f10be5486c6f?auto=format&fit=crop&w=1200&q=80',
-          weights:{ green:22, calm:16, nightlife:-10, shopping:-4 }
-        },
-        {
-          id:'calm_cafe',
-          emoji:'☕',
-          title:'Calm + Cafe Streets',
-          note:'Walkable daytime energy, relaxed evenings.',
-          image:'https://images.unsplash.com/photo-1509042239860-f550ce710b93?auto=format&fit=crop&w=1200&q=80',
-          weights:{ cafes:14, walkability:12, foodie:8, calm:8 }
-        },
-        {
-          id:'urban_mix',
-          emoji:'⚖️',
-          title:'Walkable Urban Mix',
-          note:'A balanced blend of buzz and breathing room.',
-          image:'https://images.unsplash.com/photo-1496950866446-3253e1470e8e?auto=format&fit=crop&w=1200&q=80',
-          weights:{ walkability:12, central:10, nightlife:4, calm:4, shopping:6 }
-        },
-        {
-          id:'lively_central',
-          emoji:'🌆',
-          title:'Lively + Central',
-          note:'Dense food, shops, nightlife, and movement.',
-          image:'https://images.unsplash.com/photo-1477959858617-67f85cf4f1df?auto=format&fit=crop&w=1200&q=80',
-          weights:{ nightlife:18, shopping:12, central:12, calm:-12, green:-6 }
-        }
+        { id:'central', emoji:'🗽', title:'Popular Central', note:'Icons, sightseeing distance, easy access.', image:'https://images.unsplash.com/photo-1431274172761-fca41d930114?auto=format&fit=crop&w=1200&q=80', weights:{ central:18, iconic:10, walkability:6 } },
+        { id:'trendy',  emoji:'🧭', title:'Trendy Local',    note:'Hip local area, authentic neighbourhood.', image:'https://images.unsplash.com/photo-1509917734205-50c3085b3c5c?auto=format&fit=crop&w=1200&q=80', weights:{ local:18, cafes:6, calm:4 } },
       ]
     },
     // Screen 6 — room must-haves (multi-select) + optional free-text.
     // These map to DB feature_flags that become must_haves[] on /api/vsearch.
     // "spa_bathroom" & "spacious" don't have single canonical flags — they're
-    // handled via composite flags + HyDE seed nudges (see boopFinish).
+    // handled via composite flags + HyDE seed nudges (see buildBoopSeeds).
     {
       id:'musthaves',
       label:'Must-haves',
@@ -3966,29 +3952,28 @@
   // If they contradict (e.g. "expert" + "lively central" — an exception),
   // amplify screen 5 so the user's override actually moves results.
   const BOOP_RECONCILE_KEYS = ['central','local','nightlife','calm'];
+  // trip (screen 1) and nbhdLocation (screen 5) both push on the central/local
+  // axis. If the user says "first time" AND "central" they're piling up on the
+  // same side; dampen a bit so they don't drown out calm/green/nightlife. If
+  // they contradict ("expert" + "central") the user is explicitly overriding
+  // screen 1 — amplify screen 5 so the override actually moves results.
   function reconcileTripEnvWeights(answers, rawPrefs) {
     const trip = answers?.trip;
-    const env  = answers?.environment;
-    if (!trip || !env) return rawPrefs;
-    // Sign of trip-context direction on each axis (from BOOP_QUESTIONS weights)
+    const loc  = answers?.nbhdLocation;
+    if (!trip || !loc) return rawPrefs;
     const tripDir = {
       first:  { central:+1, local:-1, iconic:+1, calm:+1 },
-      repeat: { central:-1, local:+1, calm:0 },
+      repeat: { central:-1, local:+1 },
       expert: { central:-1, local:+1, calm:+1, iconic:-1 },
     }[trip] || {};
-    const envDir = {
-      calm_green:     { calm:+1, nightlife:-1, green:+1 },
-      calm_cafe:      { calm:+1, cafes:+1 },
-      urban_mix:      { central:+1, nightlife:+1, calm:0 },
-      lively_central: { central:+1, nightlife:+1, calm:-1, shopping:+1 },
-    }[env] || {};
+    const locDir = {
+      central: { central:+1, local:-1, iconic:+1 },
+      trendy:  { central:-1, local:+1 },
+    }[loc] || {};
     const out = { ...rawPrefs };
     for (const k of BOOP_RECONCILE_KEYS) {
-      const t = tripDir[k];  const e = envDir[k];
+      const t = tripDir[k];  const e = locDir[k];
       if (!t || !e) continue;
-      // Only reconcile the env-contributed portion (which is already baked into
-      // rawPrefs). We use a simple heuristic: if they agree → scale that axis
-      // by 0.65 (dampen), if they contradict → scale by 1.25 (amplify).
       const agree = (t > 0 && e > 0) || (t < 0 && e < 0);
       if (out[k] == null) continue;
       out[k] = Math.round(out[k] * (agree ? 0.65 : 1.25));
@@ -3998,10 +3983,10 @@
 
   // ── BOOP v4 — Build search seeds from wizard answers + must-haves ────────
   // roomSeed: natural-language HyDE seed embedded against room_types_index.
-  //   Built from musthaves picks (aesthetic/feature hints) + optional freetext.
-  // hotelSeed: built from trip/morning/night/environment (atmosphere signals)
-  //   — embedded against hotel_profile_index (lobby/bar/pool vibe).
-  // mustHaves: array of DB feature_flag names → pass as must_haves[] to /api/vsearch.
+  //   Built from roomStyle choice + musthaves picks + optional freetext.
+  // hotelSeed: built from trip/hotelPersonality/nbhdPace/nbhdLocation signals
+  //   — embedded against hotel_profile_index (lobby/bar/pool/description vibe).
+  // mustHaves: array of DB feature_flag names → passed as must_haves[] on /api/vsearch.
   function buildBoopSeeds(profile) {
     const ans = profile?.answers || {};
     const picked = new Set(profile?.dealbreakers || []);
@@ -4024,44 +4009,42 @@
       if (o.id === 'work_desk')       seedExtras.push('work desk, proper workspace');
     }
 
-    // Room seed: aesthetic + feature words + user freetext.
+    // Room seed: roomStyle aesthetic → primary signal + feature nudges + freetext.
+    const roomStyleLabel = {
+      sleek: 'sleek modern contemporary room, clean lines, minimalist, soft greys, natural light',
+      cozy:  'warm cozy hotel room, layered textures, wood accents, warm ambient lighting, inviting',
+    }[ans.roomStyle] || '';
     const roomBits = [
-      'hotel room',
+      roomStyleLabel || 'hotel room',
       seedExtras.join(', '),
       freetext,
     ].filter(Boolean);
-    const roomSeed = roomBits.join(', ') || 'a comfortable hotel room';
+    const roomSeed = roomBits.join('. ') || 'a comfortable hotel room';
 
-    // Hotel seed: atmosphere from morning/night/environment + trip context.
+    // Hotel seed: atmosphere from trip + hotelPersonality + nbhd pace/location.
     const tripLabel = {
       first:  'first-time visitor, iconic central location',
       repeat: 'returning visitor, local neighbourhood feel',
       expert: 'local expert, hidden-gem neighbourhood, non-touristy',
     }[ans.trip] || '';
-    const envLabel = {
-      calm_green:     'quiet leafy neighbourhood, calm pace',
-      calm_cafe:      'calm café-street neighbourhood, walkable daytime energy',
-      urban_mix:      'walkable urban mix, balanced buzz',
-      lively_central: 'lively central hotel, nightlife, restaurants',
-    }[ans.environment] || '';
-    const morningLabel = {
-      cafe:     'warm café culture, pastry counter',
-      park:     'green park nearby',
-      shopping: 'upscale shopping district',
-      historic: 'historic architecture, cultural heart',
-    }[ans.morning] || '';
-    const nightLabel = {
-      chill:  'quiet wine bar, intimate dinner',
-      street: 'casual street-food energy',
-      trendy: 'trendy cocktail bar, modern social scene',
-      late:   'late-night bars and music',
-    }[ans.night] || '';
+    const personalityLabel = {
+      polished: 'polished refined hotel, calm luxury, attentive service, elegant lobby, marble, soft lighting',
+      unique:   'boutique hotel with character, design-led, unique personality, quirky art, independent feel',
+    }[ans.hotelPersonality] || '';
+    const paceLabel = {
+      vibrant: 'vibrant busy street, cafés, shops, movement and buzz outside',
+      quiet:   'quiet residential streets, leafy, calm, local pace outside',
+    }[ans.nbhdPace] || '';
+    const locationLabel = {
+      central: 'popular central area, close to iconic sights, easy sightseeing access',
+      trendy:  'trendy local pocket, authentic neighbourhood feel away from tourist crowds',
+    }[ans.nbhdLocation] || '';
     const hotelBits = [
       tripLabel ? `hotel for ${tripLabel}` : 'hotel',
-      envLabel,
-      morningLabel && `mornings with ${morningLabel}`,
-      nightLabel && `evenings with ${nightLabel}`,
-      'polished lobby, atmospheric bar, thoughtful amenities',
+      personalityLabel,
+      locationLabel,
+      paceLabel,
+      'thoughtful amenities, bar, restaurant, welcoming arrival',
     ].filter(Boolean);
     const hotelSeed = hotelBits.join('. ');
 
