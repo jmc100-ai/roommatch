@@ -13,6 +13,22 @@
 -- Keep in sync with AMENITY_PHOTO_TYPES in scripts/index-city.js.
 
 
+-- pgvector 0.8 does not define `vector * real` (scalar multiplication),
+-- so we add a tiny SQL helper that scales a vector by a scalar via array cast.
+-- Used by the blended-vector calculation below.
+CREATE OR REPLACE FUNCTION public.vec_scale(v vector, s double precision)
+RETURNS vector
+LANGUAGE sql IMMUTABLE
+AS $$
+  SELECT (
+    ARRAY(SELECT val::real * s::real FROM unnest(v::real[]) AS val)
+  )::vector;
+$$;
+
+GRANT EXECUTE ON FUNCTION public.vec_scale(vector, double precision)
+  TO anon, authenticated, service_role;
+
+
 -- ── rebuild_hotel_profile_index_city ────────────────────────────────────────
 -- Aggregates per-hotel averages from room_embeddings + hotels_cache,
 -- builds the blended vector with graceful fallbacks when a component is
@@ -23,8 +39,11 @@ LANGUAGE plpgsql
 AS $function$
 DECLARE
   v_count integer;
+  v_zero  vector(768);
 BEGIN
   SET LOCAL statement_timeout = '300000';
+
+  v_zero := ('[' || repeat('0,', 767) || '0]')::vector(768);
 
   INSERT INTO hotel_profile_index (
     hotel_id, city, country_code,
@@ -57,9 +76,7 @@ BEGIN
       GROUP BY re.hotel_id, re.city
     ),
     hotels AS (
-      SELECT
-        hc.hotel_id, hc.city, hc.country_code,
-        hc.description_embedding
+      SELECT hc.hotel_id, hc.city, hc.country_code, hc.description_embedding
       FROM hotels_cache hc
       WHERE hc.city = p_city
     ),
@@ -74,32 +91,26 @@ BEGIN
         r.room_avg,
         h.description_embedding,
         COALESCE(a.n, 0) AS amenity_photo_count,
-        COALESCE(r.n, 0) AS room_photo_count
+        COALESCE(r.n, 0) AS room_photo_count,
+        (CASE WHEN a.amenity_avg           IS NULL THEN 0::double precision ELSE 0.60 END) AS w_amenity,
+        (CASE WHEN r.room_avg              IS NULL THEN 0::double precision ELSE 0.25 END) AS w_room,
+        (CASE WHEN h.description_embedding IS NULL THEN 0::double precision ELSE 0.15 END) AS w_desc
       FROM hotels h
       FULL OUTER JOIN amenity a ON a.hotel_id = h.hotel_id
       FULL OUTER JOIN rooms   r ON r.hotel_id = h.hotel_id
-      -- Require at least one vector component so we don't emit all-null rows
       WHERE COALESCE(a.amenity_avg, r.room_avg, h.description_embedding) IS NOT NULL
     )
   SELECT
     hotel_id, city, country_code,
     amenity_avg, room_avg, description_embedding,
-    -- Blended vector: weighted sum of whichever components exist.
-    -- Weights re-normalise so a hotel missing (e.g.) description still gets
-    -- a valid blended vector using just amenity + room. This avoids all-
-    -- zero vectors that would otherwise dominate cosine distance.
+    -- Blended vector: weighted sum of whichever components exist, re-normalised
+    -- so missing components don't collapse the vector toward zero. Weights are
+    -- renormalised by (w_amenity + w_room + w_desc) so the relative weighting
+    -- stays consistent regardless of which components are present.
     (
-      (
-        COALESCE(amenity_avg,           '[' || repeat('0,', 767) || '0]')::vector(768) * (CASE WHEN amenity_avg           IS NULL THEN 0 ELSE 0.60 END)::real
-      + COALESCE(room_avg,              '[' || repeat('0,', 767) || '0]')::vector(768) * (CASE WHEN room_avg              IS NULL THEN 0 ELSE 0.25 END)::real
-      + COALESCE(description_embedding, '[' || repeat('0,', 767) || '0]')::vector(768) * (CASE WHEN description_embedding IS NULL THEN 0 ELSE 0.15 END)::real
-      )
-      / GREATEST(
-          (CASE WHEN amenity_avg           IS NULL THEN 0 ELSE 0.60 END)
-        + (CASE WHEN room_avg              IS NULL THEN 0 ELSE 0.25 END)
-        + (CASE WHEN description_embedding IS NULL THEN 0 ELSE 0.15 END),
-          0.0001
-        )::real
+      public.vec_scale(COALESCE(amenity_avg, v_zero),           w_amenity / GREATEST(w_amenity + w_room + w_desc, 0.0001))
+    + public.vec_scale(COALESCE(room_avg, v_zero),              w_room    / GREATEST(w_amenity + w_room + w_desc, 0.0001))
+    + public.vec_scale(COALESCE(description_embedding, v_zero), w_desc    / GREATEST(w_amenity + w_room + w_desc, 0.0001))
     )::vector(768) AS blended,
     amenity_photo_count, room_photo_count,
     NOW() AS updated_at
@@ -206,6 +217,9 @@ $function$;
 -- ── get_primary_nbhds_for_hotels ────────────────────────────────────────────
 -- Batch version: one RPC call returns primary nbhd for a list of hotel_ids.
 -- Used by /api/vsearch to attach a nbhd to every result hotel without N calls.
+-- Note: RETURNS TABLE column names collide with plpgsql locals, so we alias
+-- everything inside the CTEs to unique names (hid / nid / nname …) and only
+-- expose the canonical column names in the final projection.
 CREATE OR REPLACE FUNCTION public.get_primary_nbhds_for_hotels(
   p_hotel_ids text[]
 )
@@ -222,21 +236,21 @@ BEGIN
   SET LOCAL statement_timeout = '30000';
   RETURN QUERY
   WITH hotel_pts AS (
-    SELECT hc.hotel_id, hc.city, hc.lat, hc.lng
+    SELECT hc.hotel_id AS hid, hc.city, hc.lat, hc.lng
     FROM hotels_cache hc
     WHERE hc.hotel_id = ANY(p_hotel_ids)
       AND hc.lat IS NOT NULL AND hc.lng IS NOT NULL
   ),
   joined AS (
     SELECT
-      hp.hotel_id,
-      n.id   AS neighborhood_id,
-      n.name,
-      n.vibe_short,
-      n.attributes,
-      n.bbox_area,
+      hp.hid        AS hid,
+      n.id          AS nid,
+      n.name        AS nname,
+      n.vibe_short  AS nvibe,
+      n.attributes  AS nattrs,
+      n.bbox_area   AS narea,
       ROW_NUMBER() OVER (
-        PARTITION BY hp.hotel_id
+        PARTITION BY hp.hid
         ORDER BY n.bbox_area NULLS LAST
       ) AS rn
     FROM hotel_pts hp
@@ -248,9 +262,9 @@ BEGIN
       AND (n.bbox->>'lon_min')::double precision <= hp.lng
       AND (n.bbox->>'lon_max')::double precision >= hp.lng
   )
-  SELECT hotel_id, neighborhood_id, name, vibe_short, attributes
-  FROM joined
-  WHERE rn = 1;
+  SELECT j.hid, j.nid, j.nname, j.nvibe, j.nattrs
+  FROM joined j
+  WHERE j.rn = 1;
 END;
 $function$;
 
