@@ -1,0 +1,76 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 300" preserveAspectRatio="xMidYMid slice">
+  <defs>
+    <radialGradient id="bg" cx="50%" cy="50%" r="80%">
+      <stop offset="0%" stop-color="#1a2033"/>
+      <stop offset="100%" stop-color="#0a0e1a"/>
+    </radialGradient>
+    <radialGradient id="glow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#d8b27a" stop-opacity="0.35"/>
+      <stop offset="100%" stop-color="#d8b27a" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect width="400" height="300" fill="url(#bg)"/>
+
+  <!-- Blocks (abstract building footprints) -->
+  <g fill="#141a28" opacity="0.75">
+    <rect x="25"  y="30"  width="60"  height="50"  rx="4"/>
+    <rect x="100" y="20"  width="85"  height="40"  rx="4"/>
+    <rect x="205" y="30"  width="70"  height="55"  rx="4"/>
+    <rect x="290" y="25"  width="85"  height="60"  rx="4"/>
+    <rect x="25"  y="100" width="75"  height="60"  rx="4"/>
+    <rect x="115" y="85"  width="60"  height="45"  rx="4"/>
+    <rect x="190" y="100" width="95"  height="55"  rx="4"/>
+    <rect x="305" y="105" width="65"  height="50"  rx="4"/>
+    <rect x="30"  y="180" width="90"  height="55"  rx="4"/>
+    <rect x="140" y="175" width="70"  height="65"  rx="4"/>
+    <rect x="225" y="180" width="60"  height="55"  rx="4"/>
+    <rect x="300" y="180" width="80"  height="60"  rx="4"/>
+  </g>
+
+  <!-- River / boulevard curve -->
+  <path d="M -10 165 Q 90 145 200 170 T 410 160" stroke="#263349" stroke-width="10" fill="none" opacity="0.55" stroke-linecap="round"/>
+
+  <!-- Subtle grid lines (streets) -->
+  <g stroke="#1f2638" stroke-width="1" fill="none" opacity="0.8">
+    <path d="M0 90 L400 85"/>
+    <path d="M0 240 Q 150 250 400 240"/>
+    <path d="M95 0 Q 100 150 95 300"/>
+    <path d="M285 0 Q 290 150 285 300"/>
+  </g>
+
+  <!-- Central cluster glow -->
+  <circle cx="200" cy="150" r="85" fill="url(#glow)"/>
+
+  <!-- Hotel dots tightly clustered in the centre (popular central) -->
+  <g>
+    <circle cx="175" cy="130" r="4.5" fill="#d8b27a"/>
+    <circle cx="196" cy="122" r="5.5" fill="#e8c285"/>
+    <circle cx="218" cy="135" r="4.5" fill="#d8b27a"/>
+    <circle cx="165" cy="148" r="4"   fill="#d8b27a"/>
+    <circle cx="188" cy="155" r="5"   fill="#e8c285"/>
+    <circle cx="210" cy="160" r="4.5" fill="#d8b27a"/>
+    <circle cx="230" cy="150" r="4"   fill="#d8b27a"/>
+    <circle cx="180" cy="172" r="4.5" fill="#d8b27a"/>
+    <circle cx="205" cy="178" r="4"   fill="#d8b27a"/>
+    <circle cx="222" cy="175" r="3.5" fill="#d8b27a"/>
+    <circle cx="155" cy="160" r="3.5" fill="#c9a36a"/>
+    <circle cx="240" cy="165" r="3.5" fill="#c9a36a"/>
+    <circle cx="198" cy="140" r="3"   fill="#f5d69b"/>
+    <circle cx="170" cy="165" r="3"   fill="#c9a36a"/>
+    <circle cx="215" cy="145" r="3"   fill="#c9a36a"/>
+  </g>
+
+  <!-- Central pin marker (iconic spot) -->
+  <g transform="translate(200 148)">
+    <circle r="18" fill="none" stroke="#d8b27a" stroke-width="1.2" opacity="0.35"/>
+    <circle r="28" fill="none" stroke="#d8b27a" stroke-width="0.8" opacity="0.2"/>
+  </g>
+
+  <!-- Icon spot markers (scattered on the edges to imply sights) -->
+  <g fill="#5a4e3a" opacity="0.7">
+    <path d="M60 45 l -4 6 l 8 0 z"/>
+    <path d="M345 55 l -4 6 l 8 0 z"/>
+    <path d="M330 215 l -4 6 l 8 0 z"/>
+    <path d="M70 210 l -4 6 l 8 0 z"/>
+  </g>
+</svg>

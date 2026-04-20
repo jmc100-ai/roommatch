@@ -1583,7 +1583,8 @@
     .city-box .recent-dropdown {
       position:absolute; top:calc(100% + 6px); left:0; right:0; z-index:100;
     }
-    .city-chips { display:flex; flex-wrap:wrap; gap:8px; justify-content:center; margin-top:18px; }
+    .city-chips { display:flex; flex-wrap:nowrap; gap:8px; justify-content:center; margin-top:14px; overflow:hidden; max-width:100%; }
+    @media(max-width:760px){ .city-chips { overflow-x:auto; flex-wrap:nowrap; -webkit-overflow-scrolling:touch; justify-content:flex-start; padding:0 4px; } }
     .city-chip-recent {
       padding:7px 15px; border-radius:100px;
       border:1px solid rgba(201,169,110,.3); color:var(--accent2);
@@ -2623,11 +2624,7 @@
           <div class="recent-dropdown" id="cityHistoryDropdown"></div>
           <div class="city-dropdown" id="cityDropdown"></div>
         </div>
-        <div class="city-chips" id="city-chips">
-          <!-- populated by buildCityChips() on load -->
-        </div>
-
-        <!-- BOOP v4 — optional dates inline on the city step -->
+        <!-- BOOP v4 — optional dates sit directly under the edit box -->
         <div class="city-dates" id="city-dates">
           <div class="city-dates-label">
             <span class="city-dates-head">Add dates <span class="city-dates-opt">(optional — enables live prices)</span></span>
@@ -2643,6 +2640,10 @@
             </div>
             <button type="button" class="city-dates-clear" id="city-dates-clear" onclick="clearCityDates()" style="display:none">Clear</button>
           </div>
+        </div>
+
+        <div class="city-chips" id="city-chips">
+          <!-- populated by buildCityChips() on load — capped to 5, single-row -->
         </div>
       </div>
     </div>
@@ -3091,7 +3092,7 @@
       type:'cards',
       options:[
         { id:'sleek', emoji:'✨', title:'Sleek & Modern', note:'Clean lines, soft greys, minimal.',       image:'https://images.unsplash.com/photo-1631049307264-da0ec9d70304?auto=format&fit=crop&w=1200&q=80' },
-        { id:'cozy',  emoji:'🕯️', title:'Warm & Cozy',     note:'Layered textures, wood, warm light.',    image:'https://images.unsplash.com/photo-1596394516093-501ba68a0ba6?auto=format&fit=crop&w=1200&q=80' },
+        { id:'cozy',  emoji:'🕯️', title:'Warm & Cozy',     note:'Layered textures, wood, warm light.',    image:'https://images.unsplash.com/photo-1618773928121-c32242e63f39?auto=format&fit=crop&w=1200&q=80' },
       ]
     },
     // Screen 3 — "Step outside — what feels right?" (nbhd pace A/B)
@@ -3107,7 +3108,8 @@
       ]
     },
     // Screen 4 — "What matters more?" (hotel personality A/B)
-    // Drives hotelSeed + luxury/local prefs axis.
+    // Drives hotelSeed + luxury/local prefs axis. Images are interior shots
+    // (a refined suite vs. a characterful boutique room) matching the mockup.
     {
       id:'hotelPersonality',
       label:'Hotel personality',
@@ -3115,13 +3117,13 @@
       sub:'Two ways a hotel can win.',
       type:'cards',
       options:[
-        { id:'polished', emoji:'🥂', title:'Polished Comfort',   note:'Refined service, calm luxury.',     image:'https://images.unsplash.com/photo-1566073771259-6a8506099945?auto=format&fit=crop&w=1200&q=80', weights:{ luxury:14, central:4 } },
-        { id:'unique',   emoji:'🎨', title:'Unique Personality', note:'Boutique, characterful, design-led.', image:'https://images.unsplash.com/photo-1564501049412-61c2a3083791?auto=format&fit=crop&w=1200&q=80', weights:{ local:10, culture:8 } },
+        { id:'polished', emoji:'🥂', title:'Polished Comfort',   note:'Refined service, calm luxury.',        image:'https://images.unsplash.com/photo-1611892440504-42a792e24d32?auto=format&fit=crop&w=1200&q=80', weights:{ luxury:14, central:4 } },
+        { id:'unique',   emoji:'🎨', title:'Unique Personality', note:'Boutique, characterful, design-led.', image:'https://images.unsplash.com/photo-1540541338287-41700207dee6?auto=format&fit=crop&w=1200&q=80', weights:{ local:10, culture:8 } },
       ]
     },
     // Screen 5 — "Where would you stay?" (nbhd location A/B)
-    // (Mockup shows a mini-map; we use representative photos for now — map
-    // preview variant is a future polish item.)
+    // Uses stylized map SVGs (client/maps/*) that echo the mini-map thumbnails
+    // from the original mockup — gold dots on a dark grid palette.
     {
       id:'nbhdLocation',
       label:'Neighbourhood location',
@@ -3129,8 +3131,8 @@
       sub:'Iconic central area or trendy local pocket.',
       type:'cards',
       options:[
-        { id:'central', emoji:'🗽', title:'Popular Central', note:'Icons, sightseeing distance, easy access.', image:'https://images.unsplash.com/photo-1431274172761-fca41d930114?auto=format&fit=crop&w=1200&q=80', weights:{ central:18, iconic:10, walkability:6 } },
-        { id:'trendy',  emoji:'🧭', title:'Trendy Local',    note:'Hip local area, authentic neighbourhood.', image:'https://images.unsplash.com/photo-1509917734205-50c3085b3c5c?auto=format&fit=crop&w=1200&q=80', weights:{ local:18, cafes:6, calm:4 } },
+        { id:'central', emoji:'🗽', title:'Popular Central', note:'Icons, sightseeing distance, easy access.', image:'maps/map-central.svg', weights:{ central:18, iconic:10, walkability:6 } },
+        { id:'trendy',  emoji:'🧭', title:'Trendy Local',    note:'Hip local area, authentic neighbourhood.',  image:'maps/map-trendy.svg',  weights:{ local:18, cafes:6, calm:4 } },
       ]
     },
     // Screen 6 — room must-haves (multi-select) + optional free-text.
@@ -3144,12 +3146,10 @@
       sub:'Optional — pick as many as apply. Anything else? Add it below.',
       type:'chips',
       options:[
-        { id:'balcony',          flag:'balcony',          label:'Balcony or view',     hint:'Outdoor space or a real view.',           image:'https://images.unsplash.com/photo-1507652313519-d4e9174996dd?auto=format&fit=crop&w=1200&q=80' },
-        { id:'spa_bathroom',     flag:'soaking_tub',      label:'Spa-style bathroom',  hint:'Soaking tub, rain shower, marble feel.',  image:'https://images.unsplash.com/photo-1552321554-5fefe8c9ef14?auto=format&fit=crop&w=1200&q=80' },
-        { id:'spacious',         flag:null,               label:'Spacious room',       hint:'Room to spread out, not a closet.',       image:'https://images.unsplash.com/photo-1590490360182-c33d57733427?auto=format&fit=crop&w=1200&q=80', seed:'spacious room, generous layout' },
-        { id:'work_desk',        flag:'work_desk',        label:'Work desk',           hint:'Proper desk to get a few hours done.',    image:'https://images.unsplash.com/photo-1518733057094-95b53143d2a7?auto=format&fit=crop&w=1200&q=80' },
-        { id:'city_view',        flag:'city_view',        label:'City view',           hint:'Window on the skyline or streets below.', image:'https://images.unsplash.com/photo-1480714378408-67cf0d13bc1b?auto=format&fit=crop&w=1200&q=80' },
-        { id:'rainfall_shower',  flag:'rainfall_shower',  label:'Rainfall shower',     hint:'Big overhead showerhead, hotel-spa feel.', image:'https://images.unsplash.com/photo-1600566753051-f0b89df2dd90?auto=format&fit=crop&w=1200&q=80' },
+        { id:'balcony',      flag:'balcony',   label:'Balcony or view',    hint:'Outdoor space or a real view from the room.',                         image:'https://images.unsplash.com/photo-1507652313519-d4e9174996dd?auto=format&fit=crop&w=1200&q=80' },
+        { id:'spa_bathroom', flag:null,        label:'Spa-style bathroom', hint:'Soaking tub or rain shower plus larger counter / double vanity.',     image:'https://images.unsplash.com/photo-1552321554-5fefe8c9ef14?auto=format&fit=crop&w=1200&q=80', seed:'spa-like bathroom, soaking tub, rainfall shower, marble vanity, generous counter space, double sinks' },
+        { id:'spacious',     flag:null,        label:'Spacious room',      hint:'Room to spread out, not a closet.',                                    image:'https://images.unsplash.com/photo-1590490360182-c33d57733427?auto=format&fit=crop&w=1200&q=80', seed:'spacious hotel room, generous layout, open feel' },
+        { id:'work_desk',    flag:'work_desk', label:'Work desk',          hint:'Proper desk to get a few hours done.',                                 image:'https://images.unsplash.com/photo-1518733057094-95b53143d2a7?auto=format&fit=crop&w=1200&q=80' },
       ]
     }
   ];
@@ -4000,13 +4000,11 @@
     for (const o of mustHaveOptions) {
       if (o.flag) mustHaves.push(o.flag);
       if (o.seed) seedExtras.push(o.seed);
-      // Synonym nudges so HyDE lands near the right photo embeddings even
-      // when the DB flag fires directly.
-      if (o.id === 'balcony')         seedExtras.push('private balcony, outdoor terrace');
-      if (o.id === 'spa_bathroom')    seedExtras.push('spa-like bathroom, soaking tub, rain shower, marble');
-      if (o.id === 'city_view')       seedExtras.push('floor-to-ceiling window, city view');
-      if (o.id === 'rainfall_shower') seedExtras.push('rainfall shower, walk-in shower');
-      if (o.id === 'work_desk')       seedExtras.push('work desk, proper workspace');
+      // Extra synonym nudges for flag-only options so HyDE lands near the
+      // right photo embeddings even when the DB flag filter is what's really
+      // doing the work.
+      if (o.id === 'balcony')   seedExtras.push('private balcony, outdoor terrace, view from room');
+      if (o.id === 'work_desk') seedExtras.push('work desk, proper workspace, ergonomic chair');
     }
 
     // Room seed: roomStyle aesthetic → primary signal + feature nudges + freetext.
@@ -4222,16 +4220,12 @@
     S.mustHaves = null;
     prefetchBoopWizardImages(city);
 
-    // BOOP v4 — returning users: if a saved profile exists for this city, show
-    // the review screen first so they can either jump straight to hotels with
-    // their last-saved answers or retake the wizard.
+    // BOOP v4 — saved-profile review screen temporarily disabled; always send
+    // users straight into the wizard. We still load the saved profile so the
+    // wizard can pre-populate answers if that's ever wired up, but the review
+    // UI is hidden for now.
     const saved = loadBoopProfileForCity(city);
-    if (saved) {
-      S.boopProfile = saved;
-      renderReviewScreen(saved);
-      showFlowStep('review');
-      return;
-    }
+    if (saved) S.boopProfile = saved;
 
     startBoopStep();
     refreshStory('boop');
@@ -6351,18 +6345,22 @@
     {name:'Barcelona',     flag:'🇪🇸'},
   ];
 
+  // Cap at 5 total so the chip row stays on a single line (see .city-chips
+  // CSS: flex-wrap:nowrap + overflow:hidden). Recents come first, then top
+  // cities fill any remaining slots.
   function buildCityChips() {
+    const MAX_CHIPS = 5;
     const container = document.getElementById('city-chips');
     if (!container) return;
     const recent = JSON.parse(localStorage.getItem(CITY_HISTORY_KEY) || '[]')
                      .filter(r => !TOP_CITIES.some(t => t.name.toLowerCase() === r.toLowerCase()));
     const html = [];
-    // Recent additions first (up to 3), styled distinctly
-    recent.slice(0, 3).forEach(r => {
+    const recentCount = Math.min(recent.length, 2, MAX_CHIPS);
+    recent.slice(0, recentCount).forEach(r => {
       html.push(`<div class="city-chip city-chip-recent" onclick="selectCity({name:'${r.replace(/'/g,"\\'")}'})" title="Recent">🕐 ${r}</div>`);
     });
-    // Top world cities
-    TOP_CITIES.forEach(c => {
+    const remaining = Math.max(0, MAX_CHIPS - html.length);
+    TOP_CITIES.slice(0, remaining).forEach(c => {
       html.push(`<div class="city-chip" onclick="selectCity({name:'${c.name}'})">${c.flag} ${c.name}</div>`);
     });
     container.innerHTML = html.join('');
