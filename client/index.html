@@ -1610,6 +1610,26 @@
       text-align:center;
       box-sizing:border-box;
     }
+    /* Gold hairline between dates row and recent city chips — slightly narrower than city-box */
+    .city-dates::after {
+      content:'';
+      display:block;
+      width:calc(100% - 44px);
+      height:1px;
+      margin:16px auto 0;
+      border-radius:1px;
+      background:linear-gradient(
+        90deg,
+        transparent,
+        rgba(201,169,110,.22) 12%,
+        rgba(201,169,110,.42) 50%,
+        rgba(201,169,110,.22) 88%,
+        transparent
+      );
+    }
+    @media (max-width:640px) {
+      .city-dates::after { width:calc(100% - 32px); }
+    }
     @media (min-width:641px) {
       .city-dates { max-width:598px; }
     }
