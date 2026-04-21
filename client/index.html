@@ -611,12 +611,20 @@
       box-shadow:0 4px 18px rgba(0,0,0,.45);
       cursor:pointer;
       transition:border-color .15s, color .15s;
-      max-width:60%;
+      max-width:min(78%,420px);
       overflow:hidden;
     }
     .hotel-nbhd-pill:hover { border-color:rgba(201,169,110,.8); color:var(--accent2); }
     .hotel-nbhd-pill-icon { font-size:11px; flex-shrink:0; }
-    .hotel-nbhd-pill-name { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .hotel-nbhd-pill-text {
+      min-width:0;
+      flex:1;
+      white-space:nowrap;
+      overflow:hidden;
+      text-overflow:ellipsis;
+      text-align:left;
+    }
+    .hotel-nbhd-pill-vibe-bit { color:rgba(232,228,220,.72); font-weight:400; }
     .hotel-hero {
       display: grid;
       grid-template-columns: 1.6fr 1fr;
@@ -6091,7 +6099,7 @@
                  onclick="goToStep('nbhd')"
                  title="${escHtml(nbhd.vibe_short || '')}">
            <span class="hotel-nbhd-pill-icon">📍</span>
-           <span class="hotel-nbhd-pill-name">${escHtml(nbhd.name)}</span>
+           <span class="hotel-nbhd-pill-text">${escHtml(nbhd.name)}<span class="hotel-nbhd-pill-vibe-bit">, neighborhood vibe - ${nbhdVibe}% match</span></span>
          </button>`
       : '';
 
@@ -6197,7 +6205,7 @@
     // ── Featured variant (top match room — scrollable strip, same indices as lightbox) ──
     if (variant === 'featured') {
       const vibeOverlay = rt.score > 0
-        ? `<span class="room-featured-vibe-badge">Room Boop Vibe - ${rt.score}% match</span>`
+        ? `<span class="room-featured-vibe-badge">Room vibe - ${rt.score}% match</span>`
         : (isTopMatch && hotelScore === 0 && _currentSort === 'match'
             ? `<span class="room-featured-vibe-badge room-featured-vibe-badge--low">Room vibe - browse</span>` : '');
 
