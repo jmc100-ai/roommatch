@@ -1603,26 +1603,37 @@
     /* BOOP v4 — inline optional dates on the city step */
     .city-dates {
       margin-top:28px;
-      max-width:480px;
+      width:100%;
+      max-width:520px;
       margin-left:auto;
       margin-right:auto;
-      text-align:center;
+      text-align:left;
+      box-sizing:border-box;
     }
-    .city-dates-label {
+    @media (min-width:641px) {
+      .city-dates { max-width:598px; }
+    }
+    .city-dates-lead {
+      flex:0 1 230px;
+      min-width:0;
       font-size:11px;
       letter-spacing:.18em;
       text-transform:uppercase;
       color:var(--muted);
-      margin-bottom:10px;
+      line-height:1.35;
+      padding-bottom:9px;
     }
     .city-dates-head { color:var(--muted); }
     .city-dates-opt { color:rgba(255,255,255,.35); text-transform:none; letter-spacing:normal; font-size:12px; }
     .city-dates-row {
       display:flex;
-      gap:10px;
-      justify-content:center;
+      gap:10px 14px;
+      justify-content:flex-start;
       align-items:flex-end;
-      flex-wrap:wrap;
+      flex-wrap:nowrap;
+      overflow-x:auto;
+      -webkit-overflow-scrolling:touch;
+      padding-bottom:2px;
     }
     .city-dates-row .date-f { display:flex; flex-direction:column; align-items:flex-start; gap:4px; }
     .city-dates-row .date-f label {
@@ -1654,10 +1665,10 @@
     }
     .city-dates-clear:hover { color:var(--text); border-color:rgba(255,255,255,.3); }
     @media (max-width:520px) {
-      .city-dates-row { flex-direction:column; align-items:stretch; }
-      .city-dates-row .date-f { width:100%; }
-      .city-dates-row input[type="date"] { width:100%; box-sizing:border-box; }
-      .city-dates-clear { width:100%; }
+      .city-dates-lead { flex:0 1 160px; padding-right:4px; }
+      .city-dates-row .date-f { flex-shrink:0; }
+      .city-dates-row input[type="date"] { min-width:0; }
+      .city-dates-clear { flex-shrink:0; }
     }
 
     /* BOOP v4 — returning-user review screen */
@@ -2626,10 +2637,10 @@
         </div>
         <!-- BOOP v4 — optional dates sit directly under the edit box -->
         <div class="city-dates" id="city-dates">
-          <div class="city-dates-label">
-            <span class="city-dates-head">Add dates <span class="city-dates-opt">(optional — enables live prices)</span></span>
-          </div>
           <div class="city-dates-row">
+            <div class="city-dates-lead" id="city-dates-lead">
+              <span class="city-dates-head">Add dates <span class="city-dates-opt">(optional — enables live prices)</span></span>
+            </div>
             <div class="date-f">
               <label for="city-d-ci">Check-in</label>
               <input type="date" id="city-d-ci" style="color-scheme:dark" onchange="onCityDatesChanged()"/>
