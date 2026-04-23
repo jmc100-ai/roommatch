@@ -5902,6 +5902,17 @@
       }
       const data = await resp.json();
       _lastVsearchStats = data.stats || null;
+      const st = data.stats;
+      if (st && (st.nbhd_rank_weight_config != null || st.nbhd_blend_applied != null)) {
+        console.info(
+          '[vsearch nbhd]',
+          'config_weight=', st.nbhd_rank_weight_config,
+          'active_weight=', st.nbhd_rank_weight_active,
+          'blend_applied=', !!st.nbhd_blend_applied,
+          'boop_profile=', !!st.boop_profile_received,
+          'sort_uses_blend=', typeof st.nbhd_rank_weight === 'number'
+        );
+      }
 
       const hotels = data.hotels || [];
 
@@ -6104,7 +6115,7 @@
       if (badgeWrap) {
         const roomVibe  = Math.round(hotelEffectiveScore(h) || 0);
         const hotelVibe = Math.round(h.hotelScore || 0);
-        const nbhdVibe  = computeNbhdVibe(h);
+        const nbhdVibe  = h.nbhd_fit_pct != null ? Math.round(h.nbhd_fit_pct) : computeNbhdVibe(h);
         badgeWrap.innerHTML = buildVibeTriplet(roomVibe, hotelVibe, nbhdVibe);
       }
 
@@ -6779,7 +6790,8 @@
     const effectiveScore = hotelEffectiveScore(h);
     const roomVibe  = Math.round(effectiveScore || 0);
     const hotelVibe = Math.round(h.hotelScore || 0);
-    const nbhdVibe  = computeNbhdVibe(h);
+    // Prefer server nbhd % (same value used for ranking blend) when present.
+    const nbhdVibe  = h.nbhd_fit_pct != null ? Math.round(h.nbhd_fit_pct) : computeNbhdVibe(h);
     const tripletHTML = buildVibeTriplet(roomVibe, hotelVibe, nbhdVibe);
     const matchBadgeWrap = `<span class="hotel-hero-badge-wrap hotel-hero-badge-triplet" id="hotel-badge-wrap-${h.id}">${tripletHTML}</span>`;
 

@@ -2102,6 +2102,11 @@ app.get("/api/vsearch", async (req, res) => {
     console.log(`[vsearch] TOTAL: ${tTotal}ms${kpiFlag} | ${city}: ${hotels.length} hotels, top score ${allHotels[0]?.topScore?.toFixed(3)}`);
 
     const stats = { indexed: cityRow?.photo_count || 0 };
+    // Neighbourhood blend diagnostics (weight ≠ neighbourhood % on cards; weight is room vs nbhd for *sort*).
+    if (Number.isFinite(rawNbhdW)) stats.nbhd_rank_weight_config = rawNbhdW;
+    stats.nbhd_rank_weight_active = nbhdRankWeight;
+    stats.nbhd_blend_applied = !!(nbhdFitByHotelId && nbhdFitByHotelId.size > 0);
+    if (boopProfileForNbhd) stats.boop_profile_received = true;
     if (nbhdRankWeight > 0 && nbhdFitByHotelId && nbhdFitByHotelId.size > 0) {
       stats.nbhd_rank_weight = nbhdRankWeight;
     }
