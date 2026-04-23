@@ -3242,6 +3242,8 @@
   let clipES = null;
   let clipDone = 0, clipTotal = 10;
   let _lastHotels     = [];
+  /** Last /api/vsearch `stats` — used to align match sort with server nbhd blend weight */
+  let _lastVsearchStats = null;
   let selectedNeighborhood = null; // { name, bbox?, polygon? } — polygon is geo JSON for /api/vsearch
   let NEIGHBORHOOD_FLOW_ROWS = []; // indexed rows for fetchAndShowNeighborhoods → selectNeighborhoodFlow
   /** True when neighbourhood grid was opened from hotel results (change area) — different chrome + Choose returns to results. */
@@ -5844,6 +5846,7 @@
       const resp = await fetch(`${BACKEND}/api/room-search?` + new URLSearchParams({ query, city }));
       if (!resp.ok) throw new Error(`Search failed (${resp.status})`);
       const data = await resp.json();
+      _lastVsearchStats = null;
       const hotels = data.hotels || [];
       if (!hotels.length) { setStatus(''); renderEmpty(query, city); }
       else {
@@ -5898,6 +5901,7 @@
         throw new Error(errMsg);
       }
       const data = await resp.json();
+      _lastVsearchStats = data.stats || null;
 
       const hotels = data.hotels || [];
 
@@ -6456,7 +6460,18 @@
         return bValue - aValue;
       });
     } else if (_currentSort === 'match') {
-      hotels.sort((a, b) => hotelEffectiveScore(b) - hotelEffectiveScore(a));
+      const wNbhd = typeof _lastVsearchStats?.nbhd_rank_weight === 'number' ? _lastVsearchStats.nbhd_rank_weight : 0;
+      hotels.sort((a, b) => {
+        if (wNbhd > 0 && a.nbhd_fit_pct != null && b.nbhd_fit_pct != null) {
+          const ra = hotelEffectiveScore(a) / 100;
+          const rb = hotelEffectiveScore(b) / 100;
+          const ca = (1 - wNbhd) * ra + wNbhd * (a.nbhd_fit_pct / 100);
+          const cb = (1 - wNbhd) * rb + wNbhd * (b.nbhd_fit_pct / 100);
+          const d = cb - ca;
+          if (Math.abs(d) > 1e-9) return d > 0 ? 1 : -1;
+        }
+        return hotelEffectiveScore(b) - hotelEffectiveScore(a);
+      });
     }
 
     const toShow    = hotels.slice(0, _displayedCount);

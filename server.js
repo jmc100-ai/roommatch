@@ -2102,6 +2102,9 @@ app.get("/api/vsearch", async (req, res) => {
     console.log(`[vsearch] TOTAL: ${tTotal}ms${kpiFlag} | ${city}: ${hotels.length} hotels, top score ${allHotels[0]?.topScore?.toFixed(3)}`);
 
     const stats = { indexed: cityRow?.photo_count || 0 };
+    if (nbhdRankWeight > 0 && nbhdFitByHotelId && nbhdFitByHotelId.size > 0) {
+      stats.nbhd_rank_weight = nbhdRankWeight;
+    }
     if (String(req.query.debug || "") === "1") {
       const sample = rankedHotels.slice(0, 10).map(h => ({
         hotel_id: h.hotel_id,
