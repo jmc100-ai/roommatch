@@ -3823,8 +3823,31 @@
     };
   }
 
+  /**
+   * Live wizard answers + prefs (same shape as boopFinish) — only when the user
+   * has actually interacted this run. Used so nbhd % updates per screen instead
+   * of staying stuck on S.boopProfile from localStorage for the whole wizard.
+   */
+  function buildLiveWizardBoopProfileForScoring() {
+    if (!boopCurrentWizardHasSignal()) return null;
+    const normalizedAnswers = migrateBoopProfileAnswersIfNeeded({ ...BOOP.answers });
+    const reconciledPrefs = reconcileTripEnvWeights(normalizedAnswers, { ...BOOP.prefs });
+    return {
+      answers: normalizedAnswers,
+      prefs: reconciledPrefs,
+      dealbreakers: Array.from(BOOP.dealbreakers || []),
+      freetext: BOOP.freetext || '',
+      updatedAt: Date.now(),
+    };
+  }
+
   /** Profile for nbhd %, refine strip, and neighbourhood ranking — never null when city is set. */
   function getEffectiveBoopProfileForScoring() {
+    const activeStep = document.getElementById('discovery-flow')?.getAttribute('data-active-step');
+    if (activeStep === 'boop') {
+      const live = buildLiveWizardBoopProfileForScoring();
+      if (live) return live;
+    }
     const fromSession = S.boopProfile;
     const fromDisk = loadBoopProfileForCity(S.city);
     if (boopProfileHasAnySignal(fromSession)) return fromSession;
