@@ -93,6 +93,8 @@
     .topnav-links {
       display: flex; align-items: center; gap: 4px;
       margin-left: 8px;
+      flex-wrap: wrap;
+      row-gap: 4px;
     }
     .tnl {
       padding: 6px 14px;
@@ -103,7 +105,7 @@
       transition: color .15s, background .15s;
     }
     .tnl:hover { color: var(--text); background: rgba(255,255,255,.05); }
-    .topnav-right { margin-left: auto; display: flex; align-items: center; gap: 12px; }
+    .topnav-right { margin-left: auto; display: flex; align-items: center; gap: 12px; flex-shrink: 0; }
     .topnav-beta {
       font-size: 10px;
       letter-spacing: .1em;
@@ -114,9 +116,128 @@
       border-radius: 20px;
       padding: 3px 10px;
     }
-    @media(max-width:600px) {
-      .topnav-links { display: none; }
+    .topnav-menu-btn {
+      display: none;
+      align-items: center;
+      justify-content: center;
+      width: 40px;
+      height: 36px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: rgba(255,255,255,.04);
+      color: var(--text);
+      cursor: pointer;
+      font-size: 20px;
+      line-height: 1;
+      flex-shrink: 0;
+    }
+    .topnav-menu-btn:hover { background: rgba(255,255,255,.08); }
+    .topnav-menu-btn[aria-expanded="true"] { border-color: rgba(201,169,110,.35); color: var(--accent2); }
+    @media (max-width: 960px) {
+      .topnav-menu-btn { display: flex; margin-left: 12px; }
+      .topnav-inner { flex-wrap: wrap; }
+      .topnav-logo { flex: 1; min-width: 0; }
+      .topnav-links {
+        display: none;
+        order: 10;
+        width: 100%;
+        flex-direction: column;
+        align-items: stretch;
+        margin: 0 !important;
+        padding: 10px 0 14px;
+        gap: 2px;
+        border-top: 1px solid rgba(255,255,255,.06);
+      }
+      .topnav-links.topnav-links--open { display: flex; }
+      .tnl { border-radius: 6px; padding: 10px 12px; }
       .logo-text { font-size: 18px; }
+    }
+    @media (min-width: 961px) {
+      .topnav-links { display: flex !important; }
+    }
+
+    /* ── Static pages (About, Terms, …) overlay ─────────── */
+    .static-overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 400;
+      background: rgba(6,6,8,.78);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      display: flex;
+      align-items: flex-start;
+      justify-content: center;
+      padding: 72px var(--gutter) 48px;
+      overflow-y: auto;
+      opacity: 0;
+      visibility: hidden;
+      transition: opacity .22s ease, visibility .22s ease;
+    }
+    .static-overlay.is-open {
+      opacity: 1;
+      visibility: visible;
+    }
+    body.has-results .static-overlay { padding-top: 62px; }
+    .static-panel {
+      width: 100%;
+      max-width: 680px;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 28px 32px 36px;
+      margin-bottom: 48px;
+      position: relative;
+      box-shadow: 0 28px 100px rgba(0,0,0,.5);
+    }
+    .static-close {
+      position: absolute;
+      top: 12px;
+      right: 12px;
+      width: 40px;
+      height: 40px;
+      border: none;
+      border-radius: 10px;
+      background: rgba(255,255,255,.06);
+      color: var(--muted);
+      font-size: 22px;
+      line-height: 1;
+      cursor: pointer;
+      transition: color .15s, background .15s;
+    }
+    .static-close:hover { color: var(--text); background: rgba(255,255,255,.1); }
+    .static-panel h1 {
+      font-family: 'Cormorant Garamond', serif;
+      font-size: 26px;
+      font-weight: 500;
+      color: var(--text);
+      margin: 0 44px 16px 0;
+      letter-spacing: .02em;
+    }
+    .static-panel h2 {
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: .14em;
+      text-transform: uppercase;
+      color: var(--accent2);
+      margin: 24px 0 10px;
+    }
+    .static-panel p,
+    .static-panel li {
+      font-size: 14px;
+      line-height: 1.65;
+      color: rgba(232,228,220,.9);
+      margin: 0 0 12px;
+    }
+    .static-panel ul { margin: 0 0 14px; padding-left: 1.25em; }
+    .static-panel a { color: var(--accent2); }
+    .static-panel a:hover { color: var(--accent); }
+    .static-muted {
+      font-size: 12px;
+      line-height: 1.55;
+      color: var(--muted);
+      margin-top: 28px;
+      padding-top: 20px;
+      border-top: 1px solid var(--border);
     }
     body::before {
       content: '';
@@ -2901,11 +3022,18 @@
       <span class="logo-text">Travel<span class="logo-accent">Boop</span></span>
     </a>
 
-    <!-- Nav links (desktop) -->
-    <div class="topnav-links">
-      <a href="#" onclick="setMode('search'); return false;" class="tnl">Search</a>
-      <a href="https://github.com/jmc100-ai/roommatch" target="_blank" rel="noopener" class="tnl">GitHub</a>
+    <!-- Nav links (desktop + mobile expandable) -->
+    <div class="topnav-links" id="topnav-links">
+      <a href="#" onclick="setMode('search'); closeTopnavMobileMenu(); return false;" class="tnl">Search</a>
+      <a href="#" onclick="openStaticPage('how'); return false;" class="tnl">How it works</a>
+      <a href="#" onclick="openStaticPage('about'); return false;" class="tnl">About</a>
+      <a href="#" onclick="openStaticPage('privacy'); return false;" class="tnl">Privacy</a>
+      <a href="#" onclick="openStaticPage('terms'); return false;" class="tnl">Terms</a>
+      <a href="#" onclick="openStaticPage('contact'); return false;" class="tnl">Contact</a>
+      <a href="https://github.com/jmc100-ai/roommatch" target="_blank" rel="noopener noreferrer" class="tnl" onclick="closeTopnavMobileMenu()">GitHub</a>
     </div>
+
+    <button type="button" class="topnav-menu-btn" id="topnav-menu-btn" aria-label="Open menu" aria-expanded="false" aria-controls="topnav-links">☰</button>
 
     <!-- Right side -->
     <div class="topnav-right">
@@ -2913,6 +3041,14 @@
     </div>
   </div>
 </nav>
+
+<!-- ─── Static pages overlay (About, Terms, …) ─────────── -->
+<div id="static-overlay" class="static-overlay" role="dialog" aria-modal="true" aria-hidden="true" aria-labelledby="static-title">
+  <div class="static-panel">
+    <button type="button" class="static-close" onclick="closeStaticPage()" aria-label="Close">&times;</button>
+    <div id="static-body"></div>
+  </div>
+</div>
 
 <!-- ─── Discovery flow ─────────────────────────────────── -->
 <div id="discovery-flow" class="discovery-flow" data-active-step="city">
@@ -5738,6 +5874,8 @@
   // Pre-fill date inputs on DOMContentLoaded (called below)
 
   function setMode(mode) {
+    closeStaticPage();
+    closeTopnavMobileMenu();
     currentMode = mode;
     const el = document.getElementById('results');
     if (el) el.innerHTML = '';
@@ -5752,6 +5890,144 @@
     showFlowStep('city');
     document.getElementById('story').classList.remove('show');
   }
+
+  function closeTopnavMobileMenu() {
+    const links = document.getElementById('topnav-links');
+    const btn = document.getElementById('topnav-menu-btn');
+    if (links) links.classList.remove('topnav-links--open');
+    if (btn) {
+      btn.setAttribute('aria-expanded', 'false');
+      btn.setAttribute('aria-label', 'Open menu');
+    }
+  }
+
+  function getStaticPageContent(id) {
+    const commonFoot = `<p class="static-muted">This is a public beta. Information here is for orientation only and is not legal or professional advice. Features and policies may change without notice.</p>`;
+    const pages = {
+      how: {
+        title: 'How it works',
+        html: `
+          <p>TravelBoop helps you narrow hotels in three beats: <strong>city</strong>, <strong>neighbourhood vibe</strong>, and <strong>room visuals</strong> matched to how you like to stay.</p>
+          <h2>1 · City & dates</h2>
+          <p>Pick where you are going (and optional dates). We use that to load live inventory and pricing context where available.</p>
+          <h2>2 · Vibe wizard & areas</h2>
+          <p>A short wizard captures trip style and neighbourhood preferences. AI-generated area cards describe the feel of each part of town so you can choose a base that fits you—not just a pin on a map.</p>
+          <h2>3 · Visual room search</h2>
+          <p>Describe the room you want in plain language. We rank real hotel room photos with embeddings so results reflect what spaces actually look like, not marketing copy alone.</p>
+          <h2>Beta note</h2>
+          <p>Results depend on indexed cities and partner data coverage. Always confirm details on the hotel or booking provider before you pay.</p>
+          ${commonFoot}`,
+      },
+      about: {
+        title: 'About TravelBoop',
+        html: `
+          <p><strong>TravelBoop</strong> is an experimental product for discovering hotels by <em>neighbourhood character</em> and <em>room aesthetics</em>—built for travellers who care where they land and what their room feels like.</p>
+          <p>We combine structured neighbourhood signals, a guided “vibe” flow, and visual search over indexed room imagery. The goal is fewer mismatches between what you imagined and what you check into.</p>
+          <h2>Public beta</h2>
+          <p>During beta, cities, models, and ranking logic may shift. We appreciate feedback as we harden quality and expand coverage.</p>
+          <p>Source &amp; issues: <a href="https://github.com/jmc100-ai/roommatch" target="_blank" rel="noopener noreferrer">GitHub — roommatch</a></p>
+          ${commonFoot}`,
+      },
+      privacy: {
+        title: 'Privacy',
+        html: `
+          <p>We take privacy seriously and keep this policy short and concrete for beta users.</p>
+          <h2>What we process</h2>
+          <ul>
+            <li><strong>Search &amp; wizard inputs</strong> — city, queries, and preferences you enter to run searches and personalize neighbourhood scoring.</li>
+            <li><strong>Technical data</strong> — standard server logs (e.g. IP, user agent, timestamps) for security and reliability.</li>
+            <li><strong>Optional access gate</strong> — if the site password feature is enabled, an HttpOnly cookie is used only to remember that you passed the gate.</li>
+          </ul>
+          <h2>Third parties</h2>
+          <p>Hotel listings, photos, and rates may come from travel data and booking partners (e.g. LiteAPI). AI features may call Google (Gemini) for captions, embeddings, and neighbourhood text. Infrastructure may use Supabase and hosting providers. Those services process data under their own terms.</p>
+          <h2>Retention &amp; rights</h2>
+          <p>Beta retention policies may evolve. For data questions or removal requests, use the contact page. We will respond as promptly as we can for a small team.</p>
+          ${commonFoot}`,
+      },
+      terms: {
+        title: 'Terms of service',
+        html: `
+          <p>By using TravelBoop during the public beta, you agree to these terms. If you do not agree, please stop using the service.</p>
+          <h2>Not advice</h2>
+          <p>TravelBoop does not provide legal, financial, or travel advice. Neighbourhood descriptions and match scores are generated or derived for discovery only—they can be incomplete or wrong.</p>
+          <h2>No guarantee</h2>
+          <p>The service is provided “as is” without warranties of any kind. We do not guarantee availability, accuracy of prices, or suitability of any hotel for your trip.</p>
+          <h2>Bookings</h2>
+          <p>When you leave TravelBoop to book with a third party, their terms apply. We are not a party to your reservation.</p>
+          <h2>Acceptable use</h2>
+          <p>Do not misuse the product (including scraping, probing, or attempting to overload systems). We may suspend access that harms the beta or other users.</p>
+          <h2>Limitation of liability</h2>
+          <p>To the maximum extent permitted by law, TravelBoop and its operators are not liable for indirect or consequential damages arising from use of the beta.</p>
+          <h2>Changes</h2>
+          <p>We may update these terms as the product matures. Continued use after changes means you accept the updated terms.</p>
+          ${commonFoot}`,
+      },
+      contact: {
+        title: 'Contact',
+        html: `
+          <p>We read every message we can during beta—feature ideas, bad matches, and bug reports all help.</p>
+          <h2>Email</h2>
+          <p><a href="mailto:hello@travelboop.com">hello@travelboop.com</a></p>
+          <p class="static-muted" style="margin-top:12px;border:none;padding:0;">Replace this address with your production inbox before wide launch, or forward the domain mailbox to your team.</p>
+          <h2>GitHub</h2>
+          <p>For technical issues or contributions: <a href="https://github.com/jmc100-ai/roommatch/issues" target="_blank" rel="noopener noreferrer">github.com/jmc100-ai/roommatch/issues</a></p>
+          ${commonFoot}`,
+      },
+    };
+    return pages[id] || pages.about;
+  }
+
+  function openStaticPage(id) {
+    const ov = document.getElementById('static-overlay');
+    const body = document.getElementById('static-body');
+    if (!ov || !body) return;
+    const { title, html } = getStaticPageContent(id);
+    body.innerHTML = `<h1 id="static-title">${title}</h1>${html}`;
+    ov.classList.add('is-open');
+    ov.setAttribute('aria-hidden', 'false');
+    document.body.style.overflow = 'hidden';
+    closeTopnavMobileMenu();
+    const closeBtn = ov.querySelector('.static-close');
+    if (closeBtn) closeBtn.focus();
+  }
+
+  function closeStaticPage() {
+    const ov = document.getElementById('static-overlay');
+    if (!ov || !ov.classList.contains('is-open')) return;
+    ov.classList.remove('is-open');
+    ov.setAttribute('aria-hidden', 'true');
+    document.body.style.overflow = '';
+    const body = document.getElementById('static-body');
+    if (body) body.innerHTML = '';
+  }
+
+  function initTopnavMenuAndStatic() {
+    const btn = document.getElementById('topnav-menu-btn');
+    const links = document.getElementById('topnav-links');
+    if (btn && links) {
+      btn.addEventListener('click', () => {
+        const open = !links.classList.contains('topnav-links--open');
+        links.classList.toggle('topnav-links--open', open);
+        btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+        btn.setAttribute('aria-label', open ? 'Close menu' : 'Open menu');
+      });
+    }
+    const ov = document.getElementById('static-overlay');
+    if (ov) {
+      ov.addEventListener('click', (e) => {
+        if (e.target === ov) closeStaticPage();
+      });
+    }
+    document.addEventListener('keydown', (e) => {
+      if (e.key !== 'Escape') return;
+      const o = document.getElementById('static-overlay');
+      if (o && o.classList.contains('is-open')) {
+        e.preventDefault();
+        closeStaticPage();
+      }
+    });
+  }
+  document.addEventListener('DOMContentLoaded', initTopnavMenuAndStatic);
 
   function setQuery(chip) {
     document.getElementById('queryInput').value = chip.textContent.trim();
