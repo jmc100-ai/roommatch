@@ -1561,6 +1561,9 @@ app.get("/api/vsearch", async (req, res) => {
 
     const fetchClient = supabaseAdmin || supabase;
     const GALLERY_LIMIT = 250;
+    /** Set when BOOP profile + nbhd blend runs — used for final sort + optional response field */
+    let nbhdRankWeight = 0;
+    let nbhdFitByHotelId = null;
 
     // Feature flags from raw query — before HyDE so soft-flag coverage can run in parallel with HyDE + Phase A.
     // Union with any explicit client-supplied must_haves (BOOP v4 screen 6 picks).
@@ -1796,6 +1799,31 @@ app.get("/api/vsearch", async (req, res) => {
       rankedHotels.forEach(h => { h.s_boosted = h.similarity; });
     }
 
+    const rawNbhdW = parseFloat(process.env.VSEARCH_NBHD_RANK_WEIGHT || "0.22");
+    nbhdRankWeight = Number.isFinite(rawNbhdW) && rawNbhdW > 0 ? rawNbhdW : 0;
+    let boopProfileForNbhd = null;
+    const boopParam = req.query.boop_profile;
+    if (typeof boopParam === "string" && boopParam.trim()) {
+      try {
+        boopProfileForNbhd = JSON.parse(boopParam);
+      } catch (_) {
+        boopProfileForNbhd = null;
+      }
+    }
+    if (nbhdRankWeight > 0 && boopProfileForNbhd && typeof boopProfileForNbhd === "object" && rankedHotels.length) {
+      const { applyNbhdBoopRank } = require("./lib/nbhd-vibe-rank");
+      nbhdFitByHotelId = await applyNbhdBoopRank(fetchClient, city, rankedHotels, boopProfileForNbhd, {
+        weight: nbhdRankWeight,
+        neutralPct: parseFloat(process.env.VSEARCH_NBHD_NEUTRAL_PCT || "62"),
+        maxHotels: parseInt(process.env.VSEARCH_NBHD_RANK_MAX_HOTELS || "5000", 10),
+      });
+      if (nbhdFitByHotelId?.size) {
+        console.log(
+          `[vsearch] nbhd_boop_rank: weight=${nbhdRankWeight} hotels=${rankedHotels.length} nbhd_scores=${nbhdFitByHotelId.size}`
+        );
+      }
+    }
+
     console.log(`[vsearch] ranked: ${rankedHotels.length} hotels from room-type scoring`);
 
     // ── Phase B: photo fetch + hotel-vibe scoring + primary-nbhd lookup (parallel) ──
@@ -1933,6 +1961,18 @@ app.get("/api/vsearch", async (req, res) => {
     const allHotels = [...photoHotelScores, ...remainingHotelScores]
       .sort((a, b) => b.topScore - a.topScore);
 
+    if (nbhdFitByHotelId && nbhdFitByHotelId.size > 0 && nbhdRankWeight > 0) {
+      const w = nbhdRankWeight;
+      allHotels.sort((a, b) => {
+        const nbA = nbhdFitByHotelId.get(a.hotelId) ?? 62;
+        const nbB = nbhdFitByHotelId.get(b.hotelId) ?? 62;
+        const ca = (1 - w) * (a.topScore / 100) + w * (nbA / 100);
+        const cb = (1 - w) * (b.topScore / 100) + w * (nbB / 100);
+        if (Math.abs(cb - ca) > 1e-6) return cb - ca;
+        return b.topScore - a.topScore;
+      });
+    }
+
     // 6. Build response for all hotels
     const hotels = allHotels.map(({ hotelId, topScore, hasPhotos }) => {
       const meta           = cacheMap.get(hotelId) || {};
@@ -1946,6 +1986,7 @@ app.get("/api/vsearch", async (req, res) => {
         ? Math.round(Math.max(0, Math.min(100, (rawHotelSim - HOTEL_SIM_MIN) / hotelSimSpan * 100)))
         : null;
       const primaryNbhd = primaryNbhdMap.get(hotelId) || null;
+      const nbhdFitPct = nbhdFitByHotelId?.get(hotelId);
 
       // Hotels without photo data (beyond GALLERY_LIMIT): return stub with no room types.
       // They appear in the sorted list with their match score from room_types_index.
@@ -1965,6 +2006,7 @@ app.get("/api/vsearch", async (req, res) => {
           vectorScore: score,
           hotelScore,
           primary_nbhd: primaryNbhd,
+          ...(nbhdFitPct != null ? { nbhd_fit_pct: nbhdFitPct } : {}),
         };
       }
 
@@ -2051,6 +2093,7 @@ app.get("/api/vsearch", async (req, res) => {
         vectorScore: score,
         hotelScore,
         primary_nbhd: primaryNbhd,
+        ...(nbhdFitPct != null ? { nbhd_fit_pct: nbhdFitPct } : {}),
       };
     });
 
