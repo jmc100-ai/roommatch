@@ -3520,7 +3520,8 @@
       type:'cards',
       options:[
         { id:'sleek', emoji:'✨', title:'Sleek & Modern', note:'Clean lines, soft greys, minimal.',       image:'images/wizard/sleek-modern.png' },
-        { id:'cozy',  emoji:'🕯️', title:'Warm & Cozy',     note:'Layered textures, wood, warm light.',    image:'images/wizard/warm-cozy.png' },
+        { id:'cozy',  emoji:'🕯️', title:'Warm & Cozy',     note:'Layered textures, wood, warm light.',    image:'images/wizard/warm-cozy.png',
+          weights:{ calm: 12, local: 10, culture: 6, green: 6, cafes: 6, iconic: -8, central: -6, luxury: -4, nightlife: 2 } },
         { id:'distinct', emoji:'🏛️', title:'Distinct & full of character', note:'Historic details, bold design, one-of-a-kind.', image:'images/wizard/distinct-character.png',
           weights:{ culture:12, iconic:8, local:6, luxury:8 } },
       ]
@@ -3535,7 +3536,7 @@
       options:[
         { id:'buzz_central', emoji:'🌆', label:'Icons & energy', title:'Icons & energy', note:'Sights, crowds, movement — stay in the thick of it.', image:'images/wizard/vibrant-busy.png', weights:{ nightlife:14, central:22, iconic:10, walkability:12, calm:-8, local:-4 } },
         { id:'calm_central', emoji:'🏙️', label:'Calm & central', title:'Calm & central', note:'Easy access without a party outside your window.', image:'images/wizard/nbhd-central.png', weights:{ calm:18, central:20, iconic:10, walkability:8, nightlife:-8, green:6, local:4 } },
-        { id:'hip_local', emoji:'🧭', label:'Hip & local', title:'Hip & local', note:'Neighbourhood buzz — cafés and small shops away from postcard corners.', image:'images/wizard/nbhd-trendy.png', weights:{ nightlife:14, local:18, cafes:8, walkability:8, central:2, calm:-4 } },
+        { id:'hip_local', emoji:'🧭', label:'Hip & local', title:'Hip & local', note:'Neighbourhood buzz — cafés and small shops away from postcard corners.', image:'images/wizard/nbhd-trendy.png', weights:{ nightlife:14, local:20, cafes:10, walkability:10, central:-8, calm:-2, iconic:-12, luxury:-6 } },
         { id:'leafy_local', emoji:'🌿', label:'Leafy & residential', title:'Leafy & residential', note:'Quiet streets, trees, everyday local pace.', image:'images/wizard/quiet-residential.png', weights:{ calm:18, green:10, local:20, nightlife:-10, cafes:6 } },
         { id:'scenic_open', emoji:'🌊', label:'Open & scenic', title:'Open & scenic', note:'Views, water or skyline — room to breathe.', image:'images/wizard/nbhd-scenic-open.png', weights:{ calm:14, green:12, iconic:16, walkability:8, central:6, local:6, nightlife:-10 } },
       ]
