@@ -7,7 +7,9 @@ const express = require("express");
 const cors    = require("cors");
 const path    = require("path");
 const crypto  = require("crypto");
-require("dotenv").config();
+// Load .env from the repo root (next to server.js), not process.cwd() — IDEs/tasks
+// often start Node from another folder, which breaks local env on localhost.
+require("dotenv").config({ path: path.join(__dirname, ".env") });
 const { createClient } = require("@supabase/supabase-js");
 
 // Lazy-load heavy pipeline modules so we bind PORT quickly (Render "port scan" / health checks).
@@ -113,6 +115,10 @@ app.head("/api/health", (_, res) => {
 app.listen(PORT, "0.0.0.0", () => {
   console.log(`[boot] listening on 0.0.0.0:${PORT}`);
   console.log(`[config] Using ${IS_PROD ? "PRODUCTION" : "SANDBOX"} LiteAPI key`);
+  const nbhdW = parseFloat(process.env.VSEARCH_NBHD_RANK_WEIGHT || "0.22");
+  console.log(
+    `[config] VSEARCH_NBHD_RANK_WEIGHT=${Number.isFinite(nbhdW) ? nbhdW : "invalid"} (parsed from env; 0 or missing → blend off)`
+  );
   console.log(`TravelBoop on port ${PORT}`);
   const KEEPALIVE_ENABLED = String(process.env.RENDER_KEEPALIVE || "").toLowerCase() === "true";
   const RENDER_URL = process.env.RENDER_EXTERNAL_URL;
