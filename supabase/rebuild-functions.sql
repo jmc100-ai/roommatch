@@ -30,13 +30,18 @@ BEGIN
       room_name, photo_type,
       avg(COALESCE(feature_embedding, embedding))::vector(768) AS embedding
     FROM room_embeddings
-    WHERE city = p_city AND embedding IS NOT NULL
+    WHERE city = p_city
+      AND embedding IS NOT NULL
+      AND room_name IS NOT NULL AND btrim(room_name) <> ''
+      AND photo_type = ANY (ARRAY['bedroom','bathroom','living area','view','other'])
     GROUP BY hotel_id, city, room_name, photo_type
   ),
   group_sizes AS (
     SELECT hotel_id, room_name, photo_type, city, COUNT(*) AS group_size
     FROM room_embeddings
     WHERE city = p_city
+      AND room_name IS NOT NULL AND btrim(room_name) <> ''
+      AND photo_type = ANY (ARRAY['bedroom','bathroom','living area','view','other'])
     GROUP BY hotel_id, room_name, photo_type, city
   ),
   flag_counts AS (
@@ -44,6 +49,8 @@ BEGIN
     FROM room_embeddings re
     CROSS JOIN LATERAL jsonb_object_keys(COALESCE(re.feature_flags, '{}')) AS k
     WHERE re.city = p_city
+      AND re.room_name IS NOT NULL AND btrim(re.room_name) <> ''
+      AND re.photo_type = ANY (ARRAY['bedroom','bathroom','living area','view','other'])
       AND re.feature_flags IS NOT NULL
       AND re.feature_flags != '{}'
     GROUP BY re.hotel_id, re.room_name, re.photo_type, re.city, k
