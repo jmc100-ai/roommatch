@@ -2645,6 +2645,7 @@
     }
     @media(min-width:900px){
       .boop-grid--triple { grid-template-columns:repeat(3,minmax(0,1fr)); max-width:100%; margin-left:auto; margin-right:auto; }
+      .boop-grid--quad { grid-template-columns:repeat(2,minmax(0,1fr)); max-width:760px; margin-left:auto; margin-right:auto; }
     }
     .boop-card {
       border-radius:14px; overflow:hidden; border:1px solid var(--border); cursor:pointer;
@@ -4140,23 +4141,29 @@
   let _flowFeatIdx = 0;
 
   // Boop intro profile (persisted per city).
-  // `dealbreakers` is the legacy multi-select Set; in v4 it's reused as the
-  // Screen 6 must-haves picker (each id matches a BOOP_QUESTIONS musthaves option).
-  // `freetext` is optional prose (screen 7) appended to room + hotel HyDE seeds and used for light nbhd pref nudges.
+  // `dealbreakers` is the legacy multi-select Set; it's reused as the
+  // must-haves picker (each id matches a BOOP_QUESTIONS musthaves option).
+  // `freetext` is optional prose appended to room + hotel HyDE seeds and used for light nbhd pref nudges.
   const BOOP = { idx:0, prefs:{}, answers:{}, dealbreakers:new Set(), slider:0, saved:null, freetext:'' };
   const BOOP_WIZARD_IMAGES = {}; // cityKey -> { questionId: { optionId: url } }
   const BOOP_WIZARD_CITY_FALLBACKS = {}; // cityKey -> { questionId: url }
   const BOOP_WIZARD_FETCHING = new Set();
-  // BOOP v4 wizard — 6 screens:
+  // BOOP v5 wizard — 5 screens:
   //   1. Trip context       (3 cards)
-  //   2. Room style         (3 cards)
+  //   2. Stay vibe          (4 cards; maps to roomStyle + hotelPersonality internally)
   //   3. Neighbourhood scene (5 cards — pace + location combined; see NBHD_SCENE_SEEDS)
-  //   4. Hotel personality  (3 cards)
-  //   5. Must-haves         (multi-select)
-  //   6. Optional free-text (room + hotel seeds; keyword nudges → prefs)
+  //   4. Must-haves         (multi-select)
+  //   5. Optional free-text (room + hotel seeds; keyword nudges → prefs)
   //
-  // Weights accumulate into BOOP.prefs; trip / nbhdScene / hotelPersonality / roomStyle
-  // drive HyDE seeds in buildBoopSeeds().
+  // Weights accumulate into BOOP.prefs; trip / nbhdScene / stayVibe-derived
+  // hotelPersonality + roomStyle drive HyDE seeds in buildBoopSeeds().
+  const STAY_VIBE_DERIVED = {
+    sleek_polished: { roomStyle: 'sleek',    hotelPersonality: 'polished' },
+    cozy_warm:      { roomStyle: 'cozy',     hotelPersonality: 'unique' },
+    distinct_unique:{ roomStyle: 'distinct', hotelPersonality: 'unique' },
+    simple_value:   { roomStyle: 'sleek',    hotelPersonality: 'economical' },
+  };
+
   const BOOP_QUESTIONS = [
     {
       id:'trip',
@@ -4170,20 +4177,22 @@
         { id:'expert', emoji:'🧭', title:'I know it well',    note:'Neighbourhood streets, cafés, trees.', image:'https://images.unsplash.com/photo-1449824913935-59a10b8d2000?auto=format&fit=crop&w=1200&q=80', weights:{ local:20, calm:6, central:-8, iconic:-5 } },
       ]
     },
-    // Screen 2 — "Which would you rather wake up in?" (room style)
-    // Drives roomSeed; "distinct" also adds prefs (nbhd vibe %) + hotel seed nudge.
+    // Screen 2 — stay vibe. One UX choice writes both roomStyle + hotelPersonality
+    // so room photo search and hotel-profile search keep their separate signals.
     {
-      id:'roomStyle',
-      label:'Room style',
-      title:'Which would you rather wake up in?',
-      sub:'The room that feels more like you.',
+      id:'stayVibe',
+      label:'Stay vibe',
+      title:'What kind of stay feels right?',
+      sub:'This shapes both the room style and hotel vibe we search for.',
       type:'cards',
       options:[
-        { id:'sleek', emoji:'✨', title:'Sleek & Modern', note:'Clean lines, soft greys, minimal.',       image:'images/wizard/sleek-modern.png' },
-        { id:'cozy',  emoji:'🕯️', title:'Warm & Cozy',     note:'Layered textures, wood, warm light.',    image:'images/wizard/warm-cozy.png',
-          weights:{ calm: 12, local: 10, culture: 6, green: 6, cafes: 6, iconic: -8, central: -6, luxury: -4, nightlife: 2 } },
-        { id:'distinct', emoji:'🏛️', title:'Distinct & full of character', note:'Historic details, bold design, one-of-a-kind.', image:'images/wizard/distinct-character.png',
-          weights:{ culture:12, iconic:8, local:6, luxury:8 } },
+        { id:'sleek_polished', emoji:'✨', title:'Sleek & polished', note:'Clean modern rooms, refined service, calm luxury.', image:'images/wizard/sleek-polished.png', weights:{ luxury:14, central:4, calm:8 } },
+        { id:'cozy_warm', emoji:'🕯️', title:'Warm & cozy', note:'Warm lighting, texture, comfort, and a relaxed feel.', image:'images/wizard/warm-cozy.png',
+          weights:{ calm:14, local:12, culture:6, green:6, cafes:6, iconic:-8, central:-6, luxury:-2, nightlife:2 } },
+        { id:'distinct_unique', emoji:'🎨', title:'Distinct & characterful', note:'Boutique, historic, design-led, or one-of-a-kind.', image:'images/wizard/distinct-characterful.png',
+          weights:{ culture:16, iconic:8, local:12, luxury:8 } },
+        { id:'simple_value', emoji:'💡', title:'Simple & good value', note:'Clean, functional, practical, and well-priced.', image:'https://images.pexels.com/photos/18201945/pexels-photo-18201945.jpeg?auto=compress&cs=tinysrgb&w=1200',
+          weights:{ luxury:-16, iconic:-8, shopping:-8, nightlife:-6, local:8, calm:6 } },
       ]
     },
     // Screen 3 — neighbourhood pace + location in one pick (maps to legacy pace + location for seeds).
@@ -4201,21 +4210,7 @@
         { id:'scenic_open', emoji:'🌊', label:'Open & scenic', title:'Open & scenic', note:'Views, water or skyline — room to breathe.', image:'images/wizard/nbhd-scenic-open.png', weights:{ calm:14, green:12, iconic:16, walkability:8, central:6, local:6, nightlife:-10 } },
       ]
     },
-    // Screen 4 — hotel personality (3 tiles)
-    // Drives hotelSeed (hotel embedding / hotel vibe %) + prefs on luxury/local axes.
-    {
-      id:'hotelPersonality',
-      label:'Hotel personality',
-      title:'What matters more in a hotel',
-      sub:'Pick the experience that matters most to you.',
-      type:'cards',
-      options:[
-        { id:'polished', emoji:'🥂', title:'Polished Comfort',   note:'Refined service, calm luxury.',        image:'images/wizard/polished-comfort.png', weights:{ luxury:14, central:4 } },
-        { id:'unique',   emoji:'🎨', title:'Unique Personality', note:'Boutique, characterful, design-led.', image:'images/wizard/unique-personality.png', weights:{ local:10, culture:8 } },
-        { id:'economical', emoji:'💡', title:'Simple and economical', note:'Clean, functional, great value.', image:'images/wizard/simple-economical.png', weights:{ luxury:-16, iconic:-8, shopping:-8, nightlife:-6, local:8, calm:6 } },
-      ]
-    },
-    // Screen 5 — room must-haves (multi-select).
+    // Screen 4 — room must-haves (multi-select).
     // These map to DB feature_flags that become must_haves[] on /api/vsearch.
     // "spa_bathroom" & "spacious" don't have single canonical flags — they're
     // handled via composite flags + HyDE seed nudges (see buildBoopSeeds).
@@ -4272,6 +4267,17 @@
   function migrateBoopProfileAnswersIfNeeded(answers) {
     if (!answers || typeof answers !== 'object') return answers;
     const a = { ...answers };
+    if (!a.stayVibe) {
+      if (a.hotelPersonality === 'economical') a.stayVibe = 'simple_value';
+      else if (a.roomStyle === 'distinct') a.stayVibe = 'distinct_unique';
+      else if (a.roomStyle === 'cozy') a.stayVibe = 'cozy_warm';
+      else if (a.roomStyle === 'sleek' || a.hotelPersonality === 'polished') a.stayVibe = 'sleek_polished';
+      else if (a.hotelPersonality === 'unique') a.stayVibe = 'distinct_unique';
+    }
+    if (a.stayVibe && STAY_VIBE_DERIVED[a.stayVibe]) {
+      a.roomStyle = STAY_VIBE_DERIVED[a.stayVibe].roomStyle;
+      a.hotelPersonality = STAY_VIBE_DERIVED[a.stayVibe].hotelPersonality;
+    }
     if (!a.nbhdScene && (a.nbhdPace != null || a.nbhdLocation != null)) {
       a.nbhdScene = resolveNbhdScene(a);
     }
@@ -4465,6 +4471,7 @@
   function buildEphemeralDefaultBoopProfile() {
     const answers = {
       trip: 'repeat',
+      stayVibe: 'sleek_polished',
       roomStyle: 'sleek',
       nbhdScene: 'calm_central',
       hotelPersonality: 'polished',
@@ -5122,6 +5129,10 @@
     const o = (q?.options || []).find(x => x.id === optionId);
     if (!q || !o) return;
     BOOP.answers[questionId] = optionId;
+    if (questionId === 'stayVibe' && STAY_VIBE_DERIVED[optionId]) {
+      BOOP.answers.roomStyle = STAY_VIBE_DERIVED[optionId].roomStyle;
+      BOOP.answers.hotelPersonality = STAY_VIBE_DERIVED[optionId].hotelPersonality;
+    }
     applyBoopWeights(o.weights);
     BOOP.idx += 1;
     renderBoopQuestion();
@@ -5355,7 +5366,10 @@
 
     let body = '';
     if (q.type === 'cards') {
-      body = `<div class="boop-grid${(q.options && q.options.length >= 3) ? ' boop-grid--triple' : ''}">${q.options.map((o, cardIdx) => `
+      const gridClass = (q.options && q.options.length === 4)
+        ? ' boop-grid--quad'
+        : ((q.options && q.options.length >= 3) ? ' boop-grid--triple' : '');
+      body = `<div class="boop-grid${gridClass}">${q.options.map((o, cardIdx) => `
         <button class="boop-card" onclick="boopChoose('${q.id}','${o.id}')">
           <div class="boop-card-media">
             <img src="${boopGetDynamicImage(q.id, o.id, o.image)}" alt="${o.title}" ${q.id === 'trip' ? `loading="eager" decoding="async"${cardIdx === 0 ? ' fetchpriority="high"' : ''}` : 'loading="lazy"'} onerror="this.onerror=null;this.src='https://images.unsplash.com/photo-1477959858617-67f85cf4f1df?auto=format&fit=crop&w=1200&q=80';" />
