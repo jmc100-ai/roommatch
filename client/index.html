@@ -4189,8 +4189,8 @@
         { id:'sleek_polished', emoji:'✨', title:'Sleek & polished', note:'Clean modern rooms, refined service, calm luxury.', image:'images/wizard/sleek-polished.png', weights:{ luxury:14, central:4, calm:8 } },
         { id:'cozy_warm', emoji:'🕯️', title:'Warm & cozy', note:'Warm lighting, texture, comfort, and a relaxed feel.', image:'images/wizard/warm-cozy.png',
           weights:{ calm:14, local:12, culture:6, green:6, cafes:6, iconic:-8, central:-6, luxury:-2, nightlife:2 } },
-        { id:'distinct_unique', emoji:'🎨', title:'Distinct & characterful', note:'Boutique, historic, design-led, or one-of-a-kind.', image:'images/wizard/distinct-characterful.png',
-          weights:{ culture:16, iconic:8, local:12, luxury:8 } },
+        { id:'distinct_unique', emoji:'🎨', title:'Distinct & characterful', note:'Boutique, design-led, expressive, or one-of-a-kind.', image:'images/wizard/distinct-characterful.png',
+          weights:{ culture:14, local:14, luxury:6, iconic:2 } },
         { id:'simple_value', emoji:'💡', title:'Simple & good value', note:'Clean, functional, practical, and well-priced.', image:'https://images.pexels.com/photos/18201945/pexels-photo-18201945.jpeg?auto=compress&cs=tinysrgb&w=1200',
           weights:{ luxury:-16, iconic:-8, shopping:-8, nightlife:-6, local:8, calm:6 } },
       ]
@@ -4205,7 +4205,7 @@
       options:[
         { id:'buzz_central', emoji:'🌆', label:'Icons & energy', title:'Icons & energy', note:'Sights, crowds, movement — stay in the thick of it.', image:'images/wizard/vibrant-busy.png', weights:{ nightlife:14, central:22, iconic:10, walkability:12, calm:-8, local:-4 } },
         { id:'calm_central', emoji:'🏙️', label:'Calm & central', title:'Calm & central', note:'Easy access without a party outside your window.', image:'images/wizard/nbhd-central.png', weights:{ calm:18, central:20, iconic:10, walkability:8, nightlife:-8, green:6, local:4 } },
-        { id:'hip_local', emoji:'🧭', label:'Hip & local', title:'Hip & local', note:'Neighbourhood buzz — cafés and small shops away from postcard corners.', image:'images/wizard/nbhd-trendy.png', weights:{ nightlife:14, local:20, cafes:10, walkability:10, central:-8, calm:-2, iconic:-12, luxury:-6 } },
+        { id:'hip_local', emoji:'🧭', label:'Hip & local', title:'Hip & local', note:'Neighbourhood buzz — cafés and small shops away from postcard corners.', image:'images/wizard/nbhd-trendy.png', weights:{ nightlife:16, local:24, cafes:14, restaurants:14, walkability:12, central:-14, calm:-2, iconic:-18, touristy:-18, luxury:-6 } },
         { id:'leafy_local', emoji:'🌿', label:'Leafy & residential', title:'Leafy & residential', note:'Quiet streets, trees, everyday local pace.', image:'images/wizard/quiet-residential.png', weights:{ calm:18, green:10, local:20, nightlife:-10, cafes:6 } },
         { id:'scenic_open', emoji:'🌊', label:'Open & scenic', title:'Open & scenic', note:'Views, water or skyline — room to breathe.', image:'images/wizard/nbhd-scenic-open.png', weights:{ calm:14, green:12, iconic:16, walkability:8, central:6, local:6, nightlife:-10 } },
       ]
@@ -5546,10 +5546,17 @@
     const v = k => Number(e[k]?.score || 0);
     const tags = (h.tags || []).map(t => String(t).toLowerCase());
     const txt = `${h.vibe_short || ''} ${h.vibe_long || ''}`.toLowerCase();
+    const poi = h.attributes?.poi_counts || {};
+    const cafeCount = Number(poi.cafes || 0);
+    const restaurantCount = Number(poi.restaurants || 0);
+    const cafeDensity = Math.min(100, Math.round((Math.min(cafeCount, 120) / 120) * 100));
+    const restaurantDensity = Math.min(100, Math.round((Math.min(restaurantCount, 400) / 400) * 100));
 
     const s = {
       walkability: Math.round((v('street_feel') * 0.55) + (v('cafes') * 0.20) + (v('parks') * 0.25)),
       green:       Math.round(v('parks') * 0.9 + (tags.includes('nature') ? 15 : 0)),
+      cafes:       Math.round((v('cafes') * 0.45) + (cafeDensity * 0.55) + (tags.includes('foodie') ? 6 : 0)),
+      restaurants: Math.round((v('restaurants') * 0.45) + (restaurantDensity * 0.55) + (tags.includes('foodie') ? 6 : 0)),
       foodie:      Math.round((v('restaurants') * 0.65) + (v('cafes') * 0.35)),
       culture:     Math.round((v('museums') * 0.55) + (v('icon_spots') * 0.45)),
       shopping:    Math.round(v('shops') * 0.9 + (tags.includes('shopping') ? 12 : 0)),
@@ -5567,7 +5574,7 @@
 
   function normalizeSignalsByCity(hoods) {
     if (!hoods?.length) return {};
-    const dims = ['walkability','green','foodie','culture','shopping','nightlife','calm','central','local','iconic','luxury','touristy'];
+    const dims = ['walkability','green','cafes','restaurants','foodie','culture','shopping','nightlife','calm','central','local','iconic','luxury','touristy'];
     const raw = hoods.map(h => ({ name: h.name, s: deriveNbhdSignals(h) }));
     const minMax = {};
     dims.forEach(d => {
