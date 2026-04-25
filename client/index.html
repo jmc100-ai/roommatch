@@ -632,8 +632,9 @@
     @keyframes spin { to { transform: rotate(360deg); } }
 
     /* ── Availability filter toggle ── */
+    .avail-filter-mount-desktop { display: contents; }
     .avail-filter {
-      display: flex; align-items: center; gap: 10px; margin-left: 2px;
+      display: flex; align-items: center; gap: 10px; margin-left: 2px; flex-shrink: 0;
     }
     .avail-filter-label {
       font-size: 13px; letter-spacing: 0.02em; color: rgba(255,255,255,0.86);
@@ -839,6 +840,20 @@
       max-width:var(--max);
       margin:0 auto;
     }
+    .nbhd-refine-toprow {
+      display:flex;
+      align-items:center;
+      gap:12px;
+      flex:0 0 auto;
+    }
+    .nbhd-refine-avail-slot {
+      display:flex;
+      align-items:center;
+      justify-content:flex-end;
+      min-width:0;
+      flex:1 1 auto;
+    }
+    .nbhd-refine-avail-slot:empty { display:none; }
     .nbhd-refine-label {
       font-size:10px; letter-spacing:.14em; text-transform:uppercase;
       color:var(--muted); flex-shrink:0;
@@ -882,6 +897,35 @@
       align-self:flex-start;
     }
     .nbhd-refine-more:hover { color:var(--accent2); text-decoration:underline; }
+    @media (max-width: 640px) {
+      .nbhd-refine-inner {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 6px 10px;
+      }
+      .nbhd-refine-toprow {
+        width: 100%;
+        justify-content: space-between;
+        align-items: center;
+        flex-wrap: nowrap;
+        gap: 8px;
+      }
+      .nbhd-refine-label { padding-top: 0; }
+      .nbhd-refine-avail-slot {
+        flex: 0 1 auto;
+        margin-left: auto;
+        justify-content: flex-end;
+      }
+      .nbhd-refine-avail-slot .avail-filter { gap: 6px; margin: 0; }
+      .nbhd-refine-avail-slot .avail-filter-label {
+        font-size: 9px;
+        letter-spacing: 0.06em;
+        text-align: right;
+        line-height: 1.2;
+        white-space: normal;
+        max-width: min(190px, 42vw);
+      }
+    }
     .nbhd-chip {
       display:inline-flex; align-items:center; gap:6px;
       padding:6px 12px;
@@ -1670,8 +1714,27 @@
         gap: 10px;
         overflow: visible;
       }
-      /* Second row: count + grid/list only (avoids overlap with sort pills) */
+      /* “Checking live rates…” was on the same flex row as sort pills → overlap; own row between sort and count/view */
+      #st-results .sort-bar .rates-status {
+        order: 2;
+        flex: 0 0 100%;
+        width: 100%;
+        max-width: 100%;
+        margin-left: 0;
+        margin-right: 0;
+        justify-content: center;
+        box-sizing: border-box;
+        padding: 4px 8px 2px;
+        font-size: 11px;
+        line-height: 1.3;
+        text-align: center;
+      }
+      #st-results .sort-bar .rates-status:empty {
+        display: none;
+      }
+      /* Second row: rates line; third: “Showing…” + grid/list (availability lives in nbhd strip on mobile) */
       #st-results .sort-bar-trailer {
+        order: 3;
         display: flex;
         flex-basis: 100%;
         width: 100%;
@@ -2117,7 +2180,7 @@
     }
     .city-chip:hover { border-color:rgba(201,169,110,.5); color:var(--accent); background:rgba(201,169,110,.06); }
 
-    /* BOOP v4 — inline optional dates on the city step */
+    /* BOOP v4 — travel-style date range picker on the city step */
     .city-dates {
       margin-top:28px;
       width:100%;
@@ -2126,6 +2189,7 @@
       margin-right:auto;
       text-align:center;
       box-sizing:border-box;
+      position:relative;
     }
     /* Gold hairline between dates row and recent city chips — slightly narrower than city-box */
     .city-dates::after {
@@ -2150,59 +2214,292 @@
     @media (min-width:641px) {
       .city-dates { max-width:598px; }
     }
-    .city-dates-lead {
-      flex:0 1 230px;
+    .city-date-trigger {
+      width:min(calc(100% - 28px), 470px);
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:14px;
+      margin:0 auto;
+      padding:13px 16px;
+      border-radius:15px;
+      border:1px solid rgba(255,255,255,.12);
+      background:rgba(255,255,255,.045);
+      color:var(--text);
+      font-family:'DM Sans',sans-serif;
+      cursor:pointer;
+      text-align:left;
+      box-shadow:inset 0 1px 0 rgba(255,255,255,.04), 0 10px 30px rgba(0,0,0,.14);
+      transition:border-color .18s, background .18s, box-shadow .18s, transform .12s;
+    }
+    .city-date-trigger:hover,
+    .city-date-trigger[aria-expanded="true"] {
+      border-color:rgba(201,169,110,.5);
+      background:rgba(201,169,110,.065);
+      box-shadow:inset 0 1px 0 rgba(255,255,255,.05), 0 0 0 1px rgba(201,169,110,.1), 0 14px 38px rgba(0,0,0,.22);
+    }
+    .city-date-trigger:active { transform:translateY(1px); }
+    .city-date-trigger-main {
+      display:flex;
+      align-items:center;
+      gap:11px;
       min-width:0;
+    }
+    .city-date-icon {
+      width:32px;
+      height:32px;
+      border-radius:10px;
+      display:grid;
+      place-items:center;
+      flex-shrink:0;
+      background:rgba(201,169,110,.13);
+      color:var(--accent2);
+      border:1px solid rgba(201,169,110,.2);
+      font-size:15px;
+    }
+    .city-date-copy { min-width:0; }
+    .city-date-kicker {
       font-size:11px;
       letter-spacing:.18em;
       text-transform:uppercase;
       color:var(--muted);
       line-height:1.35;
-      padding-bottom:9px;
     }
-    .city-dates-head { color:var(--muted); }
     .city-dates-opt { color:rgba(255,255,255,.35); text-transform:none; letter-spacing:normal; font-size:12px; }
-    .city-dates-row {
+    .city-date-value {
+      margin-top:2px;
+      font-size:15px;
+      color:rgba(232,228,220,.9);
+      white-space:nowrap;
+      overflow:hidden;
+      text-overflow:ellipsis;
+    }
+    .city-date-value.ph { color:rgba(232,228,220,.42); font-style:italic; }
+    .city-date-chevron {
+      flex-shrink:0;
+      color:rgba(201,169,110,.7);
+      font-size:18px;
+      transition:transform .18s;
+    }
+    .city-date-trigger[aria-expanded="true"] .city-date-chevron { transform:rotate(180deg); }
+    .city-date-pop {
+      display:none;
+      position:absolute;
+      z-index:500;
+      left:50%;
+      top:auto;
+      bottom:calc(100% + 12px);
+      transform:translateX(-50%);
+      width:min(720px, calc(100vw - 32px));
+      max-height:var(--city-date-pop-max-h, calc(100dvh - 120px));
+      padding:18px;
+      border-radius:22px;
+      border:1px solid rgba(255,255,255,.1);
+      background:rgba(18,18,21,.98);
+      box-shadow:0 24px 70px rgba(0,0,0,.58), 0 0 0 1px rgba(201,169,110,.07);
+      backdrop-filter:blur(24px);
+      -webkit-backdrop-filter:blur(24px);
+      text-align:left;
+      overflow-y:auto;
+      animation:fd .16s ease;
+    }
+    .city-date-pop.open { display:block; }
+    @media (max-width: 760px) {
+      body.city-date-modal-open { overflow:hidden; }
+    }
+    .city-date-pop-head {
       display:flex;
-      gap:10px 14px;
-      justify-content:center;
-      align-items:flex-end;
-      flex-wrap:nowrap;
-      overflow-x:auto;
-      -webkit-overflow-scrolling:touch;
-      padding-bottom:2px;
+      align-items:center;
+      justify-content:space-between;
+      gap:14px;
+      margin-bottom:16px;
     }
-    .city-dates-row .date-f { display:flex; flex-direction:column; align-items:flex-start; gap:4px; }
-    .city-dates-row .date-f label {
-      font-size:11px; letter-spacing:.12em; text-transform:uppercase; color:var(--muted);
-    }
-    .city-dates-row input[type="date"] {
-      background:rgba(255,255,255,.04);
-      border:1px solid rgba(255,255,255,.12);
+    .city-date-pop-title {
+      font-family:'Cormorant Garamond',serif;
+      font-size:24px;
+      font-weight:400;
       color:var(--text);
-      padding:8px 10px;
-      border-radius:8px;
-      font-family:inherit;
+      line-height:1.1;
+    }
+    .city-date-pop-sub {
+      margin-top:4px;
+      font-size:12px;
+      color:var(--muted);
+      line-height:1.45;
+    }
+    .city-date-nav {
+      display:flex;
+      gap:8px;
+      flex-shrink:0;
+    }
+    .city-date-nav button {
+      width:38px;
+      height:38px;
+      border-radius:999px;
+      border:1px solid rgba(255,255,255,.11);
+      background:rgba(255,255,255,.045);
+      color:var(--text);
+      cursor:pointer;
+      font-size:19px;
+      transition:border-color .15s, background .15s, color .15s;
+    }
+    .city-date-nav button:hover {
+      border-color:rgba(201,169,110,.45);
+      background:rgba(201,169,110,.08);
+      color:var(--accent2);
+    }
+    .city-date-months {
+      display:grid;
+      grid-template-columns:repeat(2, minmax(0, 1fr));
+      gap:18px;
+    }
+    .city-date-month-title {
       font-size:13px;
+      color:var(--accent2);
+      font-weight:500;
+      text-align:center;
+      margin-bottom:12px;
     }
-    .city-dates-row input[type="date"]:focus {
-      outline:none;
-      border-color:var(--accent2);
-      box-shadow:0 0 0 2px rgba(201,169,110,.18);
+    .city-date-weekdays,
+    .city-date-grid {
+      display:grid;
+      grid-template-columns:repeat(7, minmax(0, 1fr));
+      gap:4px;
     }
-    .city-dates-clear {
+    .city-date-weekdays span {
+      font-size:10px;
+      letter-spacing:.12em;
+      text-transform:uppercase;
+      color:rgba(232,228,220,.38);
+      text-align:center;
+      padding-bottom:5px;
+    }
+    .city-date-day {
+      position:relative;
+      height:40px;
+      border:0;
+      border-radius:10px;
+      background:transparent;
+      color:rgba(232,228,220,.83);
+      font-family:'DM Sans',sans-serif;
+      font-size:13px;
+      cursor:pointer;
+      z-index:0;
+      transition:background .12s, color .12s, box-shadow .12s;
+    }
+    .city-date-day:hover:not(:disabled) {
+      background:rgba(201,169,110,.12);
+      color:var(--accent2);
+    }
+    .city-date-day:disabled {
+      cursor:not-allowed;
+      color:rgba(232,228,220,.18);
+    }
+    .city-date-day.is-muted { visibility:hidden; pointer-events:none; }
+    .city-date-day.is-in-range:not(.is-start):not(.is-end) {
+      background:rgba(201,169,110,.13);
+      color:rgba(232,228,220,.92);
+      border-radius:0;
+    }
+    .city-date-day.is-start,
+    .city-date-day.is-end {
+      background:var(--accent);
+      color:#0c0c0e;
+      font-weight:700;
+      box-shadow:0 8px 22px rgba(201,169,110,.25);
+    }
+    .city-date-day.is-start { border-top-right-radius:0; border-bottom-right-radius:0; }
+    .city-date-day.is-end { border-top-left-radius:0; border-bottom-left-radius:0; }
+    .city-date-day.is-start.is-end { border-radius:10px; }
+    .city-date-footer {
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:12px;
+      border-top:1px solid rgba(255,255,255,.08);
+      margin-top:16px;
+      padding-top:14px;
+      position:sticky;
+      bottom:-18px;
+      background:linear-gradient(to top, rgba(18,18,21,.98) 78%, rgba(18,18,21,0));
+      padding-bottom:4px;
+    }
+    .city-date-summary {
+      font-size:13px;
+      color:var(--muted);
+      line-height:1.45;
+    }
+    .city-date-summary strong { color:var(--text); font-weight:500; }
+    .city-date-actions { display:flex; gap:10px; flex-shrink:0; }
+    .city-date-clear,
+    .city-date-done {
+      border-radius:11px;
+      padding:10px 16px;
+      font-family:'DM Sans',sans-serif;
+      font-size:13px;
+      cursor:pointer;
+      transition:opacity .15s, border-color .15s, color .15s;
+    }
+    .city-date-clear {
       background:none;
       border:1px solid rgba(255,255,255,.1);
       color:var(--muted);
-      padding:8px 14px;
-      border-radius:8px;
-      font-size:12px;
-      cursor:pointer;
-      transition:color .15s, border-color .15s;
     }
-    .city-dates-clear:hover { color:var(--text); border-color:rgba(255,255,255,.3); }
+    .city-date-clear:hover { color:var(--text); border-color:rgba(255,255,255,.28); }
+    .city-date-done {
+      background:var(--accent);
+      border:1px solid var(--accent);
+      color:#0c0c0e;
+      font-weight:600;
+    }
+    .city-date-done:hover { opacity:.88; }
+    .city-date-hidden { display:none !important; }
 
-    /* City step — narrow viewports: lead full width, check-in + check-out one row (grid + minmax(0) stops WebKit overlap) */
+    @media (max-width: 760px) {
+      .city-dates { max-width:100%; margin-top:20px; padding:0 2px; }
+      .city-date-trigger { width:calc(100% - 24px); }
+      .city-date-pop {
+        position:fixed;
+        inset:0;
+        width:auto;
+        max-width:none;
+        max-height:none;
+        height:100dvh;
+        min-height:100vh;
+        left:0;
+        right:0;
+        top:0;
+        bottom:0;
+        transform:none;
+        padding:calc(18px + env(safe-area-inset-top, 0px)) max(16px, env(safe-area-inset-right, 0px)) calc(18px + env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px));
+        border-radius:0;
+        border:none;
+        overflow-y:auto;
+        z-index:500;
+      }
+      .city-date-pop-head { align-items:flex-start; }
+      .city-date-months { grid-template-columns:1fr; gap:14px; }
+      .city-date-month:nth-child(2) { display:none; }
+      .city-date-day { height:38px; }
+      .city-date-footer {
+        align-items:stretch;
+        flex-direction:column;
+        bottom:calc(-18px - env(safe-area-inset-bottom, 0px));
+      }
+      .city-date-actions { width:100%; }
+      .city-date-clear,
+      .city-date-done { flex:1; }
+    }
+    @media (max-width: 420px) {
+      .city-date-trigger { padding:12px 13px; }
+      .city-date-icon { width:30px; height:30px; }
+      .city-date-value { font-size:14px; }
+      .city-date-pop-title { font-size:22px; }
+      .city-date-day { height:36px; font-size:12px; }
+      .city-date-weekdays,
+      .city-date-grid { gap:3px; }
+    }
+
     @media (max-width: 900px) {
       .city-dates {
         max-width: 100%;
@@ -2210,79 +2507,6 @@
         padding: 0 2px;
         box-sizing: border-box;
       }
-      .city-dates-row {
-        display: grid;
-        width: 100%;
-        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-        column-gap: 8px;
-        row-gap: 10px;
-        align-items: start;
-        justify-items: center;
-        overflow-x: visible;
-      }
-      .city-dates-lead {
-        grid-column: 1 / -1;
-        max-width: 100%;
-        text-align: center;
-        padding-right: 0;
-        padding-bottom: 0;
-      }
-      .city-dates-head {
-        display: block;
-        max-width: 100%;
-        line-height: 1.4;
-        word-break: break-word;
-      }
-      /* DOM: .city-dates-lead, .date-f (in), .date-f (out), .city-dates-clear — :first-of-type on .date-f is wrong (first div is lead) */
-      .city-dates-lead + .date-f {
-        grid-column: 1;
-        grid-row: 2;
-      }
-      .city-dates-lead + .date-f + .date-f {
-        grid-column: 2;
-        grid-row: 2;
-      }
-      .city-dates-row .date-f {
-        min-width: 0;
-        width: 100%;
-        /* Slightly narrower than the grid cell so WebKit date UI stays inside the column */
-        max-width: calc(100% - 8px);
-        box-sizing: border-box;
-        overflow: hidden;
-      }
-      .city-dates-row .date-f label {
-        align-self: flex-start;
-      }
-      .city-dates-row input[type="date"] {
-        display: block;
-        width: 100%;
-        min-width: 0;
-        max-width: 100%;
-        box-sizing: border-box;
-        padding: 7px 4px;
-        font-size: 11px;
-        letter-spacing: -0.02em;
-      }
-      /* WebKit: trim internal edit padding so the control fits half-width */
-      #city-dates .city-dates-row input[type="date"]::-webkit-datetime-edit {
-        padding: 0 1px 0 0;
-      }
-      #city-dates .city-dates-row input[type="date"]::-webkit-calendar-picker-indicator {
-        margin: 0;
-        padding: 0 0 0 2px;
-        cursor: pointer;
-        transform: scale(0.88);
-        transform-origin: center right;
-      }
-      .city-dates-clear {
-        grid-column: 1 / -1;
-        grid-row: 3;
-        justify-self: center;
-        width: auto;
-        max-width: 100%;
-      }
-
-      /* Touch phones (e.g. iPhone): native date has large intrinsic width; zoom + insets avoid clip from html/body overflow-x:hidden */
       @media (hover: none) and (pointer: coarse) {
         #st-city .city-chapter {
           padding-left: max(12px, env(safe-area-inset-left, 0px));
@@ -2291,19 +2515,6 @@
         #st-city #city-dates {
           padding-left: max(2px, env(safe-area-inset-left, 0px));
           padding-right: max(2px, env(safe-area-inset-right, 0px));
-        }
-        #st-city #city-dates .city-dates-row {
-          column-gap: 6px;
-          padding: 0;
-        }
-        /* Safari: zoom shrinks the used layout width of type=date (transform: scale does not) */
-        #st-city #city-dates .city-dates-lead + .date-f,
-        #st-city #city-dates .city-dates-lead + .date-f + .date-f {
-          zoom: 0.78;
-        }
-        #st-city #city-dates .city-dates-row input[type="date"] {
-          font-size: 13px;
-          padding: 6px 2px;
         }
       }
     }
@@ -3160,7 +3371,7 @@
     .dates-card-top h3 { font-family:'Cormorant Garamond',serif; font-size:26px; font-weight:400; margin-bottom:6px; }
     .dates-card-top p { font-size:13px; color:var(--muted); line-height:1.65; }
     .dates-row { display:grid; grid-template-columns:1fr 1fr; gap:14px; padding:22px 26px; }
-    /* Scoped — do not target .city-dates-row .date-f (city home uses its own sizing; global rule + WebKit min width caused overlap) */
+    /* Scoped so homepage range-picker sizing stays independent. */
     .dates-row .date-f label,
     .cmd-tray-inner .date-f label { font-size:10px; letter-spacing:.14em; text-transform:uppercase; color:var(--muted); display:block; margin-bottom:7px; }
     .dates-row .date-f input,
@@ -3382,11 +3593,11 @@
       <div class="city-chapter-inner">
         <div class="eyebrow"><div class="eyebrow-dot"></div>TravelBoop · Find your Travel Vibe</div>
         <h1 class="city-heading">Where are you <em>headed?</em></h1>
-        <p class="chapter-sub">Pick a city and discover neighborhoods that actually match your Vibe — not just the usual tourist blurbs. Then we scan real neighborhood and hotel room photos with AI to find places that feel right to you. When your neighborhood, hotel and room vibe match, that's your place!</p>
+        <p class="chapter-sub">Pick a city and discover neighborhoods that actually match your Vibe — not just the usual tourist blurbs. Then we'll scan real neighborhood and hotel room photos with AI to find places that feel right to you!</p>
         <div class="city-box">
           <span class="city-box-icon">⌕</span>
           <!-- Geoapify + recent popover paused (clashed with chips) — restore oninput/onblur + onCityInput -->
-          <input type="text" id="cityInput" placeholder="Paris, Kuala Lumpur, Tokyo…"
+          <input type="text" id="cityInput" placeholder="Where are you going?"
                  autocomplete="off"
                  onkeydown="onCityKeydown(event)"/>
           <button class="city-go-btn" id="cityGoBtn" onclick="onCityGo()" aria-label="Go">Go →</button>
@@ -3395,19 +3606,37 @@
         </div>
         <!-- BOOP v4 — optional dates sit directly under the edit box -->
         <div class="city-dates" id="city-dates">
-          <div class="city-dates-row">
-            <div class="city-dates-lead" id="city-dates-lead">
-              <span class="city-dates-head">Add dates <span class="city-dates-opt">(optional)</span></span>
+          <input type="hidden" id="city-d-ci"/>
+          <input type="hidden" id="city-d-co"/>
+          <button type="button" class="city-date-trigger" id="city-date-trigger" aria-expanded="false" aria-controls="city-date-pop" onclick="toggleCityDateRangePicker()">
+            <span class="city-date-trigger-main">
+              <span class="city-date-icon">◇</span>
+              <span class="city-date-copy">
+                <span class="city-date-kicker">Add dates <span class="city-dates-opt">(optional)</span></span>
+                <span class="city-date-value ph" id="city-date-value">Check-in — Check-out</span>
+              </span>
+            </span>
+            <span class="city-date-chevron">⌄</span>
+          </button>
+          <div class="city-date-pop" id="city-date-pop" role="dialog" aria-label="Choose travel dates">
+            <div class="city-date-pop-head">
+              <div>
+                <div class="city-date-pop-title">Choose your dates</div>
+                <div class="city-date-pop-sub" id="city-date-pop-sub">Select a check-in date, then choose your check-out date.</div>
+              </div>
+              <div class="city-date-nav">
+                <button type="button" onclick="shiftCityDateMonth(-1)" aria-label="Previous month">‹</button>
+                <button type="button" onclick="shiftCityDateMonth(1)" aria-label="Next month">›</button>
+              </div>
             </div>
-            <div class="date-f">
-              <label for="city-d-ci">Check-in</label>
-              <input type="date" id="city-d-ci" style="color-scheme:dark" onchange="onCityDatesChanged()"/>
+            <div class="city-date-months" id="city-date-months"></div>
+            <div class="city-date-footer">
+              <div class="city-date-summary" id="city-date-summary">No dates selected</div>
+              <div class="city-date-actions">
+                <button type="button" class="city-date-clear" onclick="clearCityDates()">Clear</button>
+                <button type="button" class="city-date-done" onclick="closeCityDateRangePicker()">Done</button>
+              </div>
             </div>
-            <div class="date-f">
-              <label for="city-d-co">Check-out</label>
-              <input type="date" id="city-d-co" style="color-scheme:dark" onchange="onCityDatesChanged()"/>
-            </div>
-            <button type="button" class="city-dates-clear" id="city-dates-clear" onclick="clearCityDates()" style="display:none">Clear</button>
           </div>
         </div>
 
@@ -3544,8 +3773,8 @@
               <p>We'll show live nightly rates ranked by how well they match <strong id="dates-style-label" style="color:var(--accent2)">your vibe</strong>.</p>
             </div>
             <div class="dates-row">
-              <div class="date-f"><label>Check-in</label><input type="date" id="d-ci" style="color-scheme:dark"/></div>
-              <div class="date-f"><label>Check-out</label><input type="date" id="d-co" style="color-scheme:dark"/></div>
+              <div class="date-f"><label>Check-in</label><input type="date" id="d-ci" style="color-scheme:dark" onchange="onFlowDatesPairChanged('d-ci','d-co')"/></div>
+              <div class="date-f"><label>Check-out</label><input type="date" id="d-co" style="color-scheme:dark" onchange="onFlowDatesPairChanged('d-ci','d-co')"/></div>
             </div>
             <div class="dates-actions">
               <button class="btn-pri" onclick="confirmDates()">Show rooms with prices →</button>
@@ -3589,8 +3818,8 @@
     </div>
     <div class="cmd-tray" id="cmd-tray">
       <div class="cmd-tray-inner">
-        <div class="date-f"><label>Check-in</label><input type="date" id="ct-ci" style="color-scheme:dark"/></div>
-        <div class="date-f"><label>Check-out</label><input type="date" id="ct-co" style="color-scheme:dark"/></div>
+        <div class="date-f"><label>Check-in</label><input type="date" id="ct-ci" style="color-scheme:dark" onchange="onFlowDatesPairChanged('ct-ci','ct-co')"/></div>
+        <div class="date-f"><label>Check-out</label><input type="date" id="ct-co" style="color-scheme:dark" onchange="onFlowDatesPairChanged('ct-ci','ct-co')"/></div>
         <button class="btn-pri" onclick="cmdConfirmDates()" style="padding:12px 22px;">Update prices</button>
         <button class="btn-sec" onclick="toggleDatesTray()" style="padding:12px 16px;">Close</button>
       </div>
@@ -3629,12 +3858,14 @@
     <button class="sort-btn" data-sort="rating" onclick="setSortBy('rating')">Guest Rating</button>
     <button class="sort-btn" data-sort="stars" onclick="setSortBy('stars')">Stars</button>
   </div>
-  <div class="avail-filter" id="availFilter" style="display:none" title="Only show room types with availability for your dates">
-    <label class="avail-filter-label" for="availOnlyCheck">Available rooms only</label>
-    <label class="toggle-switch">
-      <input type="checkbox" id="availOnlyCheck" onchange="setAvailFilter(this.checked)">
-      <span class="toggle-track"></span>
-    </label>
+  <div id="availFilterMountDesktop" class="avail-filter-mount-desktop">
+    <div class="avail-filter" id="availFilter" style="display:none" title="Only show room types with availability for your dates">
+      <label class="avail-filter-label" for="availOnlyCheck">Available rooms only</label>
+      <label class="toggle-switch">
+        <input type="checkbox" id="availOnlyCheck" onchange="setAvailFilter(this.checked)">
+        <span class="toggle-track"></span>
+      </label>
+    </div>
   </div>
   <span id="ratesStatus" class="rates-status"></span>
   <div class="sort-bar-trailer">
@@ -5922,47 +6153,264 @@
   }
 
   // ── DATES ────────────────────────────────────────────
+  /** YYYY-MM-DD + n calendar days (local), ISO date string out */
+  function ymdAddDays(ymd, n) {
+    if (!ymd || typeof ymd !== 'string') return '';
+    const p = ymd.split('-').map(Number);
+    if (p.length !== 3 || p.some(x => !Number.isFinite(x))) return '';
+    const d = new Date(p[0], p[1] - 1, p[2]);
+    d.setDate(d.getDate() + n);
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+  }
+
+  function ymdFromLocalDate(d) {
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+  }
+
+  function ymdToLocalDate(ymd) {
+    if (!ymd || typeof ymd !== 'string') return null;
+    const p = ymd.split('-').map(Number);
+    if (p.length !== 3 || p.some(x => !Number.isFinite(x))) return null;
+    return new Date(p[0], p[1] - 1, p[2]);
+  }
+
+  function ymdDiffDays(start, end) {
+    const a = ymdToLocalDate(start);
+    const b = ymdToLocalDate(end);
+    if (!a || !b) return 0;
+    return Math.round((b - a) / 86400000);
+  }
+
+  /** Checkout must be ≥ check-in + 2 calendar days; sets default + input min when check-in changes */
+  function ensureMinCheckoutAfterCheckin(ciEl, coEl) {
+    if (!ciEl || !coEl) return;
+    const ci = ciEl.value;
+    if (!ci) {
+      coEl.removeAttribute('min');
+      return;
+    }
+    const minCo = ymdAddDays(ci, 2);
+    if (!minCo) return;
+    coEl.min = minCo;
+    const co = coEl.value;
+    if (!co || co <= ci || co < minCo) coEl.value = minCo;
+  }
+
+  function onFlowDatesPairChanged(ciId, coId) {
+    ensureMinCheckoutAfterCheckin(document.getElementById(ciId), document.getElementById(coId));
+  }
+
+  const CITY_DATE_WEEKDAYS = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+  const CITY_DATE_PICKER = { cursor: null, selecting: 'checkin' };
+
+  function cityDateMonthStart(ymd) {
+    const base = ymdToLocalDate(ymd) || new Date();
+    return new Date(base.getFullYear(), base.getMonth(), 1);
+  }
+
+  function syncCityDateRangeUI() {
+    const ci = document.getElementById('city-d-ci')?.value || '';
+    const co = document.getElementById('city-d-co')?.value || '';
+    const value = document.getElementById('city-date-value');
+    const summary = document.getElementById('city-date-summary');
+    const sub = document.getElementById('city-date-pop-sub');
+
+    if (value) {
+      if (ci && co) {
+        const nights = ymdDiffDays(ci, co);
+        value.textContent = `${fmtDate(ci)} — ${fmtDate(co)}`;
+        value.classList.remove('ph');
+        if (summary) summary.innerHTML = `<strong>${fmtDate(ci)} to ${fmtDate(co)}</strong> · ${nights} night${nights === 1 ? '' : 's'}`;
+      } else if (ci) {
+        value.textContent = `${fmtDate(ci)} — Select checkout`;
+        value.classList.remove('ph');
+        if (summary) summary.innerHTML = `<strong>${fmtDate(ci)}</strong> · choose checkout`;
+      } else {
+        value.textContent = 'Check-in — Check-out';
+        value.classList.add('ph');
+        if (summary) summary.textContent = 'No dates selected';
+      }
+    }
+    if (sub) {
+      sub.textContent = CITY_DATE_PICKER.selecting === 'checkout'
+        ? 'Pick a check-out date. It must be at least two days after check-in.'
+        : 'Select a check-in date, then choose your check-out date.';
+    }
+  }
+
+  function syncCityDatePartialSelection() {
+    const ci = document.getElementById('city-d-ci')?.value || '';
+    const co = document.getElementById('city-d-co')?.value || '';
+    S.checkin = ci || null;
+    S.checkout = co || null;
+    ['d-ci','ct-ci'].forEach(id => { const el = document.getElementById(id); if (el && ci) el.value = ci; });
+    ['d-co','ct-co'].forEach(id => { const el = document.getElementById(id); if (el) el.value = co || ''; });
+    syncCityDateRangeUI();
+  }
+
+  function updateCityDatePopoverPosition() {
+    const pop = document.getElementById('city-date-pop');
+    const trigger = document.getElementById('city-date-trigger');
+    if (!pop || !trigger) return;
+    if (window.matchMedia && window.matchMedia('(max-width: 760px)').matches) {
+      pop.style.removeProperty('--city-date-pop-max-h');
+      return;
+    }
+    const rect = trigger.getBoundingClientRect();
+    const maxH = Math.max(240, Math.floor(rect.top - 18));
+    pop.style.setProperty('--city-date-pop-max-h', `${maxH}px`);
+  }
+
+  function openCityDateRangePicker() {
+    const pop = document.getElementById('city-date-pop');
+    const trigger = document.getElementById('city-date-trigger');
+    if (!pop || !trigger) return;
+    const ci = document.getElementById('city-d-ci')?.value || '';
+    CITY_DATE_PICKER.cursor = cityDateMonthStart(ci || ymdFromLocalDate(new Date()));
+    CITY_DATE_PICKER.selecting = ci ? 'checkout' : 'checkin';
+    updateCityDatePopoverPosition();
+    pop.classList.add('open');
+    trigger.setAttribute('aria-expanded', 'true');
+    document.body.classList.add('city-date-modal-open');
+    syncCityDateRangeUI();
+    renderCityDateRangePicker();
+  }
+
+  function closeCityDateRangePicker() {
+    const pop = document.getElementById('city-date-pop');
+    const trigger = document.getElementById('city-date-trigger');
+    if (pop) pop.classList.remove('open');
+    if (trigger) trigger.setAttribute('aria-expanded', 'false');
+    document.body.classList.remove('city-date-modal-open');
+  }
+
+  function toggleCityDateRangePicker() {
+    const pop = document.getElementById('city-date-pop');
+    if (pop && pop.classList.contains('open')) closeCityDateRangePicker();
+    else openCityDateRangePicker();
+  }
+
+  function shiftCityDateMonth(delta) {
+    const cur = CITY_DATE_PICKER.cursor || cityDateMonthStart();
+    CITY_DATE_PICKER.cursor = new Date(cur.getFullYear(), cur.getMonth() + delta, 1);
+    renderCityDateRangePicker();
+  }
+
+  function cityDateMonthHTML(monthDate) {
+    const y = monthDate.getFullYear();
+    const m = monthDate.getMonth();
+    const title = monthDate.toLocaleDateString('en-US', { month:'long', year:'numeric' });
+    const firstDay = new Date(y, m, 1).getDay();
+    const daysInMonth = new Date(y, m + 1, 0).getDate();
+    const ci = document.getElementById('city-d-ci')?.value || '';
+    const co = document.getElementById('city-d-co')?.value || '';
+    const today = ymdFromLocalDate(new Date());
+    const minCheckout = ci ? ymdAddDays(ci, 2) : '';
+    const cells = [];
+
+    for (let i = 0; i < firstDay; i++) cells.push('<button type="button" class="city-date-day is-muted" tabindex="-1" disabled></button>');
+    for (let d = 1; d <= daysInMonth; d++) {
+      const ymd = ymdFromLocalDate(new Date(y, m, d));
+      const isPast = ymd < today;
+      const isTooSoonCheckout = CITY_DATE_PICKER.selecting === 'checkout' && ci && ymd > ci && ymd < minCheckout;
+      const disabled = isPast || isTooSoonCheckout;
+      const classes = ['city-date-day'];
+      if (ci && ymd === ci) classes.push('is-start');
+      if (co && ymd === co) classes.push('is-end');
+      if (ci && co && ymd > ci && ymd < co) classes.push('is-in-range');
+      cells.push(`<button type="button" class="${classes.join(' ')}" ${disabled ? 'disabled' : ''} onclick="selectCityDate('${ymd}')">${d}</button>`);
+    }
+
+    return `<div class="city-date-month">
+      <div class="city-date-month-title">${title}</div>
+      <div class="city-date-weekdays">${CITY_DATE_WEEKDAYS.map(w => `<span>${w}</span>`).join('')}</div>
+      <div class="city-date-grid">${cells.join('')}</div>
+    </div>`;
+  }
+
+  function renderCityDateRangePicker() {
+    const monthsEl = document.getElementById('city-date-months');
+    if (!monthsEl) return;
+    const cur = CITY_DATE_PICKER.cursor || cityDateMonthStart();
+    const next = new Date(cur.getFullYear(), cur.getMonth() + 1, 1);
+    monthsEl.innerHTML = cityDateMonthHTML(cur) + cityDateMonthHTML(next);
+    syncCityDateRangeUI();
+  }
+
+  function selectCityDate(ymd) {
+    const ciEl = document.getElementById('city-d-ci');
+    const coEl = document.getElementById('city-d-co');
+    if (!ciEl || !coEl) return;
+    const ci = ciEl.value || '';
+
+    if (!ci || CITY_DATE_PICKER.selecting !== 'checkout' || ymd <= ci) {
+      ciEl.value = ymd;
+      coEl.value = '';
+      CITY_DATE_PICKER.selecting = 'checkout';
+      syncCityDatePartialSelection();
+    } else {
+      const minCo = ymdAddDays(ci, 2);
+      if (ymd < minCo) {
+        flashMsg('Check-out must be at least two days after check-in');
+        return;
+      }
+      coEl.value = ymd;
+      CITY_DATE_PICKER.selecting = 'checkin';
+      onCityDatesChanged();
+    }
+
+    renderCityDateRangePicker();
+  }
+
   function _initFlowDates() {
-    const fmt = d => d.toISOString().slice(0,10);
-    const tomorrow = new Date(); tomorrow.setDate(tomorrow.getDate()+1);
-    const checkout = new Date(tomorrow); checkout.setDate(checkout.getDate()+2);
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    const ciStr = ymdFromLocalDate(tomorrow);
+    const coStr = ymdAddDays(ciStr, 2);
     const ci = document.getElementById('d-ci');
     const co = document.getElementById('d-co');
-    if (ci) ci.value = fmt(tomorrow);
-    if (co) co.value = fmt(checkout);
-    // Also set cmd tray defaults
+    if (ci) ci.value = ciStr;
+    if (co) co.value = coStr;
+    ensureMinCheckoutAfterCheckin(ci, co);
     const ct1 = document.getElementById('ct-ci');
     const ct2 = document.getElementById('ct-co');
-    if (ct1) ct1.value = fmt(tomorrow);
-    if (ct2) ct2.value = fmt(checkout);
+    if (ct1) ct1.value = ciStr;
+    if (ct2) ct2.value = coStr;
+    ensureMinCheckoutAfterCheckin(ct1, ct2);
   }
 
   function confirmDates() {
-    const ci = document.getElementById('d-ci').value;
-    const co = document.getElementById('d-co').value;
+    const ciEl = document.getElementById('d-ci');
+    const coEl = document.getElementById('d-co');
+    ensureMinCheckoutAfterCheckin(ciEl, coEl);
+    const ci = ciEl && ciEl.value;
+    const co = coEl && coEl.value;
     if (!ci || !co) { flashMsg('Please select both check-in and check-out dates'); return; }
     if (ci >= co)   { flashMsg('Check-out must be after check-in'); return; }
     S.checkin  = ci;
     S.checkout = co;
+    const ct1 = document.getElementById('ct-ci');
+    const ct2 = document.getElementById('ct-co');
+    if (ct1) ct1.value = ci;
+    if (ct2) ct2.value = co;
+    ensureMinCheckoutAfterCheckin(ct1, ct2);
     refreshStory('results');
     startSearch();
   }
 
   // BOOP v4 — optional inline dates on the city step.
   function onCityDatesChanged() {
-    const ci = (document.getElementById('city-d-ci')||{}).value || '';
-    const co = (document.getElementById('city-d-co')||{}).value || '';
-    // Auto-advance: if user picks a check-in and no check-out yet, default to +2 nights.
-    if (ci && !co) {
-      try {
-        const d = new Date(ci + 'T12:00:00'); d.setDate(d.getDate() + 2);
-        const def = d.toISOString().slice(0,10);
-        const coEl = document.getElementById('city-d-co');
-        if (coEl) coEl.value = def;
-      } catch(_) {}
-    }
-    const nci = (document.getElementById('city-d-ci')||{}).value || '';
-    const nco = (document.getElementById('city-d-co')||{}).value || '';
+    const ciEl = document.getElementById('city-d-ci');
+    const coEl = document.getElementById('city-d-co');
+    ensureMinCheckoutAfterCheckin(ciEl, coEl);
+    const nci = (ciEl && ciEl.value) || '';
+    const nco = (coEl && coEl.value) || '';
     if (nci && nco && nci >= nco) {
       flashMsg('Check-out must be after check-in');
       return;
@@ -5972,8 +6420,9 @@
     // Mirror into the existing st-dates + cmd tray inputs so downstream UX sees them.
     ['d-ci','ct-ci'].forEach(id => { const el = document.getElementById(id); if (el && nci) el.value = nci; });
     ['d-co','ct-co'].forEach(id => { const el = document.getElementById(id); if (el && nco) el.value = nco; });
-    const clearBtn = document.getElementById('city-dates-clear');
-    if (clearBtn) clearBtn.style.display = (nci || nco) ? 'inline-flex' : 'none';
+    ensureMinCheckoutAfterCheckin(document.getElementById('d-ci'), document.getElementById('d-co'));
+    ensureMinCheckoutAfterCheckin(document.getElementById('ct-ci'), document.getElementById('ct-co'));
+    syncCityDateRangeUI();
   }
 
   function clearCityDates() {
@@ -5982,8 +6431,12 @@
     ['city-d-ci','city-d-co','d-ci','d-co','ct-ci','ct-co'].forEach(id => {
       const el = document.getElementById(id); if (el) el.value = '';
     });
-    const clearBtn = document.getElementById('city-dates-clear');
-    if (clearBtn) clearBtn.style.display = 'none';
+    ensureMinCheckoutAfterCheckin(document.getElementById('city-d-ci'), document.getElementById('city-d-co'));
+    ensureMinCheckoutAfterCheckin(document.getElementById('d-ci'), document.getElementById('d-co'));
+    ensureMinCheckoutAfterCheckin(document.getElementById('ct-ci'), document.getElementById('ct-co'));
+    CITY_DATE_PICKER.selecting = 'checkin';
+    syncCityDateRangeUI();
+    renderCityDateRangePicker();
   }
 
   function skipDates() {
@@ -6045,6 +6498,9 @@
     document.body.classList.add('has-results');
     const st = document.getElementById('st-results');
     if (st) st.classList.add('results-pending');
+    const dmRescue = document.getElementById('availFilterMountDesktop');
+    const afRescue = document.getElementById('availFilter');
+    if (dmRescue && afRescue) dmRescue.appendChild(afRescue);
     const strip = document.getElementById('nbhd-refine-strip');
     if (strip) {
       strip.style.display = 'none';
@@ -6059,6 +6515,7 @@
     if (rc) rc.textContent = 'Finding matches…';
     const availFilter = document.getElementById('availFilter');
     if (availFilter) availFilter.style.display = 'none';
+    scheduleSyncAvailFilterMount();
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }
 
@@ -6090,15 +6547,28 @@
   }
 
   function toggleDatesTray() {
-    document.getElementById('cmd-tray').classList.toggle('open');
+    const tray = document.getElementById('cmd-tray');
+    const opening = tray && !tray.classList.contains('open');
+    tray.classList.toggle('open');
+    if (opening) {
+      ensureMinCheckoutAfterCheckin(document.getElementById('ct-ci'), document.getElementById('ct-co'));
+    }
   }
 
   function cmdConfirmDates() {
-    const ci = document.getElementById('ct-ci').value;
-    const co = document.getElementById('ct-co').value;
+    const ciEl = document.getElementById('ct-ci');
+    const coEl = document.getElementById('ct-co');
+    ensureMinCheckoutAfterCheckin(ciEl, coEl);
+    const ci = ciEl && ciEl.value;
+    const co = coEl && coEl.value;
     if (!ci || !co) return;
     if (ci >= co) { flashMsg('Check-out must be after check-in'); return; }
     S.checkin  = ci; S.checkout = co;
+    const dCi = document.getElementById('d-ci');
+    const dCo = document.getElementById('d-co');
+    if (dCi) dCi.value = ci;
+    if (dCo) dCo.value = co;
+    ensureMinCheckoutAfterCheckin(dCi, dCo);
     const cd = document.getElementById('cv-dates');
     if (cd) { cd.textContent = fmtDate(ci) + ' – ' + fmtDate(co); cd.classList.remove('ph'); }
     const sb = document.getElementById('s-dates-btn');
@@ -6320,7 +6790,10 @@
       }
     });
   }
-  document.addEventListener('DOMContentLoaded', initTopnavMenuAndStatic);
+  document.addEventListener('DOMContentLoaded', () => {
+    initTopnavMenuAndStatic();
+    scheduleSyncAvailFilterMount();
+  });
 
   function setQuery(chip) {
     document.getElementById('queryInput').value = chip.textContent.trim();
@@ -6621,6 +7094,7 @@
     _showAvailOnly  = false;
     const availFilter = document.getElementById('availFilter');
     if (availFilter) availFilter.style.display = 'none';
+    scheduleSyncAvailFilterMount();
     _setRatesStatus('', '');
     document.body.classList.add('has-results');
     document.getElementById('discovery-flow').style.display = 'none';
@@ -6769,6 +7243,7 @@
       availFilter.style.display = 'flex';
       document.getElementById('availOnlyCheck').checked = false;
     }
+    scheduleSyncAvailFilterMount();
 
     // Route by sort mode:
     //  - match / rating / stars: order doesn't change with prices → update in-place,
@@ -7183,6 +7658,36 @@
   let _nbhdRefineExpanded = false;
   const NBHD_REFINE_COLLAPSED_MAX_PX = 42;
 
+  let _availMountRaf = null;
+  function scheduleSyncAvailFilterMount() {
+    if (_availMountRaf != null) cancelAnimationFrame(_availMountRaf);
+    _availMountRaf = requestAnimationFrame(() => {
+      _availMountRaf = null;
+      syncAvailFilterMount();
+    });
+  }
+
+  /** Desktop: #availFilter stays in sort bar. Mobile (≤640px): move into nbhd strip next to “Top neighbourhoods”. */
+  function syncAvailFilterMount() {
+    const avail = document.getElementById('availFilter');
+    const desktopMount = document.getElementById('availFilterMountDesktop');
+    const stripSlot = document.getElementById('nbhd-refine-avail-slot');
+    if (!avail || !desktopMount) return;
+    const shown = typeof window.getComputedStyle !== 'undefined' && window.getComputedStyle(avail).display !== 'none';
+    const mobile = typeof window.matchMedia !== 'undefined' && window.matchMedia('(max-width: 640px)').matches;
+    if (!shown) {
+      desktopMount.appendChild(avail);
+      return;
+    }
+    if (mobile && stripSlot) {
+      stripSlot.appendChild(avail);
+    } else {
+      desktopMount.appendChild(avail);
+    }
+  }
+
+  window.addEventListener('resize', scheduleSyncAvailFilterMount);
+
   function syncNbhdRefineMoreBtn() {
     const strip = document.getElementById('nbhd-refine-strip');
     if (!strip || strip.style.display === 'none') return;
@@ -7240,9 +7745,13 @@
       .sort((a,b) => b.count - a.count)
       .slice(0, 5);
     if (entries.length < 2) {
+      const dm0 = document.getElementById('availFilterMountDesktop');
+      const af0 = document.getElementById('availFilter');
+      if (dm0 && af0) dm0.appendChild(af0);
       strip.style.display = 'none';
       strip.innerHTML = '';
       _nbhdRefineExpanded = false;
+      scheduleSyncAvailFilterMount();
       return;
     }
     const chips = [
@@ -7257,15 +7766,22 @@
     ];
     _nbhdRefineExpanded = false;
     strip.className = 'nbhd-refine-strip';
+    const dmStrip = document.getElementById('availFilterMountDesktop');
+    const afStrip = document.getElementById('availFilter');
+    if (dmStrip && afStrip) dmStrip.appendChild(afStrip);
     strip.innerHTML = `
       <div class="nbhd-refine-inner">
-        <span class="nbhd-refine-label">Top neighbourhoods</span>
+        <div class="nbhd-refine-toprow">
+          <span class="nbhd-refine-label">Top neighbourhoods</span>
+          <div class="nbhd-refine-avail-slot" id="nbhd-refine-avail-slot"></div>
+        </div>
         <div class="nbhd-refine-main">
           <div class="nbhd-refine-chips" id="nbhd-refine-chips">${chips.join('')}</div>
           <button type="button" class="nbhd-refine-more" onclick="toggleNbhdRefineExpand()" aria-expanded="false" aria-controls="nbhd-refine-chips">More ›</button>
         </div>
       </div>`;
     strip.style.display = '';
+    scheduleSyncAvailFilterMount();
     requestAnimationFrame(() => {
       syncNbhdRefineMoreBtn();
       window.requestAnimationFrame(() => syncNbhdRefineMoreBtn());
@@ -7951,8 +8467,22 @@
     if (!w || !w.classList.contains('is-open')) return;
     if (!w.contains(ev.target)) closeSortMorePop();
   });
+  document.addEventListener('click', (ev) => {
+    const picker = document.getElementById('city-dates');
+    const pop = document.getElementById('city-date-pop');
+    if (!picker || !pop || !pop.classList.contains('open')) return;
+    const path = typeof ev.composedPath === 'function' ? ev.composedPath() : [];
+    if (!picker.contains(ev.target) && !path.includes(picker) && !path.includes(pop)) {
+      closeCityDateRangePicker();
+    }
+  });
   document.addEventListener('keydown', (ev) => {
     if (ev.key === 'Escape') closeSortMorePop();
+    if (ev.key === 'Escape') closeCityDateRangePicker();
+  });
+  window.addEventListener('resize', () => {
+    const pop = document.getElementById('city-date-pop');
+    if (pop && pop.classList.contains('open')) updateCityDatePopoverPosition();
   });
 
   // Keyboard nav on city input
@@ -7965,6 +8495,7 @@
 
     // Init date inputs with sensible defaults
     _initFlowDates();
+    syncCityDateRangeUI();
 
     // Build city quick-pick chips (top cities + recent)
     buildCityChips();
