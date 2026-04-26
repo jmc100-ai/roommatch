@@ -997,6 +997,351 @@
       .hotel-nbhd-pill-suffix--full { display: none; }
       .hotel-nbhd-pill-suffix--short { display: inline; }
     }
+    .vibe-tour {
+      width:min(1120px, calc(100vw - 32px));
+      max-height:calc(100vh - 32px);
+      border:1px solid rgba(201,169,110,.22);
+      background:#08080a;
+      border-radius:24px;
+      overflow:hidden;
+      box-shadow:0 24px 70px rgba(0,0,0,.46);
+      position:relative;
+    }
+    .vibe-tour-overlay {
+      position:fixed;
+      inset:0;
+      z-index:1000;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      padding:16px;
+      background:rgba(0,0,0,.74);
+      backdrop-filter:blur(12px);
+      -webkit-backdrop-filter:blur(12px);
+    }
+    .vibe-tour-overlay[aria-hidden="true"] { display:none; }
+    .vibe-tour-stage {
+      height:min(72vh,680px);
+      min-height:480px;
+      position:relative;
+      display:flex;
+      align-items:stretch;
+      background:#000;
+      overflow:hidden;
+      isolation:isolate;
+    }
+    .vibe-tour-stage::before {
+      content:'';
+      position:absolute;
+      inset:-18%;
+      z-index:3;
+      pointer-events:none;
+      opacity:.055;
+      mix-blend-mode:screen;
+      background:
+        radial-gradient(circle at 18% 30%, rgba(255,255,255,.7) 0 1px, transparent 1.5px),
+        radial-gradient(circle at 74% 62%, rgba(255,255,255,.45) 0 1px, transparent 1.5px);
+      background-size:42px 42px, 57px 57px;
+      animation:vibeFilmGrain .7s steps(2,end) infinite;
+    }
+    .vibe-tour-stage::after {
+      content:'';
+      position:absolute;
+      inset:0;
+      z-index:3;
+      pointer-events:none;
+      opacity:.16;
+      background:linear-gradient(105deg, transparent 0%, rgba(255,255,255,.12) 42%, transparent 62%);
+      transform:translateX(-120%);
+      animation:vibeLightSweep 9s linear infinite;
+    }
+    .vibe-tour-scene {
+      position:absolute;
+      inset:0;
+      opacity:0;
+      pointer-events:none;
+      z-index:1;
+      transition:opacity 1.05s linear;
+    }
+    .vibe-tour-scene.active {
+      opacity:1;
+      pointer-events:auto;
+      z-index:2;
+    }
+    .vibe-tour-bg {
+      position:absolute;
+      inset:0;
+      background:linear-gradient(160deg,#17110b 0%,#050505 100%);
+      background-size:cover;
+      background-position:center;
+      transform:scale(1.04);
+      will-change:transform;
+    }
+    .vibe-tour-bg.motion-0 { animation:vibeDriftA 11s linear infinite alternate; transform-origin:35% 52%; }
+    .vibe-tour-bg.motion-1 { animation:vibeDriftB 12s linear infinite alternate; transform-origin:68% 44%; }
+    .vibe-tour-bg.motion-2 { animation:vibeDriftC 10.5s linear infinite alternate; transform-origin:50% 68%; }
+    .vibe-tour-scene--neighborhood .vibe-tour-bg.motion-0 { animation-duration:9.5s; }
+    .vibe-tour-scene--neighborhood .vibe-tour-bg.motion-1 { animation-duration:10s; }
+    .vibe-tour-scene--neighborhood .vibe-tour-bg.motion-2 { animation-duration:9s; }
+    @keyframes vibeDriftA {
+      from { transform:scale(1.04) translate3d(-2.5%,.5%,0); }
+      to   { transform:scale(1.21) translate3d(3.5%,-2%,0); }
+    }
+    @keyframes vibeDriftB {
+      from { transform:scale(1.06) translate3d(3%,1.5%,0); }
+      to   { transform:scale(1.22) translate3d(-3.5%,-1.8%,0); }
+    }
+    @keyframes vibeDriftC {
+      from { transform:scale(1.05) translate3d(-.8%,-3%,0); }
+      to   { transform:scale(1.2) translate3d(1.2%,3%,0); }
+    }
+    @keyframes vibeFilmGrain {
+      from { transform:translate3d(-1%,1%,0); }
+      to   { transform:translate3d(1%,-1%,0); }
+    }
+    @keyframes vibeLightSweep {
+      0%, 46% { transform:translateX(-120%); opacity:0; }
+      58% { opacity:.18; }
+      74%, 100% { transform:translateX(120%); opacity:0; }
+    }
+    .vibe-tour-shade {
+      position:absolute;
+      inset:0;
+      background:
+        radial-gradient(circle at 72% 18%,rgba(201,169,110,.10),transparent 34%),
+        linear-gradient(90deg,rgba(0,0,0,.46) 0%,rgba(0,0,0,.18) 48%,rgba(0,0,0,.06) 100%),
+        linear-gradient(to top,rgba(0,0,0,.58),transparent 46%);
+    }
+    .vibe-tour-topbar {
+      position:absolute;
+      top:16px;
+      left:18px;
+      right:18px;
+      z-index:4;
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
+      gap:12px;
+    }
+    .vibe-tour-progress {
+      flex:1;
+      display:flex;
+      gap:6px;
+      max-width:520px;
+    }
+    .vibe-tour-progress button {
+      flex:1;
+      height:3px;
+      border:0;
+      border-radius:99px;
+      background:rgba(255,255,255,.24);
+      padding:0;
+      cursor:pointer;
+      overflow:hidden;
+    }
+    .vibe-tour-progress button.active { background:rgba(201,169,110,.95); }
+    .vibe-tour-top-actions { display:flex; gap:8px; align-items:center; }
+    .vibe-tour-icon-btn {
+      border:1px solid rgba(255,255,255,.18);
+      background:rgba(0,0,0,.38);
+      color:rgba(255,255,255,.82);
+      border-radius:999px;
+      padding:8px 11px;
+      font-family:'DM Sans',sans-serif;
+      font-size:12px;
+      cursor:pointer;
+      backdrop-filter:blur(10px);
+      white-space:nowrap;
+    }
+    .vibe-tour-icon-btn:hover,
+    .vibe-tour-icon-btn.active {
+      color:var(--accent2);
+      border-color:rgba(201,169,110,.55);
+      background:rgba(201,169,110,.11);
+    }
+    .vibe-tour-arrival-map {
+      position:absolute;
+      right:clamp(18px,5vw,58px);
+      top:clamp(58px,10vw,96px);
+      z-index:3;
+      width:min(210px,34vw);
+      height:126px;
+      border:1px solid rgba(255,255,255,.22);
+      border-radius:18px;
+      overflow:hidden;
+      background:
+        linear-gradient(rgba(255,255,255,.09) 1px, transparent 1px),
+        linear-gradient(90deg,rgba(255,255,255,.09) 1px, transparent 1px),
+        radial-gradient(circle at 70% 42%, rgba(201,169,110,.28), transparent 34%),
+        rgba(7,8,10,.46);
+      background-size:28px 28px, 28px 28px, 100% 100%, 100% 100%;
+      box-shadow:0 18px 44px rgba(0,0,0,.35);
+      backdrop-filter:blur(8px);
+      opacity:0;
+      transform:scale(.92) translateY(-4px);
+    }
+    .vibe-tour-scene.active .vibe-tour-arrival-map {
+      animation:vibeMapCue 3.5s linear forwards;
+    }
+    .vibe-tour-map-route {
+      position:absolute;
+      left:24px;
+      right:34px;
+      top:58px;
+      height:2px;
+      background:linear-gradient(90deg, transparent, rgba(201,169,110,.95), rgba(255,255,255,.7));
+      transform:rotate(-15deg);
+      transform-origin:left center;
+    }
+    .vibe-tour-map-pin {
+      position:absolute;
+      right:26px;
+      top:42px;
+      width:15px;
+      height:15px;
+      border-radius:50%;
+      background:var(--accent2);
+      box-shadow:0 0 0 7px rgba(201,169,110,.18), 0 0 22px rgba(201,169,110,.7);
+    }
+    .vibe-tour-map-label {
+      position:absolute;
+      left:14px;
+      bottom:12px;
+      right:14px;
+      color:rgba(255,255,255,.88);
+      font-size:10px;
+      letter-spacing:.16em;
+      text-transform:uppercase;
+    }
+    @keyframes vibeMapCue {
+      0% { opacity:0; transform:scale(.92) translateY(-4px); }
+      12%, 72% { opacity:1; transform:scale(1) translateY(0); }
+      100% { opacity:0; transform:scale(1.04) translateY(-3px); }
+    }
+    .vibe-tour-content {
+      position:absolute;
+      left:clamp(20px,5vw,58px);
+      right:clamp(20px,5vw,58px);
+      bottom:clamp(24px,6vw,62px);
+      z-index:3;
+      max-width:620px;
+    }
+    .vibe-tour-kicker {
+      font-size:10px;
+      letter-spacing:.18em;
+      text-transform:uppercase;
+      color:var(--accent2);
+      margin-bottom:7px;
+    }
+    .vibe-tour-title {
+      font-family:'Cormorant Garamond',serif;
+      font-size:clamp(28px,4.4vw,50px);
+      line-height:.95;
+      color:#fff;
+      font-weight:400;
+      text-shadow:0 3px 28px rgba(0,0,0,.72);
+    }
+    .vibe-tour-copy {
+      margin-top:10px;
+      max-width:460px;
+      color:rgba(255,252,248,.86);
+      font-size:13px;
+      line-height:1.55;
+      text-shadow:0 2px 14px rgba(0,0,0,.68);
+    }
+    .vibe-tour-caption {
+      margin-top:8px;
+      color:rgba(255,252,248,.66);
+      font-size:11px;
+    }
+    .vibe-tour-pills {
+      display:flex;
+      flex-wrap:wrap;
+      gap:7px;
+      margin-top:18px;
+    }
+    .vibe-tour-pill {
+      border:1px solid rgba(255,255,255,.2);
+      background:rgba(0,0,0,.28);
+      color:rgba(255,255,255,.86);
+      border-radius:999px;
+      padding:6px 10px;
+      font-size:11px;
+      backdrop-filter:blur(8px);
+    }
+    .vibe-tour-nav {
+      position:absolute;
+      z-index:4;
+      top:50%;
+      transform:translateY(-50%);
+      width:38px;
+      height:48px;
+      border:1px solid rgba(255,255,255,.18);
+      background:rgba(0,0,0,.34);
+      color:#fff;
+      font-size:28px;
+      border-radius:14px;
+      cursor:pointer;
+      backdrop-filter:blur(8px);
+    }
+    .vibe-tour-nav:hover { border-color:rgba(201,169,110,.55); color:var(--accent2); }
+    .vibe-tour-nav.prev { left:18px; }
+    .vibe-tour-nav.next { right:18px; }
+    .vibe-tour-actions {
+      display:flex;
+      align-items:center;
+      gap:10px;
+      flex-wrap:wrap;
+      padding:14px 18px 18px;
+      background:rgba(10,10,13,.94);
+      border-top:1px solid rgba(255,255,255,.08);
+      position:relative;
+      z-index:5;
+    }
+    .vibe-tour-actions .btn-pri,
+    .vibe-tour-actions .btn-sec { padding:11px 16px; }
+    .hotel-tour-link {
+      border:1px solid rgba(201,169,110,.34);
+      background:rgba(201,169,110,.08);
+      color:var(--accent2);
+      border-radius:999px;
+      padding:7px 11px;
+      font-family:'DM Sans',sans-serif;
+      font-size:11px;
+      font-weight:600;
+      letter-spacing:.08em;
+      text-transform:uppercase;
+      cursor:pointer;
+      white-space:nowrap;
+      transition:border-color .15s, background .15s, transform .1s;
+    }
+    .hotel-tour-link:hover {
+      border-color:rgba(201,169,110,.68);
+      background:rgba(201,169,110,.15);
+      transform:translateY(-1px);
+    }
+    .hotel-row-tour-link {
+      margin-top:5px;
+      padding:0;
+      border:0;
+      background:transparent;
+      color:var(--accent2);
+      font-family:'DM Sans',sans-serif;
+      font-size:10px;
+      cursor:pointer;
+      text-decoration:underline;
+      text-underline-offset:2px;
+    }
+    @media(max-width:820px) {
+      .vibe-tour { width:calc(100vw - 24px); max-height:calc(100vh - 44px); border-radius:18px; }
+      .vibe-tour-stage { height:min(62vh,520px); min-height:390px; }
+      .vibe-tour-topbar { left:12px; right:12px; top:12px; }
+      .vibe-tour-arrival-map { width:152px; height:92px; right:14px; top:56px; border-radius:14px; opacity:.92; }
+      .vibe-tour-map-label { font-size:8px; letter-spacing:.12em; }
+      .vibe-tour-content { bottom:clamp(30px,9vw,72px); }
+      .vibe-tour-nav { display:none; }
+      .vibe-tour-actions { padding:14px 18px 18px; }
+    }
     .hotel-hero {
       display: grid;
       grid-template-columns: 1.6fr 1fr;
@@ -1711,7 +2056,7 @@
       #st-results .sort-bar {
         flex-wrap: wrap;
         align-items: center;
-        gap: 10px;
+        gap: 8px;
         overflow: visible;
       }
       /* “Checking live rates…” was on the same flex row as sort pills → overlap; own row between sort and count/view */
@@ -3404,6 +3749,23 @@
     .cmd-l { font-size:10px; letter-spacing:.16em; text-transform:uppercase; color:var(--muted); margin-bottom:4px; }
     .cmd-v { font-size:14px; font-weight:500; color:var(--text); white-space:nowrap; max-width:100%; overflow:hidden; text-overflow:ellipsis; }
     .cmd-v.ph { color:rgba(201,169,110,.55); font-weight:400; font-style:italic; font-size:13px; }
+    .cmd-v-row { display:flex; align-items:center; gap:7px; min-width:0; }
+    .cmd-v-text { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .cmd-clear {
+      flex-shrink:0;
+      width:16px; height:16px;
+      border-radius:999px;
+      border:1px solid rgba(255,255,255,.16);
+      background:rgba(255,255,255,.06);
+      color:rgba(232,228,220,.72);
+      font-size:12px; line-height:14px;
+      display:none; align-items:center; justify-content:center;
+      cursor:pointer;
+      transition:border-color .15s, color .15s, background .15s;
+    }
+    .cmd-clear:hover { border-color:rgba(201,169,110,.55); color:var(--accent2); background:rgba(201,169,110,.12); }
+    .cmd-clear.visible { display:inline-flex; }
+    .cmd-mobile-dates-chip { display:none; }
     /* City + Neighbourhood — a bit wider so labels do not clip (ellipsis if still too long) */
     .cmd-inner > .cmd-seg:nth-child(1),
     .cmd-inner > .cmd-seg:nth-child(2) {
@@ -3458,6 +3820,17 @@
       flex-wrap:wrap;
       align-items:flex-end;
     }
+    .cmd-date-range {
+      position:relative;
+      width:min(100%, 520px);
+    }
+    .cmd-date-range .city-date-trigger {
+      width:100%;
+    }
+    .cmd-date-range .city-date-pop {
+      top:calc(100% + 12px);
+      bottom:auto;
+    }
     @keyframes fd { from{opacity:0;transform:translateY(-6px)} to{opacity:1;transform:translateY(0)} }
     /* Feature chips inside results meta */
     .fc-wrap { display:flex; gap:6px; flex-wrap:wrap; }
@@ -3503,6 +3876,59 @@
         margin-top: 4px;
         padding: 6px 12px;
         box-sizing: border-box;
+      }
+      .sort-bar-trailer .cmd-mobile-dates-chip {
+        display:inline-flex;
+        align-items:center;
+        justify-content:space-between;
+        gap:8px;
+        flex:0 1 auto;
+        max-width:min(220px, 100%);
+        margin:0;
+        padding:7px 11px;
+        border-radius:999px;
+        border:1px solid rgba(201,169,110,.28);
+        background:rgba(201,169,110,.07);
+        color:var(--text);
+        font-family:'DM Sans',sans-serif;
+        font-size:12px;
+        cursor:pointer;
+      }
+      .cmd-mobile-dates-label {
+        flex:1;
+        min-width:0;
+        overflow:hidden;
+        text-overflow:ellipsis;
+        white-space:nowrap;
+      }
+      .cmd-mobile-dates-label.ph { color:rgba(201,169,110,.62); font-style:italic; }
+      .cmd-mobile-dates-clear {
+        flex-shrink:0;
+        width:17px; height:17px;
+        border-radius:999px;
+        border:1px solid rgba(255,255,255,.16);
+        background:rgba(255,255,255,.06);
+        color:rgba(232,228,220,.72);
+        font-size:12px; line-height:15px;
+        display:none; align-items:center; justify-content:center;
+      }
+      .cmd-mobile-dates-clear.visible { display:inline-flex; }
+      .cmd-tray.open {
+        display:block;
+        padding:0;
+        border-top:0;
+      }
+      .cmd-tray.open .cmd-tray-inner {
+        max-width:none;
+        display:block;
+      }
+      .cmd-tray.open .cmd-date-range {
+        width:0;
+        height:0;
+        overflow:visible;
+      }
+      .cmd-tray.open > .cmd-tray-inner > .btn-sec {
+        display:none;
       }
       .cmd-inner > .cmd-seg:nth-child(1),
       .cmd-inner > .cmd-seg:nth-child(2) {
@@ -3804,9 +4230,12 @@
       </div>
       <div class="cmd-seg cmd-mobile-visible" onclick="goToStep('nbhd')">
         <div class="cmd-l">Neighbourhood</div>
-        <div class="cmd-v" id="cv-nbhd">—</div>
+        <div class="cmd-v cmd-v-row" id="cv-nbhd-wrap">
+          <span class="cmd-v-text" id="cv-nbhd">—</span>
+          <button type="button" class="cmd-clear" id="cv-nbhd-clear" onclick="clearResultsNeighborhood(event)" aria-label="Clear neighbourhood">×</button>
+        </div>
       </div>
-      <div class="cmd-seg" onclick="toggleDatesTray()">
+      <div class="cmd-seg" onclick="toggleDatesTray(event)">
         <div class="cmd-l">Dates</div>
         <div class="cmd-v ph" id="cv-dates">Add dates</div>
       </div>
@@ -3819,10 +4248,41 @@
     </div>
     <div class="cmd-tray" id="cmd-tray">
       <div class="cmd-tray-inner">
-        <div class="date-f"><label>Check-in</label><input type="date" id="ct-ci" style="color-scheme:dark" onchange="onFlowDatesPairChanged('ct-ci','ct-co')"/></div>
-        <div class="date-f"><label>Check-out</label><input type="date" id="ct-co" style="color-scheme:dark" onchange="onFlowDatesPairChanged('ct-ci','ct-co')"/></div>
-        <button class="btn-pri" onclick="cmdConfirmDates()" style="padding:12px 22px;">Update prices</button>
-        <button class="btn-sec" onclick="toggleDatesTray()" style="padding:12px 16px;">Close</button>
+        <div class="cmd-date-range" id="cmd-date-range">
+          <input type="hidden" id="ct-ci"/>
+          <input type="hidden" id="ct-co"/>
+          <button type="button" class="city-date-trigger" id="cmd-date-trigger" aria-expanded="false" aria-controls="cmd-date-pop" onclick="toggleCmdDateRangePicker()">
+            <span class="city-date-trigger-main">
+              <span class="city-date-icon">◇</span>
+              <span class="city-date-copy">
+                <span class="city-date-kicker">Dates</span>
+                <span class="city-date-value ph" id="cmd-date-value">Check-in — Check-out</span>
+              </span>
+            </span>
+            <span class="city-date-chevron">⌄</span>
+          </button>
+          <div class="city-date-pop" id="cmd-date-pop" role="dialog" aria-label="Choose travel dates">
+            <div class="city-date-pop-head">
+              <div>
+                <div class="city-date-pop-title">Choose your dates</div>
+                <div class="city-date-pop-sub" id="cmd-date-pop-sub">Select a check-in date, then choose your check-out date.</div>
+              </div>
+              <div class="city-date-nav">
+                <button type="button" onclick="shiftCityDateMonth(-1)" aria-label="Previous month">‹</button>
+                <button type="button" onclick="shiftCityDateMonth(1)" aria-label="Next month">›</button>
+              </div>
+            </div>
+            <div class="city-date-months" id="cmd-date-months"></div>
+            <div class="city-date-footer">
+              <div class="city-date-summary" id="cmd-date-summary">No dates selected</div>
+              <div class="city-date-actions">
+                <button type="button" class="city-date-clear" onclick="clearCityDates()">Clear</button>
+                <button type="button" class="city-date-done" onclick="cmdConfirmDates()">Update prices</button>
+              </div>
+            </div>
+          </div>
+        </div>
+        <button class="btn-sec" onclick="toggleDatesTray(event)" style="padding:12px 16px;">Close</button>
       </div>
     </div>
   </div>
@@ -3870,6 +4330,10 @@
   </div>
   <span id="ratesStatus" class="rates-status"></span>
   <div class="sort-bar-trailer">
+    <button type="button" class="cmd-mobile-dates-chip" id="cmd-mobile-dates-chip" onclick="openMobileResultsDatePicker(event)">
+      <span class="cmd-mobile-dates-label ph" id="cmd-mobile-dates-label">Dates: Add dates</span>
+      <span class="cmd-mobile-dates-clear" id="cmd-mobile-dates-clear" onclick="clearResultsDates(event)" aria-label="Clear dates">×</span>
+    </button>
     <span id="resultCount" class="result-count"></span>
     <div class="view-toggle" id="viewToggle">
       <button class="view-btn active" id="viewBtnCards" onclick="setViewMode('cards')" title="Card view">
@@ -3903,6 +4367,14 @@
   let clipES = null;
   let clipDone = 0, clipTotal = 10;
   let _lastHotels     = [];
+  let _vibeTourPending = false;
+  let _vibeTourVisible = false;
+  let _vibeTourLastHotels = [];
+  let _vibeTourScene = 0;
+  let _vibeTourSceneCount = 3;
+  let _vibeTourTimer = null;
+  let _vibeTourAudio = null;
+  const _svFrameCache = {}; // hotelId → string[] urls (session cache)
   /** Last /api/vsearch `stats` — used to align match sort with server nbhd blend weight */
   let _lastVsearchStats = null;
   let selectedNeighborhood = null; // { name, bbox?, polygon? } — polygon is geo JSON for /api/vsearch
@@ -3979,11 +4451,13 @@
       if (resp.status === 202 || data.status === 'generating') return;
       const raw = data.neighborhoods || [];
       if (!raw.length) return;
+      NBHD_CITY_ROWS[cityKey(cityN)] = raw;
       const ranked = rankNeighborhoodsByBoop(raw.map(h => ({ ...h })));
       fillNbhdPickerMatchCacheFromRanked(cityN, ranked);
     } catch (_) { /* non-fatal */ }
   }
   let selectedCityData     = null; // {name, country_code, lat, lng} from Geoapify autocomplete
+  const NBHD_CITY_ROWS = {};
   let _currentSort    = 'match';
   let _viewMode       = localStorage.getItem('rmViewMode') || 'cards';
   let _displayedCount = 10;
@@ -4364,8 +4838,30 @@
 
   function completeNbhdBrowseSelection() {
     _nbhdBrowseFromResults = false;
+    _nbhdFilter = null;
+    syncCommandBarFromState();
     const fakeBtn = { disabled: false, textContent: '' };
-    startVectorSearch(S.q, S.city, fakeBtn, null);
+    startVectorSearch(S.q, S.city, fakeBtn, S.nbhdBbox);
+  }
+
+  function clearResultsNeighborhood(ev) {
+    if (ev) {
+      ev.stopPropagation();
+      ev.preventDefault();
+    }
+    if (!S.nbhd && !S.nbhdBbox && !selectedNeighborhood) return;
+    S.nbhd = null;
+    S.nbhdBbox = null;
+    selectedNeighborhood = null;
+    _nbhdFilter = null;
+    syncCommandBarFromState();
+    flashMsg('Searching all of ' + S.city + ' — updating results…');
+    if (S.q && S.city) {
+      const fakeBtn = { disabled: false, textContent: '' };
+      startVectorSearch(S.q, S.city, fakeBtn, null);
+    } else {
+      renderSorted();
+    }
   }
 
   function refreshStory(curId) {
@@ -5340,6 +5836,9 @@
     S.q = roomSeed;   // store as the active query so breadcrumbs + refinements work
     S.hotelQ = hotelSeed;
     S.mustHaves = mustHaves;
+    _vibeTourPending = true;
+    _vibeTourVisible = false;
+    _vibeTourScene = 0;
     const fakeBtn = { disabled:false, textContent:'' };
     // Use any previously selected neighbourhood bbox (if user jumped to nbhd then back)
     selectedNeighborhood = null; // reset to city-wide by default
@@ -5909,6 +6408,7 @@
           return;
         }
         const hoods = rankNeighborhoodsByBoop(data.neighborhoods || []);
+        NBHD_CITY_ROWS[cityKey(city)] = data.neighborhoods || [];
         fillNbhdPickerMatchCacheFromRanked(city, hoods);
         if (hoods.length) {
           Object.keys(NBHD_CARD_DATA).forEach(k => delete NBHD_CARD_DATA[k]);
@@ -5926,6 +6426,7 @@
     // Fallback to hardcoded data (London, Tokyo, New York)
     const fallback = NBHDS_FALLBACK[city];
     if (fallback && fallback.length) {
+      NBHD_CITY_ROWS[cityKey(city)] = fallback;
       Object.keys(NBHD_CARD_DATA).forEach(k => delete NBHD_CARD_DATA[k]);
       NBHD_RESERVED_HEROES = new Set(fallback.map(h => h.photo_url).filter(Boolean));
       const rankedFallback = rankNeighborhoodsByBoop(fallback);
@@ -6228,19 +6729,51 @@
   }
 
   const CITY_DATE_WEEKDAYS = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
-  const CITY_DATE_PICKER = { cursor: null, selecting: 'checkin' };
+  const CITY_DATE_PICKER = { cursor: null, selecting: 'checkin', context: 'city' };
+
+  function cityDateIds(context = CITY_DATE_PICKER.context || 'city') {
+    return context === 'cmd'
+      ? {
+        wrapper:'cmd-date-range', ci:'ct-ci', co:'ct-co', trigger:'cmd-date-trigger',
+        pop:'cmd-date-pop', months:'cmd-date-months', value:'cmd-date-value',
+        summary:'cmd-date-summary', sub:'cmd-date-pop-sub',
+      }
+      : {
+        wrapper:'city-dates', ci:'city-d-ci', co:'city-d-co', trigger:'city-date-trigger',
+        pop:'city-date-pop', months:'city-date-months', value:'city-date-value',
+        summary:'city-date-summary', sub:'city-date-pop-sub',
+      };
+  }
+
+  function closeDateRangePicker(context = CITY_DATE_PICKER.context || 'city') {
+    const ids = cityDateIds(context);
+    const pop = document.getElementById(ids.pop);
+    const trigger = document.getElementById(ids.trigger);
+    if (pop) pop.classList.remove('open');
+    if (trigger) trigger.setAttribute('aria-expanded', 'false');
+    if (context === 'cmd' && window.matchMedia && window.matchMedia('(max-width: 640px)').matches) {
+      document.getElementById('cmd-tray')?.classList.remove('open');
+    }
+    document.body.classList.remove('city-date-modal-open');
+  }
+
+  function closeAllDateRangePickers() {
+    closeDateRangePicker('city');
+    closeDateRangePicker('cmd');
+  }
 
   function cityDateMonthStart(ymd) {
     const base = ymdToLocalDate(ymd) || new Date();
     return new Date(base.getFullYear(), base.getMonth(), 1);
   }
 
-  function syncCityDateRangeUI() {
-    const ci = document.getElementById('city-d-ci')?.value || '';
-    const co = document.getElementById('city-d-co')?.value || '';
-    const value = document.getElementById('city-date-value');
-    const summary = document.getElementById('city-date-summary');
-    const sub = document.getElementById('city-date-pop-sub');
+  function syncCityDateRangeUI(context = CITY_DATE_PICKER.context || 'city') {
+    const ids = cityDateIds(context);
+    const ci = document.getElementById(ids.ci)?.value || '';
+    const co = document.getElementById(ids.co)?.value || '';
+    const value = document.getElementById(ids.value);
+    const summary = document.getElementById(ids.summary);
+    const sub = document.getElementById(ids.sub);
 
     if (value) {
       if (ci && co) {
@@ -6265,34 +6798,47 @@
     }
   }
 
+  function syncAllDateRangeUIs() {
+    syncCityDateRangeUI('city');
+    syncCityDateRangeUI('cmd');
+  }
+
   function syncCityDatePartialSelection() {
-    const ci = document.getElementById('city-d-ci')?.value || '';
-    const co = document.getElementById('city-d-co')?.value || '';
+    const ids = cityDateIds();
+    const ci = document.getElementById(ids.ci)?.value || '';
+    const co = document.getElementById(ids.co)?.value || '';
     S.checkin = ci || null;
     S.checkout = co || null;
-    ['d-ci','ct-ci'].forEach(id => { const el = document.getElementById(id); if (el && ci) el.value = ci; });
-    ['d-co','ct-co'].forEach(id => { const el = document.getElementById(id); if (el) el.value = co || ''; });
-    syncCityDateRangeUI();
+    ['city-d-ci','d-ci','ct-ci'].forEach(id => { const el = document.getElementById(id); if (el && ci) el.value = ci; });
+    ['city-d-co','d-co','ct-co'].forEach(id => { const el = document.getElementById(id); if (el) el.value = co || ''; });
+    syncAllDateRangeUIs();
   }
 
   function updateCityDatePopoverPosition() {
-    const pop = document.getElementById('city-date-pop');
-    const trigger = document.getElementById('city-date-trigger');
+    const ids = cityDateIds();
+    const pop = document.getElementById(ids.pop);
+    const trigger = document.getElementById(ids.trigger);
     if (!pop || !trigger) return;
     if (window.matchMedia && window.matchMedia('(max-width: 760px)').matches) {
       pop.style.removeProperty('--city-date-pop-max-h');
       return;
     }
     const rect = trigger.getBoundingClientRect();
-    const maxH = Math.max(240, Math.floor(rect.top - 18));
+    const available = (CITY_DATE_PICKER.context === 'cmd')
+      ? window.innerHeight - rect.bottom - 24
+      : rect.top - 18;
+    const maxH = Math.max(240, Math.floor(available));
     pop.style.setProperty('--city-date-pop-max-h', `${maxH}px`);
   }
 
-  function openCityDateRangePicker() {
-    const pop = document.getElementById('city-date-pop');
-    const trigger = document.getElementById('city-date-trigger');
+  function openCityDateRangePicker(context = 'city') {
+    CITY_DATE_PICKER.context = context;
+    closeDateRangePicker(context === 'city' ? 'cmd' : 'city');
+    const ids = cityDateIds(context);
+    const pop = document.getElementById(ids.pop);
+    const trigger = document.getElementById(ids.trigger);
     if (!pop || !trigger) return;
-    const ci = document.getElementById('city-d-ci')?.value || '';
+    const ci = document.getElementById(ids.ci)?.value || '';
     CITY_DATE_PICKER.cursor = cityDateMonthStart(ci || ymdFromLocalDate(new Date()));
     CITY_DATE_PICKER.selecting = ci ? 'checkout' : 'checkin';
     updateCityDatePopoverPosition();
@@ -6304,17 +6850,21 @@
   }
 
   function closeCityDateRangePicker() {
-    const pop = document.getElementById('city-date-pop');
-    const trigger = document.getElementById('city-date-trigger');
-    if (pop) pop.classList.remove('open');
-    if (trigger) trigger.setAttribute('aria-expanded', 'false');
-    document.body.classList.remove('city-date-modal-open');
+    closeDateRangePicker(CITY_DATE_PICKER.context || 'city');
   }
 
   function toggleCityDateRangePicker() {
+    CITY_DATE_PICKER.context = 'city';
     const pop = document.getElementById('city-date-pop');
     if (pop && pop.classList.contains('open')) closeCityDateRangePicker();
-    else openCityDateRangePicker();
+    else openCityDateRangePicker('city');
+  }
+
+  function toggleCmdDateRangePicker() {
+    CITY_DATE_PICKER.context = 'cmd';
+    const pop = document.getElementById('cmd-date-pop');
+    if (pop && pop.classList.contains('open')) closeCityDateRangePicker();
+    else openCityDateRangePicker('cmd');
   }
 
   function shiftCityDateMonth(delta) {
@@ -6329,8 +6879,9 @@
     const title = monthDate.toLocaleDateString('en-US', { month:'long', year:'numeric' });
     const firstDay = new Date(y, m, 1).getDay();
     const daysInMonth = new Date(y, m + 1, 0).getDate();
-    const ci = document.getElementById('city-d-ci')?.value || '';
-    const co = document.getElementById('city-d-co')?.value || '';
+    const ids = cityDateIds();
+    const ci = document.getElementById(ids.ci)?.value || '';
+    const co = document.getElementById(ids.co)?.value || '';
     const today = ymdFromLocalDate(new Date());
     const minCheckout = ci ? ymdAddDays(ci, 2) : '';
     const cells = [];
@@ -6356,17 +6907,19 @@
   }
 
   function renderCityDateRangePicker() {
-    const monthsEl = document.getElementById('city-date-months');
+    const ids = cityDateIds();
+    const monthsEl = document.getElementById(ids.months);
     if (!monthsEl) return;
     const cur = CITY_DATE_PICKER.cursor || cityDateMonthStart();
     const next = new Date(cur.getFullYear(), cur.getMonth() + 1, 1);
     monthsEl.innerHTML = cityDateMonthHTML(cur) + cityDateMonthHTML(next);
-    syncCityDateRangeUI();
+    syncAllDateRangeUIs();
   }
 
   function selectCityDate(ymd) {
-    const ciEl = document.getElementById('city-d-ci');
-    const coEl = document.getElementById('city-d-co');
+    const ids = cityDateIds();
+    const ciEl = document.getElementById(ids.ci);
+    const coEl = document.getElementById(ids.co);
     if (!ciEl || !coEl) return;
     const ci = ciEl.value || '';
 
@@ -6427,8 +6980,9 @@
 
   // BOOP v4 — optional inline dates on the city step.
   function onCityDatesChanged() {
-    const ciEl = document.getElementById('city-d-ci');
-    const coEl = document.getElementById('city-d-co');
+    const ids = cityDateIds();
+    const ciEl = document.getElementById(ids.ci);
+    const coEl = document.getElementById(ids.co);
     ensureMinCheckoutAfterCheckin(ciEl, coEl);
     const nci = (ciEl && ciEl.value) || '';
     const nco = (coEl && coEl.value) || '';
@@ -6439,11 +6993,11 @@
     S.checkin  = nci || null;
     S.checkout = nco || null;
     // Mirror into the existing st-dates + cmd tray inputs so downstream UX sees them.
-    ['d-ci','ct-ci'].forEach(id => { const el = document.getElementById(id); if (el && nci) el.value = nci; });
-    ['d-co','ct-co'].forEach(id => { const el = document.getElementById(id); if (el && nco) el.value = nco; });
+    ['city-d-ci','d-ci','ct-ci'].forEach(id => { const el = document.getElementById(id); if (el && nci) el.value = nci; });
+    ['city-d-co','d-co','ct-co'].forEach(id => { const el = document.getElementById(id); if (el && nco) el.value = nco; });
     ensureMinCheckoutAfterCheckin(document.getElementById('d-ci'), document.getElementById('d-co'));
     ensureMinCheckoutAfterCheckin(document.getElementById('ct-ci'), document.getElementById('ct-co'));
-    syncCityDateRangeUI();
+    syncAllDateRangeUIs();
   }
 
   function clearCityDates() {
@@ -6456,8 +7010,22 @@
     ensureMinCheckoutAfterCheckin(document.getElementById('d-ci'), document.getElementById('d-co'));
     ensureMinCheckoutAfterCheckin(document.getElementById('ct-ci'), document.getElementById('ct-co'));
     CITY_DATE_PICKER.selecting = 'checkin';
-    syncCityDateRangeUI();
+    syncAllDateRangeUIs();
     renderCityDateRangePicker();
+  }
+
+  function clearResultsDates(ev) {
+    if (ev) {
+      ev.stopPropagation();
+      ev.preventDefault();
+    }
+    const hadDates = !!(S.checkin && S.checkout);
+    clearCityDates();
+    syncCommandBarFromState();
+    if (hadDates && S.q && S.city) {
+      const fakeBtn = { disabled: false, textContent: '' };
+      startVectorSearch(S.q, S.city, fakeBtn, S.nbhdBbox);
+    }
   }
 
   function skipDates() {
@@ -6476,6 +7044,8 @@
       const n = S.nbhd || '—';
       cn.textContent = n.length > 30 ? n.slice(0, 28) + '…' : n;
     }
+    const cnClear = document.getElementById('cv-nbhd-clear');
+    if (cnClear) cnClear.classList.toggle('visible', !!S.nbhd && !String(S.nbhd).startsWith('All of'));
     const cq = document.getElementById('cmd-q');
     if (cq && S.q) cq.value = S.q;
     const cd = document.getElementById('cv-dates');
@@ -6488,6 +7058,18 @@
         cd.classList.add('ph');
       }
     }
+    const md = document.getElementById('cmd-mobile-dates-label');
+    if (md) {
+      if (S.checkin && S.checkout) {
+        md.textContent = 'Dates: ' + fmtDate(S.checkin) + ' – ' + fmtDate(S.checkout);
+        md.classList.remove('ph');
+      } else {
+        md.textContent = 'Dates: Add dates';
+        md.classList.add('ph');
+      }
+    }
+    const mdClear = document.getElementById('cmd-mobile-dates-clear');
+    if (mdClear) mdClear.classList.toggle('visible', !!(S.checkin && S.checkout));
     if (S.checkin) {
       const ct1 = document.getElementById('ct-ci');
       if (ct1) ct1.value = S.checkin;
@@ -6546,6 +7128,8 @@
   }
 
   function startSearch() {
+    _vibeTourPending = false;
+    closeVibeTourPopup();
     // Show results view, hide discovery flow
     document.getElementById('discovery-flow').style.display = 'none';
     document.getElementById('st-results').style.display     = 'block';
@@ -6567,13 +7151,31 @@
     startSearch();
   }
 
-  function toggleDatesTray() {
+  function toggleDatesTray(ev) {
+    if (ev) ev.stopPropagation();
     const tray = document.getElementById('cmd-tray');
     const opening = tray && !tray.classList.contains('open');
     tray.classList.toggle('open');
     if (opening) {
-      ensureMinCheckoutAfterCheckin(document.getElementById('ct-ci'), document.getElementById('ct-co'));
+      const ctCi = document.getElementById('ct-ci');
+      const ctCo = document.getElementById('ct-co');
+      if (ctCi) ctCi.value = S.checkin || '';
+      if (ctCo) ctCo.value = S.checkout || '';
+      openCityDateRangePicker('cmd');
+    } else {
+      closeDateRangePicker('cmd');
     }
+  }
+
+  function openMobileResultsDatePicker(ev) {
+    if (ev) ev.stopPropagation();
+    const tray = document.getElementById('cmd-tray');
+    if (tray) tray.classList.add('open');
+    const ctCi = document.getElementById('ct-ci');
+    const ctCo = document.getElementById('ct-co');
+    if (ctCi) ctCi.value = S.checkin || '';
+    if (ctCo) ctCo.value = S.checkout || '';
+    openCityDateRangePicker('cmd');
   }
 
   function cmdConfirmDates() {
@@ -6587,14 +7189,22 @@
     S.checkin  = ci; S.checkout = co;
     const dCi = document.getElementById('d-ci');
     const dCo = document.getElementById('d-co');
+    const cCi = document.getElementById('city-d-ci');
+    const cCo = document.getElementById('city-d-co');
     if (dCi) dCi.value = ci;
     if (dCo) dCo.value = co;
+    if (cCi) cCi.value = ci;
+    if (cCo) cCo.value = co;
     ensureMinCheckoutAfterCheckin(dCi, dCo);
+    ensureMinCheckoutAfterCheckin(cCi, cCo);
+    syncAllDateRangeUIs();
     const cd = document.getElementById('cv-dates');
     if (cd) { cd.textContent = fmtDate(ci) + ' – ' + fmtDate(co); cd.classList.remove('ph'); }
     const sb = document.getElementById('s-dates-btn');
     if (sb) { sb.textContent = fmtDate(ci) + ' – ' + fmtDate(co); sb.classList.add('set'); }
+    closeDateRangePicker('cmd');
     document.getElementById('cmd-tray').classList.remove('open');
+    syncCommandBarFromState();
     startSearch();
   }
 
@@ -6667,6 +7277,8 @@
     document.getElementById('st-results').style.display     = 'none';
     document.getElementById('discovery-flow').style.display = '';
     _lastHotels     = [];
+    _vibeTourPending = false;
+    closeVibeTourPopup();
     _displayedCount = 10;
     hideBanner();
     setStatus('');
@@ -7106,6 +7718,8 @@
     if (resPre) resPre.classList.remove('no-anim');
     _lbRegistry.length = 0;  // reset photo registry for each new search result
     _lastHotels     = hotels;
+    const shouldOpenVibeTour = !!(_vibeTourPending && hotels?.length && S.boopProfile);
+    _vibeTourPending = false;
     _currentSort    = 'match';
     _displayedCount = 10;
     _nbhdFilter     = null;  // BOOP v4 — reset the top-nbhd refine strip filter
@@ -7127,6 +7741,7 @@
     });
     syncSortMoreTriggerAccent();
     renderSorted();
+    if (shouldOpenVibeTour) setTimeout(() => openVibeTourWithStreetView(hotels), 250);
   }
 
   function _setPriceBtnsState(loaded) {
@@ -7364,6 +7979,455 @@
     requestAnimationFrame(() => { if (resultsEl) resultsEl.classList.remove('no-anim'); });
   }
 
+  function firstUsablePhoto(list) {
+    return (list || []).find(Boolean) || '';
+  }
+
+  function topRoomForVibeTour(hotel) {
+    const rooms = hotel?.roomTypes || [];
+    return rooms.find(r => (r.photos || []).length) || rooms[0] || null;
+  }
+
+  function vibeTourPhotoForNeighborhood(nbhd, hotel) {
+    const vibePhotos = nbhd?.vibe_photos || {};
+    for (const key of ['street_feel','cafes','restaurants','parks','icon_spots']) {
+      const row = vibePhotos[key] || [];
+      const url = row.map(nbhdHeroUrlFromEntry).find(Boolean);
+      if (url) return url;
+    }
+    if (nbhd?.photo_url) return nbhd.photo_url;
+    return hotel?.mainPhoto || firstUsablePhoto(hotel?.hotelPhotos) || '';
+  }
+
+  function vibeTourPhotoKey(url) {
+    try {
+      const u = new URL(String(url));
+      let path = u.pathname.replace(/\/+$/, '').toLowerCase();
+      // Google/Places image URLs often encode only sizing after "=".
+      path = path.replace(/=w\d+.*$/i, '').replace(/=s\d+.*$/i, '').replace(/=h\d+.*$/i, '');
+      return `${u.hostname.toLowerCase()}${path}`;
+    } catch (_) {
+      return String(url || '').split('?')[0].replace(/\/+$/, '').toLowerCase();
+    }
+  }
+
+  function pushUniquePhoto(out, url, label) {
+    if (!url) return;
+    const key = vibeTourPhotoKey(url);
+    if (out.some(p => p.key === key || p.url === url)) return;
+    out.push({ url, label, key });
+  }
+
+  function shuffledVibeTourItems(items) {
+    return [...(items || [])].sort(() => Math.random() - 0.5);
+  }
+
+  function fullNeighborhoodForVibeTour(nbhd) {
+    const rows = NBHD_CITY_ROWS[cityKey(S.city)] || Object.values(NBHD_CARD_DATA || {});
+    if (!rows.length) return nbhd || null;
+    const target = String(nbhd?.name || selectedNeighborhood?.name || '').trim().toLowerCase();
+    if (!target) return rows[0] || nbhd || null;
+    return rows.find(h => String(h.name || '').trim().toLowerCase() === target)
+      || rows.find(h => target.includes(String(h.name || '').trim().toLowerCase()) || String(h.name || '').trim().toLowerCase().includes(target))
+      || nbhd
+      || rows[0]
+      || null;
+  }
+
+  function neighborhoodPhotosForVibeTour(nbhd, hotel) {
+    const out = [];
+    const full = fullNeighborhoodForVibeTour(nbhd);
+    const cityRows = NBHD_CITY_ROWS[cityKey(S.city)] || Object.values(NBHD_CARD_DATA || {});
+    const preferredKeys = ['street_feel','parks','greenery','icon_spots','cafes','restaurants','shops','museums'];
+    const sources = [];
+    const seen = new Set();
+    const addSource = h => {
+      if (!h) return;
+      const sig = String(h.id || h.name || JSON.stringify(h.bbox || '')).toLowerCase();
+      if (seen.has(sig)) return;
+      seen.add(sig);
+      sources.push(h);
+    };
+
+    addSource(full);
+    addSource(nbhd);
+    addSource(selectedNeighborhood);
+    cityRows.forEach(addSource);
+
+    for (const h of sources) {
+      for (const url of shuffledVibeTourItems(buildHeroPhotos(h || {}))) {
+        pushUniquePhoto(out, url, h?.name || 'Neighborhood');
+        if (out.length >= 4) break;
+      }
+      if (out.length >= 4) break;
+    }
+
+    for (const h of sources) {
+      const vibePhotos = h?.vibe_photos || {};
+      for (const key of preferredKeys) {
+        for (const p of shuffledVibeTourItems(vibePhotos[key])) {
+          pushUniquePhoto(out, nbhdHeroUrlFromEntry(p), h?.name || key.replace('_', ' '));
+          if (out.length >= 4) break;
+        }
+        if (out.length >= 4) break;
+      }
+      if (out.length >= 4) break;
+    }
+
+    for (const h of sources) {
+      pushUniquePhoto(out, h?.photo_url, h?.name || 'Neighborhood');
+      if (out.length >= 4) break;
+    }
+
+    return out.slice(0, 4);
+  }
+
+  function hotelArrivalPhotosForVibeTour(hotel, roomPhoto) {
+    const out = [];
+    pushUniquePhoto(out, hotel?.mainPhoto, hotel?.name || 'Hotel arrival');
+    for (const url of (hotel?.hotelPhotos || [])) {
+      pushUniquePhoto(out, url, hotel?.name || 'Hotel arrival');
+      if (out.length >= 2) break;
+    }
+    pushUniquePhoto(out, roomPhoto, hotel?.name || 'Hotel arrival');
+    return out.slice(0, 2);
+  }
+
+  function isLikelyHotelInteriorPhoto(url, idx) {
+    const u = String(url || '').toLowerCase();
+    if (/\b(lobby|reception|interior|bar|restaurant|lounge|atrium|spa|pool|terrace|amenity|public|common)\b/.test(u)) return true;
+    if (/\b(room|bed|bath|suite|guestroom|bathroom|shower|toilet|sink)\b/.test(u)) return false;
+    // LiteAPI gallery order often places public-space photos near the front.
+    return idx > 0 && idx < 8;
+  }
+
+  function hotelInteriorPhotosForVibeTour(hotel, roomPhoto) {
+    const out = [];
+    (hotel?.hotelPhotos || []).forEach((url, idx) => {
+      if (!isLikelyHotelInteriorPhoto(url, idx)) return;
+      pushUniquePhoto(out, url, 'Inside the hotel');
+    });
+    pushUniquePhoto(out, hotel?.mainPhoto, 'Inside the hotel');
+    pushUniquePhoto(out, roomPhoto, 'Inside the hotel');
+    return out.slice(0, 2);
+  }
+
+  function roomPhotosForVibeTour(room, hotel) {
+    const out = [];
+    for (const url of (room?.photos || [])) {
+      pushUniquePhoto(out, url, room?.name || 'Room reveal');
+      if (out.length >= 4) break;
+    }
+    for (const rt of (hotel?.roomTypes || [])) {
+      for (const url of (rt.photos || [])) {
+        pushUniquePhoto(out, url, rt.name || 'Room reveal');
+        if (out.length >= 4) break;
+      }
+      if (out.length >= 4) break;
+    }
+    pushUniquePhoto(out, hotel?.mainPhoto, room?.name || 'Room reveal');
+    return out.slice(0, 4);
+  }
+
+  function vibeTourPillHTML(items) {
+    return (items || []).filter(Boolean).slice(0, 4)
+      .map(x => `<span class="vibe-tour-pill">${escHtml(String(x))}</span>`)
+      .join('');
+  }
+
+  function buildVibeTourHTML(hotels, svUrls = []) {
+    if (!hotels?.length) return '';
+    const h = hotels[0];
+    const nbhd = h.primary_nbhd || selectedNeighborhood || null;
+    const room = topRoomForVibeTour(h);
+    const roomPhoto = firstUsablePhoto(room?.photos) || h.mainPhoto || '';
+    const roomVibe = Math.round(hotelEffectiveScore(h) || 0);
+    const hotelVibe = Math.round(h.hotelScore || 0);
+    const nbhdVibe = h.nbhd_fit_pct != null ? Math.round(h.nbhd_fit_pct) : computeNbhdVibe(h);
+    const nbhdName = nbhd?.name || selectedNeighborhood?.name || S.city || 'the neighborhood';
+    const nbhdDesc = nbhd?.vibe_short || nbhd?.vibe_long || 'This is the local setting around your stay.';
+    const roomName = room?.name || 'Best matching room';
+    const roomBits = [
+      room?.score ? `${Math.round(room.score)}% room match` : null,
+      room?.beds,
+      room?.size,
+    ].filter(Boolean);
+    const scorePills = [
+      nbhdVibe > 0 ? `${nbhdVibe}% neighborhood vibe` : null,
+      hotelVibe > 0 ? `${hotelVibe}% hotel vibe` : null,
+      roomVibe > 0 ? `${roomVibe}% room vibe` : null,
+    ];
+    const scenes = [];
+
+    // Street View frames — real street-level photos of the hotel's block
+    const svPhotosSeen = new Set();
+    (svUrls || []).forEach((url, i) => {
+      if (!url || svPhotosSeen.has(url)) return;
+      svPhotosSeen.add(url);
+      scenes.push({
+        key:`sv-${i}`,
+        kind:'neighborhood',
+        kicker:i === 0 ? `Street level · ${nbhdName}` : `Street view ${i + 1}`,
+        title:i === 0 ? `Arriving in ${nbhdName}` : nbhdName,
+        copy:i === 0 ? nbhdDesc : 'Walking the streets around your stay.',
+        caption:'📍 Google Street View',
+        photo:url,
+        pills:[...(nbhd?.tags || []), scorePills[0]],
+        arrival:i === 0 && scenes.length === 0,
+      });
+    });
+
+    neighborhoodPhotosForVibeTour(nbhd, h).forEach((p, i) => {
+      if (svPhotosSeen.has(p.url)) return; // don't duplicate if SV happened to match
+      scenes.push({
+        key:`neighborhood-${i}`,
+        kind:'neighborhood',
+        kicker:scenes.length === 0 ? `Arrive in ${nbhdName}` : `Neighborhood ${i + 1}`,
+        title:scenes.length === 0 ? `Arrive in ${nbhdName}` : nbhdName,
+        copy:scenes.length === 0 ? nbhdDesc : 'Walk the surrounding streets and read the local energy before you choose a stay.',
+        caption:scenes.length === 0 ? 'Your trip starts outside the hotel.' : 'A little more of the area around your stay.',
+        photo:p.url,
+        pills:[...(nbhd?.tags || []), scorePills[0]],
+        arrival:scenes.length === 0,
+      });
+    });
+    hotelArrivalPhotosForVibeTour(h, roomPhoto).forEach((p, i) => scenes.push({
+      key:`hotel-arrival-${i}`,
+      kind:'hotel',
+      kicker:`Hotel arrival ${i + 1}`,
+      title:h.name || 'Your matched hotel',
+      copy:i === 0
+        ? (h.name || 'This hotel') + ' is the strongest current hotel match for your trip vibe.'
+        : 'Now the tour moves from the neighborhood into the hotel setting.',
+      caption:i === 0 ? 'Pull up to the hotel.' : 'Get a second glance before stepping inside.',
+      photo:p.url,
+      pills:[scorePills[1], h.rating > 0 ? `${Number(h.rating).toFixed(1)} guest score` : null, h.starRating ? `${Math.round(h.starRating)} star` : null],
+    }));
+    hotelInteriorPhotosForVibeTour(h, roomPhoto).forEach((p, i) => scenes.push({
+      key:`hotel-inside-${i}`,
+      kind:'hotel',
+      kicker:`Inside the hotel ${i + 1}`,
+      title:'Step inside',
+      copy:'This is the hotel personality layer: arrival feel, shared spaces, and the mood before you reach the room.',
+      caption:i === 0 ? 'From lobby energy to public spaces.' : 'A second interior cue, when available.',
+      photo:p.url,
+      pills:[scorePills[1], 'hotel personality'],
+    }));
+    roomPhotosForVibeTour(room, h).forEach((p, i) => scenes.push({
+      key:`room-${i}`,
+      kind:'room',
+      kicker:`Room reveal ${i + 1}`,
+      title:i === 0 ? roomName : (p.label || roomName),
+      copy:i === 0
+        ? (room ? 'Open the door to the room type we would show first based on your visual room vibe.' : 'Room photos are limited for this hotel, but it still matched your broader stay vibe.')
+        : 'Keep looking through the room details: sleep area, bathroom, light, texture, and view when available.',
+      caption:i === 0 ? 'End the tour where you would actually sleep.' : 'Another look at the room before the list.',
+      photo:p.url,
+      pills:[scorePills[2], ...roomBits],
+    }));
+    if (!scenes.length) return '';
+    _vibeTourSceneCount = scenes.length;
+    _vibeTourScene = Math.max(0, Math.min(scenes.length - 1, _vibeTourScene || 0));
+    const sceneHTML = scenes.map((s, i) => `<article class="vibe-tour-scene vibe-tour-scene--${escHtml(s.kind || 'photo')} ${s.arrival ? 'vibe-tour-scene--arrival' : ''} ${i === _vibeTourScene ? 'active' : ''}" data-scene="${i}" data-duration="3500">
+      <div class="vibe-tour-bg motion-${i % 3}" style="background-image:url('${escHtml(s.photo || '')}')"></div>
+      <div class="vibe-tour-shade"></div>
+      ${s.arrival ? `<div class="vibe-tour-arrival-map" aria-hidden="true">
+        <div class="vibe-tour-map-route"></div>
+        <div class="vibe-tour-map-pin"></div>
+        <div class="vibe-tour-map-label">Arriving in ${escHtml(nbhdName)}</div>
+      </div>` : ''}
+      <div class="vibe-tour-content">
+        <div class="vibe-tour-kicker">${escHtml(s.kicker)}</div>
+        <div class="vibe-tour-title">${escHtml(s.title)}</div>
+        <div class="vibe-tour-copy">${escHtml(s.copy)}</div>
+        <div class="vibe-tour-caption">${escHtml(s.caption)}</div>
+        <div class="vibe-tour-pills">${vibeTourPillHTML(s.pills)}</div>
+      </div>
+    </article>`).join('');
+    const progressHTML = scenes.map((s, i) => `<button type="button" class="${i === _vibeTourScene ? 'active' : ''}" aria-label="Show ${escHtml(s.key)} scene" onclick="setVibeTourScene(${i}, true)"></button>`).join('');
+    return `<section class="vibe-tour" id="vibe-tour" data-scene="${_vibeTourScene}" aria-label="Cinematic vibe tour preview">
+      <div class="vibe-tour-stage">
+        ${sceneHTML}
+        <div class="vibe-tour-topbar">
+          <div class="vibe-tour-progress">${progressHTML}</div>
+          <div class="vibe-tour-top-actions">
+            <button type="button" class="vibe-tour-icon-btn" id="vibe-tour-audio-btn" onclick="toggleVibeTourAudio()">Music off</button>
+        <button type="button" class="vibe-tour-icon-btn" onclick="closeVibeTourPopup()">Skip</button>
+          </div>
+        </div>
+        <button type="button" class="vibe-tour-nav prev" aria-label="Previous scene" onclick="shiftVibeTourScene(-1)">&#8249;</button>
+        <button type="button" class="vibe-tour-nav next" aria-label="Next scene" onclick="shiftVibeTourScene(1)">&#8250;</button>
+      </div>
+      <div class="vibe-tour-actions">
+        <button type="button" class="btn-pri" onclick="closeVibeTourPopup(true)">Continue to hotel list</button>
+        <button type="button" class="btn-sec" onclick="closeVibeTourPopup();goToStep('nbhd')">Try another neighborhood</button>
+        <button type="button" class="btn-sec" onclick="setVibeTourScene(0, true)">Replay arrival</button>
+      </div>
+    </section>`;
+  }
+
+  async function fetchStreetViewFrames(hotelId) {
+    if (!hotelId) return [];
+    if (_svFrameCache[hotelId]) return _svFrameCache[hotelId];
+    try {
+      const resp = await fetch(`${BACKEND}/api/street-view?hotelId=${encodeURIComponent(hotelId)}`);
+      if (!resp.ok) return [];
+      const data = await resp.json();
+      const urls = data.urls || [];
+      _svFrameCache[hotelId] = urls;
+      return urls;
+    } catch (_) { return []; }
+  }
+
+  function openVibeTourPopup(hotels, svUrls = []) {
+    if (!hotels?.length) return;
+    _vibeTourLastHotels = hotels;
+    _vibeTourVisible = true;
+    _vibeTourScene = 0;
+    _vibeTourSceneCount = 3;
+    let ov = document.getElementById('vibe-tour-overlay');
+    if (!ov) {
+      ov = document.createElement('div');
+      ov.id = 'vibe-tour-overlay';
+      ov.className = 'vibe-tour-overlay';
+      ov.setAttribute('role', 'dialog');
+      ov.setAttribute('aria-modal', 'true');
+      ov.setAttribute('aria-label', 'Vibe video tour');
+      ov.addEventListener('click', (ev) => {
+        if (ev.target === ov) closeVibeTourPopup();
+      });
+      document.body.appendChild(ov);
+    }
+    ov.innerHTML = buildVibeTourHTML(hotels, svUrls);
+    ov.setAttribute('aria-hidden', 'false');
+    document.body.style.overflow = 'hidden';
+    startVibeTourAutoAdvance();
+  }
+
+  async function openVibeTourWithStreetView(hotels) {
+    if (!hotels?.length) return;
+    const hotelId = hotels[0]?.id;
+    // Show tour immediately with existing photos, then inject street view frames if available
+    openVibeTourPopup(hotels, []);
+    const svUrls = await fetchStreetViewFrames(hotelId);
+    if (svUrls.length && _vibeTourVisible) {
+      // Re-render with street view frames prepended — keeps current scene position
+      const savedScene = _vibeTourScene;
+      const ov = document.getElementById('vibe-tour-overlay');
+      if (ov) {
+        ov.innerHTML = buildVibeTourHTML(hotels, svUrls);
+        _vibeTourScene = 0;
+        syncVibeTourSceneDOM();
+        startVibeTourAutoAdvance();
+      }
+    }
+  }
+
+  function openVibeTourForHotel(hotelId) {
+    const target = (_lastHotels || []).find(h => String(h.id) === String(hotelId));
+    if (!target) return;
+    openVibeTourWithStreetView([target]);
+  }
+
+  function closeVibeTourPopup(scrollToList = false) {
+    const ov = document.getElementById('vibe-tour-overlay');
+    if (ov) {
+      ov.setAttribute('aria-hidden', 'true');
+      ov.innerHTML = '';
+    }
+    _vibeTourVisible = false;
+    _vibeTourPending = false;
+    if (_vibeTourTimer) clearTimeout(_vibeTourTimer);
+    _vibeTourTimer = null;
+    stopVibeTourAudio();
+    document.body.style.overflow = '';
+    if (scrollToList) {
+      document.getElementById('results')?.querySelector('.hotel-card,.hotel-row')?.scrollIntoView({ behavior:'smooth', block:'start' });
+    }
+  }
+
+  function syncVibeTourSceneDOM() {
+    const tour = document.getElementById('vibe-tour');
+    if (!tour) return;
+    tour.dataset.scene = String(_vibeTourScene);
+    tour.querySelectorAll('.vibe-tour-scene').forEach((s, i) => s.classList.toggle('active', i === _vibeTourScene));
+    tour.querySelectorAll('.vibe-tour-progress button').forEach((b, i) => b.classList.toggle('active', i === _vibeTourScene));
+  }
+
+  function setVibeTourScene(idx, restartTimer = false) {
+    const maxIdx = Math.max(0, (_vibeTourSceneCount || 1) - 1);
+    _vibeTourScene = Math.max(0, Math.min(maxIdx, Number(idx) || 0));
+    syncVibeTourSceneDOM();
+    if (restartTimer) startVibeTourAutoAdvance();
+  }
+
+  function shiftVibeTourScene(delta) {
+    const n = Math.max(1, _vibeTourSceneCount || 1);
+    setVibeTourScene((_vibeTourScene + delta + n) % n, true);
+  }
+
+  function startVibeTourAutoAdvance() {
+    if (_vibeTourTimer) clearTimeout(_vibeTourTimer);
+    _vibeTourTimer = null;
+    if (!_vibeTourVisible) return;
+    const activeScene = document.querySelector('#vibe-tour .vibe-tour-scene.active');
+    const duration = Math.max(1200, Number(activeScene?.dataset.duration) || 3500);
+    _vibeTourTimer = setTimeout(() => shiftVibeTourScene(1), duration);
+  }
+
+  function stopVibeTourAudio() {
+    if (!_vibeTourAudio) return;
+    try {
+      _vibeTourAudio.gain.gain.setTargetAtTime(0, _vibeTourAudio.ctx.currentTime, 0.08);
+      setTimeout(() => {
+        try { _vibeTourAudio.osc.forEach(o => o.stop()); _vibeTourAudio.ctx.close(); } catch (_) {}
+      }, 180);
+    } catch (_) {}
+    _vibeTourAudio = null;
+    const btn = document.getElementById('vibe-tour-audio-btn');
+    if (btn) {
+      btn.textContent = 'Music off';
+      btn.classList.remove('active');
+    }
+  }
+
+  function toggleVibeTourAudio() {
+    if (_vibeTourAudio) { stopVibeTourAudio(); return; }
+    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+    if (!AudioCtx) { flashMsg('Audio is not supported in this browser'); return; }
+    try {
+      const ctx = new AudioCtx();
+      const gain = ctx.createGain();
+      gain.gain.value = 0.0001;
+      gain.connect(ctx.destination);
+      const freqs = [146.83, 220, 329.63];
+      const osc = freqs.map((f, i) => {
+        const o = ctx.createOscillator();
+        const g = ctx.createGain();
+        o.type = i === 1 ? 'triangle' : 'sine';
+        o.frequency.value = f;
+        g.gain.value = i === 1 ? 0.12 : 0.08;
+        o.connect(g);
+        g.connect(gain);
+        o.start();
+        return o;
+      });
+      gain.gain.setTargetAtTime(0.055, ctx.currentTime, 0.35);
+      _vibeTourAudio = { ctx, gain, osc };
+      const btn = document.getElementById('vibe-tour-audio-btn');
+      if (btn) {
+        btn.textContent = 'Music on';
+        btn.classList.add('active');
+      }
+    } catch (_) {
+      flashMsg('Could not start music');
+    }
+  }
+
+  function dismissVibeTour() {
+    closeVibeTourPopup();
+  }
+
   function setViewMode(mode) {
     _viewMode = mode;
     localStorage.setItem('rmViewMode', mode);
@@ -7407,6 +8471,7 @@
   function hotelRowHTML(h) {
     const sym   = _priceCurrency === 'EUR' ? '€' : '$';
     const score = hotelEffectiveScore(h);
+    const hotelIdAttr = escHtml(String(h.id));
     const allRoomTypes = h.roomTypes || [];
     const canFilter    = _showAvailOnly && _hasDateSearch && _pricesLoaded;
     const availRTs     = allRoomTypes.filter(rt => rt.roomTypeId != null && h.roomPrices?.[rt.roomTypeId] != null);
@@ -7481,6 +8546,7 @@
           <div class="hotel-row-match-pct">${score > 0 ? score + '%' : '—'}</div>
           <div class="hotel-row-match-label">match</div>
           ${topRoom ? `<div class="hotel-row-match-room">${topRoom.name}</div>` : ''}
+          <button type="button" class="hotel-row-tour-link" data-hotel-id="${hotelIdAttr}" onclick="event.stopPropagation();openVibeTourForHotel(this.dataset.hotelId)">Vibe tour</button>
         </div>
         <div class="hotel-row-price" id="hotel-row-price-${h.id}">${priceHTML}</div>
         <span class="hotel-row-chevron">▼</span>
@@ -7912,6 +8978,7 @@
     const rating   = h.rating > 0 ? `<span class="hotel-guest-score"><strong>${parseFloat(h.rating).toFixed(1)}</strong> guest score</span>` : '';
     const bookUrl  = `https://www.google.com/search?q=${encodeURIComponent(h.name + ' ' + (h.city||'') + ' hotel booking')}`;
     const clipBadge = h.clipScore > 0 ? `<span class="clip-score-badge">&#9889; ${h.clipScore}% CLIP</span>` : '';
+    const hotelIdAttr = escHtml(String(h.id));
 
     // BOOP v4 — three vibe % scores on every card:
     //   roomVibe = h.vectorScore        (set by score_room_types + HyDE room seed)
@@ -8008,6 +9075,7 @@
                 <span class="price-value" id="hotel-price-${h.id}">${priceDisplay}</span>
                 <span class="price-note" id="hotel-price-note-${h.id}">${priceNote}</span>
               </div>
+              <button type="button" class="hotel-tour-link" data-hotel-id="${hotelIdAttr}" onclick="openVibeTourForHotel(this.dataset.hotelId)">Vibe tour</button>
               <a class="book-btn" href="${bookUrl}" target="_blank" rel="noopener">Find &amp; Book →</a>
             </div>
           </div>
@@ -8489,8 +9557,9 @@
     if (!w.contains(ev.target)) closeSortMorePop();
   });
   document.addEventListener('click', (ev) => {
-    const picker = document.getElementById('city-dates');
-    const pop = document.getElementById('city-date-pop');
+    const ids = cityDateIds();
+    const picker = document.getElementById(ids.wrapper);
+    const pop = document.getElementById(ids.pop);
     if (!picker || !pop || !pop.classList.contains('open')) return;
     const path = typeof ev.composedPath === 'function' ? ev.composedPath() : [];
     if (!picker.contains(ev.target) && !path.includes(picker) && !path.includes(pop)) {
@@ -8502,7 +9571,7 @@
     if (ev.key === 'Escape') closeCityDateRangePicker();
   });
   window.addEventListener('resize', () => {
-    const pop = document.getElementById('city-date-pop');
+    const pop = document.getElementById(cityDateIds().pop);
     if (pop && pop.classList.contains('open')) updateCityDatePopoverPosition();
   });
 

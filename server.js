@@ -3058,6 +3058,77 @@ app.get("*", (req, res) => {
   res.sendFile(path.join(__dirname, "client", "index.html"));
 });
 
+// ── Street View Static API — 4-frame neighborhood walk ───────────────────────
+// GET /api/street-view?hotelId=lp1beec
+// Returns up to 4 Street View image URLs at different headings around the hotel's
+// lat/lng. Results are in-process cached (keyed by hotelId) to avoid repeated
+// billing on the same hotel within a server process lifetime.
+const STREETVIEW_KEY = process.env.GOOGLE_STREETVIEW_KEY || "";
+const _svCache = new Map(); // hotelId → { ts, urls }
+const SV_CACHE_MS = 24 * 60 * 60 * 1000; // 24h
+
+app.get("/api/street-view", async (req, res) => {
+  const hotelId = (req.query.hotelId || "").trim();
+  if (!hotelId) return res.status(400).json({ error: "hotelId required" });
+  if (!STREETVIEW_KEY) return res.status(503).json({ error: "Street View not configured" });
+  if (!supabase) return res.status(500).json({ error: "Supabase not configured" });
+
+  // Cache hit
+  const cached = _svCache.get(hotelId);
+  if (cached && Date.now() - cached.ts < SV_CACHE_MS) {
+    return res.json({ urls: cached.urls, cached: true });
+  }
+
+  // Look up lat/lng from hotels_cache
+  const db = supabaseAdmin || supabase;
+  const { data: row, error } = await db
+    .from("hotels_cache")
+    .select("lat, lng, name")
+    .eq("hotel_id", hotelId)
+    .single();
+
+  if (error || !row?.lat || !row?.lng) {
+    return res.status(404).json({ error: "Hotel coordinates not found" });
+  }
+
+  const { lat, lng } = row;
+  // 4 headings evenly spaced — gives a "walking around" feel
+  const headings = [0, 90, 180, 270];
+  const size = "1200x800";
+  const fov = 90;
+  const pitch = 5; // slightly above horizon for cinematic feel
+
+  const urls = headings.map(h =>
+    `https://maps.googleapis.com/maps/api/streetview?size=${size}&location=${lat},${lng}&heading=${h}&pitch=${pitch}&fov=${fov}&key=${STREETVIEW_KEY}`
+  );
+
+  // Verify at least the first frame exists (avoids grey "no imagery" frames)
+  try {
+    const metaUrl = `https://maps.googleapis.com/maps/api/streetview/metadata?location=${lat},${lng}&key=${STREETVIEW_KEY}`;
+    const metaResp = await fetch(metaUrl);
+    const meta = await metaResp.json();
+    if (meta.status !== "OK") {
+      console.log(`[street-view] No coverage for ${hotelId} at ${lat},${lng}: ${meta.status}`);
+      return res.json({ urls: [], coverage: false });
+    }
+    // If coverage exists, use the actual pano lat/lng for more accurate framing
+    if (meta.location) {
+      const pl = meta.location.lat;
+      const plng = meta.location.lng;
+      const adjustedUrls = headings.map(h =>
+        `https://maps.googleapis.com/maps/api/streetview?size=${size}&location=${pl},${plng}&heading=${h}&pitch=${pitch}&fov=${fov}&key=${STREETVIEW_KEY}`
+      );
+      _svCache.set(hotelId, { ts: Date.now(), urls: adjustedUrls });
+      return res.json({ urls: adjustedUrls, coverage: true });
+    }
+  } catch (e) {
+    console.warn("[street-view] metadata check failed:", e.message);
+  }
+
+  _svCache.set(hotelId, { ts: Date.now(), urls });
+  res.json({ urls, coverage: true });
+});
+
 // ── Graceful shutdown: fix any cities stuck at "indexing" when Render deploys ──
 async function gracefulShutdown(signal) {
   console.log(`[shutdown] ${signal} received — cleaning up stuck indexing jobs`);
