@@ -3060,8 +3060,9 @@ app.post("/api/rebuild-hotel-profile-index", async (req, res) => {
 // lat/lng. Results are in-process cached (keyed by hotelId) to avoid repeated
 // billing on the same hotel within a server process lifetime.
 const STREETVIEW_KEY = process.env.GOOGLE_STREETVIEW_KEY || "";
-const _svCache = new Map(); // hotelId → { ts, urls }
+const _svCache = new Map(); // cacheKey → { ts, urls }
 const SV_CACHE_MS = 24 * 60 * 60 * 1000; // 24h
+const SV_CACHE_VERSION = 2; // bump when URL params change (invalidates stale cache)
 
 app.get("/api/street-view", async (req, res) => {
   const hotelId = (req.query.hotelId || "").trim();
@@ -3069,8 +3070,8 @@ app.get("/api/street-view", async (req, res) => {
   if (!STREETVIEW_KEY) return res.status(503).json({ error: "Street View not configured" });
   if (!supabase) return res.status(500).json({ error: "Supabase not configured" });
 
-  // Cache hit
-  const cached = _svCache.get(hotelId);
+  const cacheKey = `${SV_CACHE_VERSION}:${hotelId}`;
+  const cached = _svCache.get(cacheKey);
   if (cached && Date.now() - cached.ts < SV_CACHE_MS) {
     return res.json({ urls: cached.urls, cached: true });
   }
@@ -3088,40 +3089,48 @@ app.get("/api/street-view", async (req, res) => {
   }
 
   const { lat, lng } = row;
-  // 4 headings evenly spaced — gives a "walking around" feel
+  // Four headings — full rotation from the same curb pano reads as "walking the block"
   const headings = [0, 90, 180, 270];
-  const size = "1200x800";
-  const fov = 90;
-  const pitch = 5; // slightly above horizon for cinematic feel
+  const size = "1280x800";
+  const fov = 102; // wider field = more sidewalk, façades, and street context
+  const pitch = 0; // level horizon — reads more like standing on the street
+  const radius = 45; // metres: hotel coords are often on the footprint; snap to nearest outdoor pano
 
-  const svUrl = (lat, lng, h) =>
-    `https://maps.googleapis.com/maps/api/streetview?size=${size}&location=${lat},${lng}&heading=${h}&pitch=${pitch}&fov=${fov}&source=outdoor&key=${STREETVIEW_KEY}`;
+  const svUrlFromPano = (panoId, h) =>
+    `https://maps.googleapis.com/maps/api/streetview?size=${size}&pano=${encodeURIComponent(panoId)}&heading=${h}&pitch=${pitch}&fov=${fov}&source=outdoor&key=${STREETVIEW_KEY}`;
 
-  const urls = headings.map(h => svUrl(lat, lng, h));
+  const svUrlFromLocation = (la, ln, h) =>
+    `https://maps.googleapis.com/maps/api/streetview?size=${size}&location=${la},${ln}&heading=${h}&pitch=${pitch}&fov=${fov}&radius=${radius}&source=outdoor&key=${STREETVIEW_KEY}`;
 
-  // Verify at least the first frame exists (avoids grey "no imagery" frames)
-  // source=outdoor in metadata also confirms only outdoor coverage is used
+  const urls = headings.map(h => svUrlFromLocation(lat, lng, h));
+
+  // Verify coverage; prefer pano_id so all four frames share one street capture (consistent "block" feel)
   try {
-    const metaUrl = `https://maps.googleapis.com/maps/api/streetview/metadata?location=${lat},${lng}&source=outdoor&key=${STREETVIEW_KEY}`;
+    const metaUrl = `https://maps.googleapis.com/maps/api/streetview/metadata?location=${lat},${lng}&radius=${radius}&source=outdoor&key=${STREETVIEW_KEY}`;
     const metaResp = await fetch(metaUrl);
     const meta = await metaResp.json();
     if (meta.status !== "OK") {
       console.log(`[street-view] No outdoor coverage for ${hotelId} at ${lat},${lng}: ${meta.status}`);
       return res.json({ urls: [], coverage: false });
     }
-    // If coverage exists, use the actual pano lat/lng for more accurate framing
+    const panoId = meta.pano_id || meta.panoId;
+    if (panoId) {
+      const panoUrls = headings.map(h => svUrlFromPano(panoId, h));
+      _svCache.set(cacheKey, { ts: Date.now(), urls: panoUrls });
+      return res.json({ urls: panoUrls, coverage: true });
+    }
     if (meta.location) {
       const pl = meta.location.lat;
       const plng = meta.location.lng;
-      const adjustedUrls = headings.map(h => svUrl(pl, plng, h));
-      _svCache.set(hotelId, { ts: Date.now(), urls: adjustedUrls });
+      const adjustedUrls = headings.map(h => svUrlFromLocation(pl, plng, h));
+      _svCache.set(cacheKey, { ts: Date.now(), urls: adjustedUrls });
       return res.json({ urls: adjustedUrls, coverage: true });
     }
   } catch (e) {
     console.warn("[street-view] metadata check failed:", e.message);
   }
 
-  _svCache.set(hotelId, { ts: Date.now(), urls });
+  _svCache.set(cacheKey, { ts: Date.now(), urls });
   res.json({ urls, coverage: true });
 });
 

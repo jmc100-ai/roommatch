@@ -8058,9 +8058,9 @@
     for (const h of sources) {
       for (const url of shuffledVibeTourItems(buildHeroPhotos(h || {}))) {
         pushUniquePhoto(out, url, h?.name || 'Neighborhood');
-        if (out.length >= 4) break;
+        if (out.length >= 2) break;
       }
-      if (out.length >= 4) break;
+      if (out.length >= 2) break;
     }
 
     for (const h of sources) {
@@ -8068,29 +8068,29 @@
       for (const key of preferredKeys) {
         for (const p of shuffledVibeTourItems(vibePhotos[key])) {
           pushUniquePhoto(out, nbhdHeroUrlFromEntry(p), h?.name || key.replace('_', ' '));
-          if (out.length >= 4) break;
+          if (out.length >= 2) break;
         }
-        if (out.length >= 4) break;
+        if (out.length >= 2) break;
       }
-      if (out.length >= 4) break;
+      if (out.length >= 2) break;
     }
 
     for (const h of sources) {
       pushUniquePhoto(out, h?.photo_url, h?.name || 'Neighborhood');
-      if (out.length >= 4) break;
+      if (out.length >= 2) break;
     }
 
-    return out.slice(0, 4);
+    return out.slice(0, 2);
   }
 
   function hotelArrivalPhotosForVibeTour(hotel, roomPhoto) {
     const out = [];
     pushUniquePhoto(out, hotel?.mainPhoto, hotel?.name || 'Hotel arrival');
-    for (const url of (hotel?.hotelPhotos || [])) {
+    (hotel?.hotelPhotos || []).forEach((url, idx) => {
+      if (isLikelyHotelInteriorPhoto(url, idx)) return;
       pushUniquePhoto(out, url, hotel?.name || 'Hotel arrival');
-      if (out.length >= 2) break;
-    }
-    pushUniquePhoto(out, roomPhoto, hotel?.name || 'Hotel arrival');
+    });
+    // Room photos have their own tour segment — keep arrival to building / exterior only
     return out.slice(0, 2);
   }
 
@@ -8110,7 +8110,7 @@
     });
     pushUniquePhoto(out, hotel?.mainPhoto, 'Inside the hotel');
     pushUniquePhoto(out, roomPhoto, 'Inside the hotel');
-    return out.slice(0, 2);
+    return out.slice(0, 4);
   }
 
   function roomPhotosForVibeTour(room, hotel) {
@@ -8168,10 +8168,12 @@
       scenes.push({
         key:`sv-${i}`,
         kind:'neighborhood',
-        kicker:i === 0 ? `Street level · ${nbhdName}` : `Street view ${i + 1}`,
-        title:i === 0 ? `Arriving in ${nbhdName}` : nbhdName,
-        copy:i === 0 ? nbhdDesc : 'Walking the streets around your stay.',
-        caption:'📍 Google Street View',
+        kicker:i === 0 ? `On the street · ${nbhdName}` : `Around the block · ${i + 1}/4`,
+        title:i === 0 ? `Street level near your stay` : nbhdName,
+        copy:i === 0
+          ? (nbhdDesc + ' Here is the actual sidewalk and façades near this hotel (outdoor Street View).')
+          : 'Same corner, different angle — a slow look up and down the block.',
+        caption:'📍 Google Street View (outdoor)',
         photo:url,
         pills:[...(nbhd?.tags || []), scorePills[0]],
         arrival:i === 0 && scenes.length === 0,
@@ -8183,37 +8185,59 @@
       scenes.push({
         key:`neighborhood-${i}`,
         kind:'neighborhood',
-        kicker:scenes.length === 0 ? `Arrive in ${nbhdName}` : `Neighborhood ${i + 1}`,
-        title:scenes.length === 0 ? `Arrive in ${nbhdName}` : nbhdName,
-        copy:scenes.length === 0 ? nbhdDesc : 'Walk the surrounding streets and read the local energy before you choose a stay.',
-        caption:scenes.length === 0 ? 'Your trip starts outside the hotel.' : 'A little more of the area around your stay.',
+        kicker:i === 0 ? `Neighborhood mood` : `More of ${nbhdName}`,
+        title:i === 0 ? nbhdName : nbhdName,
+        copy:i === 0
+          ? 'Curated stills from the area cards — texture, parks, and street energy after the live curb views.'
+          : 'Another outdoor-forward glimpse of the district around this match.',
+        caption:i === 0 ? 'Area around your stay' : 'Neighborhood gallery',
         photo:p.url,
         pills:[...(nbhd?.tags || []), scorePills[0]],
-        arrival:scenes.length === 0,
+        arrival:false,
       });
     });
-    hotelArrivalPhotosForVibeTour(h, roomPhoto).forEach((p, i) => scenes.push({
-      key:`hotel-arrival-${i}`,
-      kind:'hotel',
-      kicker:`Hotel arrival ${i + 1}`,
-      title:h.name || 'Your matched hotel',
-      copy:i === 0
-        ? (h.name || 'This hotel') + ' is the strongest current hotel match for your trip vibe.'
-        : 'Now the tour moves from the neighborhood into the hotel setting.',
-      caption:i === 0 ? 'Pull up to the hotel.' : 'Get a second glance before stepping inside.',
-      photo:p.url,
-      pills:[scorePills[1], h.rating > 0 ? `${Number(h.rating).toFixed(1)} guest score` : null, h.starRating ? `${Math.round(h.starRating)} star` : null],
-    }));
-    hotelInteriorPhotosForVibeTour(h, roomPhoto).forEach((p, i) => scenes.push({
-      key:`hotel-inside-${i}`,
-      kind:'hotel',
-      kicker:`Inside the hotel ${i + 1}`,
-      title:'Step inside',
-      copy:'This is the hotel personality layer: arrival feel, shared spaces, and the mood before you reach the room.',
-      caption:i === 0 ? 'From lobby energy to public spaces.' : 'A second interior cue, when available.',
-      photo:p.url,
-      pills:[scorePills[1], 'hotel personality'],
-    }));
+    const arrivalList = hotelArrivalPhotosForVibeTour(h, roomPhoto);
+    const interiorPool = hotelInteriorPhotosForVibeTour(h, roomPhoto);
+    const hotelTour = [];
+    for (const p of arrivalList) {
+      if (hotelTour.length >= 2) break;
+      hotelTour.push({ p, seg: 'arrival' });
+    }
+    for (const p of interiorPool) {
+      if (hotelTour.length >= 2) break;
+      hotelTour.push({ p, seg: 'interior' });
+    }
+    let hotelArrivalIdx = 0;
+    let hotelInsideIdx = 0;
+    hotelTour.forEach(({ p, seg }) => {
+      if (seg === 'arrival') {
+        const i = hotelArrivalIdx++;
+        scenes.push({
+          key:`hotel-arrival-${i}`,
+          kind:'hotel',
+          kicker:`Hotel outside ${i + 1}`,
+          title:h.name || 'Your matched hotel',
+          copy:i === 0
+            ? (h.name || 'This hotel') + ' is the strongest current hotel match for your trip vibe.'
+            : 'Another exterior angle before we go indoors or to the room.',
+          caption:i === 0 ? 'Approach and façade.' : 'Hotel from the street side.',
+          photo:p.url,
+          pills:[scorePills[1], h.rating > 0 ? `${Number(h.rating).toFixed(1)} guest score` : null, h.starRating ? `${Math.round(h.starRating)} star` : null],
+        });
+      } else {
+        const i = hotelInsideIdx++;
+        scenes.push({
+          key:`hotel-inside-${i}`,
+          kind:'hotel',
+          kicker:`Inside the hotel ${i + 1}`,
+          title:'Step inside',
+          copy:'Shared spaces and personality before the room.',
+          caption:i === 0 ? 'Lobby or public space when we can detect it.' : 'Another interior cue.',
+          photo:p.url,
+          pills:[scorePills[1], 'hotel personality'],
+        });
+      }
+    });
     roomPhotosForVibeTour(room, h).forEach((p, i) => scenes.push({
       key:`room-${i}`,
       kind:'room',
