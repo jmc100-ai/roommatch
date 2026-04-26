@@ -1020,6 +1020,52 @@
       -webkit-backdrop-filter:blur(12px);
     }
     .vibe-tour-overlay[aria-hidden="true"] { display:none; }
+    .vibe-tour.vibe-tour--loading {
+      min-height:min(52vh,420px);
+      display:flex;
+      flex-direction:column;
+      align-items:center;
+      justify-content:center;
+      padding:56px 28px 40px;
+      position:relative;
+      text-align:center;
+    }
+    .vibe-tour-loading-topbar {
+      position:absolute;
+      top:10px;
+      right:10px;
+      z-index:6;
+    }
+    .vibe-tour-loading-spinner {
+      width:44px;
+      height:44px;
+      margin:0 auto 20px;
+      border:3px solid rgba(201,169,110,.22);
+      border-top-color:rgba(201,169,110,.88);
+      border-radius:50%;
+      animation:vibeTourSpin .78s linear infinite;
+    }
+    @keyframes vibeTourSpin { to { transform:rotate(360deg); } }
+    .vibe-tour-loading-title {
+      margin:0 0 6px;
+      font-size:1.05rem;
+      font-weight:650;
+      letter-spacing:.02em;
+      color:rgba(248,244,236,.94);
+    }
+    .vibe-tour-loading-sub {
+      margin:0 0 14px;
+      font-size:.88rem;
+      color:rgba(201,169,110,.82);
+      max-width:36em;
+    }
+    .vibe-tour-loading-hint {
+      margin:0;
+      font-size:.8rem;
+      line-height:1.45;
+      color:rgba(220,214,200,.62);
+      max-width:28em;
+    }
     .vibe-tour-stage {
       height:min(72vh,680px);
       min-height:480px;
@@ -4373,8 +4419,12 @@
   let _vibeTourScene = 0;
   let _vibeTourSceneCount = 3;
   let _vibeTourTimer = null;
+  /** Cleared on close — paired with _vibeTourLoadWaitResolve so skip never hangs the async opener. */
+  let _vibeTourLoadWaitTimer = null;
+  let _vibeTourLoadWaitResolve = null;
   let _vibeTourAudio = null;
-  const _svFrameCache = {}; // hotelId → string[] urls (session cache)
+  /** hotelId → Street View URL array (possibly empty after a completed fetch) */
+  const _svFrameCache = {};
   /** Last /api/vsearch `stats` — used to align match sort with server nbhd blend weight */
   let _lastVsearchStats = null;
   let selectedNeighborhood = null; // { name, bbox?, polygon? } — polygon is geo JSON for /api/vsearch
@@ -8293,23 +8343,26 @@
 
   async function fetchStreetViewFrames(hotelId) {
     if (!hotelId) return [];
-    if (_svFrameCache[hotelId]) return _svFrameCache[hotelId];
+    if (Object.prototype.hasOwnProperty.call(_svFrameCache, hotelId)) {
+      return _svFrameCache[hotelId];
+    }
     try {
       const resp = await fetch(`${BACKEND}/api/street-view?hotelId=${encodeURIComponent(hotelId)}`);
-      if (!resp.ok) return [];
+      if (!resp.ok) {
+        _svFrameCache[hotelId] = [];
+        return [];
+      }
       const data = await resp.json();
       const urls = data.urls || [];
       _svFrameCache[hotelId] = urls;
       return urls;
-    } catch (_) { return []; }
+    } catch (_) {
+      _svFrameCache[hotelId] = [];
+      return [];
+    }
   }
 
-  function openVibeTourPopup(hotels, svUrls = []) {
-    if (!hotels?.length) return;
-    _vibeTourLastHotels = hotels;
-    _vibeTourVisible = true;
-    _vibeTourScene = 0;
-    _vibeTourSceneCount = 3;
+  function ensureVibeTourOverlay() {
     let ov = document.getElementById('vibe-tour-overlay');
     if (!ov) {
       ov = document.createElement('div');
@@ -8323,6 +8376,29 @@
       });
       document.body.appendChild(ov);
     }
+    return ov;
+  }
+
+  function buildVibeTourLoadingHTML(hotel) {
+    const name = escHtml(hotel?.name || 'Your matched hotel');
+    return `<section class="vibe-tour vibe-tour--loading" id="vibe-tour" aria-busy="true" aria-label="Preparing street-level tour">
+      <div class="vibe-tour-loading-topbar">
+        <button type="button" class="vibe-tour-icon-btn" onclick="closeVibeTourPopup()">Skip</button>
+      </div>
+      <div class="vibe-tour-loading-spinner" aria-hidden="true"></div>
+      <p class="vibe-tour-loading-title">Loading street view</p>
+      <p class="vibe-tour-loading-sub">${name}</p>
+      <p class="vibe-tour-loading-hint">We are fetching outdoor Street View panos so the tour can start on the sidewalk — not on a gallery photo.</p>
+    </section>`;
+  }
+
+  function openVibeTourPopup(hotels, svUrls = []) {
+    if (!hotels?.length) return;
+    _vibeTourLastHotels = hotels;
+    _vibeTourVisible = true;
+    _vibeTourScene = 0;
+    _vibeTourSceneCount = 3;
+    const ov = ensureVibeTourOverlay();
     ov.innerHTML = buildVibeTourHTML(hotels, svUrls);
     ov.setAttribute('aria-hidden', 'false');
     document.body.style.overflow = 'hidden';
@@ -8332,20 +8408,44 @@
   async function openVibeTourWithStreetView(hotels) {
     if (!hotels?.length) return;
     const hotelId = hotels[0]?.id;
-    // Show tour immediately with existing photos, then inject street view frames if available
-    openVibeTourPopup(hotels, []);
-    const svUrls = await fetchStreetViewFrames(hotelId);
-    if (svUrls.length && _vibeTourVisible) {
-      // Re-render with street view frames prepended — keeps current scene position
-      const savedScene = _vibeTourScene;
-      const ov = document.getElementById('vibe-tour-overlay');
-      if (ov) {
-        ov.innerHTML = buildVibeTourHTML(hotels, svUrls);
-        _vibeTourScene = 0;
-        syncVibeTourSceneDOM();
-        startVibeTourAutoAdvance();
-      }
+    if (hotelId && Object.prototype.hasOwnProperty.call(_svFrameCache, hotelId)) {
+      openVibeTourPopup(hotels, _svFrameCache[hotelId]);
+      return;
     }
+    const ov = ensureVibeTourOverlay();
+    _vibeTourLastHotels = hotels;
+    _vibeTourVisible = true;
+    _vibeTourScene = 0;
+    _vibeTourSceneCount = 0;
+    if (_vibeTourTimer) {
+      clearTimeout(_vibeTourTimer);
+      _vibeTourTimer = null;
+    }
+    if (_vibeTourLoadWaitTimer) {
+      clearTimeout(_vibeTourLoadWaitTimer);
+      _vibeTourLoadWaitTimer = null;
+    }
+    ov.innerHTML = buildVibeTourLoadingHTML(hotels[0]);
+    ov.setAttribute('aria-hidden', 'false');
+    document.body.style.overflow = 'hidden';
+
+    const minLoadMs = 720;
+    const t0 = Date.now();
+    const svUrls = await fetchStreetViewFrames(hotelId);
+    const elapsed = Date.now() - t0;
+    if (elapsed < minLoadMs && _vibeTourVisible) {
+      await new Promise(r => {
+        _vibeTourLoadWaitResolve = r;
+        _vibeTourLoadWaitTimer = setTimeout(() => {
+          _vibeTourLoadWaitTimer = null;
+          const done = _vibeTourLoadWaitResolve;
+          _vibeTourLoadWaitResolve = null;
+          if (done) done();
+        }, minLoadMs - elapsed);
+      });
+    }
+    if (!_vibeTourVisible) return;
+    openVibeTourPopup(hotels, svUrls);
   }
 
   function openVibeTourForHotel(hotelId) {
@@ -8364,6 +8464,13 @@
     _vibeTourPending = false;
     if (_vibeTourTimer) clearTimeout(_vibeTourTimer);
     _vibeTourTimer = null;
+    if (_vibeTourLoadWaitTimer) clearTimeout(_vibeTourLoadWaitTimer);
+    _vibeTourLoadWaitTimer = null;
+    if (_vibeTourLoadWaitResolve) {
+      const r = _vibeTourLoadWaitResolve;
+      _vibeTourLoadWaitResolve = null;
+      try { r(); } catch (_) {}
+    }
     stopVibeTourAudio();
     document.body.style.overflow = '';
     if (scrollToList) {
