@@ -3054,10 +3054,6 @@ app.post("/api/rebuild-hotel-profile-index", async (req, res) => {
   }
 });
 
-app.get("*", (req, res) => {
-  res.sendFile(path.join(__dirname, "client", "index.html"));
-});
-
 // ── Street View Static API — 4-frame neighborhood walk ───────────────────────
 // GET /api/street-view?hotelId=lp1beec
 // Returns up to 4 Street View image URLs at different headings around the hotel's
@@ -3127,6 +3123,10 @@ app.get("/api/street-view", async (req, res) => {
 
   _svCache.set(hotelId, { ts: Date.now(), urls });
   res.json({ urls, coverage: true });
+});
+
+app.get("*", (req, res) => {
+  res.sendFile(path.join(__dirname, "client", "index.html"));
 });
 
 // ── Graceful shutdown: fix any cities stuck at "indexing" when Render deploys ──
