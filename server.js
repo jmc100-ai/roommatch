@@ -3094,26 +3094,26 @@ app.get("/api/street-view", async (req, res) => {
   const fov = 90;
   const pitch = 5; // slightly above horizon for cinematic feel
 
-  const urls = headings.map(h =>
-    `https://maps.googleapis.com/maps/api/streetview?size=${size}&location=${lat},${lng}&heading=${h}&pitch=${pitch}&fov=${fov}&key=${STREETVIEW_KEY}`
-  );
+  const svUrl = (lat, lng, h) =>
+    `https://maps.googleapis.com/maps/api/streetview?size=${size}&location=${lat},${lng}&heading=${h}&pitch=${pitch}&fov=${fov}&source=outdoor&key=${STREETVIEW_KEY}`;
+
+  const urls = headings.map(h => svUrl(lat, lng, h));
 
   // Verify at least the first frame exists (avoids grey "no imagery" frames)
+  // source=outdoor in metadata also confirms only outdoor coverage is used
   try {
-    const metaUrl = `https://maps.googleapis.com/maps/api/streetview/metadata?location=${lat},${lng}&key=${STREETVIEW_KEY}`;
+    const metaUrl = `https://maps.googleapis.com/maps/api/streetview/metadata?location=${lat},${lng}&source=outdoor&key=${STREETVIEW_KEY}`;
     const metaResp = await fetch(metaUrl);
     const meta = await metaResp.json();
     if (meta.status !== "OK") {
-      console.log(`[street-view] No coverage for ${hotelId} at ${lat},${lng}: ${meta.status}`);
+      console.log(`[street-view] No outdoor coverage for ${hotelId} at ${lat},${lng}: ${meta.status}`);
       return res.json({ urls: [], coverage: false });
     }
     // If coverage exists, use the actual pano lat/lng for more accurate framing
     if (meta.location) {
       const pl = meta.location.lat;
       const plng = meta.location.lng;
-      const adjustedUrls = headings.map(h =>
-        `https://maps.googleapis.com/maps/api/streetview?size=${size}&location=${pl},${plng}&heading=${h}&pitch=${pitch}&fov=${fov}&key=${STREETVIEW_KEY}`
-      );
+      const adjustedUrls = headings.map(h => svUrl(pl, plng, h));
       _svCache.set(hotelId, { ts: Date.now(), urls: adjustedUrls });
       return res.json({ urls: adjustedUrls, coverage: true });
     }

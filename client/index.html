@@ -8038,7 +8038,8 @@
     const out = [];
     const full = fullNeighborhoodForVibeTour(nbhd);
     const cityRows = NBHD_CITY_ROWS[cityKey(S.city)] || Object.values(NBHD_CARD_DATA || {});
-    const preferredKeys = ['street_feel','parks','greenery','icon_spots','cafes','restaurants','shops','museums'];
+    // Only outdoor-leaning buckets — cafes/restaurants/museums tend to have interior shots
+    const preferredKeys = ['street_feel','parks','greenery','icon_spots','shops'];
     const sources = [];
     const seen = new Set();
     const addSource = h => {
