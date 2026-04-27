@@ -1019,6 +1019,19 @@
       backdrop-filter:blur(12px);
       -webkit-backdrop-filter:blur(12px);
     }
+    .vibe-tour-overlay.vibe-tour-overlay--max {
+      padding:0;
+      background:rgba(0,0,0,.88);
+      backdrop-filter:none;
+      -webkit-backdrop-filter:none;
+    }
+    .vibe-tour-overlay.vibe-tour-overlay--max .vibe-tour {
+      width:100vw;
+      max-height:100vh;
+      height:100vh;
+      border-radius:0;
+      border:0;
+    }
     .vibe-tour-overlay[aria-hidden="true"] { display:none; }
     .vibe-tour.vibe-tour--loading {
       min-height:min(52vh,420px);
@@ -1114,6 +1127,71 @@
       pointer-events:auto;
       z-index:2;
     }
+    .vibe-tour-scene--title .vibe-tour-bg {
+      animation:none !important;
+      transform:scale(1.01) translate3d(0,0,0) !important;
+    }
+    .vibe-tour-scene--title .vibe-tour-shade {
+      background:
+        linear-gradient(180deg, rgba(0,0,0,.63) 0%, rgba(0,0,0,.57) 34%, rgba(0,0,0,.54) 62%, rgba(0,0,0,.63) 100%);
+    }
+    .vibe-tour-scene--title .vibe-tour-content {
+      left:50%;
+      right:auto;
+      top:50%;
+      bottom:auto;
+      transform:translate(-50%,-50%);
+      width:min(860px, calc(100% - 48px));
+      max-width:860px;
+      text-align:center;
+    }
+    .vibe-tour-scene--title .vibe-tour-content::before {
+      border-radius:18px;
+      background:
+        radial-gradient(circle at 50% 18%, rgba(201,169,110,.08), transparent 42%),
+        linear-gradient(180deg, rgba(8,8,12,.30) 0%, rgba(6,6,10,.25) 60%, rgba(6,6,10,.32) 100%);
+    }
+    .vibe-tour-scene--title .vibe-tour-kicker {
+      font-size:13px;
+      letter-spacing:.22em;
+      color:rgba(201,169,110,.98);
+    }
+    .vibe-tour-scene--title .vibe-tour-copy {
+      margin-top:12px;
+      font-size:18px;
+      font-weight:600;
+      color:rgba(236,223,192,.92);
+      line-height:1.45;
+      text-align:center;
+      display:block;
+      width:100%;
+      max-width:none;
+      margin-left:auto;
+      margin-right:auto;
+    }
+    .vibe-tour-title-meta-line {
+      display:block;
+      width:100%;
+      text-align:center;
+      margin-top:4px;
+      line-height:1.35;
+    }
+    .vibe-tour-title-meta-wrap {
+      display:inline-block;
+      text-align:left;
+      max-width:min(92%, 760px);
+      margin:0 auto;
+    }
+    .vibe-tour-title-meta-key {
+      color:rgba(242,230,202,.96);
+      font-weight:650;
+    }
+    .vibe-tour-title-meta-val {
+      font-size:14px;
+      font-weight:520;
+      color:rgba(201,169,110,.98);
+      text-shadow:0 2px 8px rgba(0,0,0,.88), 0 0 1px rgba(0,0,0,.9);
+    }
     .vibe-tour-bg {
       position:absolute;
       inset:0;
@@ -1140,6 +1218,19 @@
     @keyframes vibeDriftC {
       from { transform:scale(1.05) translate3d(-.8%,-3%,0); }
       to   { transform:scale(1.2) translate3d(1.2%,3%,0); }
+    }
+    /* Mobile: room slides — keep motion but cap zoom so cover-crop doesn’t swallow the frame */
+    @keyframes vibeDriftRoomMobA {
+      from { transform:scale(0.99) translate3d(-.8%,.2%,0); }
+      to   { transform:scale(1.12) translate3d(1.4%,-.9%,0); }
+    }
+    @keyframes vibeDriftRoomMobB {
+      from { transform:scale(0.99) translate3d(1.1%,.7%,0); }
+      to   { transform:scale(1.13) translate3d(-1.4%,-1%,0); }
+    }
+    @keyframes vibeDriftRoomMobC {
+      from { transform:scale(0.985) translate3d(-.4%,-1%,0); }
+      to   { transform:scale(1.115) translate3d(.9%,1.1%,0); }
     }
     @keyframes vibeFilmGrain {
       from { transform:translate3d(-1%,1%,0); }
@@ -1187,6 +1278,22 @@
     }
     .vibe-tour-progress button.active { background:rgba(201,169,110,.95); }
     .vibe-tour-top-actions { display:flex; gap:8px; align-items:center; }
+    .vibe-tour-debug-source {
+      position:absolute;
+      left:14px;
+      top:14px;
+      z-index:7;
+      border:1px solid rgba(201,169,110,.45);
+      border-radius:999px;
+      padding:3px 8px;
+      background:rgba(0,0,0,.55);
+      color:rgba(255,241,206,.94);
+      font-size:10px;
+      letter-spacing:.05em;
+      text-transform:uppercase;
+      pointer-events:none;
+      backdrop-filter:blur(5px);
+    }
     .vibe-tour-icon-btn {
       border:1px solid rgba(255,255,255,.18);
       background:rgba(0,0,0,.38);
@@ -1198,6 +1305,23 @@
       cursor:pointer;
       backdrop-filter:blur(10px);
       white-space:nowrap;
+    }
+    .vibe-tour-icon-btn--icon {
+      width:36px;
+      min-width:36px;
+      height:36px;
+      padding:0;
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+    }
+    .vibe-tour-icon-btn--icon svg {
+      width:16px;
+      height:16px;
+      stroke:currentColor;
+      fill:none;
+      stroke-width:1.9;
+      vector-effect:non-scaling-stroke;
     }
     .vibe-tour-icon-btn:hover,
     .vibe-tour-icon-btn.active {
@@ -1271,13 +1395,41 @@
       bottom:clamp(24px,6vw,62px);
       z-index:3;
       max-width:620px;
+      padding:12px 14px 10px;
+      border-radius:16px;
+    }
+    .vibe-tour-content::before {
+      content:'';
+      position:absolute;
+      inset:0;
+      z-index:-1;
+      border-radius:inherit;
+      border:1px solid rgba(255,255,255,.12);
+      background:
+        radial-gradient(circle at 12% 14%, rgba(201,169,110,.09), transparent 44%),
+        linear-gradient(180deg, rgba(10,10,14,.38) 0%, rgba(8,8,12,.31) 58%, rgba(6,6,10,.36) 100%);
+      backdrop-filter:blur(4px);
+    }
+    /* Desktop only: narrow translucent panel without changing text wrap width. */
+    @media(min-width:821px) {
+      .vibe-tour-scene:not(.vibe-tour-scene--title) .vibe-tour-content {
+        max-width:744px; /* ~20% wider text area than 620px */
+      }
+      .vibe-tour-scene:not(.vibe-tour-scene--title) .vibe-tour-copy {
+        max-width:560px; /* widen actual text line box to reduce wrapping */
+      }
+      .vibe-tour-scene:not(.vibe-tour-scene--title) .vibe-tour-content::before {
+        left:14%;
+        right:14%;
+      }
     }
     .vibe-tour-kicker {
-      font-size:10px;
+      font-size:11px;
       letter-spacing:.18em;
       text-transform:uppercase;
       color:var(--accent2);
       margin-bottom:7px;
+      text-shadow:0 2px 8px rgba(0,0,0,.9), 0 0 1px rgba(0,0,0,.9);
     }
     .vibe-tour-title {
       font-family:'Cormorant Garamond',serif;
@@ -1286,6 +1438,15 @@
       color:#fff;
       font-weight:400;
       text-shadow:0 3px 28px rgba(0,0,0,.72);
+    }
+    .vibe-tour-neighborhood {
+      margin-top:4px;
+      font-size:12px;
+      font-weight:650;
+      letter-spacing:.04em;
+      text-transform:uppercase;
+      color:rgba(201,169,110,.9);
+      text-shadow:0 2px 10px rgba(0,0,0,.9), 0 0 1px rgba(0,0,0,.9);
     }
     .vibe-tour-copy {
       margin-top:10px;
@@ -1384,9 +1545,66 @@
       .vibe-tour-topbar { left:12px; right:12px; top:12px; }
       .vibe-tour-arrival-map { width:152px; height:92px; right:14px; top:56px; border-radius:14px; opacity:.92; }
       .vibe-tour-map-label { font-size:8px; letter-spacing:.12em; }
-      .vibe-tour-content { bottom:clamp(30px,9vw,72px); }
+      .vibe-tour-content {
+        left:0;
+        right:0;
+        bottom:0;
+        max-width:none;
+        padding:10px 12px 12px;
+        border-radius:0;
+      }
+      .vibe-tour-content::before {
+        border:0;
+        border-radius:0;
+        background:linear-gradient(180deg, rgba(0,0,0,0) 0%, rgba(6,6,10,.64) 38%, rgba(6,6,10,.82) 100%);
+        backdrop-filter:none;
+      }
+      .vibe-tour-scene--title .vibe-tour-content {
+        left:50%;
+        right:auto;
+        top:50%;
+        bottom:auto;
+        transform:translate(-50%,-50%);
+        width:min(92%, 520px);
+        text-align:center;
+        padding:12px 12px 11px;
+      }
+      .vibe-tour-scene--title .vibe-tour-content::before {
+        border:1px solid rgba(255,255,255,.14);
+        border-radius:14px;
+        background:
+          radial-gradient(circle at 50% 16%, rgba(201,169,110,.16), transparent 42%),
+          linear-gradient(180deg, rgba(8,8,12,.74) 0%, rgba(6,6,10,.66) 60%, rgba(6,6,10,.78) 100%);
+      }
+      .vibe-tour-scene--title .vibe-tour-copy {
+        margin-top:10px;
+        font-size:14px;
+        line-height:1.32;
+      }
+      .vibe-tour-scene--title .vibe-tour-title-meta-wrap {
+        width:100%;
+      }
+      .vibe-tour-scene--title .vibe-tour-title-meta-line {
+        display:flex;
+        flex-direction:column;
+        align-items:center;
+        gap:2px;
+        margin-top:8px;
+      }
+      .vibe-tour-scene--title .vibe-tour-title-meta-key {
+        font-size:15px;
+        line-height:1.2;
+        max-width:100%;
+      }
+      .vibe-tour-scene--title .vibe-tour-title-meta-val {
+        font-size:13px;
+        line-height:1.25;
+      }
       .vibe-tour-nav { display:none; }
       .vibe-tour-actions { padding:14px 18px 18px; }
+      .vibe-tour-scene--room .vibe-tour-bg.motion-0 { animation-name:vibeDriftRoomMobA; animation-duration:6s; }
+      .vibe-tour-scene--room .vibe-tour-bg.motion-1 { animation-name:vibeDriftRoomMobB; animation-duration:6.5s; }
+      .vibe-tour-scene--room .vibe-tour-bg.motion-2 { animation-name:vibeDriftRoomMobC; animation-duration:5.8s; }
     }
     .hotel-hero {
       display: grid;
@@ -2717,6 +2935,24 @@
       font-size:12px;
       color:var(--muted);
       line-height:1.45;
+    }
+    .city-date-pop-close {
+      width:36px;
+      height:36px;
+      border-radius:999px;
+      border:1px solid rgba(255,255,255,.15);
+      background:rgba(255,255,255,.045);
+      color:var(--text);
+      font-size:24px;
+      line-height:1;
+      cursor:pointer;
+      transition:border-color .15s, background .15s, color .15s;
+      flex-shrink:0;
+    }
+    .city-date-pop-close:hover {
+      border-color:rgba(201,169,110,.45);
+      background:rgba(201,169,110,.08);
+      color:rgba(255,255,255,.98);
     }
     .city-date-nav {
       display:flex;
@@ -4097,10 +4333,11 @@
                 <div class="city-date-pop-title">Choose your dates</div>
                 <div class="city-date-pop-sub" id="city-date-pop-sub">Select a check-in date, then choose your check-out date.</div>
               </div>
-              <div class="city-date-nav">
+              <div class="city-date-nav" aria-label="Change calendar month">
                 <button type="button" onclick="shiftCityDateMonth(-1)" aria-label="Previous month">‹</button>
                 <button type="button" onclick="shiftCityDateMonth(1)" aria-label="Next month">›</button>
               </div>
+              <button type="button" class="city-date-pop-close" onclick="closeCityDateRangePicker()" aria-label="Close date picker">&times;</button>
             </div>
             <div class="city-date-months" id="city-date-months"></div>
             <div class="city-date-footer">
@@ -4419,12 +4656,17 @@
   let _vibeTourScene = 0;
   let _vibeTourSceneCount = 3;
   let _vibeTourTimer = null;
+  let _vibeTouchStartX = null;
+  let _vibeTouchStartY = null;
   /** Cleared on close — paired with _vibeTourLoadWaitResolve so skip never hangs the async opener. */
   let _vibeTourLoadWaitTimer = null;
   let _vibeTourLoadWaitResolve = null;
   let _vibeTourAudio = null;
+  let _vibeTourPseudoFullscreen = false;
+  let _deferResultsRenderUntilTourClose = false;
   /** hotelId → Street View URL array (possibly empty after a completed fetch) */
   const _svFrameCache = {};
+  const VIBE_TOUR_DEBUG = /^(localhost|127\.0\.0\.1)$/i.test(window.location.hostname);
   /** Last /api/vsearch `stats` — used to align match sort with server nbhd blend weight */
   let _lastVsearchStats = null;
   let selectedNeighborhood = null; // { name, bbox?, polygon? } — polygon is geo JSON for /api/vsearch
@@ -7179,6 +7421,7 @@
 
   function startSearch() {
     _vibeTourPending = false;
+    _deferResultsRenderUntilTourClose = false;
     closeVibeTourPopup();
     // Show results view, hide discovery flow
     document.getElementById('discovery-flow').style.display = 'none';
@@ -7763,12 +8006,11 @@
   // ── Render + sort ──────────────────────────────────────────────────────────
 
   function render(hotels, hasDates = false) {
-    exitResultsPendingMode();
     const resPre = document.getElementById('results');
-    if (resPre) resPre.classList.remove('no-anim');
     _lbRegistry.length = 0;  // reset photo registry for each new search result
     _lastHotels     = hotels;
     const shouldOpenVibeTour = !!(_vibeTourPending && hotels?.length && S.boopProfile);
+    _deferResultsRenderUntilTourClose = shouldOpenVibeTour;
     _vibeTourPending = false;
     _currentSort    = 'match';
     _displayedCount = 10;
@@ -7790,8 +8032,14 @@
       b.classList.remove('loading');
     });
     syncSortMoreTriggerAccent();
+    if (shouldOpenVibeTour) {
+      if (resPre) resPre.classList.add('no-anim');
+      setTimeout(() => openVibeTourWithStreetView(hotels), 120);
+      return;
+    }
+    exitResultsPendingMode();
+    if (resPre) resPre.classList.remove('no-anim');
     renderSorted();
-    if (shouldOpenVibeTour) setTimeout(() => openVibeTourWithStreetView(hotels), 250);
   }
 
   function _setPriceBtnsState(loaded) {
@@ -8071,6 +8319,15 @@
   function shuffledVibeTourItems(items) {
     return [...(items || [])].sort(() => Math.random() - 0.5);
   }
+  function isLikelyOutdoorNeighborhoodPhoto(url, label = '') {
+    const t = `${String(url || '')} ${String(label || '')}`.toLowerCase();
+    // Reject obvious indoor/hotel-room cues.
+    if (/\b(lobby|interior|inside|reception|atrium|corridor|hallway|suite|guest\s*room|bed(room)?|bath(room)?|toilet|shower|sink|spa|gym|meeting|conference|ballroom)\b/.test(t)) return false;
+    // Prefer explicit outdoor cues when present.
+    if (/\b(street|avenue|boulevard|sidewalk|plaza|square|park|garden|outdoor|skyline|facade|façade|neighborhood|district)\b/.test(t)) return true;
+    // Otherwise allow as neutral (we still dedupe and prioritize strong outdoor buckets).
+    return true;
+  }
 
   function fullNeighborhoodForVibeTour(nbhd) {
     const rows = NBHD_CITY_ROWS[cityKey(S.city)] || Object.values(NBHD_CARD_DATA || {});
@@ -8105,19 +8362,15 @@
     addSource(selectedNeighborhood);
     cityRows.forEach(addSource);
 
-    for (const h of sources) {
-      for (const url of shuffledVibeTourItems(buildHeroPhotos(h || {}))) {
-        pushUniquePhoto(out, url, h?.name || 'Neighborhood');
-        if (out.length >= 2) break;
-      }
-      if (out.length >= 2) break;
-    }
-
+    // For tour scenes, avoid generic hero strips (they can include indoor intent).
+    // Prefer explicit outdoor vibe buckets first.
     for (const h of sources) {
       const vibePhotos = h?.vibe_photos || {};
       for (const key of preferredKeys) {
         for (const p of shuffledVibeTourItems(vibePhotos[key])) {
-          pushUniquePhoto(out, nbhdHeroUrlFromEntry(p), h?.name || key.replace('_', ' '));
+          const url = nbhdHeroUrlFromEntry(p);
+          if (!isLikelyOutdoorNeighborhoodPhoto(url, key)) continue;
+          pushUniquePhoto(out, url, h?.name || key.replace('_', ' '));
           if (out.length >= 2) break;
         }
         if (out.length >= 2) break;
@@ -8125,7 +8378,18 @@
       if (out.length >= 2) break;
     }
 
+    // Secondary fallback: hero photos, still filtered to avoid indoor cues.
     for (const h of sources) {
+      for (const url of shuffledVibeTourItems(buildHeroPhotos(h || {}))) {
+        if (!isLikelyOutdoorNeighborhoodPhoto(url, h?.name || 'Neighborhood')) continue;
+        pushUniquePhoto(out, url, h?.name || 'Neighborhood');
+        if (out.length >= 2) break;
+      }
+      if (out.length >= 2) break;
+    }
+
+    for (const h of sources) {
+      if (!isLikelyOutdoorNeighborhoodPhoto(h?.photo_url, h?.name || 'Neighborhood')) continue;
       pushUniquePhoto(out, h?.photo_url, h?.name || 'Neighborhood');
       if (out.length >= 2) break;
     }
@@ -8192,9 +8456,19 @@
     const nbhd = h.primary_nbhd || selectedNeighborhood || null;
     const room = topRoomForVibeTour(h);
     const roomPhoto = firstUsablePhoto(room?.photos) || h.mainPhoto || '';
-    const roomVibe = Math.round(hotelEffectiveScore(h) || 0);
-    const hotelVibe = Math.round(h.hotelScore || 0);
-    const nbhdVibe = h.nbhd_fit_pct != null ? Math.round(h.nbhd_fit_pct) : computeNbhdVibe(h);
+    const roomVibeBase = Number(hotelEffectiveScore(h));
+    const roomVibeFallback =
+      Number.isFinite(Number(h.vectorScore)) ? Number(h.vectorScore)
+      : Number.isFinite(Number(h.score)) ? Number(h.score)
+      : 0;
+    const roomVibe = Math.max(0, Math.round((Number.isFinite(roomVibeBase) && roomVibeBase > 0) ? roomVibeBase : roomVibeFallback));
+    const nbhdVibeRaw = h.nbhd_fit_pct != null ? Math.round(h.nbhd_fit_pct) : computeNbhdVibe(h);
+    const nbhdVibe = Math.max(0, Math.round(nbhdVibeRaw || 0));
+    const nbhdForBlend = nbhdVibe > 0 ? nbhdVibe : roomVibe;
+    const derivedHotelVibe = Math.round((roomVibe * 0.65) + (nbhdForBlend * 0.35));
+    const hotelVibeRaw = Number.isFinite(Number(h.hotelScore)) && Number(h.hotelScore) > 0 ? Number(h.hotelScore) : derivedHotelVibe;
+    const hotelVibe = Math.max(0, Math.round(hotelVibeRaw));
+    const hotelVibeLabel = `${hotelVibe}%`;
     const nbhdName = nbhd?.name || selectedNeighborhood?.name || S.city || 'the neighborhood';
     const nbhdDesc = nbhd?.vibe_short || nbhd?.vibe_long || 'This is the local setting around your stay.';
     const roomName = room?.name || 'Best matching room';
@@ -8209,34 +8483,40 @@
       roomVibe > 0 ? `${roomVibe}% room vibe` : null,
     ];
     const scenes = [];
+    const hotelScenes = [];
+    const areaScenes = [];
+    const roomScenes = [];
+    const addScene = (target, scene) => target.push({ ...scene, nbhdLabel: nbhdName, showNbhdLine: scene.showNbhdLine !== false });
 
     // Street View frames — real street-level photos of the hotel's block
     const svPhotosSeen = new Set();
     (svUrls || []).forEach((url, i) => {
       if (!url || svPhotosSeen.has(url)) return;
       svPhotosSeen.add(url);
-      scenes.push({
+      addScene(areaScenes, {
         key:`sv-${i}`,
         kind:'neighborhood',
-        kicker:i === 0 ? `On the street · ${nbhdName}` : `Around the block · ${i + 1}/4`,
-        title:i === 0 ? `Street level near your stay` : nbhdName,
+        kicker:`Neighborhood vibe match ${nbhdVibe > 0 ? `${nbhdVibe}%` : '—'} - ${nbhdName}`,
+        title:h.name || 'Your matched hotel',
         copy:i === 0
           ? (nbhdDesc + ' Here is the actual sidewalk and façades near this hotel (outdoor Street View).')
           : 'Same corner, different angle — a slow look up and down the block.',
         caption:'📍 Google Street View (outdoor)',
         photo:url,
         pills:[...(nbhd?.tags || []), scorePills[0]],
-        arrival:i === 0 && scenes.length === 0,
+        arrival:i === 0,
+        showNbhdLine:false,
+        sourceTag:'street-view',
       });
     });
 
     neighborhoodPhotosForVibeTour(nbhd, h).forEach((p, i) => {
       if (svPhotosSeen.has(p.url)) return; // don't duplicate if SV happened to match
-      scenes.push({
+      addScene(areaScenes, {
         key:`neighborhood-${i}`,
         kind:'neighborhood',
-        kicker:i === 0 ? `Neighborhood mood` : `More of ${nbhdName}`,
-        title:i === 0 ? nbhdName : nbhdName,
+        kicker:`Neighborhood vibe match ${nbhdVibe > 0 ? `${nbhdVibe}%` : '—'} - ${nbhdName}`,
+        title:h.name || 'Your matched hotel',
         copy:i === 0
           ? 'Curated stills from the area cards — texture, parks, and street energy after the live curb views.'
           : 'Another outdoor-forward glimpse of the district around this match.',
@@ -8244,6 +8524,8 @@
         photo:p.url,
         pills:[...(nbhd?.tags || []), scorePills[0]],
         arrival:false,
+        showNbhdLine:false,
+        sourceTag:p.label || 'neighborhood',
       });
     });
     const arrivalList = hotelArrivalPhotosForVibeTour(h, roomPhoto);
@@ -8262,13 +8544,13 @@
     hotelTour.forEach(({ p, seg }) => {
       if (seg === 'arrival') {
         const i = hotelArrivalIdx++;
-        scenes.push({
+        addScene(hotelScenes, {
           key:`hotel-arrival-${i}`,
           kind:'hotel',
-          kicker:`Hotel outside ${i + 1}`,
+          kicker:`Hotel vibe match ${hotelVibeLabel}`,
           title:h.name || 'Your matched hotel',
           copy:i === 0
-            ? (h.name || 'This hotel') + ' is the strongest current hotel match for your trip vibe.'
+            ? (h.name || 'This hotel') + ` is the strongest current hotel match for your trip vibe (${hotelVibeLabel}).`
             : 'Another exterior angle before we go indoors or to the room.',
           caption:i === 0 ? 'Approach and façade.' : 'Hotel from the street side.',
           photo:p.url,
@@ -8276,10 +8558,10 @@
         });
       } else {
         const i = hotelInsideIdx++;
-        scenes.push({
+        addScene(hotelScenes, {
           key:`hotel-inside-${i}`,
           kind:'hotel',
-          kicker:`Inside the hotel ${i + 1}`,
+          kicker:`Hotel vibe match ${hotelVibeLabel} - Inside ${i + 1}`,
           title:'Step inside',
           copy:'Shared spaces and personality before the room.',
           caption:i === 0 ? 'Lobby or public space when we can detect it.' : 'Another interior cue.',
@@ -8288,11 +8570,11 @@
         });
       }
     });
-    roomPhotosForVibeTour(room, h).forEach((p, i) => scenes.push({
+    roomPhotosForVibeTour(room, h).forEach((p, i) => addScene(roomScenes, {
       key:`room-${i}`,
       kind:'room',
-      kicker:`Room reveal ${i + 1}`,
-      title:i === 0 ? roomName : (p.label || roomName),
+      kicker:`Room vibe match ${roomVibe > 0 ? `${roomVibe}%` : '—'} - ${roomName}`,
+      title:h.name || 'Your matched hotel',
       copy:i === 0
         ? (room ? 'Open the door to the room type we would show first based on your visual room vibe.' : 'Room photos are limited for this hotel, but it still matched your broader stay vibe.')
         : 'Keep looking through the room details: sleep area, bathroom, light, texture, and view when available.',
@@ -8300,12 +8582,36 @@
       photo:p.url,
       pills:[scorePills[2], ...roomBits],
     }));
+
+    // Requested sequence: hotel first, then area, then room.
+    scenes.push(...hotelScenes.slice(0, 2), ...areaScenes.slice(0, 3), ...roomScenes);
+    const titlePhoto = hotelScenes[0]?.photo || h.mainPhoto || roomPhoto;
+    if (titlePhoto) {
+      scenes.unshift({
+        key:'title-card',
+        kind:'title',
+        kicker:`Hotel vibe match: ${hotelVibe}%`,
+        title:h.name || 'Your matched hotel',
+        nbhdLabel:'',
+        showNbhdLine:false,
+        titleMeta:[
+          { key: `${nbhdName}:`, val: `Neighborhood vibe match ${nbhdVibe > 0 ? `${nbhdVibe}%` : '—'}` },
+          { key: `${roomName}:`, val: `Room vibe match ${roomVibe > 0 ? `${roomVibe}%` : '—'}` },
+        ],
+        copy:'',
+        caption:'A quick cinematic summary before the tour starts.',
+        photo:titlePhoto,
+        pills:[],
+        durationMs:4000,
+      });
+    }
     if (!scenes.length) return '';
     _vibeTourSceneCount = scenes.length;
     _vibeTourScene = Math.max(0, Math.min(scenes.length - 1, _vibeTourScene || 0));
-    const sceneHTML = scenes.map((s, i) => `<article class="vibe-tour-scene vibe-tour-scene--${escHtml(s.kind || 'photo')} ${s.arrival ? 'vibe-tour-scene--arrival' : ''} ${i === _vibeTourScene ? 'active' : ''}" data-scene="${i}" data-duration="3500">
+    const sceneHTML = scenes.map((s, i) => `<article class="vibe-tour-scene vibe-tour-scene--${escHtml(s.kind || 'photo')} ${s.arrival ? 'vibe-tour-scene--arrival' : ''} ${i === _vibeTourScene ? 'active' : ''}" data-scene="${i}" data-duration="${Math.max(1200, Number(s.durationMs) || 4000)}">
       <div class="vibe-tour-bg motion-${i % 3}" style="background-image:url('${escHtml(s.photo || '')}')"></div>
       <div class="vibe-tour-shade"></div>
+      ${(VIBE_TOUR_DEBUG && s.sourceTag) ? `<div class="vibe-tour-debug-source">${escHtml(String(s.sourceTag))}</div>` : ''}
       ${s.arrival ? `<div class="vibe-tour-arrival-map" aria-hidden="true">
         <div class="vibe-tour-map-route"></div>
         <div class="vibe-tour-map-pin"></div>
@@ -8314,7 +8620,10 @@
       <div class="vibe-tour-content">
         <div class="vibe-tour-kicker">${escHtml(s.kicker)}</div>
         <div class="vibe-tour-title">${escHtml(s.title)}</div>
-        <div class="vibe-tour-copy">${escHtml(s.copy)}</div>
+        ${s.showNbhdLine === false ? '' : `<div class="vibe-tour-neighborhood">${escHtml(s.nbhdLabel || nbhdName)}</div>`}
+        <div class="vibe-tour-copy">${Array.isArray(s.titleMeta) && s.titleMeta.length
+          ? `<div class="vibe-tour-title-meta-wrap">${s.titleMeta.map(m => `<div class="vibe-tour-title-meta-line"><span class="vibe-tour-title-meta-key">${escHtml(m.key || '')}</span> <span class="vibe-tour-title-meta-val">${escHtml(m.val || '')}</span></div>`).join('')}</div>`
+          : escHtml(s.copy).replace(/\n/g, '<br>')}</div>
         <div class="vibe-tour-caption">${escHtml(s.caption)}</div>
         <div class="vibe-tour-pills">${vibeTourPillHTML(s.pills)}</div>
       </div>
@@ -8326,8 +8635,11 @@
         <div class="vibe-tour-topbar">
           <div class="vibe-tour-progress">${progressHTML}</div>
           <div class="vibe-tour-top-actions">
+            <button type="button" class="vibe-tour-icon-btn vibe-tour-icon-btn--icon" id="vibe-tour-fullscreen-btn" aria-label="Enter fullscreen" title="Fullscreen" onclick="toggleVibeTourFullscreen()">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 3H3v5M16 3h5v5M21 16v5h-5M3 16v5h5"/></svg>
+            </button>
             <button type="button" class="vibe-tour-icon-btn" id="vibe-tour-audio-btn" onclick="toggleVibeTourAudio()">Music off</button>
-        <button type="button" class="vibe-tour-icon-btn" onclick="closeVibeTourPopup()">Skip</button>
+        <button type="button" class="vibe-tour-icon-btn" onclick="closeVibeTourPopup()">Close</button>
           </div>
         </div>
         <button type="button" class="vibe-tour-nav prev" aria-label="Previous scene" onclick="shiftVibeTourScene(-1)">&#8249;</button>
@@ -8336,7 +8648,7 @@
       <div class="vibe-tour-actions">
         <button type="button" class="btn-pri" onclick="closeVibeTourPopup(true)">Continue to hotel list</button>
         <button type="button" class="btn-sec" onclick="closeVibeTourPopup();goToStep('nbhd')">Try another neighborhood</button>
-        <button type="button" class="btn-sec" onclick="setVibeTourScene(0, true)">Replay arrival</button>
+        <button type="button" class="btn-sec" onclick="setVibeTourScene(0, true)">Replay</button>
       </div>
     </section>`;
   }
@@ -8383,7 +8695,7 @@
     const name = escHtml(hotel?.name || 'Your matched hotel');
     return `<section class="vibe-tour vibe-tour--loading" id="vibe-tour" aria-busy="true" aria-label="Preparing street-level tour">
       <div class="vibe-tour-loading-topbar">
-        <button type="button" class="vibe-tour-icon-btn" onclick="closeVibeTourPopup()">Skip</button>
+        <button type="button" class="vibe-tour-icon-btn" onclick="closeVibeTourPopup()">Close</button>
       </div>
       <div class="vibe-tour-loading-spinner" aria-hidden="true"></div>
       <p class="vibe-tour-loading-title">Loading street view</p>
@@ -8402,6 +8714,8 @@
     ov.innerHTML = buildVibeTourHTML(hotels, svUrls);
     ov.setAttribute('aria-hidden', 'false');
     document.body.style.overflow = 'hidden';
+    bindVibeTourSwipe();
+    syncVibeTourFullscreenButton();
     startVibeTourAutoAdvance();
   }
 
@@ -8458,8 +8772,10 @@
     const ov = document.getElementById('vibe-tour-overlay');
     if (ov) {
       ov.setAttribute('aria-hidden', 'true');
+      ov.classList.remove('vibe-tour-overlay--max');
       ov.innerHTML = '';
     }
+    _vibeTourPseudoFullscreen = false;
     _vibeTourVisible = false;
     _vibeTourPending = false;
     if (_vibeTourTimer) clearTimeout(_vibeTourTimer);
@@ -8473,9 +8789,52 @@
     }
     stopVibeTourAudio();
     document.body.style.overflow = '';
+    if (_deferResultsRenderUntilTourClose) {
+      _deferResultsRenderUntilTourClose = false;
+      const resEl = document.getElementById('results');
+      exitResultsPendingMode();
+      if (resEl) resEl.classList.remove('no-anim');
+      renderSorted();
+    }
     if (scrollToList) {
       document.getElementById('results')?.querySelector('.hotel-card,.hotel-row')?.scrollIntoView({ behavior:'smooth', block:'start' });
     }
+  }
+
+  function syncVibeTourFullscreenButton() {
+    const btn = document.getElementById('vibe-tour-fullscreen-btn');
+    if (!btn) return;
+    const fsEl = document.fullscreenElement || document.webkitFullscreenElement || null;
+    const active = !!fsEl || _vibeTourPseudoFullscreen;
+    btn.classList.toggle('active', active);
+    btn.setAttribute('aria-label', active ? 'Exit fullscreen' : 'Enter fullscreen');
+    btn.setAttribute('title', active ? 'Exit fullscreen' : 'Fullscreen');
+    btn.innerHTML = active
+      ? '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 3H3v6M15 3h6v6M21 15v6h-6M3 15v6h6"/></svg>'
+      : '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 3H3v5M16 3h5v5M21 16v5h-5M3 16v5h5"/></svg>';
+  }
+
+  async function toggleVibeTourFullscreen() {
+    const ov = document.getElementById('vibe-tour-overlay');
+    if (!ov) return;
+    const fsEl = document.fullscreenElement || document.webkitFullscreenElement || null;
+    const hasNativeFs = !!(ov.requestFullscreen || ov.webkitRequestFullscreen);
+    try {
+      if (fsEl) {
+        if (document.exitFullscreen) await document.exitFullscreen();
+        else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
+      } else if (_vibeTourPseudoFullscreen) {
+        _vibeTourPseudoFullscreen = false;
+        ov.classList.remove('vibe-tour-overlay--max');
+      } else if (hasNativeFs) {
+        if (ov.requestFullscreen) await ov.requestFullscreen();
+        else if (ov.webkitRequestFullscreen) ov.webkitRequestFullscreen();
+      } else {
+        _vibeTourPseudoFullscreen = true;
+        ov.classList.add('vibe-tour-overlay--max');
+      }
+    } catch (_) {}
+    syncVibeTourFullscreenButton();
   }
 
   function syncVibeTourSceneDOM() {
@@ -8484,6 +8843,29 @@
     tour.dataset.scene = String(_vibeTourScene);
     tour.querySelectorAll('.vibe-tour-scene').forEach((s, i) => s.classList.toggle('active', i === _vibeTourScene));
     tour.querySelectorAll('.vibe-tour-progress button').forEach((b, i) => b.classList.toggle('active', i === _vibeTourScene));
+  }
+
+  function bindVibeTourSwipe() {
+    const stage = document.querySelector('#vibe-tour .vibe-tour-stage');
+    if (!stage || stage.dataset.swipeBound === '1') return;
+    stage.dataset.swipeBound = '1';
+    stage.addEventListener('touchstart', (ev) => {
+      const t = ev.changedTouches?.[0];
+      if (!t) return;
+      _vibeTouchStartX = t.clientX;
+      _vibeTouchStartY = t.clientY;
+    }, { passive:true });
+    stage.addEventListener('touchend', (ev) => {
+      const t = ev.changedTouches?.[0];
+      if (!t || _vibeTouchStartX == null || _vibeTouchStartY == null) return;
+      const dx = t.clientX - _vibeTouchStartX;
+      const dy = t.clientY - _vibeTouchStartY;
+      _vibeTouchStartX = null;
+      _vibeTouchStartY = null;
+      if (Math.abs(dx) < 44 || Math.abs(dx) <= Math.abs(dy) * 1.2) return;
+      shiftVibeTourScene(dx < 0 ? 1 : -1);
+      startVibeTourAutoAdvance();
+    }, { passive:true });
   }
 
   function setVibeTourScene(idx, restartTimer = false) {
@@ -8503,7 +8885,7 @@
     _vibeTourTimer = null;
     if (!_vibeTourVisible) return;
     const activeScene = document.querySelector('#vibe-tour .vibe-tour-scene.active');
-    const duration = Math.max(1200, Number(activeScene?.dataset.duration) || 3500);
+    const duration = Math.max(1200, Number(activeScene?.dataset.duration) || 4000);
     _vibeTourTimer = setTimeout(() => shiftVibeTourScene(1), duration);
   }
 
@@ -8555,6 +8937,8 @@
       flashMsg('Could not start music');
     }
   }
+  document.addEventListener('fullscreenchange', syncVibeTourFullscreenButton);
+  document.addEventListener('webkitfullscreenchange', syncVibeTourFullscreenButton);
 
   function dismissVibeTour() {
     closeVibeTourPopup();

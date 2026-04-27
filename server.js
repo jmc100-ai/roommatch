@@ -3062,7 +3062,7 @@ app.post("/api/rebuild-hotel-profile-index", async (req, res) => {
 const STREETVIEW_KEY = process.env.GOOGLE_STREETVIEW_KEY || "";
 const _svCache = new Map(); // cacheKey → { ts, urls }
 const SV_CACHE_MS = 24 * 60 * 60 * 1000; // 24h
-const SV_CACHE_VERSION = 2; // bump when URL params change (invalidates stale cache)
+const SV_CACHE_VERSION = 3; // bump when URL params change (invalidates stale cache)
 
 app.get("/api/street-view", async (req, res) => {
   const hotelId = (req.query.hotelId || "").trim();
@@ -3089,47 +3089,53 @@ app.get("/api/street-view", async (req, res) => {
   }
 
   const { lat, lng } = row;
-  // Four headings — full rotation from the same curb pano reads as "walking the block"
-  const headings = [0, 90, 180, 270];
   const size = "1280x800";
-  const fov = 102; // wider field = more sidewalk, façades, and street context
-  const pitch = 0; // level horizon — reads more like standing on the street
-  const radius = 45; // metres: hotel coords are often on the footprint; snap to nearest outdoor pano
+  const fov = 102;
+  const pitch = 0;
+  const radius = 120; // broaden search to find curb/outdoor pano near hotel footprint
+  const sampleDistanceM = 55;
 
-  const svUrlFromPano = (panoId, h) =>
-    `https://maps.googleapis.com/maps/api/streetview?size=${size}&pano=${encodeURIComponent(panoId)}&heading=${h}&pitch=${pitch}&fov=${fov}&source=outdoor&key=${STREETVIEW_KEY}`;
+  const svUrlFromPano = (panoId, heading) =>
+    `https://maps.googleapis.com/maps/api/streetview?size=${size}&pano=${encodeURIComponent(panoId)}&heading=${heading}&pitch=${pitch}&fov=${fov}&source=outdoor&key=${STREETVIEW_KEY}`;
 
-  const svUrlFromLocation = (la, ln, h) =>
-    `https://maps.googleapis.com/maps/api/streetview?size=${size}&location=${la},${ln}&heading=${h}&pitch=${pitch}&fov=${fov}&radius=${radius}&source=outdoor&key=${STREETVIEW_KEY}`;
+  const svUrlFromLocation = (la, ln, heading) =>
+    `https://maps.googleapis.com/maps/api/streetview?size=${size}&location=${la},${ln}&heading=${heading}&pitch=${pitch}&fov=${fov}&radius=${radius}&source=outdoor&key=${STREETVIEW_KEY}`;
 
-  const urls = headings.map(h => svUrlFromLocation(lat, lng, h));
+  // Sample around the hotel point to avoid interior-captured pano at the exact pin.
+  const latStep = sampleDistanceM / 111320;
+  const lngStep = sampleDistanceM / (111320 * Math.max(0.2, Math.cos((lat * Math.PI) / 180)));
+  const candidates = [
+    { la: lat + latStep, ln: lng, heading: 180, label: "north" },
+    { la: lat, ln: lng + lngStep, heading: 270, label: "east" },
+    { la: lat - latStep, ln: lng, heading: 0, label: "south" },
+    { la: lat, ln: lng - lngStep, heading: 90, label: "west" },
+  ];
 
-  // Verify coverage; prefer pano_id so all four frames share one street capture (consistent "block" feel)
+  const urls = [];
   try {
-    const metaUrl = `https://maps.googleapis.com/maps/api/streetview/metadata?location=${lat},${lng}&radius=${radius}&source=outdoor&key=${STREETVIEW_KEY}`;
-    const metaResp = await fetch(metaUrl);
-    const meta = await metaResp.json();
-    if (meta.status !== "OK") {
-      console.log(`[street-view] No outdoor coverage for ${hotelId} at ${lat},${lng}: ${meta.status}`);
-      return res.json({ urls: [], coverage: false });
-    }
-    const panoId = meta.pano_id || meta.panoId;
-    if (panoId) {
-      const panoUrls = headings.map(h => svUrlFromPano(panoId, h));
-      _svCache.set(cacheKey, { ts: Date.now(), urls: panoUrls });
-      return res.json({ urls: panoUrls, coverage: true });
-    }
-    if (meta.location) {
-      const pl = meta.location.lat;
-      const plng = meta.location.lng;
-      const adjustedUrls = headings.map(h => svUrlFromLocation(pl, plng, h));
-      _svCache.set(cacheKey, { ts: Date.now(), urls: adjustedUrls });
-      return res.json({ urls: adjustedUrls, coverage: true });
+    for (const c of candidates) {
+      const metaUrl = `https://maps.googleapis.com/maps/api/streetview/metadata?location=${c.la},${c.ln}&radius=${radius}&source=outdoor&key=${STREETVIEW_KEY}`;
+      const metaResp = await fetch(metaUrl);
+      const meta = await metaResp.json();
+      if (meta.status !== "OK") continue;
+      const panoId = meta.pano_id || meta.panoId;
+      if (panoId) {
+        urls.push(svUrlFromPano(panoId, c.heading));
+      } else if (meta.location) {
+        urls.push(svUrlFromLocation(meta.location.lat, meta.location.lng, c.heading));
+      } else {
+        urls.push(svUrlFromLocation(c.la, c.ln, c.heading));
+      }
+      if (urls.length >= 4) break;
     }
   } catch (e) {
-    console.warn("[street-view] metadata check failed:", e.message);
+    console.warn("[street-view] metadata sampling failed:", e.message);
   }
 
+  if (!urls.length) {
+    console.log(`[street-view] No outdoor curb coverage for ${hotelId} near ${lat},${lng}`);
+    return res.json({ urls: [], coverage: false });
+  }
   _svCache.set(cacheKey, { ts: Date.now(), urls });
   res.json({ urls, coverage: true });
 });
