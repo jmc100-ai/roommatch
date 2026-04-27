@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=390px"/>
+<title>Option C</title>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0c0c0e;--surface:#131316;--card:#18181c;--border:rgba(255,255,255,0.07);
+  --text:#e8e4dc;--muted:#9a9590;--accent:#c9a96e;--radius:14px;
+}
+body{font-family:'DM Sans',system-ui,sans-serif;background:var(--bg);color:var(--text);padding:20px;width:390px}
+.label{font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin-bottom:12px;padding-left:2px}
+.desc{font-size:11px;color:rgba(255,255,255,0.25);margin-bottom:14px;padding-left:2px;line-height:1.5}
+
+/* ── OPTION C: photo overlaid — text block sits ON the photo, no separate body section ── */
+.nbhd-card{
+  background:var(--card);border:1px solid var(--border);border-radius:var(--radius);
+  overflow:hidden;cursor:pointer;position:relative;
+  /* total height = photo height only, no body below */
+}
+.nbhd-card-photo{
+  width:100%;aspect-ratio:16/9;object-fit:cover;display:block;background:var(--surface);
+}
+/* gradient overlay so text is readable */
+.nbhd-card-overlay{
+  position:absolute;inset:0;
+  background:linear-gradient(
+    to bottom,
+    transparent 25%,
+    rgba(0,0,0,0.55) 58%,
+    rgba(0,0,0,0.82) 100%
+  );
+}
+.nbhd-card-body{
+  position:absolute;bottom:0;left:0;right:0;
+  padding:10px 14px 12px;
+  display:flex;flex-direction:column;gap:5px;
+}
+.nbhd-card-name{font-size:14px;font-weight:500;color:#fff}
+.nbhd-card-vibe{font-size:11px;color:rgba(255,255,255,0.65);line-height:1.35}
+.nbhd-card-tags{display:flex;flex-wrap:wrap;gap:4px;margin-top:1px}
+.nbhd-card-tag{
+  font-size:10px;padding:2px 7px;border-radius:100px;
+  border:1px solid rgba(255,255,255,0.18);color:rgba(255,255,255,0.6);
+}
+.nbhd-card-footer{display:flex;align-items:center;justify-content:space-between;padding-top:4px}
+.nbhd-card-count{font-size:10px;color:rgba(255,255,255,0.45)}
+.nbhd-card-visitor{font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:var(--accent);opacity:.8}
+.nbhd-card-credit{
+  position:absolute;top:6px;right:8px;
+  font-size:8px;color:rgba(255,255,255,0.28);
+}
+</style>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet"/>
+</head>
+<body>
+<div class="label">Option C — Text overlaid on photo</div>
+<div class="desc">Card height = photo only (16:9). Text + tags float over a gradient on the bottom half. No body section below the photo.</div>
+<div class="nbhd-card">
+  <img class="nbhd-card-photo" src="https://images.unsplash.com/photo-1499856871958-5b9627545d1a?w=700&q=80" alt="Le Marais"/>
+  <div class="nbhd-card-overlay"></div>
+  <div class="nbhd-card-credit">J. Doe / Unsplash</div>
+  <div class="nbhd-card-body">
+    <div class="nbhd-card-name">Le Marais</div>
+    <div class="nbhd-card-vibe">Artsy, walkable, café culture</div>
+    <div class="nbhd-card-tags">
+      <span class="nbhd-card-tag">first-timers</span>
+      <span class="nbhd-card-tag">walkable</span>
+      <span class="nbhd-card-tag">culture</span>
+    </div>
+    <div class="nbhd-card-footer">
+      <span class="nbhd-card-count">142 hotels</span>
+      <span class="nbhd-card-visitor">First visit</span>
+    </div>
+  </div>
+</div>
+</body>
+</html>

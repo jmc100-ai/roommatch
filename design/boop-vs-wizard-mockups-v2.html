@@ -1,0 +1,824 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Boop VS Wizard — Mockups v2 (navy)</title>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400&family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --page-bg:    #eae5d8;   /* light cream backdrop */
+    --card:       #1d3a6a;   /* navy card */
+    --card-2:     #1c2f52;   /* deeper navy */
+    --card-line:  rgba(255,255,255,0.08);
+    --ink:        #0c1934;
+    --ink-muted:  rgba(234,229,216,0.78);
+    --chip-bg:    #f1ece0;   /* warm off-white */
+    --chip-ink:   #0c1934;
+    --chip-sel:   #f1c232;   /* amber / gold */
+    --chip-sel-ink:#1a1405;
+    --teal:       #3ba8c5;
+    --teal-deep:  #2d91ac;
+    --pin:        #d8372f;   /* map pin red */
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0;
+    background: var(--page-bg);
+    color: var(--ink);
+    font-family: 'DM Sans', system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  .page { padding: 48px 40px 80px; max-width: 2100px; margin: 0 auto; }
+  .page-title {
+    font-family: 'Cormorant Garamond', serif;
+    font-weight: 300;
+    font-size: 36px;
+    margin: 0 0 6px;
+    letter-spacing: 0.01em;
+    color: #0c1934;
+  }
+  .page-title em { color: #c48a1e; font-style: italic; font-weight: 400; }
+  .page-sub {
+    color: #4b556e;
+    font-size: 13px;
+    margin-bottom: 40px;
+    max-width: 760px;
+    line-height: 1.6;
+  }
+  .section-label {
+    font-size: 11px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: #6d6f7a;
+    margin: 48px 0 18px;
+    font-weight: 600;
+  }
+  .section-label:first-of-type { margin-top: 8px; }
+
+  /* ── Mobile card (the "navy rectangle" in reference) */
+  .m-row {
+    display: grid;
+    grid-template-columns: repeat(5, 300px);
+    gap: 28px;
+    justify-content: start;
+  }
+  .m-wrap { display: flex; flex-direction: column; gap: 10px; }
+  .m-card {
+    width: 300px;
+    height: 600px;
+    border-radius: 20px;
+    background: var(--card);
+    padding: 22px 16px 18px;
+    position: relative;
+    box-shadow: 0 18px 40px rgba(12, 25, 52, 0.28);
+    color: #fff;
+    display: flex;
+    flex-direction: column;
+  }
+  .m-caption {
+    font-size: 11px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: #6d6f7a;
+    text-align: center;
+    margin-top: 4px;
+    font-weight: 600;
+  }
+
+  /* card header */
+  .card-head {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 12px;
+    min-height: 20px;
+  }
+  .card-head .q {
+    flex: 1;
+    text-align: center;
+    font-family: 'Cormorant Garamond', serif;
+    font-weight: 400;
+    font-size: 18px;
+    line-height: 1.25;
+    letter-spacing: 0.005em;
+    color: #f5efe0;
+    padding: 0 18px;
+  }
+  .card-head .q .tiny { display:block; font-family: 'DM Sans', sans-serif; font-size: 11px; font-weight: 500; color: var(--ink-muted); margin-top: 4px; letter-spacing: 0; }
+  .card-head .chev {
+    position: absolute;
+    top: 20px; right: 16px;
+    width: 22px; height: 22px;
+    border-radius: 50%;
+    border: 1px solid rgba(255,255,255,0.35);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 11px;
+    color: rgba(255,255,255,0.85);
+    font-weight: 600;
+    cursor: pointer;
+    background: rgba(255,255,255,0.02);
+  }
+
+  /* combined split-image "VS" tile */
+  .vs-tile {
+    position: relative;
+    flex: 1;
+    min-height: 320px;
+    border-radius: 16px;
+    overflow: hidden;
+    border: 1px solid rgba(255,255,255,0.08);
+    margin-bottom: 12px;
+    background: #000;
+  }
+  .vs-tile .half {
+    position: absolute;
+    top: 0; bottom: 0;
+    width: 50%;
+    background-size: cover;
+    background-position: center;
+  }
+  .vs-tile .half.left { left: 0; clip-path: polygon(0 0, 100% 0, 96% 100%, 0 100%); }
+  .vs-tile .half.right { right: 0; clip-path: polygon(4% 0, 100% 0, 100% 100%, 0 100%); }
+  .vs-tile .seam {
+    position: absolute;
+    top: 0; bottom: 0;
+    left: 50%;
+    width: 2px;
+    margin-left: -1px;
+    background: rgba(255,255,255,0.55);
+    box-shadow: 0 0 10px rgba(255,255,255,0.35);
+  }
+  .vs-badge {
+    position: absolute;
+    left: 50%; top: 50%;
+    transform: translate(-50%, -50%);
+    width: 44px; height: 44px;
+    border-radius: 50%;
+    background: #123767;
+    border: 2px solid #fff;
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 700; font-size: 12px;
+    color: #fff;
+    letter-spacing: 0.08em;
+    box-shadow: 0 4px 14px rgba(0,0,0,0.45);
+    z-index: 3;
+  }
+
+  /* pill chip buttons (full-width, stacked) */
+  .pills { display: flex; flex-direction: column; gap: 9px; }
+  .pill {
+    width: 100%;
+    height: 40px;
+    border-radius: 100px;
+    background: var(--chip-bg);
+    color: var(--chip-ink);
+    border: none;
+    font-family: 'DM Sans', sans-serif;
+    font-weight: 600;
+    font-size: 13.5px;
+    letter-spacing: 0.01em;
+    display: flex; align-items: center; justify-content: center;
+    gap: 8px;
+    position: relative;
+    cursor: pointer;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.12);
+  }
+  .pill .arr {
+    position: absolute;
+    right: 16px;
+    color: #6d6f7a;
+    font-size: 12px;
+    font-weight: 700;
+  }
+  .pill.sel { background: var(--chip-sel); color: var(--chip-sel-ink); }
+  .pill.sel .arr { color: #4a3a08; }
+
+  /* Screen 4: stacked map cards inside the navy card */
+  .stacked { display: flex; flex-direction: column; gap: 10px; flex: 1; }
+  .map-card {
+    position: relative;
+    flex: 1;
+    min-height: 0;
+    border-radius: 12px;
+    overflow: hidden;
+    background: #e4e6d4;
+    border: 1px solid rgba(255,255,255,0.08);
+    cursor: pointer;
+  }
+  .map-card.sel { box-shadow: 0 0 0 2px var(--chip-sel); }
+  .map-card svg { display: block; width: 100%; height: 100%; }
+  .map-card .caption {
+    position: absolute;
+    left: 50%;
+    bottom: 10px;
+    transform: translateX(-50%);
+    background: rgba(255,255,255,0.92);
+    color: var(--chip-ink);
+    padding: 7px 14px;
+    border-radius: 100px;
+    font-size: 12.5px;
+    font-weight: 600;
+    white-space: nowrap;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.18);
+  }
+  .map-card.sel .caption { background: var(--chip-sel); }
+
+  /* Screen 5: 2x2 attribute grid */
+  .attr2x2 {
+    flex: 1;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: 1fr 1fr;
+    gap: 10px;
+    margin-bottom: 12px;
+  }
+  .attr-tile {
+    position: relative;
+    border-radius: 10px;
+    overflow: hidden;
+    border: 1px solid rgba(255,255,255,0.08);
+    cursor: pointer;
+  }
+  .attr-tile.sel {
+    box-shadow: 0 0 0 2px var(--chip-sel);
+  }
+  .attr-tile .img { position: absolute; inset: 0; background-size: cover; background-position: center; }
+  .attr-tile .grad { position: absolute; inset: 0; background: linear-gradient(180deg, rgba(0,0,0,0) 40%, rgba(0,0,0,0.82) 100%); }
+  .attr-tile .name {
+    position: absolute;
+    left: 8px; right: 8px; bottom: 8px;
+    color: #fff;
+    font-weight: 600;
+    font-size: 11.5px;
+    display: flex; justify-content: space-between; align-items: center;
+    text-shadow: 0 1px 3px rgba(0,0,0,0.8);
+  }
+  .attr-tile .tick {
+    width: 16px; height: 16px; border-radius: 50%;
+    border: 1.5px solid rgba(255,255,255,0.8);
+    background: rgba(0,0,0,0.25);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 9px; color: transparent;
+  }
+  .attr-tile.sel .tick {
+    background: var(--chip-sel); border-color: var(--chip-sel); color: #1a1405;
+  }
+  .next-btn {
+    width: 100%;
+    height: 42px;
+    border-radius: 100px;
+    border: none;
+    background: var(--teal);
+    color: #fff;
+    font-family: 'DM Sans', sans-serif;
+    font-weight: 700;
+    font-size: 14px;
+    letter-spacing: 0.02em;
+    cursor: pointer;
+    box-shadow: 0 6px 16px rgba(59,168,197,0.38);
+  }
+
+  /* Progress dots */
+  .prog {
+    display: flex;
+    justify-content: center;
+    gap: 5px;
+    margin-bottom: 8px;
+  }
+  .prog i {
+    width: 5px; height: 5px; border-radius: 50%;
+    background: rgba(255,255,255,0.22);
+  }
+  .prog i.done { background: var(--chip-sel); opacity: 0.55; }
+  .prog i.cur  { background: var(--chip-sel); width: 18px; border-radius: 3px; }
+
+  /* ──────── Desktop ──────── */
+  .d-stack { display: flex; flex-direction: column; gap: 30px; }
+  .d-frame {
+    width: 1520px;
+    height: 720px;
+    border-radius: 14px;
+    background: #fff;
+    box-shadow: 0 18px 40px rgba(12,25,52,0.12);
+    position: relative;
+    overflow: hidden;
+    border: 1px solid rgba(12,25,52,0.10);
+  }
+  .d-frame .browser {
+    display: flex; align-items: center; gap: 8px;
+    height: 34px; padding: 0 14px;
+    background: #f5f3eb;
+    border-bottom: 1px solid rgba(12,25,52,0.08);
+  }
+  .d-frame .dot { width: 10px; height: 10px; border-radius: 50%; background: #d7d4c9; }
+  .d-frame .dot.red { background: #ff5f57; } .d-frame .dot.yel { background: #febc2e; } .d-frame .dot.grn { background: #28c840; }
+  .d-frame .url { margin-left: 20px; font-size: 11px; color: #7a7668; letter-spacing: 0.04em; }
+
+  .d-body {
+    position: absolute;
+    inset: 34px 0 0 0;
+    background: var(--page-bg);
+    padding: 40px 60px;
+    display: grid;
+    grid-template-columns: 1fr 640px;
+    gap: 64px;
+    align-items: center;
+  }
+  .d-caption {
+    font-size: 12px; color: #6d6f7a; letter-spacing: 0.16em;
+    text-transform: uppercase; margin: 0 0 14px 4px; font-weight: 600;
+  }
+  .d-caption .pill-tag {
+    display: inline-block; font-size: 10px; padding: 3px 9px; border-radius: 100px;
+    border: 1px solid rgba(12,25,52,0.2); color: #c48a1e; margin-left: 10px; letter-spacing: 0.08em;
+  }
+
+  .d-left h1 {
+    font-family: 'Cormorant Garamond', serif;
+    font-weight: 300;
+    font-size: 52px;
+    line-height: 1.08;
+    margin: 12px 0 18px;
+    color: #0c1934;
+    max-width: 480px;
+  }
+  .d-left h1 em { color: #c48a1e; font-style: italic; font-weight: 400; }
+  .d-left .eyebrow {
+    font-size: 11px; letter-spacing: 0.22em; text-transform: uppercase;
+    color: #6d6f7a; font-weight: 600;
+  }
+  .d-left .sub {
+    color: #3a4363;
+    font-size: 15px; line-height: 1.6;
+    max-width: 460px;
+  }
+  .d-left .dots-d {
+    display: flex; gap: 7px; margin: 10px 0 8px;
+  }
+  .d-left .dots-d i {
+    width: 7px; height: 7px; border-radius: 50%;
+    background: rgba(12,25,52,0.12);
+  }
+  .d-left .dots-d i.done { background: var(--chip-sel); opacity: 0.6; }
+  .d-left .dots-d i.cur  { background: var(--chip-sel); width: 24px; border-radius: 4px; }
+  .d-left .skip {
+    margin-top: 28px;
+    font-size: 13px; color: #6d6f7a;
+  }
+  .d-left .skip a {
+    color: #3a4363; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; font-weight: 500;
+  }
+  .d-left .kbd {
+    display: inline-block;
+    padding: 2px 8px;
+    border: 1px solid rgba(12,25,52,0.18);
+    border-radius: 6px;
+    font-size: 11px;
+    color: #3a4363;
+    background: #fff;
+    margin-right: 4px;
+  }
+  .d-left .kbd-line { margin-top: 18px; font-size: 12px; color: #6d6f7a; }
+
+  /* Desktop card (navy, wider than mobile) */
+  .d-card {
+    width: 640px;
+    height: 560px;
+    border-radius: 24px;
+    background: var(--card);
+    padding: 28px 28px 24px;
+    position: relative;
+    box-shadow: 0 24px 60px rgba(12,25,52,0.25);
+    color: #fff;
+    display: flex;
+    flex-direction: column;
+  }
+  .d-card .card-head .q { font-size: 22px; }
+  .d-card .card-head .chev { top: 26px; right: 24px; width: 28px; height: 28px; font-size: 13px; }
+  .d-card .vs-tile { min-height: 380px; border-radius: 18px; margin-bottom: 16px; }
+  .d-card .vs-badge { width: 60px; height: 60px; font-size: 16px; border-width: 3px; }
+  .d-card .pills { flex-direction: row; gap: 12px; }
+  .d-card .pill { height: 46px; font-size: 15px; }
+  .d-card .map-card .caption { font-size: 14px; padding: 9px 18px; }
+  .d-card .attr2x2 { gap: 12px; }
+  .d-card .attr-tile .name { font-size: 13.5px; }
+  .d-card .next-btn { height: 48px; font-size: 15px; }
+
+  .d-flag {
+    position: absolute; top: 16px; right: 20px;
+    font-size: 10px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: rgba(255,255,255,0.55);
+    font-weight: 600;
+  }
+</style>
+</head>
+<body>
+<div class="page">
+  <h1 class="page-title">vibe <em>VS</em> wizard — <em>v2</em> navy design</h1>
+  <div class="page-sub">Matching your latest reference: navy card on cream backdrop, amber selected chips, teal "Next". Screens 1-3 use one split-image tile with a VS seam. Screen 4 stacks two map cards (no VS). Screen 5 is a 2×2 attribute grid (Balcony / Spa-like Bathroom / Spacious Room / Work Desk) with a teal Next.</div>
+
+  <div class="section-label">Mobile flow · 5 screens, tap-to-advance</div>
+  <div class="m-row">
+
+    <!-- MOBILE 1 -->
+    <div class="m-wrap">
+      <div class="m-card">
+        <div class="card-head">
+          <div class="q">Which would you rather <em>wake up</em> in?</div>
+          <div class="chev">›</div>
+        </div>
+        <div class="prog"><i class="cur"></i><i></i><i></i><i></i><i></i></div>
+        <div class="vs-tile">
+          <div class="half left"  style="background-image:url('https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?auto=format&fit=crop&w=900&q=80')"></div>
+          <div class="half right" style="background-image:url('https://images.unsplash.com/photo-1522708323590-d24dbb6b0267?auto=format&fit=crop&w=900&q=80')"></div>
+          <div class="seam"></div>
+          <div class="vs-badge">VS</div>
+        </div>
+        <div class="pills">
+          <button class="pill">Sleek &amp; Modern <span class="arr">›</span></button>
+          <button class="pill sel">Cozy &amp; Charming <span class="arr">›</span></button>
+        </div>
+      </div>
+      <div class="m-caption">Screen 1 · Room aesthetic</div>
+    </div>
+
+    <!-- MOBILE 2 -->
+    <div class="m-wrap">
+      <div class="m-card">
+        <div class="card-head">
+          <div class="q">Step outside — <em>what feels right?</em></div>
+          <div class="chev">›</div>
+        </div>
+        <div class="prog"><i class="done"></i><i class="cur"></i><i></i><i></i><i></i></div>
+        <div class="vs-tile">
+          <div class="half left"  style="background-image:url('https://images.unsplash.com/photo-1509042239860-f550ce710b93?auto=format&fit=crop&w=900&q=80')"></div>
+          <div class="half right" style="background-image:url('https://images.unsplash.com/photo-1519331379826-f10be5486c6f?auto=format&fit=crop&w=900&q=80')"></div>
+          <div class="seam"></div>
+          <div class="vs-badge">VS</div>
+        </div>
+        <div class="pills">
+          <button class="pill">Vibrant &amp; Busy <span class="arr">›</span></button>
+          <button class="pill sel">Quiet &amp; Relaxed <span class="arr">›</span></button>
+        </div>
+      </div>
+      <div class="m-caption">Screen 2 · Street energy</div>
+    </div>
+
+    <!-- MOBILE 3 -->
+    <div class="m-wrap">
+      <div class="m-card">
+        <div class="card-head">
+          <div class="q">What matters <em>more</em>?</div>
+          <div class="chev">›</div>
+        </div>
+        <div class="prog"><i class="done"></i><i class="done"></i><i class="cur"></i><i></i><i></i></div>
+        <div class="vs-tile">
+          <div class="half left"  style="background-image:url('https://images.unsplash.com/photo-1578683010236-d716f9a3f461?auto=format&fit=crop&w=900&q=80')"></div>
+          <div class="half right" style="background-image:url('https://images.unsplash.com/photo-1611892440504-42a792e24d32?auto=format&fit=crop&w=900&q=80')"></div>
+          <div class="seam"></div>
+          <div class="vs-badge">VS</div>
+        </div>
+        <div class="pills">
+          <button class="pill sel">Polished Comfort <span class="arr">›</span></button>
+          <button class="pill">Unique Personality <span class="arr">›</span></button>
+        </div>
+      </div>
+      <div class="m-caption">Screen 3 · Hotel character</div>
+    </div>
+
+    <!-- MOBILE 4 : stacked map cards -->
+    <div class="m-wrap">
+      <div class="m-card">
+        <div class="card-head">
+          <div class="q">Where would you <em>stay</em>?</div>
+          <div class="chev">›</div>
+        </div>
+        <div class="prog"><i class="done"></i><i class="done"></i><i class="done"></i><i class="cur"></i><i></i></div>
+        <div class="stacked">
+          <div class="map-card sel">
+            <!-- central cluster -->
+            <svg viewBox="0 0 300 180" preserveAspectRatio="xMidYMid slice" xmlns="http://www.w3.org/2000/svg">
+              <rect width="300" height="180" fill="#e3e3cd"/>
+              <g stroke="#c6c7ab" stroke-width="1.2" fill="none">
+                <path d="M0,30 Q150,40 300,25"/>
+                <path d="M0,70 Q150,85 300,65"/>
+                <path d="M0,120 Q150,135 300,115"/>
+                <path d="M80,0 L95,180"/>
+                <path d="M170,0 L185,180"/>
+                <path d="M230,0 L240,180"/>
+              </g>
+              <!-- river -->
+              <path d="M0,95 Q80,80 160,92 T300,85" stroke="#92c5d4" stroke-width="8" fill="none" opacity="0.75"/>
+              <!-- blobs for neighbourhoods (iconic buildings) -->
+              <rect x="60" y="55" width="24" height="18" fill="#a95a3d" rx="1"/>
+              <rect x="66" y="48" width="12" height="10" fill="#8d4a30" rx="1"/>
+              <rect x="215" y="45" width="22" height="22" fill="#b88b4d" rx="1"/>
+              <rect x="126" y="112" width="20" height="16" fill="#c49c57" rx="1"/>
+              <!-- central pin -->
+              <g transform="translate(150,85)">
+                <path d="M0,-22 C10,-22 14,-14 14,-8 C14,2 0,16 0,16 C0,16 -14,2 -14,-8 C-14,-14 -10,-22 0,-22 Z" fill="#d8372f"/>
+                <circle cx="0" cy="-10" r="4.5" fill="#fff"/>
+              </g>
+            </svg>
+            <div class="caption">Popular Central Area</div>
+          </div>
+          <div class="map-card">
+            <svg viewBox="0 0 300 180" preserveAspectRatio="xMidYMid slice" xmlns="http://www.w3.org/2000/svg">
+              <rect width="300" height="180" fill="#e3e3cd"/>
+              <g stroke="#c6c7ab" stroke-width="1.2" fill="none">
+                <path d="M0,30 Q150,40 300,25"/>
+                <path d="M0,70 Q150,85 300,65"/>
+                <path d="M0,120 Q150,135 300,115"/>
+                <path d="M80,0 L95,180"/>
+                <path d="M170,0 L185,180"/>
+                <path d="M230,0 L240,180"/>
+              </g>
+              <path d="M0,95 Q80,80 160,92 T300,85" stroke="#92c5d4" stroke-width="8" fill="none" opacity="0.75"/>
+              <!-- trendy local shapes: small townhouses clustered right side + upper left -->
+              <g fill="#4a6e56">
+                <rect x="38" y="40" width="18" height="16" rx="1"/>
+                <polygon points="38,40 47,30 56,40"/>
+              </g>
+              <g fill="#7a9b82">
+                <rect x="225" y="120" width="18" height="18" rx="1"/>
+                <polygon points="225,120 234,110 243,120"/>
+                <rect x="248" y="125" width="14" height="14" rx="1"/>
+                <polygon points="248,125 255,118 262,125"/>
+              </g>
+              <!-- upper-left pin -->
+              <g transform="translate(60,50)">
+                <path d="M0,-20 C9,-20 13,-13 13,-7 C13,1 0,14 0,14 C0,14 -13,1 -13,-7 C-13,-13 -9,-20 0,-20 Z" fill="#d8372f"/>
+                <circle cx="0" cy="-9" r="4" fill="#fff"/>
+              </g>
+            </svg>
+            <div class="caption">Trendy Local Spot</div>
+          </div>
+        </div>
+      </div>
+      <div class="m-caption">Screen 4 · Location (stacked)</div>
+    </div>
+
+    <!-- MOBILE 5 -->
+    <div class="m-wrap">
+      <div class="m-card">
+        <div class="card-head">
+          <div class="q">Pick what matters <em>most</em> in your room<span class="tiny">Choose 1 – 2</span></div>
+          <div class="chev">›</div>
+        </div>
+        <div class="prog"><i class="done"></i><i class="done"></i><i class="done"></i><i class="done"></i><i class="cur"></i></div>
+        <div class="attr2x2">
+          <div class="attr-tile sel">
+            <div class="img" style="background-image:url('https://images.unsplash.com/photo-1566073771259-6a8506099945?auto=format&fit=crop&w=700&q=80')"></div>
+            <div class="grad"></div>
+            <div class="name"><span>Balcony View</span><span class="tick">✓</span></div>
+          </div>
+          <div class="attr-tile">
+            <div class="img" style="background-image:url('https://images.unsplash.com/photo-1552321554-5fefe8c9ef14?auto=format&fit=crop&w=700&q=80')"></div>
+            <div class="grad"></div>
+            <div class="name"><span>Spa-like Bathroom</span><span class="tick"></span></div>
+          </div>
+          <div class="attr-tile sel">
+            <div class="img" style="background-image:url('https://images.unsplash.com/photo-1590490360182-c33d57733427?auto=format&fit=crop&w=700&q=80')"></div>
+            <div class="grad"></div>
+            <div class="name"><span>Spacious Room</span><span class="tick">✓</span></div>
+          </div>
+          <div class="attr-tile">
+            <div class="img" style="background-image:url('https://images.unsplash.com/photo-1631049307264-da0ec9d70304?auto=format&fit=crop&w=700&q=80')"></div>
+            <div class="grad"></div>
+            <div class="name"><span>Work Desk</span><span class="tick"></span></div>
+          </div>
+        </div>
+        <button class="next-btn">Next</button>
+      </div>
+      <div class="m-caption">Screen 5 · Room must-haves (1–2)</div>
+    </div>
+
+  </div>
+
+  <div class="section-label">Desktop flow · same 5 screens, 1440-viewport</div>
+  <div class="d-stack">
+
+    <!-- DESKTOP 1 -->
+    <div>
+      <div class="d-frame">
+        <div class="browser"><span class="dot red"></span><span class="dot yel"></span><span class="dot grn"></span><span class="url">https://www.travelboop.com/ — vibe</span></div>
+        <div class="d-body">
+          <div class="d-left">
+            <div class="eyebrow">Step 1 of 5 · Room aesthetic</div>
+            <div class="dots-d"><i class="cur"></i><i></i><i></i><i></i><i></i></div>
+            <h1>Which would you rather <em>wake up</em> in?</h1>
+            <div class="sub">Tap the one that speaks to you. We use this to seed your room-photo search, and it lightly nudges the neighbourhood match.</div>
+            <div class="kbd-line"><span class="kbd">←</span> <span class="kbd">→</span> to choose &nbsp; · &nbsp; <span class="kbd">Space</span> to skip</div>
+            <div class="skip"><a>No preference — skip this question</a></div>
+          </div>
+          <div class="d-card">
+            <div class="d-flag">Step 1 / 5</div>
+            <div class="card-head">
+              <div class="q">Which would you rather wake up in?</div>
+              <div class="chev">›</div>
+            </div>
+            <div class="vs-tile">
+              <div class="half left"  style="background-image:url('https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?auto=format&fit=crop&w=1200&q=80')"></div>
+              <div class="half right" style="background-image:url('https://images.unsplash.com/photo-1522708323590-d24dbb6b0267?auto=format&fit=crop&w=1200&q=80')"></div>
+              <div class="seam"></div>
+              <div class="vs-badge">VS</div>
+            </div>
+            <div class="pills">
+              <button class="pill">Sleek &amp; Modern <span class="arr">›</span></button>
+              <button class="pill sel">Cozy &amp; Charming <span class="arr">›</span></button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="d-caption">Desktop · Screen 1 <span class="pill-tag">Room seed + Nbhd nudge</span></div>
+    </div>
+
+    <!-- DESKTOP 2 -->
+    <div>
+      <div class="d-frame">
+        <div class="browser"><span class="dot red"></span><span class="dot yel"></span><span class="dot grn"></span><span class="url">https://www.travelboop.com/ — vibe</span></div>
+        <div class="d-body">
+          <div class="d-left">
+            <div class="eyebrow">Step 2 of 5 · Neighbourhood energy</div>
+            <div class="dots-d"><i class="done"></i><i class="cur"></i><i></i><i></i><i></i></div>
+            <h1>Step outside — <em>what feels right?</em></h1>
+            <div class="sub">Photos come from <em>Paris</em> whenever we have them — cafe terraces in Le Marais vs. the Canal Saint-Martin towpath. Drives walkability/nightlife vs. green/calm weighting.</div>
+            <div class="skip"><a>No preference — skip this question</a></div>
+          </div>
+          <div class="d-card">
+            <div class="d-flag">Step 2 / 5</div>
+            <div class="card-head">
+              <div class="q">Step outside — what feels right?</div>
+              <div class="chev">›</div>
+            </div>
+            <div class="vs-tile">
+              <div class="half left"  style="background-image:url('https://images.unsplash.com/photo-1509042239860-f550ce710b93?auto=format&fit=crop&w=1200&q=80')"></div>
+              <div class="half right" style="background-image:url('https://images.unsplash.com/photo-1519331379826-f10be5486c6f?auto=format&fit=crop&w=1200&q=80')"></div>
+              <div class="seam"></div>
+              <div class="vs-badge">VS</div>
+            </div>
+            <div class="pills">
+              <button class="pill">Vibrant &amp; Busy <span class="arr">›</span></button>
+              <button class="pill sel">Quiet &amp; Relaxed <span class="arr">›</span></button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="d-caption">Desktop · Screen 2 <span class="pill-tag">Neighbourhood</span></div>
+    </div>
+
+    <!-- DESKTOP 3 -->
+    <div>
+      <div class="d-frame">
+        <div class="browser"><span class="dot red"></span><span class="dot yel"></span><span class="dot grn"></span><span class="url">https://www.travelboop.com/ — vibe</span></div>
+        <div class="d-body">
+          <div class="d-left">
+            <div class="eyebrow">Step 3 of 5 · Hotel character</div>
+            <div class="dots-d"><i class="done"></i><i class="done"></i><i class="cur"></i><i></i><i></i></div>
+            <h1>What matters <em>more</em>?</h1>
+            <div class="sub">Five-star polish (marble bathroom, spa, concierge) vs. boutique character (quirky wallpaper, bold art, design-forward). Slides the luxury ↔ local axis.</div>
+            <div class="skip"><a>No preference — skip this question</a></div>
+          </div>
+          <div class="d-card">
+            <div class="d-flag">Step 3 / 5</div>
+            <div class="card-head">
+              <div class="q">What matters more?</div>
+              <div class="chev">›</div>
+            </div>
+            <div class="vs-tile">
+              <div class="half left"  style="background-image:url('https://images.unsplash.com/photo-1578683010236-d716f9a3f461?auto=format&fit=crop&w=1200&q=80')"></div>
+              <div class="half right" style="background-image:url('https://images.unsplash.com/photo-1611892440504-42a792e24d32?auto=format&fit=crop&w=1200&q=80')"></div>
+              <div class="seam"></div>
+              <div class="vs-badge">VS</div>
+            </div>
+            <div class="pills">
+              <button class="pill sel">Polished Comfort <span class="arr">›</span></button>
+              <button class="pill">Unique Personality <span class="arr">›</span></button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="d-caption">Desktop · Screen 3 <span class="pill-tag">Room + Nbhd</span></div>
+    </div>
+
+    <!-- DESKTOP 4 -->
+    <div>
+      <div class="d-frame" style="height:760px">
+        <div class="browser"><span class="dot red"></span><span class="dot yel"></span><span class="dot grn"></span><span class="url">https://www.travelboop.com/ — vibe</span></div>
+        <div class="d-body">
+          <div class="d-left">
+            <div class="eyebrow">Step 4 of 5 · Location</div>
+            <div class="dots-d"><i class="done"></i><i class="done"></i><i class="done"></i><i class="cur"></i><i></i></div>
+            <h1>Where would you <em>stay</em>?</h1>
+            <div class="sub">Real <em>Paris</em> — the top map shows central pins (1st–8th arrondissements), the bottom shows trendy local clusters (Le Marais, Belleville, Canal St-Martin). Pin counts come from <code>neighborhoods.hotel_count</code>.</div>
+            <div class="skip"><a>No preference — skip this question</a></div>
+          </div>
+          <div class="d-card" style="height:620px">
+            <div class="d-flag">Step 4 / 5</div>
+            <div class="card-head">
+              <div class="q">Where would you stay?</div>
+              <div class="chev">›</div>
+            </div>
+            <div class="stacked">
+              <div class="map-card sel">
+                <svg viewBox="0 0 600 220" preserveAspectRatio="xMidYMid slice" xmlns="http://www.w3.org/2000/svg">
+                  <rect width="600" height="220" fill="#e3e3cd"/>
+                  <g stroke="#c6c7ab" stroke-width="1.2" fill="none">
+                    <path d="M0,38 Q300,50 600,32"/><path d="M0,88 Q300,104 600,80"/><path d="M0,150 Q300,166 600,140"/>
+                    <path d="M150,0 L170,220"/><path d="M310,0 L330,220"/><path d="M450,0 L465,220"/>
+                  </g>
+                  <path d="M0,118 Q150,100 300,112 T600,102" stroke="#92c5d4" stroke-width="10" fill="none" opacity="0.75"/>
+                  <rect x="120" y="70" width="24" height="18" fill="#a95a3d" rx="1"/>
+                  <rect x="128" y="62" width="12" height="10" fill="#8d4a30" rx="1"/>
+                  <rect x="420" y="56" width="26" height="26" fill="#b88b4d" rx="1"/>
+                  <rect x="250" y="146" width="22" height="18" fill="#c49c57" rx="1"/>
+                  <rect x="350" y="66" width="16" height="18" fill="#a7794a" rx="1"/>
+                  <g transform="translate(300,105)">
+                    <path d="M0,-26 C12,-26 17,-16 17,-9 C17,3 0,19 0,19 C0,19 -17,3 -17,-9 C-17,-16 -12,-26 0,-26 Z" fill="#d8372f"/>
+                    <circle cx="0" cy="-12" r="5.5" fill="#fff"/>
+                  </g>
+                </svg>
+                <div class="caption">Popular Central Area · 217 hotels</div>
+              </div>
+              <div class="map-card">
+                <svg viewBox="0 0 600 220" preserveAspectRatio="xMidYMid slice" xmlns="http://www.w3.org/2000/svg">
+                  <rect width="600" height="220" fill="#e3e3cd"/>
+                  <g stroke="#c6c7ab" stroke-width="1.2" fill="none">
+                    <path d="M0,38 Q300,50 600,32"/><path d="M0,88 Q300,104 600,80"/><path d="M0,150 Q300,166 600,140"/>
+                    <path d="M150,0 L170,220"/><path d="M310,0 L330,220"/><path d="M450,0 L465,220"/>
+                  </g>
+                  <path d="M0,118 Q150,100 300,112 T600,102" stroke="#92c5d4" stroke-width="10" fill="none" opacity="0.75"/>
+                  <g fill="#4a6e56">
+                    <rect x="80" y="54" width="20" height="18" rx="1"/><polygon points="80,54 90,42 100,54"/>
+                    <rect x="108" y="58" width="16" height="14" rx="1"/><polygon points="108,58 116,48 124,58"/>
+                  </g>
+                  <g fill="#7a9b82">
+                    <rect x="460" y="150" width="22" height="22" rx="1"/><polygon points="460,150 471,138 482,150"/>
+                    <rect x="490" y="158" width="18" height="16" rx="1"/><polygon points="490,158 499,148 508,158"/>
+                    <rect x="516" y="152" width="18" height="22" rx="1"/><polygon points="516,152 525,140 534,152"/>
+                  </g>
+                  <g transform="translate(115,55)">
+                    <path d="M0,-22 C10,-22 14,-13 14,-7 C14,3 0,16 0,16 C0,16 -14,3 -14,-7 C-14,-13 -10,-22 0,-22 Z" fill="#d8372f"/>
+                    <circle cx="0" cy="-10" r="4.5" fill="#fff"/>
+                  </g>
+                </svg>
+                <div class="caption">Trendy Local Spot · 89 hotels</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="d-caption">Desktop · Screen 4 <span class="pill-tag">Stacked real maps · uses lat/lng</span></div>
+    </div>
+
+    <!-- DESKTOP 5 -->
+    <div>
+      <div class="d-frame">
+        <div class="browser"><span class="dot red"></span><span class="dot yel"></span><span class="dot grn"></span><span class="url">https://www.travelboop.com/ — vibe</span></div>
+        <div class="d-body">
+          <div class="d-left">
+            <div class="eyebrow">Step 5 of 5 · Room must-haves</div>
+            <div class="dots-d"><i class="done"></i><i class="done"></i><i class="done"></i><i class="done"></i><i class="cur"></i></div>
+            <h1>Pick what matters <em>most</em> in your room</h1>
+            <div class="sub">Choose <em>1 or 2</em>. These map to feature flags on our room index (<code>balcony</code>, <code>soaking_tub</code>, <code>work_desk</code>…) and get stitched into the HyDE search query.</div>
+            <div class="skip" style="margin-top:22px;font-weight:600;color:#0c1934"><strong>2 of 2</strong> picked · Balcony View + Spacious Room</div>
+          </div>
+          <div class="d-card">
+            <div class="d-flag">Step 5 / 5</div>
+            <div class="card-head">
+              <div class="q">Pick what matters most in your room<span class="tiny">Choose 1 – 2</span></div>
+              <div class="chev">›</div>
+            </div>
+            <div class="attr2x2">
+              <div class="attr-tile sel">
+                <div class="img" style="background-image:url('https://images.unsplash.com/photo-1566073771259-6a8506099945?auto=format&fit=crop&w=900&q=80')"></div>
+                <div class="grad"></div>
+                <div class="name"><span>Balcony View</span><span class="tick">✓</span></div>
+              </div>
+              <div class="attr-tile">
+                <div class="img" style="background-image:url('https://images.unsplash.com/photo-1552321554-5fefe8c9ef14?auto=format&fit=crop&w=900&q=80')"></div>
+                <div class="grad"></div>
+                <div class="name"><span>Spa-like Bathroom</span><span class="tick"></span></div>
+              </div>
+              <div class="attr-tile sel">
+                <div class="img" style="background-image:url('https://images.unsplash.com/photo-1590490360182-c33d57733427?auto=format&fit=crop&w=900&q=80')"></div>
+                <div class="grad"></div>
+                <div class="name"><span>Spacious Room</span><span class="tick">✓</span></div>
+              </div>
+              <div class="attr-tile">
+                <div class="img" style="background-image:url('https://images.unsplash.com/photo-1631049307264-da0ec9d70304?auto=format&fit=crop&w=900&q=80')"></div>
+                <div class="grad"></div>
+                <div class="name"><span>Work Desk</span><span class="tick"></span></div>
+              </div>
+            </div>
+            <button class="next-btn">Next</button>
+          </div>
+        </div>
+      </div>
+      <div class="d-caption">Desktop · Screen 5 <span class="pill-tag">Seeds HyDE + feature flags</span></div>
+    </div>
+
+  </div>
+</div>
+</body>
+</html>

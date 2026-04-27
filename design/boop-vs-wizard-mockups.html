@@ -1,0 +1,1015 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Boop VS Wizard — Mockups</title>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400&family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --bg: #0c0c0e;
+    --panel: #111114;
+    --panel2: #17171c;
+    --border: rgba(255,255,255,0.08);
+    --border2: rgba(255,255,255,0.14);
+    --muted: #9a9590;
+    --muted2: #6d6964;
+    --accent: #c9a96e;
+    --accent2: #e8d5b0;
+    --accent-soft: rgba(201,169,110,0.18);
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; background: #070708; color: #efeae2;
+    font-family: 'DM Sans', system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  .page {
+    padding: 48px 40px 80px;
+    max-width: 2000px;
+    margin: 0 auto;
+  }
+  .page-title {
+    font-family: 'Cormorant Garamond', serif;
+    font-weight: 300;
+    font-size: 34px;
+    margin: 0 0 4px;
+    letter-spacing: 0.01em;
+  }
+  .page-title em { color: var(--accent); font-style: italic; font-weight: 400; }
+  .page-sub {
+    color: var(--muted);
+    font-size: 13px;
+    margin-bottom: 40px;
+    max-width: 720px;
+    line-height: 1.55;
+  }
+  .section-label {
+    font-size: 11px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin: 48px 0 18px;
+    font-weight: 500;
+  }
+  .section-label:first-of-type { margin-top: 8px; }
+
+  /* ── Mobile row */
+  .m-row {
+    display: grid;
+    grid-template-columns: repeat(5, 300px);
+    gap: 24px;
+    justify-content: start;
+  }
+  .m-frame {
+    width: 300px;
+    height: 640px;
+    border-radius: 36px;
+    background: var(--bg);
+    border: 1px solid rgba(255,255,255,0.10);
+    box-shadow: 0 18px 40px rgba(0,0,0,0.55);
+    padding: 22px 18px 20px;
+    position: relative;
+    overflow: hidden;
+  }
+  .m-frame::before {
+    content: "";
+    position: absolute;
+    top: 10px; left: 50%;
+    transform: translateX(-50%);
+    width: 90px; height: 6px;
+    background: #000;
+    border-radius: 4px;
+  }
+  .m-caption {
+    font-size: 11px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin: 10px 0 0 4px;
+  }
+
+  /* ── Desktop row */
+  .d-stack { display: flex; flex-direction: column; gap: 28px; }
+  .d-frame {
+    width: 1560px;
+    height: 740px;
+    border-radius: 14px;
+    background: var(--bg);
+    border: 1px solid rgba(255,255,255,0.09);
+    box-shadow: 0 12px 30px rgba(0,0,0,0.45);
+    position: relative;
+    overflow: hidden;
+  }
+  .d-frame .browser-chrome {
+    display: flex; align-items: center; gap: 8px;
+    height: 34px; padding: 0 14px;
+    background: #1a1a1f;
+    border-bottom: 1px solid rgba(255,255,255,0.06);
+  }
+  .d-frame .dot { width: 10px; height: 10px; border-radius: 50%; background: #3a3a40; }
+  .d-frame .dot.red { background: #ff5f57; }
+  .d-frame .dot.yel { background: #febc2e; }
+  .d-frame .dot.grn { background: #28c840; }
+  .d-frame .url {
+    margin-left: 18px;
+    font-size: 11px;
+    color: var(--muted);
+    letter-spacing: 0.04em;
+    font-family: 'DM Sans', sans-serif;
+  }
+  .d-frame-body {
+    position: absolute;
+    inset: 34px 0 0 0;
+    padding: 26px 56px 40px;
+    overflow: hidden;
+  }
+  .d-caption {
+    font-size: 12px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin: 0 0 14px 4px;
+    font-weight: 500;
+  }
+  .d-caption .pill {
+    display: inline-block;
+    font-size: 10px;
+    padding: 3px 8px;
+    border-radius: 100px;
+    border: 1px solid var(--border2);
+    color: var(--accent2);
+    margin-left: 10px;
+    letter-spacing: 0.08em;
+    vertical-align: middle;
+  }
+
+  /* ── Shared wizard chrome */
+  .top-nav {
+    display: flex; align-items: center; justify-content: space-between;
+    font-size: 10px; color: var(--muted);
+    letter-spacing: 0.14em; text-transform: uppercase;
+  }
+  .top-nav .brand {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 18px;
+    letter-spacing: 0.02em;
+    color: #efeae2;
+    text-transform: none;
+    font-weight: 400;
+  }
+  .top-nav .brand em { color: var(--accent); font-style: italic; }
+  .top-nav .nav-items { display: flex; gap: 18px; }
+  .top-nav .nav-items a { color: var(--muted); text-decoration: none; }
+  .top-nav .nav-items a.on { color: var(--accent); }
+  .top-nav .back {
+    display: inline-flex; align-items: center; gap: 6px;
+    color: var(--muted); cursor: pointer; font-weight: 500;
+  }
+
+  .step-info {
+    text-align: center;
+    font-size: 10px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-top: 8px;
+  }
+  .dots {
+    display: flex; justify-content: center; gap: 7px;
+    margin: 10px 0 22px;
+  }
+  .dots i {
+    width: 6px; height: 6px; border-radius: 50%;
+    background: rgba(255,255,255,0.12);
+    display: block;
+  }
+  .dots i.done { background: var(--accent); opacity: 0.55; }
+  .dots i.cur  { background: var(--accent); width: 22px; border-radius: 4px; }
+
+  .q-title {
+    font-family: 'Cormorant Garamond', serif;
+    font-weight: 300;
+    line-height: 1.15;
+    text-align: center;
+    margin: 0 auto 4px;
+    letter-spacing: 0.005em;
+  }
+  .q-sub {
+    text-align: center;
+    color: var(--muted);
+    font-size: 12px;
+    line-height: 1.55;
+    margin-bottom: 18px;
+  }
+  .q-sub em { color: var(--accent2); font-style: normal; font-weight: 500; }
+
+  /* VS tile layout */
+  .vs {
+    position: relative;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+  .tile {
+    position: relative;
+    border-radius: 16px;
+    overflow: hidden;
+    border: 1px solid var(--border);
+    aspect-ratio: 3 / 4;
+    cursor: pointer;
+    transition: transform 0.2s, border-color 0.2s, box-shadow 0.2s;
+  }
+  .tile.selected {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 2px rgba(201,169,110,0.25), 0 10px 28px rgba(0,0,0,0.5);
+  }
+  .tile .img {
+    position: absolute; inset: 0;
+    background-size: cover;
+    background-position: center;
+  }
+  .tile .grad {
+    position: absolute; inset: 0;
+    background: linear-gradient(180deg, rgba(0,0,0,0.0) 40%, rgba(0,0,0,0.78) 100%);
+  }
+  .vs-badge {
+    position: absolute;
+    left: 50%; top: 50%;
+    transform: translate(-50%, -50%);
+    width: 42px; height: 42px;
+    border-radius: 50%;
+    background: rgba(20,20,24,0.88);
+    border: 1px solid var(--border2);
+    backdrop-filter: blur(6px);
+    display: flex; align-items: center; justify-content: center;
+    font-family: 'DM Sans', sans-serif;
+    font-weight: 700;
+    font-size: 12px;
+    letter-spacing: 0.1em;
+    color: #fff;
+    z-index: 3;
+  }
+  .chip-row {
+    display: grid; grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin-top: 12px;
+  }
+  .chip {
+    padding: 10px 12px;
+    border-radius: 12px;
+    border: 1px solid var(--border2);
+    background: rgba(255,255,255,0.02);
+    color: #efeae2;
+    font-weight: 500;
+    font-size: 13px;
+    text-align: center;
+    letter-spacing: 0.01em;
+    transition: all 0.18s;
+  }
+  .chip.sel {
+    background: linear-gradient(180deg, var(--accent), #b8976a);
+    color: #0c0c0e;
+    border-color: transparent;
+    font-weight: 600;
+    box-shadow: 0 6px 18px rgba(201,169,110,0.25);
+  }
+  .chip .arr { color: inherit; opacity: 0.55; margin-left: 6px; font-size: 11px; }
+
+  .skip {
+    margin-top: 16px;
+    text-align: center;
+    font-size: 12px;
+    color: var(--muted2);
+    letter-spacing: 0.04em;
+  }
+  .skip a { color: var(--muted); text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
+
+  /* ── Screen 5: attribute grid */
+  .attr-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+  .attr-grid.three { grid-template-columns: repeat(3, 1fr); }
+  .attr-tile {
+    position: relative;
+    border-radius: 14px;
+    overflow: hidden;
+    border: 1px solid var(--border);
+    aspect-ratio: 4 / 3;
+    cursor: pointer;
+  }
+  .attr-tile.sel {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 2px rgba(201,169,110,0.25);
+  }
+  .attr-tile .img { position: absolute; inset: 0; background-size: cover; background-position: center; }
+  .attr-tile .grad { position: absolute; inset: 0; background: linear-gradient(180deg, rgba(0,0,0,0.0) 40%, rgba(0,0,0,0.78) 100%); }
+  .attr-tile .label {
+    position: absolute; left: 10px; right: 10px; bottom: 9px;
+    font-weight: 600;
+    font-size: 12.5px;
+    color: #fff;
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .attr-tile .tick {
+    width: 18px; height: 18px; border-radius: 50%;
+    border: 1.5px solid rgba(255,255,255,0.7);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 10px; color: transparent;
+    background: rgba(0,0,0,0.3);
+  }
+  .attr-tile.sel .tick {
+    background: var(--accent); border-color: var(--accent); color: #0c0c0e;
+  }
+  .picked-note {
+    margin-top: 14px;
+    text-align: center;
+    color: var(--muted);
+    font-size: 11.5px;
+  }
+  .picked-note strong { color: var(--accent2); font-weight: 600; }
+  .next-btn {
+    margin-top: 12px;
+    width: 100%;
+    padding: 14px 20px;
+    border-radius: 12px;
+    border: none;
+    background: var(--accent);
+    color: #0c0c0e;
+    font-weight: 700;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 13px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    cursor: pointer;
+  }
+
+  /* ── Map (Screen 4) */
+  .map-svg { width: 100%; height: 100%; display: block; }
+  .pin {
+    animation: none;
+  }
+
+  /* Desktop two-column */
+  .d-col {
+    display: grid;
+    grid-template-columns: 1fr 720px;
+    gap: 48px;
+    align-items: center;
+    height: 100%;
+    padding-top: 8px;
+  }
+  .d-col .left {
+    padding-right: 8px;
+  }
+  .d-col .eyebrow {
+    font-size: 11px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 12px;
+  }
+  .d-col .q-title { text-align: left; margin-left: 0; }
+  .d-col .q-sub { text-align: left; max-width: 480px; margin-left: 0; }
+  .d-col .dots-d {
+    display: flex; gap: 8px; margin-bottom: 14px;
+  }
+  .d-col .dots-d i {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: rgba(255,255,255,0.12);
+  }
+  .d-col .dots-d i.done { background: var(--accent); opacity: 0.55; }
+  .d-col .dots-d i.cur { background: var(--accent); width: 26px; border-radius: 4px; }
+  .d-col .q-meta {
+    display: flex; gap: 16px; margin-top: 28px;
+    font-size: 12px; color: var(--muted);
+  }
+  .d-col .q-meta .kbd {
+    background: rgba(255,255,255,0.05);
+    border: 1px solid var(--border);
+    padding: 2px 8px; border-radius: 6px;
+    font-family: 'DM Sans', sans-serif;
+    color: var(--accent2);
+    font-size: 11px;
+  }
+  .d-col .skip { margin-top: 22px; text-align: left; }
+  .d-vs {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+    position: relative;
+  }
+  .d-vs .tile { aspect-ratio: 4 / 5; border-radius: 20px; }
+  .d-vs .vs-badge { width: 64px; height: 64px; font-size: 16px; }
+  .d-vs .chip-row { grid-column: 1 / -1; margin-top: 14px; }
+  .d-vs .chip { padding: 14px 16px; font-size: 14px; border-radius: 14px; }
+
+  /* mobile frame font sizing */
+  .m-frame .q-title { font-size: 23px; max-width: 250px; }
+  .m-frame .q-sub { font-size: 11.5px; padding: 0 4px; }
+  .m-frame .chip { font-size: 12px; padding: 9px 8px; }
+  .m-frame .vs-badge { width: 34px; height: 34px; font-size: 10px; }
+
+  .d-col .q-title { font-size: 44px; line-height: 1.08; max-width: 520px; }
+  .d-col .q-title em { color: var(--accent); font-style: italic; }
+
+  /* screen 5 desktop layout */
+  .d-col.wide { grid-template-columns: 1fr 820px; }
+  .attr-grid-d {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 14px;
+  }
+  .attr-grid-d .attr-tile { aspect-ratio: 4 / 3.2; border-radius: 16px; }
+  .attr-grid-d .attr-tile .label { font-size: 14px; }
+
+  /* callouts next to desktop */
+  .callouts {
+    position: absolute;
+    right: -360px;
+    top: 60px;
+    width: 320px;
+    display: flex; flex-direction: column; gap: 16px;
+  }
+  .callout {
+    padding: 12px 14px;
+    background: #13131a;
+    border: 1px solid var(--border2);
+    border-radius: 10px;
+    font-size: 12px;
+    line-height: 1.5;
+    color: #cec9c1;
+  }
+  .callout .tag {
+    display: inline-block;
+    background: var(--accent-soft);
+    color: var(--accent2);
+    font-size: 10px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    padding: 2px 8px;
+    border-radius: 100px;
+    margin-bottom: 6px;
+    font-weight: 500;
+  }
+</style>
+</head>
+<body>
+<div class="page">
+  <h1 class="page-title">vibe <em>VS</em> wizard — mockups</h1>
+  <div class="page-sub">5 screens, each a playful this-or-that. Tap a tile to auto-advance. "Skip this" if you have no preference. Screen 5 switches to a 1-2-pick attribute grid so we can seed the room search on the final step.</div>
+
+  <div class="section-label">Mobile flow (5 screens, tap-to-advance)</div>
+  <div class="m-row">
+
+    <!-- ============ MOBILE SCREEN 1 ============ -->
+    <div>
+      <div class="m-frame">
+        <div class="step-info" style="margin-top:14px">Step 1 of 5</div>
+        <div class="dots">
+          <i class="cur"></i><i></i><i></i><i></i><i></i>
+        </div>
+        <h2 class="q-title">Which would you rather <em style="color:var(--accent);font-style:italic">wake up</em> in?</h2>
+        <div class="vs">
+          <div class="tile selected">
+            <div class="img" style="background-image:url('https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?auto=format&fit=crop&w=800&q=80')"></div>
+            <div class="grad"></div>
+          </div>
+          <div class="tile">
+            <div class="img" style="background-image:url('https://images.unsplash.com/photo-1522708323590-d24dbb6b0267?auto=format&fit=crop&w=800&q=80')"></div>
+            <div class="grad"></div>
+          </div>
+          <div class="vs-badge">VS</div>
+        </div>
+        <div class="chip-row">
+          <div class="chip sel">Sleek &amp; Modern</div>
+          <div class="chip">Warm &amp; Cozy</div>
+        </div>
+        <div class="skip"><a>No preference — skip</a></div>
+      </div>
+      <div class="m-caption">Screen 1 · Room aesthetic</div>
+    </div>
+
+    <!-- ============ MOBILE SCREEN 2 ============ -->
+    <div>
+      <div class="m-frame">
+        <div class="step-info" style="margin-top:14px">Step 2 of 5</div>
+        <div class="dots">
+          <i class="done"></i><i class="cur"></i><i></i><i></i><i></i>
+        </div>
+        <h2 class="q-title">Step outside — <em style="color:var(--accent);font-style:italic">what feels right?</em></h2>
+        <div class="vs">
+          <div class="tile">
+            <div class="img" style="background-image:url('https://images.unsplash.com/photo-1509042239860-f550ce710b93?auto=format&fit=crop&w=800&q=80')"></div>
+            <div class="grad"></div>
+          </div>
+          <div class="tile selected">
+            <div class="img" style="background-image:url('https://images.unsplash.com/photo-1519331379826-f10be5486c6f?auto=format&fit=crop&w=800&q=80')"></div>
+            <div class="grad"></div>
+          </div>
+          <div class="vs-badge">VS</div>
+        </div>
+        <div class="chip-row">
+          <div class="chip">Vibrant &amp; Busy</div>
+          <div class="chip sel">Quiet &amp; Relaxed</div>
+        </div>
+        <div class="skip"><a>No preference — skip</a></div>
+      </div>
+      <div class="m-caption">Screen 2 · Street energy</div>
+    </div>
+
+    <!-- ============ MOBILE SCREEN 3 ============ -->
+    <div>
+      <div class="m-frame">
+        <div class="step-info" style="margin-top:14px">Step 3 of 5</div>
+        <div class="dots">
+          <i class="done"></i><i class="done"></i><i class="cur"></i><i></i><i></i>
+        </div>
+        <h2 class="q-title">What matters <em style="color:var(--accent);font-style:italic">more</em>?</h2>
+        <div class="vs">
+          <div class="tile selected">
+            <div class="img" style="background-image:url('https://images.unsplash.com/photo-1578683010236-d716f9a3f461?auto=format&fit=crop&w=800&q=80')"></div>
+            <div class="grad"></div>
+          </div>
+          <div class="tile">
+            <div class="img" style="background-image:url('https://images.unsplash.com/photo-1611892440504-42a792e24d32?auto=format&fit=crop&w=800&q=80')"></div>
+            <div class="grad"></div>
+          </div>
+          <div class="vs-badge">VS</div>
+        </div>
+        <div class="chip-row">
+          <div class="chip sel">Polished Comfort</div>
+          <div class="chip">Unique Personality</div>
+        </div>
+        <div class="skip"><a>No preference — skip</a></div>
+      </div>
+      <div class="m-caption">Screen 3 · Hotel character</div>
+    </div>
+
+    <!-- ============ MOBILE SCREEN 4 ============ -->
+    <div>
+      <div class="m-frame">
+        <div class="step-info" style="margin-top:14px">Step 4 of 5</div>
+        <div class="dots">
+          <i class="done"></i><i class="done"></i><i class="done"></i><i class="cur"></i><i></i>
+        </div>
+        <h2 class="q-title">Where would you <em style="color:var(--accent);font-style:italic">stay</em>?</h2>
+        <div class="q-sub">Real map of <em>Paris</em></div>
+        <div class="vs">
+          <div class="tile selected" style="aspect-ratio:3/4;background:#111114">
+            <svg class="map-svg" viewBox="0 0 120 160" preserveAspectRatio="xMidYMid slice" xmlns="http://www.w3.org/2000/svg">
+              <defs>
+                <linearGradient id="mapBg1" x1="0" y1="0" x2="1" y2="1">
+                  <stop offset="0" stop-color="#1a1b22"/>
+                  <stop offset="1" stop-color="#0f1015"/>
+                </linearGradient>
+                <radialGradient id="clus1" cx="0.52" cy="0.5" r="0.28">
+                  <stop offset="0" stop-color="rgba(201,169,110,0.38)"/>
+                  <stop offset="1" stop-color="rgba(201,169,110,0.0)"/>
+                </radialGradient>
+              </defs>
+              <rect width="120" height="160" fill="url(#mapBg1)"/>
+              <g stroke="rgba(255,255,255,0.06)" stroke-width="0.5" fill="none">
+                <path d="M0,40 Q60,55 120,30"/>
+                <path d="M0,75 Q60,90 120,65"/>
+                <path d="M0,110 Q60,125 120,100"/>
+                <path d="M30,0 L40,160"/>
+                <path d="M70,0 L80,160"/>
+                <path d="M95,0 L100,160"/>
+              </g>
+              <path d="M0,82 Q30,68 62,80 T120,72" stroke="#2a4258" stroke-width="3" fill="none" opacity="0.75"/>
+              <circle cx="62" cy="80" r="34" fill="url(#clus1)"/>
+              <g fill="#c9a96e">
+                <circle cx="55" cy="72" r="2.8"/>
+                <circle cx="67" cy="70" r="2.8"/>
+                <circle cx="60" cy="82" r="2.8"/>
+                <circle cx="70" cy="85" r="2.8"/>
+                <circle cx="48" cy="82" r="2.4"/>
+                <circle cx="65" cy="94" r="2.4"/>
+                <circle cx="75" cy="78" r="2.2"/>
+              </g>
+            </svg>
+            <div style="position:absolute;left:10px;right:10px;bottom:10px;font-size:10px;color:#efeae2;text-shadow:0 1px 4px rgba(0,0,0,0.8);display:flex;justify-content:space-between;">
+              <span>7 neighbourhoods</span>
+              <span style="color:var(--accent2)">Central</span>
+            </div>
+          </div>
+          <div class="tile" style="aspect-ratio:3/4;background:#111114">
+            <svg class="map-svg" viewBox="0 0 120 160" preserveAspectRatio="xMidYMid slice" xmlns="http://www.w3.org/2000/svg">
+              <defs>
+                <radialGradient id="clus2a" cx="0.2" cy="0.3" r="0.2">
+                  <stop offset="0" stop-color="rgba(201,169,110,0.28)"/>
+                  <stop offset="1" stop-color="rgba(201,169,110,0.0)"/>
+                </radialGradient>
+                <radialGradient id="clus2b" cx="0.82" cy="0.78" r="0.22">
+                  <stop offset="0" stop-color="rgba(201,169,110,0.28)"/>
+                  <stop offset="1" stop-color="rgba(201,169,110,0.0)"/>
+                </radialGradient>
+              </defs>
+              <rect width="120" height="160" fill="url(#mapBg1)"/>
+              <g stroke="rgba(255,255,255,0.06)" stroke-width="0.5" fill="none">
+                <path d="M0,40 Q60,55 120,30"/>
+                <path d="M0,75 Q60,90 120,65"/>
+                <path d="M0,110 Q60,125 120,100"/>
+                <path d="M30,0 L40,160"/>
+                <path d="M70,0 L80,160"/>
+                <path d="M95,0 L100,160"/>
+              </g>
+              <path d="M0,82 Q30,68 62,80 T120,72" stroke="#2a4258" stroke-width="3" fill="none" opacity="0.75"/>
+              <circle cx="24" cy="48" r="20" fill="url(#clus2a)"/>
+              <circle cx="98" cy="125" r="22" fill="url(#clus2b)"/>
+              <g fill="#c9a96e">
+                <circle cx="22" cy="44" r="2.4"/>
+                <circle cx="28" cy="52" r="2.6"/>
+                <circle cx="18" cy="54" r="2.2"/>
+                <circle cx="32" cy="42" r="2.2"/>
+                <circle cx="94" cy="122" r="2.6"/>
+                <circle cx="102" cy="128" r="2.4"/>
+                <circle cx="98" cy="135" r="2.2"/>
+              </g>
+            </svg>
+            <div style="position:absolute;left:10px;right:10px;bottom:10px;font-size:10px;color:#efeae2;text-shadow:0 1px 4px rgba(0,0,0,0.8);display:flex;justify-content:space-between;">
+              <span>Le Marais + Belleville</span>
+              <span style="color:var(--accent2)">Local</span>
+            </div>
+          </div>
+          <div class="vs-badge">VS</div>
+        </div>
+        <div class="chip-row">
+          <div class="chip sel">Popular Central Area</div>
+          <div class="chip">Trendy Local Spot</div>
+        </div>
+        <div class="skip"><a>No preference — skip</a></div>
+      </div>
+      <div class="m-caption">Screen 4 · Real map, clustered pins</div>
+    </div>
+
+    <!-- ============ MOBILE SCREEN 5 ============ -->
+    <div>
+      <div class="m-frame">
+        <div class="step-info" style="margin-top:14px">Step 5 of 5</div>
+        <div class="dots">
+          <i class="done"></i><i class="done"></i><i class="done"></i><i class="done"></i><i class="cur"></i>
+        </div>
+        <h2 class="q-title">What matters most in your <em style="color:var(--accent);font-style:italic">room</em>?</h2>
+        <div class="q-sub">Pick <em>1–2</em></div>
+        <div class="attr-grid">
+          <div class="attr-tile sel">
+            <div class="img" style="background-image:url('https://images.unsplash.com/photo-1566073771259-6a8506099945?auto=format&fit=crop&w=600&q=80')"></div>
+            <div class="grad"></div>
+            <div class="label"><span>Balcony view</span><span class="tick">✓</span></div>
+          </div>
+          <div class="attr-tile">
+            <div class="img" style="background-image:url('https://images.unsplash.com/photo-1631049307264-da0ec9d70304?auto=format&fit=crop&w=600&q=80')"></div>
+            <div class="grad"></div>
+            <div class="label"><span>Work desk</span><span class="tick"></span></div>
+          </div>
+          <div class="attr-tile sel">
+            <div class="img" style="background-image:url('https://images.unsplash.com/photo-1552321554-5fefe8c9ef14?auto=format&fit=crop&w=600&q=80')"></div>
+            <div class="grad"></div>
+            <div class="label"><span>Soaking tub</span><span class="tick">✓</span></div>
+          </div>
+          <div class="attr-tile">
+            <div class="img" style="background-image:url('https://images.unsplash.com/photo-1560185007-cde436f6a4d0?auto=format&fit=crop&w=600&q=80')"></div>
+            <div class="grad"></div>
+            <div class="label"><span>City view</span><span class="tick"></span></div>
+          </div>
+          <div class="attr-tile">
+            <div class="img" style="background-image:url('https://images.unsplash.com/photo-1564540583246-934409427776?auto=format&fit=crop&w=600&q=80')"></div>
+            <div class="grad"></div>
+            <div class="label"><span>Rainfall shower</span><span class="tick"></span></div>
+          </div>
+          <div class="attr-tile">
+            <div class="img" style="background-image:url('https://images.unsplash.com/photo-1586105251261-72a756497a11?auto=format&fit=crop&w=600&q=80')"></div>
+            <div class="grad"></div>
+            <div class="label"><span>Kitchenette</span><span class="tick"></span></div>
+          </div>
+        </div>
+        <div class="picked-note"><strong>2 of 2</strong> picked · these seed your room search</div>
+        <button class="next-btn">See my matches →</button>
+      </div>
+      <div class="m-caption">Screen 5 · Room must-haves (1–2)</div>
+    </div>
+
+  </div>
+
+  <div class="section-label">Desktop flow (same 5 screens, 1440-viewport)</div>
+  <div class="d-stack">
+
+    <!-- ============ DESKTOP SCREEN 1 ============ -->
+    <div>
+      <div class="d-frame">
+        <div class="browser-chrome">
+          <span class="dot red"></span><span class="dot yel"></span><span class="dot grn"></span>
+          <span class="url">https://www.travelboop.com/ — vibe</span>
+        </div>
+        <div class="d-frame-body">
+          <div class="top-nav">
+            <div class="back">← Back to city</div>
+            <div class="brand">Travel<em>Boop</em></div>
+            <div class="nav-items"><a class="on">Search</a><a>Dates</a><a>GitHub</a></div>
+          </div>
+          <div class="d-col" style="margin-top:30px">
+            <div class="left">
+              <div class="eyebrow">Step 1 of 5 · Room aesthetic</div>
+              <div class="dots-d"><i class="cur"></i><i></i><i></i><i></i><i></i></div>
+              <h2 class="q-title">Which would you rather <em>wake up</em> in?</h2>
+              <div class="q-sub" style="font-size:14px;margin-top:14px">Tap the one that speaks to you. We'll use this to seed your room-photo search and lightly nudge which neighbourhoods feel like a match.</div>
+              <div class="q-meta">
+                <div><span class="kbd">←</span> <span class="kbd">→</span> to choose</div>
+                <div><span class="kbd">Space</span> to skip</div>
+              </div>
+              <div class="skip"><a>No preference — skip this question</a></div>
+            </div>
+            <div class="d-vs">
+              <div class="tile selected">
+                <div class="img" style="background-image:url('https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?auto=format&fit=crop&w=1000&q=80')"></div>
+                <div class="grad"></div>
+              </div>
+              <div class="tile">
+                <div class="img" style="background-image:url('https://images.unsplash.com/photo-1522708323590-d24dbb6b0267?auto=format&fit=crop&w=1000&q=80')"></div>
+                <div class="grad"></div>
+              </div>
+              <div class="vs-badge">VS</div>
+              <div class="chip-row">
+                <div class="chip sel">Sleek &amp; Modern</div>
+                <div class="chip">Warm &amp; Cozy</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="d-caption">Desktop · Screen 1 <span class="pill">Room + Nbhd</span></div>
+    </div>
+
+    <!-- ============ DESKTOP SCREEN 2 ============ -->
+    <div>
+      <div class="d-frame">
+        <div class="browser-chrome">
+          <span class="dot red"></span><span class="dot yel"></span><span class="dot grn"></span>
+          <span class="url">https://www.travelboop.com/ — vibe</span>
+        </div>
+        <div class="d-frame-body">
+          <div class="top-nav">
+            <div class="back">← Back</div>
+            <div class="brand">Travel<em>Boop</em></div>
+            <div class="nav-items"><a class="on">Search</a><a>Dates</a><a>GitHub</a></div>
+          </div>
+          <div class="d-col" style="margin-top:30px">
+            <div class="left">
+              <div class="eyebrow">Step 2 of 5 · Neighbourhood energy</div>
+              <div class="dots-d"><i class="done"></i><i class="cur"></i><i></i><i></i><i></i></div>
+              <h2 class="q-title">Step outside — <em>what feels right?</em></h2>
+              <div class="q-sub" style="font-size:14px;margin-top:14px">Photos are drawn from <em>Paris</em> whenever we have them (cafe terraces in Le Marais vs. Parc des Buttes-Chaumont). This drives walkability / nightlife vs. green / calm weighting.</div>
+              <div class="skip" style="margin-top:36px"><a>No preference — skip this question</a></div>
+            </div>
+            <div class="d-vs">
+              <div class="tile">
+                <div class="img" style="background-image:url('https://images.unsplash.com/photo-1509042239860-f550ce710b93?auto=format&fit=crop&w=1000&q=80')"></div>
+                <div class="grad"></div>
+              </div>
+              <div class="tile selected">
+                <div class="img" style="background-image:url('https://images.unsplash.com/photo-1519331379826-f10be5486c6f?auto=format&fit=crop&w=1000&q=80')"></div>
+                <div class="grad"></div>
+              </div>
+              <div class="vs-badge">VS</div>
+              <div class="chip-row">
+                <div class="chip">Vibrant &amp; Busy</div>
+                <div class="chip sel">Quiet &amp; Relaxed</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="d-caption">Desktop · Screen 2 <span class="pill">Neighbourhood</span></div>
+    </div>
+
+    <!-- ============ DESKTOP SCREEN 3 ============ -->
+    <div>
+      <div class="d-frame">
+        <div class="browser-chrome">
+          <span class="dot red"></span><span class="dot yel"></span><span class="dot grn"></span>
+          <span class="url">https://www.travelboop.com/ — vibe</span>
+        </div>
+        <div class="d-frame-body">
+          <div class="top-nav">
+            <div class="back">← Back</div>
+            <div class="brand">Travel<em>Boop</em></div>
+            <div class="nav-items"><a class="on">Search</a><a>Dates</a><a>GitHub</a></div>
+          </div>
+          <div class="d-col" style="margin-top:30px">
+            <div class="left">
+              <div class="eyebrow">Step 3 of 5 · Hotel character</div>
+              <div class="dots-d"><i class="done"></i><i class="done"></i><i class="cur"></i><i></i><i></i></div>
+              <h2 class="q-title">What matters <em>more</em>?</h2>
+              <div class="q-sub" style="font-size:14px;margin-top:14px">Five-star polish (marble, spa, concierge) vs. boutique character (wallpaper, quirk, design-forward). This slides the luxury ↔ local axis.</div>
+              <div class="skip" style="margin-top:36px"><a>No preference — skip this question</a></div>
+            </div>
+            <div class="d-vs">
+              <div class="tile selected">
+                <div class="img" style="background-image:url('https://images.unsplash.com/photo-1578683010236-d716f9a3f461?auto=format&fit=crop&w=1000&q=80')"></div>
+                <div class="grad"></div>
+              </div>
+              <div class="tile">
+                <div class="img" style="background-image:url('https://images.unsplash.com/photo-1611892440504-42a792e24d32?auto=format&fit=crop&w=1000&q=80')"></div>
+                <div class="grad"></div>
+              </div>
+              <div class="vs-badge">VS</div>
+              <div class="chip-row">
+                <div class="chip sel">Polished Comfort</div>
+                <div class="chip">Unique Personality</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="d-caption">Desktop · Screen 3 <span class="pill">Room + Nbhd</span></div>
+    </div>
+
+    <!-- ============ DESKTOP SCREEN 4 ============ -->
+    <div>
+      <div class="d-frame">
+        <div class="browser-chrome">
+          <span class="dot red"></span><span class="dot yel"></span><span class="dot grn"></span>
+          <span class="url">https://www.travelboop.com/ — vibe</span>
+        </div>
+        <div class="d-frame-body">
+          <div class="top-nav">
+            <div class="back">← Back</div>
+            <div class="brand">Travel<em>Boop</em></div>
+            <div class="nav-items"><a class="on">Search</a><a>Dates</a><a>GitHub</a></div>
+          </div>
+          <div class="d-col" style="margin-top:30px">
+            <div class="left">
+              <div class="eyebrow">Step 4 of 5 · Location</div>
+              <div class="dots-d"><i class="done"></i><i class="done"></i><i class="done"></i><i class="cur"></i><i></i></div>
+              <h2 class="q-title">Where would you <em>stay</em>?</h2>
+              <div class="q-sub" style="font-size:14px;margin-top:14px">Both sides show <em>real Paris</em> — central pins cluster around the 1st–8th; local pins mark Le Marais, Belleville, Canal Saint-Martin. Pin counts come straight from <code>neighborhoods.hotel_count</code>.</div>
+              <div class="skip" style="margin-top:36px"><a>No preference — skip this question</a></div>
+            </div>
+            <div class="d-vs">
+              <div class="tile selected" style="aspect-ratio:4/5;background:#111114">
+                <svg class="map-svg" viewBox="0 0 120 150" preserveAspectRatio="xMidYMid slice" xmlns="http://www.w3.org/2000/svg">
+                  <defs>
+                    <linearGradient id="dmapBg" x1="0" y1="0" x2="1" y2="1">
+                      <stop offset="0" stop-color="#1a1b22"/>
+                      <stop offset="1" stop-color="#0f1015"/>
+                    </linearGradient>
+                    <radialGradient id="dclus1" cx="0.5" cy="0.5" r="0.32">
+                      <stop offset="0" stop-color="rgba(201,169,110,0.4)"/>
+                      <stop offset="1" stop-color="rgba(201,169,110,0.0)"/>
+                    </radialGradient>
+                  </defs>
+                  <rect width="120" height="150" fill="url(#dmapBg)"/>
+                  <g stroke="rgba(255,255,255,0.07)" stroke-width="0.5" fill="none">
+                    <path d="M0,34 Q60,48 120,28"/>
+                    <path d="M0,68 Q60,82 120,62"/>
+                    <path d="M0,105 Q60,120 120,98"/>
+                    <path d="M28,0 L38,150"/>
+                    <path d="M68,0 L78,150"/>
+                    <path d="M92,0 L98,150"/>
+                  </g>
+                  <path d="M0,76 Q30,60 62,74 T120,66" stroke="#2a4258" stroke-width="3.5" fill="none" opacity="0.75"/>
+                  <circle cx="60" cy="75" r="38" fill="url(#dclus1)"/>
+                  <g fill="#c9a96e">
+                    <circle cx="55" cy="65" r="2.6"/>
+                    <circle cx="65" cy="68" r="2.8"/>
+                    <circle cx="72" cy="76" r="2.6"/>
+                    <circle cx="58" cy="80" r="2.8"/>
+                    <circle cx="48" cy="74" r="2.4"/>
+                    <circle cx="66" cy="86" r="2.4"/>
+                    <circle cx="50" cy="86" r="2.2"/>
+                    <circle cx="78" cy="70" r="2.4"/>
+                    <circle cx="42" cy="68" r="2.0"/>
+                  </g>
+                </svg>
+                <div style="position:absolute;left:12px;right:12px;bottom:12px;color:#efeae2;text-shadow:0 1px 6px rgba(0,0,0,0.9);display:flex;justify-content:space-between;align-items:flex-end;">
+                  <div>
+                    <div style="font-size:16px;font-weight:600">Popular Central</div>
+                    <div style="font-size:11px;color:var(--muted);margin-top:2px">Louvre · Saint-Germain · Opéra</div>
+                  </div>
+                  <div style="font-size:12px;color:var(--accent2)">217 hotels</div>
+                </div>
+              </div>
+              <div class="tile" style="aspect-ratio:4/5;background:#111114">
+                <svg class="map-svg" viewBox="0 0 120 150" preserveAspectRatio="xMidYMid slice" xmlns="http://www.w3.org/2000/svg">
+                  <defs>
+                    <radialGradient id="dclus2a" cx="0.24" cy="0.3" r="0.22">
+                      <stop offset="0" stop-color="rgba(201,169,110,0.3)"/>
+                      <stop offset="1" stop-color="rgba(201,169,110,0.0)"/>
+                    </radialGradient>
+                    <radialGradient id="dclus2b" cx="0.82" cy="0.78" r="0.24">
+                      <stop offset="0" stop-color="rgba(201,169,110,0.3)"/>
+                      <stop offset="1" stop-color="rgba(201,169,110,0.0)"/>
+                    </radialGradient>
+                  </defs>
+                  <rect width="120" height="150" fill="url(#dmapBg)"/>
+                  <g stroke="rgba(255,255,255,0.07)" stroke-width="0.5" fill="none">
+                    <path d="M0,34 Q60,48 120,28"/>
+                    <path d="M0,68 Q60,82 120,62"/>
+                    <path d="M0,105 Q60,120 120,98"/>
+                    <path d="M28,0 L38,150"/>
+                    <path d="M68,0 L78,150"/>
+                    <path d="M92,0 L98,150"/>
+                  </g>
+                  <path d="M0,76 Q30,60 62,74 T120,66" stroke="#2a4258" stroke-width="3.5" fill="none" opacity="0.75"/>
+                  <circle cx="28" cy="44" r="22" fill="url(#dclus2a)"/>
+                  <circle cx="96" cy="118" r="24" fill="url(#dclus2b)"/>
+                  <g fill="#c9a96e">
+                    <circle cx="24" cy="40" r="2.4"/>
+                    <circle cx="32" cy="48" r="2.6"/>
+                    <circle cx="18" cy="50" r="2.2"/>
+                    <circle cx="36" cy="38" r="2.2"/>
+                    <circle cx="22" cy="54" r="2.0"/>
+                    <circle cx="94" cy="114" r="2.6"/>
+                    <circle cx="102" cy="120" r="2.4"/>
+                    <circle cx="98" cy="128" r="2.4"/>
+                    <circle cx="88" cy="122" r="2.2"/>
+                    <circle cx="105" cy="110" r="2.0"/>
+                  </g>
+                </svg>
+                <div style="position:absolute;left:12px;right:12px;bottom:12px;color:#efeae2;text-shadow:0 1px 6px rgba(0,0,0,0.9);display:flex;justify-content:space-between;align-items:flex-end;">
+                  <div>
+                    <div style="font-size:16px;font-weight:600">Trendy Local</div>
+                    <div style="font-size:11px;color:var(--muted);margin-top:2px">Le Marais · Belleville · Canal St-Martin</div>
+                  </div>
+                  <div style="font-size:12px;color:var(--accent2)">89 hotels</div>
+                </div>
+              </div>
+              <div class="vs-badge">VS</div>
+              <div class="chip-row">
+                <div class="chip sel">Popular Central Area</div>
+                <div class="chip">Trendy Local Spot</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="d-caption">Desktop · Screen 4 <span class="pill">Real map · uses hotels_cache lat/lng</span></div>
+    </div>
+
+    <!-- ============ DESKTOP SCREEN 5 ============ -->
+    <div>
+      <div class="d-frame" style="height:780px">
+        <div class="browser-chrome">
+          <span class="dot red"></span><span class="dot yel"></span><span class="dot grn"></span>
+          <span class="url">https://www.travelboop.com/ — vibe</span>
+        </div>
+        <div class="d-frame-body">
+          <div class="top-nav">
+            <div class="back">← Back</div>
+            <div class="brand">Travel<em>Boop</em></div>
+            <div class="nav-items"><a class="on">Search</a><a>Dates</a><a>GitHub</a></div>
+          </div>
+          <div class="d-col wide" style="margin-top:30px">
+            <div class="left">
+              <div class="eyebrow">Step 5 of 5 · Room must-haves</div>
+              <div class="dots-d"><i class="done"></i><i class="done"></i><i class="done"></i><i class="done"></i><i class="cur"></i></div>
+              <h2 class="q-title">Pick what matters <em>most</em> in your room</h2>
+              <div class="q-sub" style="font-size:14px;margin-top:14px">Choose <em>1 or 2</em>. These map directly to feature flags in the room index (<code>balcony</code>, <code>soaking_tub</code>, <code>rainfall_shower</code>…) and get stitched into the HyDE query.</div>
+              <div class="picked-note" style="text-align:left;margin-top:18px;font-size:13px;"><strong>2 of 2</strong> selected · Balcony view + Soaking tub</div>
+              <button class="next-btn" style="width:auto;padding:14px 36px;margin-top:18px">See my matches →</button>
+            </div>
+            <div class="attr-grid-d">
+              <div class="attr-tile sel">
+                <div class="img" style="background-image:url('https://images.unsplash.com/photo-1566073771259-6a8506099945?auto=format&fit=crop&w=800&q=80')"></div>
+                <div class="grad"></div>
+                <div class="label"><span>Balcony view</span><span class="tick">✓</span></div>
+              </div>
+              <div class="attr-tile">
+                <div class="img" style="background-image:url('https://images.unsplash.com/photo-1631049307264-da0ec9d70304?auto=format&fit=crop&w=800&q=80')"></div>
+                <div class="grad"></div>
+                <div class="label"><span>Work desk</span><span class="tick"></span></div>
+              </div>
+              <div class="attr-tile sel">
+                <div class="img" style="background-image:url('https://images.unsplash.com/photo-1552321554-5fefe8c9ef14?auto=format&fit=crop&w=800&q=80')"></div>
+                <div class="grad"></div>
+                <div class="label"><span>Soaking tub</span><span class="tick">✓</span></div>
+              </div>
+              <div class="attr-tile">
+                <div class="img" style="background-image:url('https://images.unsplash.com/photo-1560185007-cde436f6a4d0?auto=format&fit=crop&w=800&q=80')"></div>
+                <div class="grad"></div>
+                <div class="label"><span>City view</span><span class="tick"></span></div>
+              </div>
+              <div class="attr-tile">
+                <div class="img" style="background-image:url('https://images.unsplash.com/photo-1564540583246-934409427776?auto=format&fit=crop&w=800&q=80')"></div>
+                <div class="grad"></div>
+                <div class="label"><span>Rainfall shower</span><span class="tick"></span></div>
+              </div>
+              <div class="attr-tile">
+                <div class="img" style="background-image:url('https://images.unsplash.com/photo-1586105251261-72a756497a11?auto=format&fit=crop&w=800&q=80')"></div>
+                <div class="grad"></div>
+                <div class="label"><span>Kitchenette</span><span class="tick"></span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="d-caption">Desktop · Screen 5 <span class="pill">Seeds HyDE + feature flags</span></div>
+    </div>
+
+  </div>
+</div>
+</body>
+</html>

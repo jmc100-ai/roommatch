@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Screen 6 Dealbreakers List Preview</title>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;600&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet" />
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+:root{
+  --bg:#0c0c0e;
+  --surface:#121318;
+  --card:#181b22;
+  --row:#1f232c;
+  --border:rgba(255,255,255,.12);
+  --text:#ece8df;
+  --muted:#9f9a92;
+  --accent:#c9a96e;
+  --ok:#7fc7a7;
+}
+body{
+  font-family:'DM Sans',sans-serif;
+  background:var(--bg);
+  color:var(--text);
+  min-height:100vh;
+  padding:18px;
+}
+.wrap{
+  max-width:1100px;
+  margin:0 auto;
+  border:1px solid var(--border);
+  border-radius:18px;
+  background:linear-gradient(180deg,#17181d 0%,#111218 100%);
+  padding:14px;
+}
+.step{
+  font-size:11px;
+  letter-spacing:.13em;
+  text-transform:uppercase;
+  color:var(--muted);
+}
+h1{
+  margin-top:6px;
+  font-family:'Cormorant Garamond',serif;
+  font-size:36px;
+  line-height:1.08;
+  font-weight:400;
+}
+h1 em{ color:var(--accent); font-style:italic; }
+.sub{
+  margin-top:6px;
+  max-width:820px;
+  color:var(--muted);
+  font-size:13px;
+  line-height:1.45;
+}
+.list{
+  margin-top:12px;
+  display:grid;
+  gap:8px;
+}
+.row{
+  width:100%;
+  border:1px solid var(--border);
+  border-radius:14px;
+  overflow:hidden;
+  background:var(--card);
+  display:grid;
+  grid-template-columns:40% 1fr;
+  min-height:112px;
+  cursor:pointer;
+  transition:transform .15s,border-color .15s,box-shadow .15s;
+}
+.row:hover{
+  transform:translateY(-1px);
+  border-color:rgba(201,169,110,.45);
+  box-shadow:0 10px 26px rgba(0,0,0,.3);
+}
+.row.active{
+  border-color:rgba(224,192,144,.95);
+  box-shadow:0 0 0 2px rgba(224,192,144,.2), 0 14px 28px rgba(0,0,0,.36);
+}
+.media{
+  position:relative;
+  min-height:112px;
+}
+.media img{
+  width:100%;
+  height:100%;
+  object-fit:cover;
+  display:block;
+}
+.grad{
+  position:absolute;
+  inset:0;
+  background:linear-gradient(90deg,rgba(0,0,0,.02),rgba(0,0,0,.26));
+}
+.content{
+  position:relative;
+  padding:12px 12px 10px 12px;
+  display:flex;
+  flex-direction:column;
+  justify-content:space-between;
+}
+.topline{
+  display:flex;
+  justify-content:space-between;
+  gap:10px;
+  align-items:flex-start;
+}
+.label{
+  font-size:11px;
+  color:#b9b3a8;
+  letter-spacing:.08em;
+  text-transform:uppercase;
+}
+.title{
+  margin-top:3px;
+  font-size:20px;
+  line-height:1.14;
+  font-weight:700;
+  color:#fff;
+}
+.hint{
+  margin-top:4px;
+  color:#d9d4c9;
+  font-size:12px;
+}
+.check{
+  width:28px;
+  height:28px;
+  border-radius:999px;
+  border:1px solid rgba(255,255,255,.3);
+  display:grid;
+  place-items:center;
+  color:#fff;
+  font-size:14px;
+  background:rgba(0,0,0,.28);
+  flex:0 0 auto;
+}
+.row.active .check{
+  background:#e0c090;
+  color:#17120b;
+  border-color:#e0c090;
+}
+.tag{
+  margin-top:6px;
+  display:inline-flex;
+  align-self:flex-start;
+  font-size:11px;
+  border-radius:999px;
+  border:1px solid rgba(127,199,167,.28);
+  color:var(--ok);
+  background:rgba(127,199,167,.08);
+  padding:5px 9px;
+}
+.footer{
+  margin-top:10px;
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  gap:10px;
+  flex-wrap:wrap;
+}
+.status{
+  font-size:13px;
+  color:var(--muted);
+}
+.btn{
+  border:1px solid var(--border);
+  border-radius:10px;
+  background:var(--row);
+  color:var(--text);
+  padding:10px 12px;
+  font-size:13px;
+}
+.btn.primary{
+  background:var(--accent);
+  color:#120f0a;
+  border-color:rgba(201,169,110,.55);
+  font-weight:700;
+}
+@media (max-width: 780px){
+  body{ padding:16px; }
+  .wrap{ padding:14px; }
+  h1{ font-size:32px; }
+  .row{
+    grid-template-columns:1fr;
+    min-height:unset;
+  }
+  .media{
+    aspect-ratio:16/9;
+    min-height:unset;
+  }
+  .title{ font-size:21px; }
+}
+</style>
+</head>
+<body>
+  <main class="wrap">
+    <div class="step">Screen 6 · Dealbreakers (horizontal list concept)</div>
+    <h1>Any <em>dealbreakers?</em></h1>
+    <p class="sub">
+      Visual-first list layout: wide horizontal images like a swipeable feed, clearer at-a-glance meaning, and easier comparison than equal tiles.
+    </p>
+
+    <section class="list" id="list">
+      <button class="row" data-id="noisy">
+        <div class="media">
+          <img src="https://images.unsplash.com/photo-1449824913935-59a10b8d2000?auto=format&fit=crop&w=1400&q=80" alt="Busy city street" />
+          <div class="grad"></div>
+        </div>
+        <div class="content">
+          <div>
+            <div class="topline">
+              <div>
+                <div class="label">Dealbreaker</div>
+                <div class="title">Too noisy</div>
+                <div class="hint">Busy streets and traffic wear me out.</div>
+              </div>
+              <div class="check">+</div>
+            </div>
+          </div>
+          <div class="tag">Filter for calmer streets</div>
+        </div>
+      </button>
+
+      <button class="row active" data-id="far">
+        <div class="media">
+          <img src="https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=1400&q=80" alt="Far from city center" />
+          <div class="grad"></div>
+        </div>
+        <div class="content">
+          <div>
+            <div class="topline">
+              <div>
+                <div class="label">Dealbreaker</div>
+                <div class="title">Too far from things</div>
+                <div class="hint">I want easy access to central spots.</div>
+              </div>
+              <div class="check">✓</div>
+            </div>
+          </div>
+          <div class="tag">Boost central convenience</div>
+        </div>
+      </button>
+
+      <button class="row" data-id="touristy">
+        <div class="media">
+          <img src="https://images.unsplash.com/photo-1481437156560-3205f6a55735?auto=format&fit=crop&w=1400&q=80" alt="Crowded tourist street" />
+          <div class="grad"></div>
+        </div>
+        <div class="content">
+          <div>
+            <div class="topline">
+              <div>
+                <div class="label">Dealbreaker</div>
+                <div class="title">Too touristy</div>
+                <div class="hint">Skip oversaturated streets with heavy crowds.</div>
+              </div>
+              <div class="check">+</div>
+            </div>
+          </div>
+          <div class="tag">Prioritize local vibe</div>
+        </div>
+      </button>
+
+      <button class="row" data-id="lowFood">
+        <div class="media">
+          <img src="https://images.unsplash.com/photo-1448630360428-65456885c650?auto=format&fit=crop&w=1400&q=80" alt="Quiet residential street" />
+          <div class="grad"></div>
+        </div>
+        <div class="content">
+          <div>
+            <div class="topline">
+              <div>
+                <div class="label">Dealbreaker</div>
+                <div class="title">Not enough food options</div>
+                <div class="hint">I need plenty of restaurants nearby.</div>
+              </div>
+              <div class="check">+</div>
+            </div>
+          </div>
+          <div class="tag">Boost food-dense neighborhoods</div>
+        </div>
+      </button>
+    </section>
+
+    <div class="footer">
+      <div class="status" id="status">Selected: Too far from things</div>
+      <button class="btn primary">Apply dealbreakers</button>
+    </div>
+  </main>
+
+<script>
+const list = [...document.querySelectorAll('.row')];
+const status = document.getElementById('status');
+list.forEach((row) => {
+  row.addEventListener('click', () => {
+    row.classList.toggle('active');
+    const on = row.classList.contains('active');
+    row.querySelector('.check').textContent = on ? '✓' : '+';
+    const active = list.filter(r => r.classList.contains('active'));
+    status.textContent = active.length
+      ? 'Selected: ' + active.map(r => r.querySelector('.title').textContent).join(' · ')
+      : 'No dealbreakers selected yet';
+  });
+});
+</script>
+</body>
+</html>

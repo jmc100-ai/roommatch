@@ -1,0 +1,1124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>TravelBoop - Find Your Vibe Prototype</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --bg: #0c0c0e;
+  --surface: #15161b;
+  --card: #1c1e24;
+  --row: #232631;
+  --text: #ece9e3;
+  --muted: #c3cad8;
+  --accent: #c8a56a;
+  --accent-2: #7ac1a5;
+  --danger: #d57a7a;
+  --border: rgba(255,255,255,0.09);
+  --radius: 16px;
+}
+body {
+  background: radial-gradient(1200px 800px at 80% -20%, #25202f 0%, #0c0c0e 52%);
+  color: var(--text);
+  font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+  min-height: 100vh;
+  padding: 18px;
+}
+.app {
+  max-width: 1120px;
+  margin: 0 auto;
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  overflow: hidden;
+  background: rgba(13,14,18,0.7);
+  box-shadow: 0 24px 70px rgba(0,0,0,0.45);
+}
+.top {
+  padding: 14px 18px 10px;
+  border-bottom: 1px solid var(--border);
+  background: rgba(15,16,20,0.86);
+  backdrop-filter: blur(8px);
+}
+.brand {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+}
+.logo {
+  font-size: 18px;
+  letter-spacing: 0.02em;
+  font-weight: 700;
+}
+.logo span { color: var(--accent); }
+.badge {
+  border: 1px solid rgba(200,165,106,0.4);
+  color: var(--accent);
+  border-radius: 999px;
+  font-size: 11px;
+  padding: 5px 10px;
+}
+.progress-wrap { margin-top: 6px; }
+.progress-head {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  color: var(--muted);
+  margin-bottom: 7px;
+}
+.bar {
+  width: 100%;
+  height: 8px;
+  background: rgba(255,255,255,0.08);
+  border-radius: 999px;
+  overflow: hidden;
+}
+.fill {
+  height: 100%;
+  width: 0%;
+  background: linear-gradient(90deg, #b38a4b 0%, #e3c189 60%, #e6d4b8 100%);
+  transition: width 0.25s ease;
+}
+.content {
+  display: block;
+  min-height: 640px;
+}
+.left {
+  padding: 18px;
+}
+@media (min-width: 900px) {
+  .left {
+    padding: 24px;
+  }
+}
+
+.hero {
+  border-radius: 14px;
+  border: 1px solid var(--border);
+  overflow: hidden;
+  position: relative;
+  min-height: 250px;
+  background: #12141a;
+  margin-bottom: 16px;
+}
+.hero img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.hero .overlay {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to bottom, rgba(0,0,0,0.1), rgba(0,0,0,0.66));
+}
+.hero-text {
+  position: absolute;
+  left: 14px;
+  right: 14px;
+  bottom: 12px;
+}
+.hero-kicker { font-size: 11px; color: rgba(255,255,255,0.78); letter-spacing: 0.08em; text-transform: uppercase; }
+.hero-title { font-size: 28px; font-weight: 700; margin-top: 4px; }
+.hero-sub { font-size: 13px; color: rgba(255,255,255,0.86); margin-top: 3px; max-width: 42ch; line-height: 1.42; }
+
+.question {
+  margin-bottom: 12px;
+}
+.q-kicker {
+  font-size: 11px;
+  color: var(--muted);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.q-title {
+  margin-top: 5px;
+  font-size: 25px;
+  line-height: 1.22;
+  font-weight: 650;
+}
+.q-sub {
+  margin-top: 7px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.grid {
+  display: grid;
+  gap: 14px;
+  margin-top: 12px;
+  justify-content: center;
+}
+.grid.two { grid-template-columns: 1fr; }
+@media (min-width: 780px) {
+  .grid.two { grid-template-columns: repeat(2, minmax(320px, 430px)); }
+}
+.grid.trip-context {
+  grid-template-columns: repeat(2, minmax(260px, 420px));
+}
+@media (max-width: 680px) {
+  .grid.trip-context {
+    grid-template-columns: 1fr;
+  }
+}
+.opt {
+  background: #151922;
+  border: 1px solid var(--border);
+  border-radius: 13px;
+  padding: 0;
+  min-height: 0;
+  cursor: pointer;
+  overflow: hidden;
+  transition: transform 0.16s ease, border-color 0.16s ease, box-shadow 0.16s ease;
+}
+.opt.trip-context {
+  min-height: 0;
+}
+.opt:hover {
+  transform: translateY(-1px);
+  border-color: rgba(200,165,106,0.45);
+  box-shadow: 0 10px 25px rgba(0,0,0,0.28);
+}
+.opt-media {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  min-height: 260px;
+  background: #1f2430;
+}
+@media (max-width: 779px) {
+  .opt-media {
+    min-height: 220px;
+  }
+}
+.opt-media img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.opt-grad {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to bottom, rgba(0,0,0,0.08), rgba(0,0,0,0.66));
+}
+.opt-body {
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  bottom: 10px;
+}
+.opt-emoji { font-size: 24px; text-shadow: 0 2px 10px rgba(0,0,0,0.6); }
+.opt-title { margin-top: 6px; font-size: 17px; font-weight: 700; color: #ffffff; text-shadow: 0 2px 10px rgba(0,0,0,0.7); }
+.opt-note { margin-top: 5px; font-size: 13px; color: #edf2ff; line-height: 1.42; text-shadow: 0 2px 10px rgba(0,0,0,0.7); }
+
+.slider-wrap {
+  margin-top: 14px;
+  border: 1px solid var(--border);
+  border-radius: 13px;
+  padding: 12px;
+  background: rgba(255,255,255,0.02);
+}
+.env-visual {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  min-height: 154px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+  margin-bottom: 10px;
+  background: #12141b;
+}
+.env-visual img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  transition: opacity 0.18s linear;
+}
+.env-visual .shade {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to bottom, rgba(0,0,0,0.12), rgba(0,0,0,0.58));
+}
+.env-labels {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  right: 10px;
+  display: flex;
+  justify-content: space-between;
+  z-index: 2;
+}
+.env-pill {
+  font-size: 11px;
+  color: #f4f7ff;
+  border: 1px solid rgba(255,255,255,0.25);
+  background: rgba(0,0,0,0.4);
+  border-radius: 999px;
+  padding: 4px 9px;
+}
+.env-caption {
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  bottom: 10px;
+  z-index: 2;
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  color: #f0f4ff;
+}
+.env-caption strong { color: #ffffff; }
+.slider-head {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  color: var(--muted);
+  margin-bottom: 8px;
+}
+input[type="range"] {
+  width: 100%;
+  accent-color: #d8b27a;
+}
+.slider-value {
+  margin-top: 8px;
+  font-size: 14px;
+  color: var(--accent-2);
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+.chip {
+  border: 1px solid var(--border);
+  background: #1f2330;
+  color: var(--muted);
+  border-radius: 999px;
+  padding: 8px 12px;
+  font-size: 12px;
+  cursor: pointer;
+}
+.chip.active {
+  color: #17110b;
+  background: #e0c090;
+  border-color: #e0c090;
+  font-weight: 600;
+}
+.visual-chips {
+  display: grid;
+  grid-template-columns: minmax(320px, 430px);
+  gap: 12px;
+  margin-top: 12px;
+  justify-content: center;
+}
+@media (min-width: 780px) {
+  .visual-chips {
+    grid-template-columns: repeat(2, minmax(320px, 430px));
+  }
+}
+.visual-chip {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  min-height: 260px;
+  border-radius: 13px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  background: #1a1e28;
+  cursor: pointer;
+  transition: transform 0.16s ease, border-color 0.16s ease, box-shadow 0.16s ease;
+}
+@media (max-width: 779px) {
+  .visual-chip {
+    min-height: 220px;
+  }
+}
+.visual-chip:hover {
+  transform: translateY(-1px);
+  border-color: rgba(200,165,106,0.45);
+  box-shadow: 0 10px 25px rgba(0,0,0,0.28);
+}
+.visual-chip img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.visual-chip .overlay {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to bottom, rgba(0,0,0,0.15), rgba(0,0,0,0.72));
+}
+.visual-chip .content {
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  bottom: 10px;
+  min-height: 0;
+}
+.visual-chip .title {
+  color: #ffffff;
+  font-size: 16px;
+  font-weight: 700;
+  text-shadow: 0 2px 12px rgba(0,0,0,0.7);
+}
+.visual-chip .hint {
+  margin-top: 4px;
+  color: #e9eefc;
+  font-size: 12px;
+  text-shadow: 0 2px 12px rgba(0,0,0,0.7);
+}
+.visual-chip.active {
+  border-color: rgba(224,192,144,0.95);
+  box-shadow: 0 0 0 2px rgba(224,192,144,0.2), 0 12px 28px rgba(0,0,0,0.35);
+}
+.visual-chip .check {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  border: 1px solid rgba(255,255,255,0.28);
+  background: rgba(0,0,0,0.45);
+  display: grid;
+  place-items: center;
+  color: #ffffff;
+  font-size: 14px;
+}
+.visual-chip.active .check {
+  background: #e0c090;
+  border-color: #e0c090;
+  color: #16110b;
+}
+.trip-spacer {
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.actions {
+  margin-top: 14px;
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+}
+.btn {
+  border: 1px solid var(--border);
+  background: #1c202a;
+  color: var(--text);
+  border-radius: 10px;
+  padding: 10px 12px;
+  font-size: 13px;
+  cursor: pointer;
+}
+.btn.primary {
+  border-color: rgba(200,165,106,0.5);
+  background: linear-gradient(180deg, #d8b982 0%, #be985f 100%);
+  color: #14100b;
+  font-weight: 700;
+}
+.btn.ghost { color: var(--muted); }
+
+.micro {
+  margin-top: 10px;
+  font-size: 12px;
+  color: #8bc4ad;
+  min-height: 18px;
+}
+
+
+.processing {
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 18px;
+  background: rgba(255,255,255,0.02);
+}
+.processing h3 { font-size: 22px; margin-bottom: 8px; }
+.processing p { color: var(--muted); font-size: 13px; margin-bottom: 10px; }
+
+.result-head {
+  border: 1px solid rgba(122,193,165,0.3);
+  border-radius: 14px;
+  background: rgba(122,193,165,0.08);
+  padding: 14px;
+  margin-bottom: 12px;
+}
+.result-head h2 { font-size: 24px; }
+.result-head p { font-size: 13px; margin-top: 7px; color: #cae8dc; line-height: 1.5; }
+.results {
+  display: grid;
+  gap: 10px;
+}
+.result-card {
+  border: 1px solid var(--border);
+  border-radius: 13px;
+  padding: 12px;
+  background: linear-gradient(180deg, #232734 0%, #1d212d 100%);
+}
+.result-line {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+.result-name { font-size: 18px; font-weight: 650; }
+.result-why { margin-top: 7px; color: var(--muted); font-size: 12px; line-height: 1.45; }
+.tags {
+  margin-top: 8px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.tag {
+  font-size: 11px;
+  border: 1px solid var(--border);
+  color: var(--muted);
+  border-radius: 999px;
+  padding: 4px 8px;
+}
+.muted-list {
+  margin-top: 10px;
+  border: 1px dashed var(--border);
+  border-radius: 12px;
+  padding: 10px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.detail {
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  overflow: hidden;
+}
+.detail-photo {
+  height: 210px;
+  position: relative;
+}
+.detail-photo img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.detail-photo .overlay {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to bottom, rgba(0,0,0,0.2), rgba(0,0,0,0.68));
+}
+.detail-photo .txt {
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  bottom: 10px;
+}
+.detail-body { padding: 12px; }
+.detail-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-top: 10px;
+}
+.kpi {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 9px;
+  background: #202533;
+}
+.kpi .label { font-size: 11px; color: var(--muted); }
+.kpi .val { margin-top: 4px; font-size: 15px; font-weight: 600; }
+.toast {
+  position: fixed;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: 22px;
+  border: 1px solid var(--border);
+  background: #1b1f29;
+  color: #d8e8e1;
+  border-radius: 999px;
+  padding: 9px 14px;
+  font-size: 12px;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+  pointer-events: none;
+}
+.toast.show { opacity: 1; }
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="top">
+    <div class="brand">
+      <div class="logo">Travel<span>Boop</span></div>
+      <div class="badge">Click-through prototype</div>
+    </div>
+    <div class="progress-wrap">
+      <div class="progress-head">
+        <span id="progressText">Lets find your vibe</span>
+        <span id="progressStep">0 / 7</span>
+      </div>
+      <div class="bar"><div id="progressFill" class="fill"></div></div>
+    </div>
+  </div>
+
+  <div class="content">
+    <section class="left">
+      <div id="screen"></div>
+    </section>
+  </div>
+</div>
+
+<div id="toast" class="toast"></div>
+
+<script>
+const QUESTIONS = [
+  {
+    id: "tripContext",
+    label: "Trip Context",
+    step: 1,
+    title: "What kind of trip is this?",
+    sub: "Tap one to continue.",
+    type: "cards",
+    options: [
+      { id: "first", emoji: "🗺️", title: "First time here", note: "Central, iconic, easier navigation", image: "https://images.unsplash.com/photo-1523906834658-6e24ef2386f9?auto=format&fit=crop&w=1200&q=80", micro: "Great start. We will prioritize central, safe, iconic neighborhoods.", weights: { central: 18, iconic: 18, quiet: 10, local: -5 } },
+      { id: "repeat", emoji: "🔍", title: "Been before, want something new", note: "Local texture and less touristy picks", image: "https://images.unsplash.com/photo-1477959858617-67f85cf4f1df?auto=format&fit=crop&w=1200&q=80", micro: "Perfect. We will prioritize local and niche neighborhood energy.", weights: { local: 18, iconic: -8, trendy: 6, historic: 6 } },
+      { id: "expert", emoji: "🧭", title: "I know the city well", note: "Hidden gems and deeper neighborhood fit", image: "https://images.unsplash.com/photo-1499856871958-5b9627545d1a?auto=format&fit=crop&w=1200&q=80", micro: "Great. We will lean into niche local matches and less obvious picks.", weights: { local: 20, quiet: 6, central: -6, iconic: -4, radius: 8 } }
+    ]
+  },
+  {
+    id: "morning",
+    label: "Morning Anchor",
+    step: 2,
+    title: "Pick your perfect morning",
+    sub: "This is one of the highest-signal decisions.",
+    type: "cards",
+    options: [
+      { id: "cafe", emoji: "☕", title: "Coffee and pastries", note: "Sidewalk cafes and walkable streets", image: "https://images.unsplash.com/photo-1442512595331-e89e73853f31?auto=format&fit=crop&w=1200&q=80", micro: "Cafe mode on. Think Roma and Condesa energy.", weights: { cafes: 18, walkability: 10, local: 8 } },
+      { id: "park", emoji: "🌳", title: "Park walk or jog", note: "Leafy and calm atmosphere", image: "https://images.unsplash.com/photo-1519331379826-f10be5486c6f?auto=format&fit=crop&w=1200&q=80", micro: "Green preference noted. Parks now weigh more heavily.", weights: { green: 22, quiet: 8, walkability: 8 } },
+      { id: "shopping", emoji: "🛍️", title: "Shopping and brunch", note: "Upscale and polished areas", image: "https://images.unsplash.com/photo-1481437156560-3205f6a55735?auto=format&fit=crop&w=1200&q=80", micro: "Got it. You are signaling a higher-end district fit.", weights: { shopping: 18, luxury: 14, trendy: 8 } },
+      { id: "historic", emoji: "🏛️", title: "Historic streets", note: "Architecture and heritage", image: "https://images.unsplash.com/photo-1467269204594-9661b134dd2b?auto=format&fit=crop&w=1200&q=80", micro: "History added. We will boost culture and iconic layers.", weights: { historic: 18, iconic: 10, central: 6 } }
+    ]
+  },
+  {
+    id: "night",
+    label: "Night Energy",
+    step: 3,
+    title: "What does your night look like?",
+    sub: "Separates quiet evenings from dense social energy.",
+    type: "cards",
+    options: [
+      { id: "chill", emoji: "🍷", title: "Wine bar and calm dinner", note: "Relaxed, lower noise", image: "https://images.unsplash.com/photo-1470337458703-46ad1756a187?auto=format&fit=crop&w=1200&q=80", micro: "Calmer evenings locked. Loud nightlife is now de-emphasized.", weights: { quiet: 14, nightlife: -8, foodie: 10 } },
+      { id: "street", emoji: "🌮", title: "Street food and casual spots", note: "Local and vibrant", image: "https://images.unsplash.com/photo-1552332386-f8dd00dc2f85?auto=format&fit=crop&w=1200&q=80", micro: "Love it. Local food clusters now get extra weight.", weights: { foodie: 16, local: 12, nightlife: 4 } },
+      { id: "trendy", emoji: "🍸", title: "Trendy restaurants and cocktails", note: "Modern social scene", image: "https://images.unsplash.com/photo-1514933651103-005eec06c04b?auto=format&fit=crop&w=1200&q=80", micro: "Trendy preference captured. Contemporary districts move up.", weights: { trendy: 16, nightlife: 8, luxury: 4 } },
+      { id: "nightlife", emoji: "🎶", title: "Bars and music", note: "Late and lively", image: "https://images.unsplash.com/photo-1492684223066-81342ee5ff30?auto=format&fit=crop&w=1200&q=80", micro: "Night energy detected. Dense social neighborhoods rank higher.", weights: { nightlife: 20, quiet: -12, central: 4 } }
+    ]
+  },
+  {
+    id: "mobility",
+    label: "Mobility Style",
+    step: 4,
+    title: "How do you want to get around?",
+    sub: "Critical trade-off between walkability and radius.",
+    type: "cards",
+    options: [
+      { id: "walk", emoji: "🚶", title: "Walk almost everywhere", note: "High walkability required", image: "https://images.unsplash.com/photo-1501426026826-31c667bdf23d?auto=format&fit=crop&w=1200&q=80", micro: "Walkability is now a hard preference.", weights: { walkability: 20, central: 8, radius: -12 } },
+      { id: "mixed", emoji: "⚖️", title: "Walk plus short rides", note: "Balanced flexibility", image: "https://images.unsplash.com/photo-1476480862126-209bfaa8edc8?auto=format&fit=crop&w=1200&q=80", micro: "Balanced mobility selected. We keep both core and nearby options.", weights: { walkability: 10, radius: 6 } },
+      { id: "uber", emoji: "🚕", title: "Uber for great spots", note: "Distance is less important", image: "https://images.unsplash.com/photo-1449965408869-eaa3f722e40d?auto=format&fit=crop&w=1200&q=80", micro: "Distance flexibility added. Wider neighborhood radius unlocked.", weights: { radius: 18, central: -6, local: 6 } }
+    ]
+  },
+  {
+    id: "environment",
+    label: "Environment Tradeoff",
+    step: 5,
+    title: "What matters more around you?",
+    sub: "Slide from quiet and green to busy and lively.",
+    type: "slider"
+  },
+  {
+    id: "stayStyle",
+    label: "Stay Style",
+    step: 6,
+    title: "Where do you picture yourself staying?",
+    sub: "Helps fit neighborhood scale and hotel style.",
+    type: "cards",
+    options: [
+      { id: "boutique", emoji: "🏡", title: "Boutique and charming", note: "Smaller hotels, local texture", image: "https://images.unsplash.com/photo-1505693416388-ac5ce068fe85?auto=format&fit=crop&w=1200&q=80", micro: "Boutique style selected. Character neighborhoods get a boost.", weights: { boutique: 20, luxury: -5, local: 8 } },
+      { id: "central", emoji: "🏨", title: "Comfortable and central", note: "Efficient home base", image: "https://images.unsplash.com/photo-1445019980597-93fa8acb246c?auto=format&fit=crop&w=1200&q=80", micro: "Central comfort selected. We optimize for convenience.", weights: { central: 14, walkability: 8 } },
+      { id: "luxury", emoji: "💎", title: "Luxury and high-end", note: "Upscale hotel clusters", image: "https://images.unsplash.com/photo-1566073771259-6a8506099945?auto=format&fit=crop&w=1200&q=80", micro: "Luxury selected. Premium districts are now weighted higher.", weights: { luxury: 20, shopping: 10, quiet: 4 } }
+    ]
+  },
+  {
+    id: "dealbreaker",
+    label: "Dealbreakers",
+    step: 7,
+    title: "Any dealbreakers?",
+    sub: "Optional: select up to two things to avoid.",
+    type: "chips",
+    options: [
+      { id: "noisy", label: "Too noisy", hint: "Prefer quieter streets", image: "https://images.unsplash.com/photo-1449824913935-59a10b8d2000?auto=format&fit=crop&w=1200&q=80&v=20260409-noisy-street" },
+      { id: "far", label: "Too far from things", hint: "Need convenient location", image: "https://images.unsplash.com/photo-1480714378408-67cf0d13bc1f?auto=format&fit=crop&w=1200&q=80" },
+      { id: "touristy", label: "Too touristy", hint: "Want more local feel", image: "https://images.unsplash.com/photo-1467269204594-9661b134dd2b?auto=format&fit=crop&w=1200&q=80" },
+      { id: "lowFood", label: "Not enough food options", hint: "Need dense food scene", image: "https://images.unsplash.com/photo-1552566626-52f8b828add9?auto=format&fit=crop&w=1200&q=80" }
+    ]
+  }
+];
+
+const NBHD = [
+  { id: "condesa", name: "Condesa", photo: "https://images.unsplash.com/photo-1518638150340-f706e86654de?w=1400&q=80", walkability: 89, green: 93, shopping: 62, foodie: 78, nightlife: 66, local: 84, central: 71, quiet: 73, luxury: 58, boutique: 88, historic: 47, iconic: 52, trendy: 72, cafes: 86, radius: 66, touristy: 55 },
+  { id: "romaNorte", name: "Roma Norte", photo: "https://images.unsplash.com/photo-1473448912268-2022ce9509d8?w=1400&q=80", walkability: 87, green: 68, shopping: 70, foodie: 90, nightlife: 79, local: 82, central: 76, quiet: 56, luxury: 64, boutique: 84, historic: 55, iconic: 60, trendy: 88, cafes: 92, radius: 70, touristy: 60 },
+  { id: "polanco", name: "Polanco", photo: "https://images.unsplash.com/photo-1519567241046-7f570eee3ce6?w=1400&q=80", walkability: 72, green: 74, shopping: 95, foodie: 82, nightlife: 58, local: 42, central: 62, quiet: 78, luxury: 96, boutique: 55, historic: 30, iconic: 50, trendy: 74, cafes: 66, radius: 74, touristy: 50 },
+  { id: "coyoacan", name: "Coyoacan", photo: "https://images.unsplash.com/photo-1526947425960-945c6e72858f?w=1400&q=80", walkability: 70, green: 82, shopping: 48, foodie: 74, nightlife: 40, local: 92, central: 38, quiet: 80, luxury: 36, boutique: 72, historic: 87, iconic: 58, trendy: 45, cafes: 70, radius: 88, touristy: 45 },
+  { id: "centro", name: "Centro Historico", photo: "https://images.unsplash.com/photo-1543349689-9a4d426bee8e?w=1400&q=80", walkability: 79, green: 35, shopping: 66, foodie: 72, nightlife: 48, local: 52, central: 96, quiet: 28, luxury: 34, boutique: 41, historic: 98, iconic: 96, trendy: 44, cafes: 58, radius: 50, touristy: 84 },
+  { id: "juarez", name: "Juarez", photo: "https://images.unsplash.com/photo-1499856871958-5b9627545d1a?w=1400&q=80", walkability: 82, green: 52, shopping: 74, foodie: 80, nightlife: 84, local: 60, central: 82, quiet: 42, luxury: 68, boutique: 64, historic: 62, iconic: 78, trendy: 86, cafes: 76, radius: 66, touristy: 68 }
+];
+
+const state = {
+  stage: "quiz",
+  qIndex: 0,
+  answers: {},
+  prefs: {},
+  sliderValue: 0,
+  dealbreakers: new Set(),
+  ranked: []
+};
+
+const progressLabels = [
+  "Lets find your vibe",
+  "Dialing in your vibe",
+  "Getting your morning signal",
+  "Balancing your night energy",
+  "Mapping your movement style",
+  "Setting your atmosphere",
+  "Matching your stay style",
+  "Applying your dealbreakers",
+  "Calculating neighborhood fit"
+];
+
+function toast(message) {
+  const t = document.getElementById("toast");
+  t.textContent = message;
+  t.classList.add("show");
+  clearTimeout(t._timer);
+  t._timer = setTimeout(() => t.classList.remove("show"), 1900);
+}
+
+function clamp(v, min, max) {
+  return Math.min(max, Math.max(min, v));
+}
+
+function addWeights(weights) {
+  Object.entries(weights).forEach(([k, v]) => {
+    state.prefs[k] = (state.prefs[k] || 0) + v;
+  });
+}
+
+function setProgress() {
+  const total = QUESTIONS.length;
+  let step = 0;
+  if (state.stage === "quiz") step = state.qIndex + 1;
+  if (state.stage === "processing") step = total;
+  if (state.stage === "results" || state.stage === "detail") step = total;
+  const pct = clamp(Math.round((step / total) * 100), 0, 100);
+  document.getElementById("progressFill").style.width = pct + "%";
+  document.getElementById("progressStep").textContent = step + " / " + total;
+  const pText = progressLabels[clamp(step, 0, progressLabels.length - 1)];
+  document.getElementById("progressText").textContent = pText;
+}
+
+function computeScores() {
+  const prefs = state.prefs;
+  const rows = NBHD.map(n => {
+    let score = 58;
+    const keys = ["walkability","green","shopping","foodie","nightlife","local","central","quiet","luxury","boutique","historic","iconic","trendy","cafes","radius"];
+    keys.forEach(k => {
+      const w = prefs[k] || 0;
+      score += (n[k] / 100) * (w * 0.6);
+    });
+
+    if (state.dealbreakers.has("noisy")) score -= ((100 - n.quiet) * 0.18);
+    if (state.dealbreakers.has("far")) score -= ((100 - n.central) * 0.14);
+    if (state.dealbreakers.has("touristy")) score -= (n.touristy * 0.16);
+    if (state.dealbreakers.has("lowFood")) score -= ((100 - n.foodie) * 0.16);
+
+    score = clamp(Math.round(score), 15, 99);
+    return { ...n, score };
+  }).sort((a, b) => b.score - a.score);
+  state.ranked = rows;
+  return rows;
+}
+
+function liveSummary() {
+  const p = state.prefs;
+  const chips = [];
+  if ((p.walkability || 0) > 14) chips.push("walk-first");
+  if ((p.green || 0) > 15) chips.push("green");
+  if ((p.foodie || 0) > 12) chips.push("food-focused");
+  if ((p.nightlife || 0) > 12) chips.push("lively nights");
+  if ((p.quiet || 0) > 8) chips.push("calm evenings");
+  if ((p.luxury || 0) > 12) chips.push("upscale");
+  if ((p.local || 0) > 12) chips.push("local feel");
+  if ((p.historic || 0) > 12) chips.push("historic backdrop");
+  if (!chips.length) return "Add a few answers to shape your profile.";
+  return "Current profile: " + chips.slice(0, 4).join(", ") + ".";
+}
+
+function liveTitle() {
+  const p = state.prefs;
+  if (!Object.keys(p).length) return "No answers yet";
+  if ((p.green || 0) > 15 && (p.cafes || 0) > 12) return "Leafy cafe explorer";
+  if ((p.nightlife || 0) > 16) return "Night-energy urban explorer";
+  if ((p.luxury || 0) > 16) return "Polished upscale traveler";
+  if ((p.local || 0) > 16) return "Local texture seeker";
+  if ((p.historic || 0) > 16) return "Culture and heritage traveler";
+  return "Balanced city explorer";
+}
+
+function whyTopChoice(n) {
+  const reasons = [];
+  if (n.walkability > 82) reasons.push("easy walking");
+  if (n.green > 78) reasons.push("green pockets");
+  if (n.foodie > 80) reasons.push("strong food scene");
+  if (n.cafes > 80) reasons.push("great cafe density");
+  if (n.local > 82) reasons.push("local neighborhood feel");
+  if (n.historic > 84) reasons.push("historic atmosphere");
+  if (n.luxury > 88) reasons.push("high-end hotel zones");
+  if (!reasons.length) reasons.push("balanced city access");
+  return reasons.slice(0, 3).join(", ");
+}
+
+function updateRightPanel() {
+  computeScores();
+}
+
+function renderCardsQuestion(q) {
+  const isTripContext = q.id === "tripContext";
+  const gridClass = isTripContext ? "grid trip-context" : "grid two";
+  let options = q.options.map(o => `
+    <button class="opt ${isTripContext ? "trip-context" : ""}" onclick="selectOption('${q.id}','${o.id}')">
+      <div class="opt-media">
+        <img src="${o.image || 'https://images.unsplash.com/photo-1519337265831-281ec6cc8514?w=1200&q=80'}" alt="${o.title}" loading="lazy" />
+        <div class="opt-grad"></div>
+        <div class="opt-body">
+          <div class="opt-emoji">${o.emoji}</div>
+          <div class="opt-title">${o.title}</div>
+          ${o.note ? `<div class="opt-note">${o.note}</div>` : ""}
+        </div>
+      </div>
+    </button>
+  `);
+  if (isTripContext && options.length === 3) {
+    options.push(`<div class="opt trip-context trip-spacer" aria-hidden="true"></div>`);
+  }
+  options = options.join("");
+  return `
+    <div class="question">
+      <div class="q-kicker">Screen ${q.step} - ${q.label}</div>
+      <div class="q-title">${q.title}</div>
+      <div class="q-sub">${q.sub}</div>
+    </div>
+    <div class="${gridClass}">${options}</div>
+    <div class="micro" id="micro"></div>
+    ${isTripContext ? "" : `<div class="actions"><button class="btn ghost" onclick="prevQuestion()">Back</button></div>`}
+  `;
+}
+
+function envLabel(v) {
+  if (v <= -60) return "Very quiet and green";
+  if (v <= -20) return "Leaning calm and leafy";
+  if (v < 20) return "Balanced";
+  if (v < 60) return "Leaning busy and social";
+  return "Very lively and dense";
+}
+
+function envBlend(v) {
+  return clamp((Number(v) + 100) / 200, 0, 1);
+}
+
+function renderSliderQuestion(q) {
+  const blend = envBlend(state.sliderValue);
+  const quietOpacity = (1 - blend).toFixed(2);
+  const livelyOpacity = blend.toFixed(2);
+  return `
+    <div class="question">
+      <div class="q-kicker">Screen ${q.step} - ${q.label}</div>
+      <div class="q-title">${q.title}</div>
+      <div class="q-sub">${q.sub}</div>
+    </div>
+    <div class="slider-wrap">
+      <div class="env-visual">
+        <img id="envQuietImg" src="https://images.unsplash.com/photo-1519331379826-f10be5486c6f?auto=format&fit=crop&w=1400&q=80" alt="Quiet green streets" style="opacity:${quietOpacity}" />
+        <img id="envBusyImg" src="https://images.unsplash.com/photo-1477959858617-67f85cf4f1df?auto=format&fit=crop&w=1400&q=80" alt="Busy lively city streets" style="opacity:${livelyOpacity}" />
+        <div class="shade"></div>
+        <div class="env-labels">
+          <span class="env-pill">Quiet + Green</span>
+          <span class="env-pill">Busy + Lively</span>
+        </div>
+        <div class="env-caption">
+          <span>Current mood:</span>
+          <strong id="envCaption">${envLabel(state.sliderValue)}</strong>
+        </div>
+      </div>
+      <div class="slider-head"><span>Quiet and green</span><span>Busy and lively</span></div>
+      <input id="envSlider" type="range" min="-100" max="100" value="${state.sliderValue}" oninput="sliderChanged(this.value)" />
+      <div class="slider-value" id="sliderValue">${envLabel(state.sliderValue)}</div>
+    </div>
+    <div class="actions">
+      <button class="btn ghost" onclick="prevQuestion()">Back</button>
+      <button class="btn primary" onclick="confirmSlider()">Use this preference</button>
+    </div>
+  `;
+}
+
+function renderChipQuestion(q) {
+  const chipHtml = q.options.map(o => `
+    <button class="visual-chip ${state.dealbreakers.has(o.id) ? "active" : ""}" onclick="toggleDealbreaker('${o.id}')">
+      <img src="${o.image}" alt="${o.label}" loading="lazy" onerror="this.onerror=null;this.src='https://images.unsplash.com/photo-1477959858617-67f85cf4f1df?auto=format&fit=crop&w=1200&q=80';" />
+      <div class="overlay"></div>
+      <div class="check">${state.dealbreakers.has(o.id) ? "✓" : "+"}</div>
+      <div class="content">
+        <div class="title">${o.label}</div>
+        <div class="hint">${o.hint || ""}</div>
+      </div>
+    </button>
+  `).join("");
+  return `
+    <div class="question">
+      <div class="q-kicker">Screen ${q.step} - ${q.label}</div>
+      <div class="q-title">${q.title}</div>
+      <div class="q-sub">${q.sub}</div>
+    </div>
+    <div class="visual-chips">${chipHtml}</div>
+    <div class="micro">Optional but high impact for ranking quality.</div>
+    <div class="actions">
+      <button class="btn ghost" onclick="prevQuestion()">Back</button>
+      <button class="btn primary" onclick="finishQuiz()">See my matches</button>
+    </div>
+  `;
+}
+
+function renderQuiz() {
+  const q = QUESTIONS[state.qIndex];
+  const el = document.getElementById("screen");
+  if (q.type === "cards") el.innerHTML = renderCardsQuestion(q);
+  if (q.type === "slider") el.innerHTML = renderSliderQuestion(q);
+  if (q.type === "chips") el.innerHTML = renderChipQuestion(q);
+  setProgress();
+}
+
+function renderProcessing() {
+  const el = document.getElementById("screen");
+  el.innerHTML = `
+    <div class="processing">
+      <h3>Building your neighborhood profile...</h3>
+      <p id="phaseText">Mapping your vibe DNA.</p>
+      <div class="bar"><div id="procFill" class="fill" style="width:0%"></div></div>
+    </div>
+  `;
+  setProgress();
+  const phases = [
+    "Mapping your vibe DNA...",
+    "Matching cafes, parks, and street energy...",
+    "Applying your movement style and dealbreakers...",
+    "Ranking neighborhoods by fit..."
+  ];
+  let i = 0;
+  let pct = 10;
+  const timer = setInterval(() => {
+    pct += 18;
+    document.getElementById("procFill").style.width = clamp(pct, 0, 100) + "%";
+    document.getElementById("phaseText").textContent = phases[Math.min(i, phases.length - 1)];
+    i += 1;
+    if (i > phases.length) {
+      clearInterval(timer);
+      state.stage = "results";
+      render();
+    }
+  }, 450);
+}
+
+function explainResult(r) {
+  return "You match " + r.name + " for " + whyTopChoice(r) + ".";
+}
+
+function renderResults() {
+  const ranked = computeScores();
+  const top = ranked[0];
+  const second = ranked[1];
+  const third = ranked[2];
+  const el = document.getElementById("screen");
+  el.innerHTML = `
+    <div class="result-head">
+      <h2>Your vibe: ${liveTitle()}</h2>
+      <p>${explainResult(top)} This recommendation blends your morning style, mobility preference, and night energy.</p>
+    </div>
+    <div class="results">
+      ${[top, second, third].map(r => `
+        <div class="result-card">
+          <div class="result-line">
+            <div class="result-name">${r.name}</div>
+            <div class="rank-score">${r.score}% match</div>
+          </div>
+          <div class="tags">
+            <span class="tag">Walkability ${r.walkability}</span>
+            <span class="tag">Food ${r.foodie}</span>
+            <span class="tag">Green ${r.green}</span>
+          </div>
+          <div class="result-why">${explainResult(r)}</div>
+          <div class="actions" style="margin-top:10px;">
+            <button class="btn ghost" onclick="viewDetail('${r.id}')">Open neighborhood</button>
+          </div>
+        </div>
+      `).join("")}
+    </div>
+    <div class="muted-list" id="ruledOut"></div>
+    <div class="actions">
+      <button class="btn ghost" onclick="restart()">Retake vibe check</button>
+    </div>
+  `;
+  const ruled = ranked.slice(-2).map(r => r.name + " (lower fit)").join(" and ");
+  document.getElementById("ruledOut").textContent = "Lower-fit options right now: " + ruled + ".";
+  setProgress();
+}
+
+function renderDetail(neighborhoodId) {
+  const n = NBHD.find(x => x.id === neighborhoodId) || state.ranked[0];
+  const el = document.getElementById("screen");
+  el.innerHTML = `
+    <div class="detail">
+      <div class="detail-photo">
+        <img src="${n.photo}" alt="${n.name}" />
+        <div class="overlay"></div>
+        <div class="txt">
+          <div class="hero-kicker">Neighborhood Detail</div>
+          <div class="hero-title" style="font-size:24px;">${n.name}</div>
+          <div class="hero-sub">${whyTopChoice(n)}</div>
+        </div>
+      </div>
+      <div class="detail-body">
+        <div class="q-sub">Personalized reason: this area aligns with your selected trip style and movement preferences.</div>
+        <div class="detail-grid">
+          <div class="kpi"><div class="label">Walkability</div><div class="val">${n.walkability}/100</div></div>
+          <div class="kpi"><div class="label">Green space</div><div class="val">${n.green}/100</div></div>
+          <div class="kpi"><div class="label">Food and cafes</div><div class="val">${Math.round((n.foodie + n.cafes) / 2)}/100</div></div>
+          <div class="kpi"><div class="label">Night energy</div><div class="val">${n.nightlife}/100</div></div>
+        </div>
+        <div class="actions">
+          <button class="btn ghost" onclick="state.stage='results'; render();">Back to matches</button>
+          <button class="btn primary" onclick="toast('Prototype CTA: Explore hotels in ${n.name}')">Explore hotels</button>
+        </div>
+      </div>
+    </div>
+  `;
+  setProgress();
+}
+
+function render() {
+  updateRightPanel();
+  if (state.stage === "intro") {
+    state.stage = "quiz";
+    state.qIndex = 0;
+    return renderQuiz();
+  }
+  if (state.stage === "quiz") return renderQuiz();
+  if (state.stage === "processing") return renderProcessing();
+  if (state.stage === "results") return renderResults();
+  if (state.stage === "detail") return renderDetail(state.detailId);
+}
+
+function selectOption(questionId, optionId) {
+  const q = QUESTIONS.find(x => x.id === questionId);
+  const o = q.options.find(x => x.id === optionId);
+  state.answers[questionId] = optionId;
+  addWeights(o.weights || {});
+  toast(o.micro || "Saved");
+  const micro = document.getElementById("micro");
+  if (micro) micro.textContent = o.micro || "";
+  updateRightPanel();
+  setTimeout(() => {
+    if (state.qIndex < QUESTIONS.length - 1) {
+      state.qIndex += 1;
+      renderQuiz();
+    }
+  }, 220);
+}
+
+function sliderChanged(value) {
+  state.sliderValue = Number(value);
+  const label = envLabel(state.sliderValue);
+  document.getElementById("sliderValue").textContent = label;
+  const caption = document.getElementById("envCaption");
+  if (caption) caption.textContent = label;
+  const blend = envBlend(state.sliderValue);
+  const quiet = document.getElementById("envQuietImg");
+  const busy = document.getElementById("envBusyImg");
+  if (quiet) quiet.style.opacity = (1 - blend).toFixed(2);
+  if (busy) busy.style.opacity = blend.toFixed(2);
+}
+
+function confirmSlider() {
+  const v = state.sliderValue;
+  state.answers.environment = v;
+  const normalized = v / 100;
+  addWeights({
+    green: Math.round(-normalized * 14),
+    quiet: Math.round(-normalized * 16),
+    nightlife: Math.round(normalized * 16),
+    shopping: Math.round(normalized * 10)
+  });
+  toast("Atmosphere preference captured.");
+  if (state.qIndex < QUESTIONS.length - 1) {
+    state.qIndex += 1;
+    renderQuiz();
+  }
+}
+
+function toggleDealbreaker(id) {
+  if (state.dealbreakers.has(id)) state.dealbreakers.delete(id);
+  else state.dealbreakers.add(id);
+  renderQuiz();
+  updateRightPanel();
+}
+
+function finishQuiz() {
+  state.stage = "processing";
+  render();
+}
+
+function prevQuestion() {
+  if (state.qIndex === 0) {
+    state.stage = "quiz";
+    renderQuiz();
+    return;
+  }
+  state.qIndex -= 1;
+  renderQuiz();
+}
+
+function viewDetail(id) {
+  state.stage = "detail";
+  state.detailId = id;
+  render();
+}
+
+function restart() {
+  state.stage = "quiz";
+  state.qIndex = 0;
+  state.answers = {};
+  state.prefs = {};
+  state.sliderValue = 0;
+  state.dealbreakers = new Set();
+  state.ranked = [];
+  render();
+}
+
+render();
+</script>
+</body>
+</html>

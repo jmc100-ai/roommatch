@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Boop Summary Preview</title>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;600&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet" />
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --bg:#0c0c0e; --surface:#131316; --card:#1a1a1f; --row:#1f2127;
+  --border:rgba(255,255,255,.1); --text:#e8e4dc; --muted:#9a9590;
+  --accent:#c9a96e; --accent2:#7ac1a5;
+}
+body { font-family:'DM Sans',sans-serif; background:var(--bg); color:var(--text); }
+.frame { max-width:1200px; margin:0 auto; padding:24px; }
+.top {
+  border:1px solid var(--border); border-radius:16px; padding:20px;
+  background:linear-gradient(180deg,#17181d 0%,#121318 100%);
+  display:grid; grid-template-columns:1fr 360px; gap:18px;
+}
+.eyebrow { font-size:11px; letter-spacing:.15em; text-transform:uppercase; color:var(--muted); }
+h1 { font-family:'Cormorant Garamond',serif; font-size:46px; font-weight:400; line-height:1.08; margin-top:10px; }
+h1 em { color:var(--accent); font-style:italic; }
+.sub { margin-top:8px; color:var(--muted); line-height:1.7; max-width:620px; font-size:14px; }
+.summary {
+  border:1px solid rgba(201,169,110,.45); border-radius:14px;
+  background:rgba(201,169,110,.08); padding:12px;
+  box-shadow:0 8px 24px rgba(0,0,0,.35), inset 0 0 0 1px rgba(201,169,110,.15);
+}
+.summary-title { font-size:12px; letter-spacing:.12em; text-transform:uppercase; color:var(--accent); margin-bottom:8px; }
+.summary-sub { font-size:11px; color:var(--muted); margin-bottom:10px; }
+.chips { display:flex; gap:6px; flex-wrap:wrap; margin-bottom:9px; }
+.chip {
+  font-size:11px; padding:4px 8px; border-radius:999px;
+  border:1px solid rgba(255,255,255,.16); background:rgba(0,0,0,.35); color:#f5f1e9;
+}
+.meter-label { display:flex; justify-content:space-between; font-size:11px; color:var(--muted); margin-bottom:5px; }
+.meter { height:6px; border-radius:999px; background:rgba(255,255,255,.1); overflow:hidden; margin-bottom:8px; }
+.meter > i { display:block; height:100%; width:35%; background:linear-gradient(90deg,#6dba8a,#c9a96e); }
+.summary-foot { font-size:11px; color:var(--muted); line-height:1.5; }
+.summary-foot strong { color:var(--text); font-weight:500; }
+.summary-cta { margin-top:10px; font-size:12px; color:var(--accent2); }
+.cards { margin-top:16px; display:grid; grid-template-columns:1fr 1fr; gap:14px; opacity:.88; }
+.card { border:1px solid var(--border); border-radius:14px; overflow:hidden; background:var(--card); }
+.hero { height:180px; background-size:cover; background-position:center; position:relative; }
+.hero::after { content:""; position:absolute; inset:0; background:linear-gradient(to bottom,transparent,rgba(0,0,0,.65)); }
+.name { position:absolute; left:12px; bottom:10px; z-index:2; font-size:22px; font-family:'Cormorant Garamond',serif; }
+.body { padding:12px; color:var(--muted); font-size:13px; line-height:1.5; }
+</style>
+</head>
+<body>
+  <div class="frame">
+    <div class="top">
+      <div>
+        <div class="eyebrow">Mexico City · Step 3 of 5</div>
+        <h1>Find your <em>neighbourhood vibe</em></h1>
+        <div class="sub">
+          Every card is a neighbourhood vibe — the feel of where you’ll stay. We ranked these based on your intro answers, so the top cards match your movement style, energy, and dealbreakers.
+        </div>
+      </div>
+      <aside class="summary">
+        <div class="summary-title">Your vibe</div>
+        <div class="summary-sub">Based on your intro answers</div>
+        <div class="chips">
+          <span class="chip">Walk-first</span>
+          <span class="chip">Cafe mornings</span>
+          <span class="chip">Calm nights</span>
+        </div>
+        <div class="meter-label"><span>Energy</span><span>Calm-leaning</span></div>
+        <div class="meter"><i></i></div>
+        <div class="summary-foot"><strong>Dealbreakers:</strong> Too noisy, Too touristy</div>
+        <div class="summary-cta">Edit vibe →</div>
+      </aside>
+    </div>
+
+    <div class="cards">
+      <div class="card">
+        <div class="hero" style="background-image:url('https://images.unsplash.com/photo-1518638150340-f706e86654de?auto=format&fit=crop&w=1200&q=80')">
+          <div class="name">Condesa</div>
+        </div>
+        <div class="body">Leafy boulevards, strong cafe density, walkable blocks, calmer evenings.</div>
+      </div>
+      <div class="card">
+        <div class="hero" style="background-image:url('https://images.unsplash.com/photo-1473448912268-2022ce9509d8?auto=format&fit=crop&w=1200&q=80')">
+          <div class="name">Roma Norte</div>
+        </div>
+        <div class="body">Creative food scene, walkable streets, more social energy and nightlife.</div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

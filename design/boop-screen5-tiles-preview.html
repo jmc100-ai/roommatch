@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Screen 5 Tiles Preview</title>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;600&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet" />
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+:root{
+  --bg:#0c0c0e; --surface:#131316; --card:#1a1a1f; --row:#1f2127;
+  --border:rgba(255,255,255,.1); --text:#e8e4dc; --muted:#9a9590;
+  --accent:#c9a96e; --accent2:#7ac1a5;
+}
+body { font-family:'DM Sans',sans-serif; background:var(--bg); color:var(--text); min-height:100vh; padding:28px; }
+.wrap { max-width:1080px; margin:0 auto; }
+.top {
+  border:1px solid var(--border); border-radius:16px; padding:18px;
+  background:linear-gradient(180deg,#17181d 0%,#121318 100%);
+}
+.step { font-size:11px; letter-spacing:.12em; text-transform:uppercase; color:var(--muted); }
+h1 { font-family:'Cormorant Garamond',serif; font-size:42px; font-weight:400; line-height:1.1; margin-top:8px; }
+h1 em { color:var(--accent); font-style:italic; }
+.sub { margin-top:8px; color:var(--muted); font-size:14px; line-height:1.6; max-width:760px; }
+.grid {
+  margin-top:18px;
+  display:grid; grid-template-columns:1fr; gap:14px; justify-content:center;
+}
+@media(min-width:860px){ .grid { grid-template-columns:repeat(2,minmax(320px,500px)); } }
+.tile {
+  border:1px solid var(--border); border-radius:14px; overflow:hidden; cursor:pointer;
+  background:#151922; transition:transform .15s,border-color .15s,box-shadow .15s;
+}
+.tile:hover{ transform:translateY(-1px); border-color:rgba(201,169,110,.45); box-shadow:0 10px 24px rgba(0,0,0,.3); }
+.tile.active{
+  border-color:rgba(224,192,144,.95);
+  box-shadow:0 0 0 2px rgba(224,192,144,.2), 0 12px 28px rgba(0,0,0,.35);
+}
+.media { position:relative; width:100%; aspect-ratio:4/3; min-height:220px; }
+.media img { width:100%; height:100%; object-fit:cover; display:block; }
+.grad { position:absolute; inset:0; background:linear-gradient(to bottom,rgba(0,0,0,.1),rgba(0,0,0,.72)); }
+.body { position:absolute; left:12px; right:12px; bottom:10px; }
+.emoji { font-size:22px; text-shadow:0 2px 10px rgba(0,0,0,.65); }
+.title { margin-top:4px; font-size:18px; font-weight:700; color:#fff; text-shadow:0 2px 10px rgba(0,0,0,.72); }
+.note { margin-top:4px; font-size:12px; color:#edf2ff; text-shadow:0 2px 10px rgba(0,0,0,.72); }
+.check {
+  position:absolute; top:10px; right:10px; width:28px; height:28px; border-radius:999px;
+  border:1px solid rgba(255,255,255,.28); background:rgba(0,0,0,.45); color:#fff;
+  display:grid; place-items:center; font-size:14px;
+}
+.tile.active .check { background:#e0c090; border-color:#e0c090; color:#16110b; }
+.foot {
+  margin-top:14px; display:flex; justify-content:space-between; gap:10px; align-items:center; flex-wrap:wrap;
+}
+.hint {
+  font-size:12px; color:var(--accent2);
+  border:1px solid rgba(122,193,165,.25); background:rgba(122,193,165,.08);
+  border-radius:10px; padding:8px 10px;
+}
+.btn {
+  border:1px solid var(--border); background:var(--row); color:var(--text);
+  border-radius:10px; padding:10px 12px; font-size:13px; cursor:pointer;
+}
+.btn.primary { background:var(--accent); border-color:rgba(201,169,110,.55); color:#0c0c0e; font-weight:600; }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <section class="top">
+      <div class="step">Screen 5 · Environment tradeoff (tile variant)</div>
+      <h1>What matters more <em>around you?</em></h1>
+      <p class="sub">Tile option mockup to replace the slider. Pick one atmosphere style like other screens. This can still map to the same scoring dimensions.</p>
+
+      <div class="grid" id="tiles">
+        <button class="tile" data-id="calm_green">
+          <div class="media">
+            <img src="https://images.unsplash.com/photo-1519331379826-f10be5486c6f?auto=format&fit=crop&w=1200&q=80" alt="Quiet and green" />
+            <div class="grad"></div>
+            <div class="check">+</div>
+            <div class="body">
+              <div class="emoji">🌳</div>
+              <div class="title">Quiet + Green</div>
+              <div class="note">Leafy streets, calm mornings, lower noise.</div>
+            </div>
+          </div>
+        </button>
+
+        <button class="tile" data-id="calm_cafe">
+          <div class="media">
+            <img src="https://images.unsplash.com/photo-1495474472287-4d71bcdd2085?auto=format&fit=crop&w=1200&q=80" alt="Calm and cafes" />
+            <div class="grad"></div>
+            <div class="check">+</div>
+            <div class="body">
+              <div class="emoji">☕</div>
+              <div class="title">Calm + Café Streets</div>
+              <div class="note">Walkable, social by day, relaxed at night.</div>
+            </div>
+          </div>
+        </button>
+
+        <button class="tile" data-id="balanced_city">
+          <div class="media">
+            <img src="https://images.unsplash.com/photo-1501426026826-31c667bdf23d?auto=format&fit=crop&w=1200&q=80" alt="Balanced city" />
+            <div class="grad"></div>
+            <div class="check">+</div>
+            <div class="body">
+              <div class="emoji">⚖️</div>
+              <div class="title">Balanced City Energy</div>
+              <div class="note">Some buzz, some breathing room.</div>
+            </div>
+          </div>
+        </button>
+
+        <button class="tile" data-id="lively_dense">
+          <div class="media">
+            <img src="https://images.unsplash.com/photo-1477959858617-67f85cf4f1df?auto=format&fit=crop&w=1200&q=80" alt="Busy and lively" />
+            <div class="grad"></div>
+            <div class="check">+</div>
+            <div class="body">
+              <div class="emoji">🌆</div>
+              <div class="title">Busy + Lively</div>
+              <div class="note">Shops, food, nightlife, constant movement.</div>
+            </div>
+          </div>
+        </button>
+      </div>
+
+      <div class="foot">
+        <div class="hint" id="hint">No selection yet.</div>
+        <button class="btn primary">Use this preference</button>
+      </div>
+    </section>
+  </div>
+
+<script>
+const labels = {
+  calm_green: "Selected: Quiet + Green",
+  calm_cafe: "Selected: Calm + Café Streets",
+  balanced_city: "Selected: Balanced City Energy",
+  lively_dense: "Selected: Busy + Lively"
+};
+const tiles = [...document.querySelectorAll(".tile")];
+const hint = document.getElementById("hint");
+tiles.forEach(tile => {
+  tile.addEventListener("click", () => {
+    tiles.forEach(t => t.classList.remove("active"));
+    tile.classList.add("active");
+    tile.querySelector(".check").textContent = "✓";
+    tiles.filter(t => t !== tile).forEach(t => { t.querySelector(".check").textContent = "+"; });
+    hint.textContent = labels[tile.dataset.id] || "Selected.";
+  });
+});
+</script>
+</body>
+</html>

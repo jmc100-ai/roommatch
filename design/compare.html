@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Neighborhood Card — Mobile Designs</title>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0c0c0e;--surface:#131316;--card:#18181c;--border:rgba(255,255,255,0.07);
+  --text:#e8e4dc;--muted:#9a9590;--accent:#c9a96e;--radius:14px;
+}
+body{font-family:'DM Sans',system-ui,sans-serif;background:var(--bg);color:var(--text);padding:32px 24px}
+h1{font-size:13px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin-bottom:32px}
+
+.grid{display:grid;grid-template-columns:repeat(4,390px);gap:28px;overflow-x:auto;padding-bottom:16px}
+
+.col-label{
+  font-size:11px;letter-spacing:.1em;text-transform:uppercase;
+  color:var(--muted);margin-bottom:10px;padding-left:2px;
+}
+.col-label span{
+  display:block;font-size:10px;letter-spacing:0;text-transform:none;
+  color:rgba(255,255,255,0.22);margin-top:4px;line-height:1.5;
+}
+
+/* ───── shared card styles ───── */
+.nbhd-card{
+  background:var(--card);border:1px solid var(--border);border-radius:var(--radius);
+  overflow:hidden;display:flex;flex-direction:column;
+  transition:border-color .18s,transform .18s,box-shadow .18s;cursor:pointer;
+}
+.nbhd-card:hover{border-color:rgba(201,169,110,.45);transform:translateY(-2px);box-shadow:0 8px 28px rgba(0,0,0,.3)}
+.nbhd-card-credit{font-size:9px;color:rgba(255,255,255,0.35);padding:4px 8px;background:rgba(0,0,0,0.4);text-align:right}
+.nbhd-card-body{padding:13px 14px 14px;flex:1;display:flex;flex-direction:column;gap:6px}
+.nbhd-card-name{font-size:14px;font-weight:500;color:var(--text)}
+.nbhd-card-vibe{font-size:12px;color:var(--muted);line-height:1.4}
+.nbhd-card-tags{display:flex;flex-wrap:wrap;gap:5px;margin-top:2px}
+.nbhd-card-tag{font-size:10px;padding:3px 8px;border-radius:100px;border:1px solid var(--border);color:var(--muted)}
+.nbhd-card-footer{display:flex;align-items:center;justify-content:space-between;margin-top:auto;padding-top:8px}
+.nbhd-card-count{font-size:10px;color:var(--muted)}
+.nbhd-card-visitor{font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:var(--accent);opacity:.8}
+
+/* ───── Baseline ───── */
+.card-baseline .nbhd-card-photo{
+  width:100%;aspect-ratio:16/9;object-fit:cover;display:block;background:var(--surface);
+}
+
+/* ───── Option A: shorter photo ───── */
+.card-a .nbhd-card-photo{
+  width:100%;aspect-ratio:16/6.5;object-fit:cover;display:block;background:var(--surface);
+}
+
+/* ───── Option B: no vibe line, tighter body ───── */
+.card-b .nbhd-card-photo{
+  width:100%;aspect-ratio:16/9;object-fit:cover;display:block;background:var(--surface);
+}
+.card-b .nbhd-card-body{padding:10px 14px 11px;gap:5px}
+.card-b .nbhd-card-tags{margin-top:0}
+.card-b .nbhd-card-footer{padding-top:6px}
+
+/* ───── Option C: text overlay ───── */
+.card-c .nbhd-card{position:relative}
+.card-c .nbhd-card-photo{
+  width:100%;aspect-ratio:16/9;object-fit:cover;display:block;background:var(--surface);
+}
+.card-c .nbhd-card-overlay{
+  position:absolute;inset:0;
+  background:linear-gradient(to bottom,transparent 25%,rgba(0,0,0,.55) 58%,rgba(0,0,0,.82) 100%);
+}
+.card-c .nbhd-card-body{
+  position:absolute;bottom:0;left:0;right:0;
+  padding:10px 14px 12px;gap:5px;
+}
+.card-c .nbhd-card-name{color:#fff}
+.card-c .nbhd-card-vibe{font-size:11px;color:rgba(255,255,255,.65);line-height:1.35}
+.card-c .nbhd-card-tag{border:1px solid rgba(255,255,255,.18);color:rgba(255,255,255,.6)}
+.card-c .nbhd-card-tags{margin-top:1px}
+.card-c .nbhd-card-footer{padding-top:4px}
+.card-c .nbhd-card-count{color:rgba(255,255,255,.45)}
+.card-c .nbhd-card-credit-overlay{
+  position:absolute;top:6px;right:8px;
+  font-size:8px;color:rgba(255,255,255,.28);
+}
+</style>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet"/>
+</head>
+<body>
+<h1>Mobile neighborhood card — height reduction options</h1>
+
+<div class="grid">
+
+  <!-- BASELINE -->
+  <div>
+    <div class="col-label">Baseline — current
+      <span>Reference. 16:9 photo + full body.</span>
+    </div>
+    <div class="card-baseline">
+      <div class="nbhd-card">
+        <img class="nbhd-card-photo" src="https://images.unsplash.com/photo-1499856871958-5b9627545d1a?w=700&q=80" alt="Le Marais"/>
+        <div class="nbhd-card-credit">Photo by John Doe on Unsplash</div>
+        <div class="nbhd-card-body">
+          <div class="nbhd-card-name">Le Marais</div>
+          <div class="nbhd-card-vibe">Artsy, walkable, café culture</div>
+          <div class="nbhd-card-tags">
+            <span class="nbhd-card-tag">first-timers</span>
+            <span class="nbhd-card-tag">walkable</span>
+            <span class="nbhd-card-tag">culture</span>
+          </div>
+          <div class="nbhd-card-footer">
+            <span class="nbhd-card-count">142 hotels</span>
+            <span class="nbhd-card-visitor">First visit</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- OPTION A -->
+  <div>
+    <div class="col-label">Option A — Shorter photo
+      <span>aspect-ratio 16:9 → 16:6.5.<br>Body unchanged.</span>
+    </div>
+    <div class="card-a">
+      <div class="nbhd-card">
+        <img class="nbhd-card-photo" src="https://images.unsplash.com/photo-1499856871958-5b9627545d1a?w=700&q=80" alt="Le Marais"/>
+        <div class="nbhd-card-credit">Photo by John Doe on Unsplash</div>
+        <div class="nbhd-card-body">
+          <div class="nbhd-card-name">Le Marais</div>
+          <div class="nbhd-card-vibe">Artsy, walkable, café culture</div>
+          <div class="nbhd-card-tags">
+            <span class="nbhd-card-tag">first-timers</span>
+            <span class="nbhd-card-tag">walkable</span>
+            <span class="nbhd-card-tag">culture</span>
+          </div>
+          <div class="nbhd-card-footer">
+            <span class="nbhd-card-count">142 hotels</span>
+            <span class="nbhd-card-visitor">First visit</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- OPTION B -->
+  <div>
+    <div class="col-label">Option B — Remove vibe line
+      <span>Photo unchanged. Vibe tagline removed.<br>Body padding tightened.</span>
+    </div>
+    <div class="card-b">
+      <div class="nbhd-card">
+        <img class="nbhd-card-photo" src="https://images.unsplash.com/photo-1499856871958-5b9627545d1a?w=700&q=80" alt="Le Marais"/>
+        <div class="nbhd-card-credit">Photo by John Doe on Unsplash</div>
+        <div class="nbhd-card-body">
+          <div class="nbhd-card-name">Le Marais</div>
+          <!-- vibe removed -->
+          <div class="nbhd-card-tags">
+            <span class="nbhd-card-tag">first-timers</span>
+            <span class="nbhd-card-tag">walkable</span>
+            <span class="nbhd-card-tag">culture</span>
+          </div>
+          <div class="nbhd-card-footer">
+            <span class="nbhd-card-count">142 hotels</span>
+            <span class="nbhd-card-visitor">First visit</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- OPTION C -->
+  <div>
+    <div class="col-label">Option C — Text on photo
+      <span>Card = photo only. Name, vibe, tags<br>float over gradient overlay.</span>
+    </div>
+    <div class="card-c">
+      <div class="nbhd-card" style="position:relative">
+        <img class="nbhd-card-photo" src="https://images.unsplash.com/photo-1499856871958-5b9627545d1a?w=700&q=80" alt="Le Marais"/>
+        <div class="nbhd-card-overlay"></div>
+        <div class="nbhd-card-credit-overlay">J. Doe / Unsplash</div>
+        <div class="nbhd-card-body">
+          <div class="nbhd-card-name">Le Marais</div>
+          <div class="nbhd-card-vibe">Artsy, walkable, café culture</div>
+          <div class="nbhd-card-tags">
+            <span class="nbhd-card-tag">first-timers</span>
+            <span class="nbhd-card-tag">walkable</span>
+            <span class="nbhd-card-tag">culture</span>
+          </div>
+          <div class="nbhd-card-footer">
+            <span class="nbhd-card-count">142 hotels</span>
+            <span class="nbhd-card-visitor">First visit</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+</body>
+</html>

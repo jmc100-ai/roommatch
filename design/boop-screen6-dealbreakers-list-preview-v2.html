@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Screen 6 Dealbreakers List Preview V2</title>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;600&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet" />
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{--bg:#0c0c0e;--panel:#13151b;--row:#1a1d25;--border:rgba(255,255,255,.12);--text:#ece8df;--muted:#a39e95;--accent:#c9a96e}
+body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);padding:8px;min-height:100vh}
+.wrap{max-width:980px;height:calc(100dvh - 16px);max-height:calc(100dvh - 16px);margin:0 auto;background:linear-gradient(180deg,#17181d,#111218);border:1px solid var(--border);border-radius:16px;padding:14px 16px;display:flex;flex-direction:column;box-sizing:border-box}
+.badge{display:inline-block;font-size:10px;letter-spacing:.12em;text-transform:uppercase;border:1px solid rgba(201,169,110,.5);color:#ead2aa;padding:4px 8px;border-radius:999px}
+h1{margin-top:6px;font-family:'Cormorant Garamond',serif;font-size:34px;font-weight:400;line-height:1.05;flex-shrink:0}
+h1 em{color:var(--accent)}
+.sub{margin-top:5px;color:var(--muted);font-size:13px;line-height:1.35;flex-shrink:0}
+/* Equal-height rows; ~60% image column on a slightly narrower panel. */
+.list{margin-top:12px;display:flex;flex-direction:column;gap:8px;flex:1 1 auto;min-height:0}
+.row{display:grid;grid-template-columns:minmax(260px,60%) 1fr;flex:1 1 0;min-height:0;border:1px solid var(--border);background:var(--row);border-radius:12px;overflow:hidden;cursor:pointer;align-items:stretch}
+.img{position:relative;min-height:0;min-width:0;height:100%;align-self:stretch}
+.img img{width:100%;height:100%;object-fit:cover;object-position:center 42%;display:block}
+.img:after{content:"";position:absolute;inset:0;background:linear-gradient(90deg,rgba(0,0,0,.04),rgba(0,0,0,.28))}
+.content{padding:10px 12px;display:flex;flex-direction:column;justify-content:space-between;min-width:0}
+.head{display:flex;justify-content:space-between;gap:10px}
+.title{font-size:20px;line-height:1.12;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.hint{margin-top:5px;font-size:13px;color:#d6d1c8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.check{width:30px;height:30px;border-radius:999px;border:1px solid rgba(255,255,255,.33);display:grid;place-items:center;font-size:15px;background:rgba(0,0,0,.28);flex-shrink:0}
+.meta{font-size:11px;color:#9ee0c4;border:1px solid rgba(158,224,196,.28);padding:4px 9px;border-radius:999px;align-self:flex-start;white-space:nowrap}
+.row.active{border-color:rgba(224,192,144,.95);box-shadow:0 0 0 2px rgba(224,192,144,.2)}
+.row.active .check{background:#e0c090;color:#17120b;border-color:#e0c090}
+.footer{margin-top:10px;font-size:13px;color:var(--muted);flex-shrink:0}
+@media (max-width:760px){
+  .wrap{height:auto;max-height:none;min-height:calc(100dvh - 20px)}
+  .list{flex:none}
+  .row{grid-template-columns:1fr;flex:none;min-height:120px}
+  .img{aspect-ratio:2/1;max-height:180px}
+}
+</style>
+</head>
+<body>
+<main class="wrap">
+  <span class="badge">V2 Compact list</span>
+  <h1>Any <em>dealbreakers?</em></h1>
+  <p class="sub">Narrower panel (~980px); photo band about 60% of each row; type scaled up for readability.</p>
+
+  <section class="list" id="list">
+    <button class="row" data-id="noisy">
+      <div class="img"><img src="https://images.unsplash.com/photo-1449824913935-59a10b8d2000?auto=format&fit=crop&w=1400&q=80" alt="Busy city street"></div>
+      <div class="content">
+        <div class="head"><div><div class="title">Too noisy</div><div class="hint">Busy streets and traffic wear me out.</div></div><div class="check">+</div></div>
+        <div class="meta">Filter for calmer streets</div>
+      </div>
+    </button>
+    <button class="row active" data-id="far">
+      <div class="img"><img src="https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=1400&q=80" alt="Far from city center"></div>
+      <div class="content">
+        <div class="head"><div><div class="title">Too far from things</div><div class="hint">I want easy access to central spots.</div></div><div class="check">✓</div></div>
+        <div class="meta">Boost central convenience</div>
+      </div>
+    </button>
+    <button class="row" data-id="touristy">
+      <div class="img"><img src="https://images.unsplash.com/photo-1481437156560-3205f6a55735?auto=format&fit=crop&w=1400&q=80" alt="Crowded tourist street"></div>
+      <div class="content">
+        <div class="head"><div><div class="title">Too touristy</div><div class="hint">Skip oversaturated streets with heavy crowds.</div></div><div class="check">+</div></div>
+        <div class="meta">Prioritize local vibe</div>
+      </div>
+    </button>
+    <button class="row" data-id="lowFood">
+      <div class="img"><img src="https://images.unsplash.com/photo-1448630360428-65456885c650?auto=format&fit=crop&w=1400&q=80" alt="Quiet residential street"></div>
+      <div class="content">
+        <div class="head"><div><div class="title">Not enough food options</div><div class="hint">I need plenty of restaurants nearby.</div></div><div class="check">+</div></div>
+        <div class="meta">Boost food-dense neighborhoods</div>
+      </div>
+    </button>
+  </section>
+  <div class="footer" id="status">Selected: Too far from things</div>
+</main>
+<script>
+const rows=[...document.querySelectorAll('.row')];
+const status=document.getElementById('status');
+rows.forEach(r=>r.addEventListener('click',()=>{
+  r.classList.toggle('active');
+  r.querySelector('.check').textContent=r.classList.contains('active')?'✓':'+';
+  const on=rows.filter(x=>x.classList.contains('active')).map(x=>x.querySelector('.title').textContent);
+  status.textContent=on.length?`Selected: ${on.join(' · ')}`:'No dealbreakers selected yet';
+}));
+</script>
+</body>
+</html>
