@@ -1422,6 +1422,19 @@ async function fetchGooglePlacesElementPhotos(bbox, elementKey, placesKey, maxPh
   return photos;
 }
 
+// Flickr license id → short label (commercial-safe set from fetchFlickrPhotos filter)
+const FLICKR_LICENSE_NAMES = {
+  "4": "CC BY 2.0",
+  "5": "CC BY-SA 2.0",
+  "6": "CC BY-ND 2.0",
+  "7": "PD",
+  "9": "CC0",
+  "10": "PD",
+  "11": "CC BY 4.0",
+  "12": "CC BY-SA 4.0",
+  "13": "CC BY-ND 4.0",
+};
+
 // ── Wikimedia Commons photo helpers ──────────────────────────────────────────
 
 /**
@@ -1474,10 +1487,11 @@ async function fetchWikimediaPhotos(query, maxPhotos = PHOTO_RULES.target) {
       const license = info.extmetadata?.LicenseShortName?.value || null;
 
       photos.push({
-        url:        info.thumburl,
-        source:     "wikimedia",
+        url:          info.thumburl,
+        source:       "wikimedia",
         query,
-        is_fallback: false,
+        is_fallback:  false,
+        license_name: license || null,
         attribution: {
           photographer: artist ? `${artist}${license ? ` (${license})` : ""}` : `Wikimedia Commons${license ? ` (${license})` : ""}`,
           profile_url:  `https://commons.wikimedia.org/wiki/${encodeURIComponent(page.title || "")}`,
@@ -1539,7 +1553,7 @@ function normalizePhotoObject(photo, query, source, isFallback = false) {
   if (typeof photo === "string") {
     return { url: photo, source, query, is_fallback: isFallback, attribution: null };
   }
-  return {
+  const out = {
     url: photo.urls?.regular || photo.url || null,
     source,
     query,
@@ -1549,6 +1563,8 @@ function normalizePhotoObject(photo, query, source, isFallback = false) {
       profile_url: photo.user.links?.html || null,
     } : (photo.attribution || null),
   };
+  if (photo.license_name) out.license_name = photo.license_name;
+  return out;
 }
 
 async function fetchUnsplashPhotos(query, unsplashKey, perPage = 8) {
@@ -1594,7 +1610,7 @@ async function fetchFlickrPhotos(bbox, tags, flickrKey, perPage = 8) {
     safe_search:   "1",
     content_type:  "1",
     sort:          "interestingness-desc",
-    extras:        "url_m,url_l,url_c,url_z,owner_name,description",
+    extras:        "url_m,url_l,url_c,url_z,owner_name,description,license",
     per_page:      String(Math.min(perPage, 50)),
     format:        "json",
     nojsoncallback:"1",
@@ -1618,10 +1634,12 @@ async function fetchFlickrPhotos(bbox, tags, flickrKey, perPage = 8) {
       .map((p) => {
         const url = p.url_l || p.url_c || p.url_z || p.url_m;
         if (!url) return null;
+        const lic = p.license != null ? String(p.license) : "";
         return {
           url,
           query: tags,
           source: "flickr",
+          license_name: FLICKR_LICENSE_NAMES[lic] || (lic ? `License ${lic}` : null),
           attribution: {
             photographer: p.ownername || "Flickr user",
             profile_url:  `https://www.flickr.com/photos/${p.owner}`,

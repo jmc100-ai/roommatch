@@ -20,15 +20,14 @@
 
 ## Phase 1 — Google Maps (Street View + Places)
 
-### 1A. Street View Static API
+### 1A. Street View Static API — **implemented (Option B+)**
 
-**Build**
+**Done in code**
 
-- **`client/index.html` (vibe tour):** For every scene with `sourceTag === 'street-view'` (or any full-screen Street View image), add a **persistent, visible** attribution strip per [Street View policies](https://developers.google.com/maps/documentation/streetview/policies): e.g. **Google Maps** wordmark or approved logo + link, not removable by scroll, readable on dark photos (contrast / backdrop).
-- **`server.js` `/api/street-view`:** Prefer **not** returning raw Static API URLs that embed `key=` for client-side `<img src>`.
-  - **Option A (recommended):** Add `GET /api/street-view/image?...` (or signed path params) that **proxies** the image: server fetches Google with the secret key, streams bytes to the client, sets short cache headers aligned with [Maps Platform caching rules](https://developers.google.com/maps/documentation/tile/policies). Client only sees same-origin URLs.
-  - **Option B (lighter):** Keep returning Google URLs but **lock down** the key in Google Cloud Console (HTTP referrer restrictions, API restrictions to Street View Static + Metadata only) and accept residual key-exposure risk; still add visible attribution.
-- Document in `CLAUDE.md` or env comments: billing surfaces (metadata + image requests per tour).
+- **Two keys:** `GOOGLE_STREETVIEW_SERVER_KEY` (metadata from Node) + `GOOGLE_STREETVIEW_BROWSER_KEY` (in image URLs for `<img src>`). Legacy `GOOGLE_STREETVIEW_KEY` fills both if split keys unset.
+- **Signing:** `GOOGLE_STREETVIEW_SIGNING_SECRET` — HMAC-SHA1 per [digital signature](https://developers.google.com/maps/documentation/streetview/digital-signature). If unset, server logs a warning and returns **unsigned** URLs (dev only).
+- **Client:** Vibe tour shows **Imagery © Google** when Street View frames are present (`client/index.html`).
+- **GCP referrer list:** `docs/gcp-streetview-referrers.md`.
 
 **UX**
 
@@ -96,17 +95,17 @@
 
 ---
 
-## Phase 5 — Hugging Face Inference (`/api/clip-search`)
+## Phase 5 — Hugging Face Inference (`/api/clip-search`) — **implemented**
 
 **Build**
 
-- **Default off for public beta:** `CLIP_SEARCH_ENABLED=false` (or absence of `HUGGINGFACE_KEY` already disables scoring path partially—align UI so **no** `EventSource` to `/api/clip-search` when disabled).
-- **Admin-only or staging:** If you keep the endpoint, gate with `SITE_PASSWORD`, separate env, or non-production host only.
-- **Docs:** Note model license (**Llama** vision) and HF Terms for any future re-enable.
+- **Server:** `/api/clip-search` returns **503** unless `CLIP_SEARCH_ENABLED=true` (in addition to LiteAPI + HF key checks).
+- **Client:** Loads `/api/public-config`; only uses CLIP streaming when `clipSearchEnabled` is true; otherwise vector search with a status line.
+- **Re-enable:** Set `CLIP_SEARCH_ENABLED=true` on Render and keep `HUGGINGFACE_KEY`; confirm Llama / HF terms.
 
 **UX**
 
-- **Feature removal:** If the UI exposes “CLIP” or streaming search mode, hide it cleanly so users do not hit a **500** or empty stream; one-line “Visual match mode is temporarily unavailable” if you want a placeholder.
+- CLIP-disabled path avoids dead **EventSource** errors from 503 on the stream.
 
 ---
 

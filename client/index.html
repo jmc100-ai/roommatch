@@ -1006,6 +1006,8 @@
       overflow:hidden;
       box-shadow:0 24px 70px rgba(0,0,0,.46);
       position:relative;
+      display:flex;
+      flex-direction:column;
     }
     .vibe-tour-overlay {
       position:fixed;
@@ -1080,8 +1082,9 @@
       max-width:28em;
     }
     .vibe-tour-stage {
+      flex: 1 1 auto;
+      min-height: 0;
       height:min(72vh,680px);
-      min-height:480px;
       position:relative;
       display:flex;
       align-items:stretch;
@@ -1507,6 +1510,40 @@
     }
     .vibe-tour-actions .btn-pri,
     .vibe-tour-actions .btn-sec { padding:11px 16px; }
+    .vibe-tour-maps-attr {
+      flex-shrink: 0;
+      padding: 5px 12px 4px;
+      text-align: center;
+      font-size: 10px;
+      letter-spacing: 0.02em;
+      background: rgba(10, 10, 13, 0.92);
+      color: rgba(200, 195, 185, 0.88);
+      border-top: 1px solid rgba(255, 255, 255, 0.06);
+    }
+    .vibe-tour-maps-attr a {
+      color: rgba(220, 210, 195, 0.95);
+      text-decoration: underline;
+    }
+    .nbhd-hero-credit-line {
+      font-size: 10px;
+      line-height: 1.35;
+      color: rgba(232, 228, 220, 0.55);
+      margin-top: 8px;
+    }
+    .nbhd-el-attrib,
+    .nbhd-osm-credit {
+      font-size: 10px;
+      line-height: 1.35;
+      color: rgba(232, 228, 220, 0.55);
+    }
+    .nbhd-hero-credit-line a,
+    .nbhd-el-attrib a,
+    .nbhd-osm-credit a {
+      color: rgba(201, 169, 110, 0.88);
+      text-decoration: underline;
+    }
+    .nbhd-el-attrib { padding: 6px 2px 0; max-width: 100%; }
+    .nbhd-osm-credit { padding: 6px 0 0; margin-top: 2px; }
     .hotel-tour-link {
       border:1px solid rgba(201,169,110,.34);
       background:rgba(201,169,110,.08);
@@ -4646,6 +4683,15 @@
   const BACKEND = (location.hostname === 'localhost' || location.hostname === '127.0.0.1')
     ? 'http://localhost:3000' : '';
 
+  let PUBLIC_CLIP_SEARCH_ENABLED = false;
+  (function loadPublicConfig() {
+    const base = BACKEND || '';
+    fetch(`${base}/api/public-config`)
+      .then((r) => (r.ok ? r.json() : {}))
+      .then((j) => { PUBLIC_CLIP_SEARCH_ENABLED = !!j.clipSearchEnabled; })
+      .catch(() => {});
+  })();
+
   let currentMode = 'vector';
   let clipES = null;
   let clipDone = 0, clipTotal = 10;
@@ -6445,6 +6491,52 @@
     return (s||'').replace(/"/g,'&quot;').replace(/'/g,'&#39;').replace(/</g,'&lt;');
   }
 
+  /** Hero / card `photo_credit` from API — source-aware attribution. */
+  function formatNbhdHeroCreditHtml(pc) {
+    if (!pc) return '';
+    let src = pc.source || '';
+    if (!src && pc.profile_url && String(pc.profile_url).includes('unsplash.com')) src = 'unsplash';
+    const name = escHtml(pc.photographer || '');
+    const prof = pc.profile_url || '';
+    const linkInner = name || 'Contributor';
+    const urlA = prof
+      ? `<a href="${escHtml(prof)}" target="_blank" rel="noopener">${linkInner}</a>`
+      : linkInner;
+    if (src === 'unsplash') {
+      return `<div class="nbhd-hero-credit-line">Photo by ${urlA} on Unsplash</div>`;
+    }
+    if (src === 'google_places') {
+      return `<div class="nbhd-hero-credit-line">Imagery © Google Maps${name ? ` · ${urlA}` : ''}</div>`;
+    }
+    if (src === 'flickr' || src === 'wikimedia') {
+      const lic = pc.license_name ? escHtml(pc.license_name) : '';
+      const lab = src === 'flickr' ? 'Flickr' : 'Wikimedia';
+      return `<div class="nbhd-hero-credit-line">${lab}${lic ? ` · ${lic}` : ''}${(prof || name) ? ` · ${urlA}` : ''}</div>`;
+    }
+    if (src === 'pexels') {
+      return `<div class="nbhd-hero-credit-line">Pexels${prof ? ` · ${urlA}` : ''}</div>`;
+    }
+    return `<div class="nbhd-hero-credit-line">Photo: ${urlA}</div>`;
+  }
+
+  function vibePhotoAttribTags(photos) {
+    const tags = [];
+    const seen = new Set();
+    const add = (t) => { if (t && !seen.has(t)) { seen.add(t); tags.push(t); } };
+    for (const p of photos || []) {
+      const o = typeof p === 'string' ? null : p;
+      const src = o?.source;
+      const u = typeof p === 'string' ? p : o?.url;
+      if (src === 'google_places' || (typeof u === 'string' && (u.includes('googleusercontent.com') || u.includes('places.googleapis.com')))) {
+        add('Google Maps');
+      } else if (src === 'unsplash') add('Unsplash');
+      else if (src === 'flickr') add(o.license_name ? `Flickr (${o.license_name})` : 'Flickr');
+      else if (src === 'wikimedia') add(o.license_name ? `Wikimedia (${o.license_name})` : 'Wikimedia');
+      else if (src === 'pexels') add('Pexels');
+    }
+    return tags;
+  }
+
   function nbhdFirstElementKey(h) {
     const data = h?.vibe_elements || {};
     const present = NBHD_ELEMENT_ORDER
@@ -6475,13 +6567,17 @@
       walkPct > 0 ? `Walkability: ${walkPct}%` : null,
       // densityPct > 0 ? `Local density: ${densityLabel} (${densityPct}%)` : null,
     ].filter(Boolean).map(l => `<li>${escHtml(l)}</li>`).join('');
+    const attribTags = vibePhotoAttribTags(photos.slice(0, 6));
+    const attribLine = attribTags.length
+      ? `<div class="nbhd-el-attrib" aria-label="Photo sources">Includes: ${attribTags.map((t) => escHtml(t)).join(' · ')}</div>`
+      : '';
     const galleryInner = photoTiles
       ? `<div class="nbhd-el-gallery">${photoTiles}</div>
          <button class="nbhd-gal-arrow nbhd-gal-prev" onclick="scrollGallery(this,-1,event)" aria-label="Scroll left">&#8249;</button>
          <button class="nbhd-gal-arrow nbhd-gal-next" onclick="scrollGallery(this,1,event)" aria-label="Scroll right">&#8250;</button>`
       : `<div class="nbhd-el-empty">No photos yet</div>`;
     return `<div class="nbhd-el-body">
-      <div class="nbhd-el-gallery-wrap">${galleryInner}</div>
+      <div class="nbhd-el-gallery-wrap">${galleryInner}${attribLine}</div>
       <div class="nbhd-el-info">
         <ul class="nbhd-el-facts">${facts}</ul>
         ${extraLines ? `<ul class="nbhd-el-extra-facts">${extraLines}</ul>` : ''}
@@ -6757,9 +6853,7 @@
     const slidesHtml = heroPhotos.length
       ? heroPhotos.map(url => `<div class="nbhd-hero-slide" style="background-image:url('${escHtml(url)}')"></div>`).join('')
       : `<div class="nbhd-hero-slide" style="background:${h.bg || 'linear-gradient(160deg,#1a1008 0%,#0e0a06 100%)'}"></div>`;
-    const credit = h.photo_credit
-      ? `<div class="nbhd-credit-new">Photo: <a href="${escHtml(h.photo_credit.profile_url||'')}" target="_blank" rel="noopener">${escHtml(h.photo_credit.photographer||'')}</a></div>`
-      : '';
+    const credit = formatNbhdHeroCreditHtml(h.photo_credit);
     const firstEl = nbhdFirstElementKey(h);
     const tabs = NBHD_ELEMENT_ORDER
       .filter(e => (h.vibe_elements || {})[e.key])
@@ -7828,7 +7922,11 @@
     S.hotelQ = null;
     S.mustHaves = null;
     if (currentMode === 'vector') startVectorSearch(query, city, btn);
-    else if (currentMode === 'clip') startClip(query, city, btn);
+    else if (currentMode === 'clip' && PUBLIC_CLIP_SEARCH_ENABLED) startClip(query, city, btn);
+    else if (currentMode === 'clip') {
+      setStatus('Visual match (CLIP) is off for this deployment — using vector search.', true);
+      startVectorSearch(query, city, btn);
+    }
     else startLiteApi(query, city, btn);
   }
 
@@ -8629,6 +8727,10 @@
       </div>
     </article>`).join('');
     const progressHTML = scenes.map((s, i) => `<button type="button" class="${i === _vibeTourScene ? 'active' : ''}" aria-label="Show ${escHtml(s.key)} scene" onclick="setVibeTourScene(${i}, true)"></button>`).join('');
+    const showSvAttrib = (svUrls && svUrls.length) || scenes.some((s) => s.sourceTag === 'street-view');
+    const svAttribHtml = showSvAttrib
+      ? `<div class="vibe-tour-maps-attr" role="note"><a href="https://www.google.com/maps" target="_blank" rel="noopener noreferrer">Imagery © Google</a></div>`
+      : '';
     return `<section class="vibe-tour" id="vibe-tour" data-scene="${_vibeTourScene}" aria-label="Cinematic vibe tour preview">
       <div class="vibe-tour-stage">
         ${sceneHTML}
@@ -8645,6 +8747,7 @@
         <button type="button" class="vibe-tour-nav prev" aria-label="Previous scene" onclick="shiftVibeTourScene(-1)">&#8249;</button>
         <button type="button" class="vibe-tour-nav next" aria-label="Next scene" onclick="shiftVibeTourScene(1)">&#8250;</button>
       </div>
+      ${svAttribHtml}
       <div class="vibe-tour-actions">
         <button type="button" class="btn-pri" onclick="closeVibeTourPopup(true)">Continue to hotel list</button>
         <button type="button" class="btn-sec" onclick="closeVibeTourPopup();goToStep('nbhd')">Try another neighborhood</button>
@@ -9372,6 +9475,10 @@
     const dmStrip = document.getElementById('availFilterMountDesktop');
     const afStrip = document.getElementById('availFilter');
     if (dmStrip && afStrip) dmStrip.appendChild(afStrip);
+    const osmCredit =
+      selectedNeighborhood && selectedNeighborhood.polygon && Array.isArray(selectedNeighborhood.polygon.ring) && selectedNeighborhood.polygon.ring.length >= 4
+        ? `<div class="nbhd-osm-credit">Map data © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap</a> contributors</div>`
+        : '';
     strip.innerHTML = `
       <div class="nbhd-refine-inner">
         <div class="nbhd-refine-toprow">
@@ -9382,6 +9489,7 @@
           <div class="nbhd-refine-chips" id="nbhd-refine-chips">${chips.join('')}</div>
           <button type="button" class="nbhd-refine-more" onclick="toggleNbhdRefineExpand()" aria-expanded="false" aria-controls="nbhd-refine-chips">More ›</button>
         </div>
+        ${osmCredit}
       </div>`;
     strip.style.display = '';
     scheduleSyncAvailFilterMount();
@@ -9968,9 +10076,8 @@
     const count = hood.hotel_count > 0 ? `${hood.hotel_count} hotels` : '—';
     const visitorLabel = hood.visitor_type === 'first-timer' ? 'First visit'
       : hood.visitor_type === 'returning' ? 'Off the beaten path' : '';
-    const credit = hood.photo_credit
-      ? `<div class="nbhd-card-credit">Photo by <a href="${esc(hood.photo_credit.profile_url)}" target="_blank" rel="noopener">${esc(hood.photo_credit.photographer)}</a> on Unsplash</div>`
-      : '';
+    const creditInner = formatNbhdHeroCreditHtml(hood.photo_credit);
+    const credit = creditInner ? `<div class="nbhd-card-credit">${creditInner}</div>` : '';
 
     return `<div class="nbhd-card">
       ${hood.photo_url

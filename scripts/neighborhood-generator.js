@@ -21,6 +21,51 @@ const {
   isParkLikePlaceName,
 } = require("./neighborhood-vibe-data");
 
+async function triggerUnsplashDownload(unsplashKey, photo) {
+  const loc = photo?.links?.download_location;
+  if (!unsplashKey || !loc) return;
+  try {
+    const r = await fetch(loc, { headers: { Authorization: `Client-ID ${unsplashKey}` } });
+    if (!r.ok) console.warn(`[unsplash] download ping HTTP ${r.status}`);
+  } catch (e) {
+    console.warn(`[unsplash] download ping failed: ${e.message}`);
+  }
+}
+
+function withUnsplashUtm(url) {
+  if (!url || typeof url !== "string") return url;
+  if (!url.includes("unsplash.com")) return url;
+  if (/utm_source=/.test(url)) return url;
+  return `${url}${url.includes("?") ? "&" : "?"}utm_source=travelboop&utm_medium=referral`;
+}
+
+/** Stored on neighborhoods.photo_credit (JSON). */
+function packPhotoCredit(obj) {
+  if (!obj) return null;
+  const out = {
+    source:       obj.source || "unknown",
+    photographer: obj.photographer || null,
+    profile_url:  obj.profile_url || null,
+    query_used:   obj.query_used || null,
+  };
+  if (obj.license_name) out.license_name = obj.license_name;
+  return out;
+}
+
+function pickFromAltPoolEntry(alt) {
+  if (typeof alt === "string") {
+    return { url: alt, photographer: "Contributor", profile_url: null, query_used: "dedup_alt", source: "unknown" };
+  }
+  return {
+    url:            alt.url,
+    photographer:   alt.attribution?.photographer || alt.photographer || "Contributor",
+    profile_url:    alt.attribution?.profile_url || alt.profile_url || null,
+    query_used:     "dedup_alt",
+    source:         alt.source || "google_places",
+    license_name:   alt.license_name || null,
+  };
+}
+
 // Canonical Gemini prompt for neighborhood generation
 function buildNeighborhoodPrompt(city) {
   return `Act as a local travel expert with deep knowledge of hotel neighborhoods.
@@ -350,10 +395,11 @@ async function fetchNeighborhoodPhoto(name, city, unsplashKey, vibeShort = "", t
       const data  = await res.json();
       const photo = (data.results || []).sort((a, b) => (b.downloads || 0) - (a.downloads || 0))[0];
       if (!photo) continue;
+      await triggerUnsplashDownload(unsplashKey, photo);
       return {
         url:          photo.urls.regular,
         photographer: photo.user.name,
-        profile_url:  photo.user.links.html,
+        profile_url:  withUnsplashUtm(photo.user.links.html),
         query_used:   query,
         source:       "unsplash",
       };
@@ -368,9 +414,23 @@ async function fetchNeighborhoodPhoto(name, city, unsplashKey, vibeShort = "", t
  * per element, best pick within each array: new place-photos URL, then any
  * non-fallback, then fallback).
  */
+function inferPhotoSourceFromUrl(url) {
+  if (!url || typeof url !== "string") return null;
+  if (url.includes("images.unsplash.com") || url.includes("unsplash.com")) return "unsplash";
+  if (url.includes("flickr.com")) return "flickr";
+  if (url.includes("wikimedia.org") || url.includes("upload.wikimedia.org")) return "wikimedia";
+  if (url.includes("pexels.com")) return "pexels";
+  if (url.includes("googleusercontent.com") || url.includes("places.googleapis.com")) return "google_places";
+  return null;
+}
+
 function pickFirstPhotoFromElementList(arr) {
   if (!Array.isArray(arr) || arr.length === 0) return null;
-  const list = arr.map(p => (typeof p === "string" ? { url: p, is_fallback: false } : p));
+  const list = arr.map((p) =>
+    typeof p === "string"
+      ? { url: p, is_fallback: false, source: inferPhotoSourceFromUrl(p) }
+      : { ...p, source: p.source || inferPhotoSourceFromUrl(p.url) }
+  );
   const isNewFormat = (p) => p?.url?.includes('/place-photos/');
   const tiers = [
     (p) => p?.url && !p.is_fallback && isNewFormat(p),
@@ -399,11 +459,12 @@ function pickHeroFromVibePhotos(vibeElements, vibePhotos) {
 
   console.log(`[photos] hero from top vibe [${topKey}] (${ranked[0][1]?.score ?? "?"}%): ${pick.source || "?"} — ${pick.query}`);
   return {
-    url:          pick.url,
-    photographer: pick.attribution?.photographer || "Google Maps contributor",
-    profile_url:  pick.attribution?.profile_url  || null,
-    query_used:   `vibe pick:${pick.query || pick.source || "unknown"}`,
-    source:       pick.source || "google_places",
+    url:            pick.url,
+    photographer:   pick.attribution?.photographer || "Google Maps contributor",
+    profile_url:    pick.attribution?.profile_url || null,
+    query_used:     `vibe pick:${pick.query || pick.source || "unknown"}`,
+    source:         pick.source || "google_places",
+    license_name:   pick.license_name || null,
   };
 }
 
@@ -765,20 +826,20 @@ async function generateNeighborhoods(city, db, geminiKey, unsplashKey, googlePla
         });
       if (pool.length > 0) {
         const alt = pool[Math.floor(Math.random() * pool.length)];
-        heroPick = { url: typeof alt === 'string' ? alt : alt.url, photographer: alt?.attribution?.photographer || "Google Maps contributor", profile_url: alt?.attribution?.profile_url || null, query_used: "dedup_alt" };
+        heroPick = pickFromAltPoolEntry(alt);
       }
     }
 
     if (heroPick) {
       row.photo_url    = heroPick.url;
-      row.photo_credit = { photographer: heroPick.photographer, profile_url: heroPick.profile_url, query_used: heroPick.query_used };
+      row.photo_credit = packPhotoCredit(heroPick);
     } else {
       const photo = await fetchNeighborhoodPhoto(
         row.name, city, unsplashKey, row.vibe_short, row.tags, row.bbox, googlePlacesKey, row._polygonRing
       ).catch(() => null);
       if (photo) {
         row.photo_url    = photo.url;
-        row.photo_credit = { photographer: photo.photographer, profile_url: photo.profile_url, query_used: photo.query_used };
+        row.photo_credit = packPhotoCredit(photo);
       }
     }
 
@@ -845,7 +906,7 @@ async function backfillNeighborhoodPhotos(city, db, unsplashKey, googlePlacesKey
         });
       if (pool.length > 0) {
         const alt = pool[Math.floor(Math.random() * pool.length)];
-        photo = { url: typeof alt === 'string' ? alt : alt.url, photographer: alt?.attribution?.photographer || "Google Maps contributor", profile_url: alt?.attribution?.profile_url || null, query_used: "dedup_alt" };
+        photo = pickFromAltPoolEntry(alt);
       }
     }
 
@@ -868,7 +929,7 @@ async function backfillNeighborhoodPhotos(city, db, unsplashKey, googlePlacesKey
         .from("neighborhoods")
         .update({
           photo_url:    photo.url,
-          photo_credit: { photographer: photo.photographer, profile_url: photo.profile_url, query_used: photo.query_used },
+          photo_credit: packPhotoCredit(photo),
         })
         .eq("id", row.id);
       if (upErr) console.warn(`[photos] update ${row.name} failed: ${upErr.message}`);
@@ -986,7 +1047,7 @@ async function recomputeNeighborhoodVibes(city, db, unsplashKey, googlePlacesKey
         });
       if (pool.length > 0) {
         const alt = pool[Math.floor(Math.random() * pool.length)];
-        heroPick = { url: typeof alt === 'string' ? alt : alt.url, photographer: alt?.attribution?.photographer || "Google Maps contributor", profile_url: alt?.attribution?.profile_url || null, query_used: "dedup_alt" };
+        heroPick = pickFromAltPoolEntry(alt);
       }
     }
 
@@ -996,7 +1057,15 @@ async function recomputeNeighborhoodVibes(city, db, unsplashKey, googlePlacesKey
         row.name, row.city, unsplashKey, row.vibe_short || "", row.tags || [], row.bbox || null, googlePlacesKey,
         normalizePolygonRing(row.polygon)
       ).catch(() => null);
-      if (fallback) heroPick = { url: fallback.url, photographer: fallback.photographer, profile_url: fallback.profile_url, query_used: fallback.query_used };
+      if (fallback) {
+        heroPick = {
+          url: fallback.url,
+          photographer: fallback.photographer,
+          profile_url: fallback.profile_url,
+          query_used: fallback.query_used,
+          source: fallback.source || "unsplash",
+        };
+      }
     }
 
     // mergedForHero is the merged set for storing.
@@ -1014,7 +1083,7 @@ async function recomputeNeighborhoodVibes(city, db, unsplashKey, googlePlacesKey
       vibe_data_version:    "v1",
       vibe_last_computed_at: new Date().toISOString(),
       photo_url:    heroPick?.url    || row.photo_url || null,
-      photo_credit: heroPick ? { photographer: heroPick.photographer, profile_url: heroPick.profile_url, query_used: heroPick.query_used } : (row.photo_credit || null),
+      photo_credit: heroPick ? packPhotoCredit(heroPick) : (row.photo_credit || null),
       hotel_count:  freshHotelCount,
     };
 

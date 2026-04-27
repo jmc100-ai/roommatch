@@ -110,6 +110,12 @@ app.head("/api/health", (_, res) => {
   res.status(200).end();
 });
 
+app.get("/api/public-config", (_req, res) => {
+  res.json({
+    clipSearchEnabled: String(process.env.CLIP_SEARCH_ENABLED || "").toLowerCase() === "true",
+  });
+});
+
 // Bind PORT before the rest of this file runs (huge tables + routes). Render scans the
 // container port immediately; waiting until EOF made probes time out intermittently.
 app.listen(PORT, "0.0.0.0", () => {
@@ -1371,6 +1377,9 @@ async function clipScore(imageUrl, textQuery) {
 app.get("/api/clip-search", async (req, res) => {
   const { query, city } = req.query;
   if (!query || !city) return res.status(400).json({ error: "query and city are required" });
+  if (String(process.env.CLIP_SEARCH_ENABLED || "").toLowerCase() !== "true") {
+    return res.status(503).json({ error: "CLIP search is disabled for this deployment" });
+  }
   if (!LITEAPI_KEY)    return res.status(500).json({ error: "LITEAPI_KEY not configured" });
   if (!HF_KEY)         return res.status(500).json({ error: "HUGGINGFACE_KEY not configured" });
 
@@ -3056,18 +3065,64 @@ app.post("/api/rebuild-hotel-profile-index", async (req, res) => {
 
 // ── Street View Static API — 4-frame neighborhood walk ───────────────────────
 // GET /api/street-view?hotelId=lp1beec
-// Returns up to 4 Street View image URLs at different headings around the hotel's
-// lat/lng. Results are in-process cached (keyed by hotelId) to avoid repeated
-// billing on the same hotel within a server process lifetime.
-const STREETVIEW_KEY = process.env.GOOGLE_STREETVIEW_KEY || "";
+// Server: GOOGLE_STREETVIEW_SERVER_KEY (no browser Referer — used for metadata only).
+// Client <img>: signed URLs with GOOGLE_STREETVIEW_BROWSER_KEY + GOOGLE_STREETVIEW_SIGNING_SECRET.
+// Legacy: GOOGLE_STREETVIEW_KEY alone fills both keys if the split keys are unset.
+// https://developers.google.com/maps/documentation/streetview/digital-signature
+const SV_SERVER_KEY = process.env.GOOGLE_STREETVIEW_SERVER_KEY || process.env.GOOGLE_STREETVIEW_KEY || "";
+const SV_BROWSER_KEY = process.env.GOOGLE_STREETVIEW_BROWSER_KEY || process.env.GOOGLE_STREETVIEW_KEY || "";
+const SV_SIGNING_SECRET = process.env.GOOGLE_STREETVIEW_SIGNING_SECRET || "";
 const _svCache = new Map(); // cacheKey → { ts, urls }
 const SV_CACHE_MS = 24 * 60 * 60 * 1000; // 24h
-const SV_CACHE_VERSION = 3; // bump when URL params change (invalidates stale cache)
+const SV_CACHE_VERSION = 4; // bump when URL params / signing change (invalidates stale cache)
+let _svUnsignedWarned = false;
+
+function googleStreetViewSigningKeyBytes(secretRaw) {
+  if (!secretRaw || typeof secretRaw !== "string") return null;
+  const s = secretRaw.trim();
+  try {
+    return Buffer.from(s, "base64url");
+  } catch {
+    try {
+      const b64 = s.replace(/-/g, "+").replace(/_/g, "/");
+      const pad = b64.length % 4 === 0 ? "" : "=".repeat(4 - (b64.length % 4));
+      return Buffer.from(b64 + pad, "base64");
+    } catch {
+      return null;
+    }
+  }
+}
+
+/** pathWithQuery must start with `/maps/api/streetview` or `/maps/api/streetview/metadata` and include `?...` (no signature). */
+function signGoogleStreetViewPath(pathWithQuery) {
+  const keyBytes = googleStreetViewSigningKeyBytes(SV_SIGNING_SECRET);
+  if (!keyBytes) return null;
+  const sig = crypto.createHmac("sha1", keyBytes).update(pathWithQuery).digest("base64");
+  const sigSafe = sig.replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+  return `https://maps.googleapis.com${pathWithQuery}&signature=${sigSafe}`;
+}
+
+function fullStreetViewUrl(pathWithQuery) {
+  if (SV_SIGNING_SECRET) {
+    const signed = signGoogleStreetViewPath(pathWithQuery);
+    if (signed) return signed;
+  }
+  if (!_svUnsignedWarned) {
+    console.warn("[street-view] GOOGLE_STREETVIEW_SIGNING_SECRET unset — returning unsigned URLs (set secret for production)");
+    _svUnsignedWarned = true;
+  }
+  return `https://maps.googleapis.com${pathWithQuery}`;
+}
 
 app.get("/api/street-view", async (req, res) => {
   const hotelId = (req.query.hotelId || "").trim();
   if (!hotelId) return res.status(400).json({ error: "hotelId required" });
-  if (!STREETVIEW_KEY) return res.status(503).json({ error: "Street View not configured" });
+  if (!SV_SERVER_KEY || !SV_BROWSER_KEY) {
+    return res.status(503).json({
+      error: "Street View not configured",
+      hint: "Set GOOGLE_STREETVIEW_SERVER_KEY + GOOGLE_STREETVIEW_BROWSER_KEY (or legacy GOOGLE_STREETVIEW_KEY for both)",
+    });
+  }
   if (!supabase) return res.status(500).json({ error: "Supabase not configured" });
 
   const cacheKey = `${SV_CACHE_VERSION}:${hotelId}`;
@@ -3094,12 +3149,14 @@ app.get("/api/street-view", async (req, res) => {
   const pitch = 0;
   const radius = 120; // broaden search to find curb/outdoor pano near hotel footprint
   const sampleDistanceM = 55;
+  const browserKeyQ = encodeURIComponent(SV_BROWSER_KEY);
+  const serverKeyQ = encodeURIComponent(SV_SERVER_KEY);
 
-  const svUrlFromPano = (panoId, heading) =>
-    `https://maps.googleapis.com/maps/api/streetview?size=${size}&pano=${encodeURIComponent(panoId)}&heading=${heading}&pitch=${pitch}&fov=${fov}&source=outdoor&key=${STREETVIEW_KEY}`;
+  const svPathFromPano = (panoId, heading) =>
+    `/maps/api/streetview?size=${size}&pano=${encodeURIComponent(panoId)}&heading=${heading}&pitch=${pitch}&fov=${fov}&source=outdoor&key=${browserKeyQ}`;
 
-  const svUrlFromLocation = (la, ln, heading) =>
-    `https://maps.googleapis.com/maps/api/streetview?size=${size}&location=${la},${ln}&heading=${heading}&pitch=${pitch}&fov=${fov}&radius=${radius}&source=outdoor&key=${STREETVIEW_KEY}`;
+  const svPathFromLocation = (la, ln, heading) =>
+    `/maps/api/streetview?size=${size}&location=${la},${ln}&heading=${heading}&pitch=${pitch}&fov=${fov}&radius=${radius}&source=outdoor&key=${browserKeyQ}`;
 
   // Sample around the hotel point to avoid interior-captured pano at the exact pin.
   const latStep = sampleDistanceM / 111320;
@@ -3114,17 +3171,20 @@ app.get("/api/street-view", async (req, res) => {
   const urls = [];
   try {
     for (const c of candidates) {
-      const metaUrl = `https://maps.googleapis.com/maps/api/streetview/metadata?location=${c.la},${c.ln}&radius=${radius}&source=outdoor&key=${STREETVIEW_KEY}`;
+      const metaPath =
+        `/maps/api/streetview/metadata?location=${c.la},${c.ln}&radius=${radius}&source=outdoor&key=${serverKeyQ}`;
+      let metaUrl = SV_SIGNING_SECRET ? signGoogleStreetViewPath(metaPath) : null;
+      if (!metaUrl) metaUrl = `https://maps.googleapis.com${metaPath}`;
       const metaResp = await fetch(metaUrl);
       const meta = await metaResp.json();
       if (meta.status !== "OK") continue;
       const panoId = meta.pano_id || meta.panoId;
       if (panoId) {
-        urls.push(svUrlFromPano(panoId, c.heading));
+        urls.push(fullStreetViewUrl(svPathFromPano(panoId, c.heading)));
       } else if (meta.location) {
-        urls.push(svUrlFromLocation(meta.location.lat, meta.location.lng, c.heading));
+        urls.push(fullStreetViewUrl(svPathFromLocation(meta.location.lat, meta.location.lng, c.heading)));
       } else {
-        urls.push(svUrlFromLocation(c.la, c.ln, c.heading));
+        urls.push(fullStreetViewUrl(svPathFromLocation(c.la, c.ln, c.heading)));
       }
       if (urls.length >= 4) break;
     }
