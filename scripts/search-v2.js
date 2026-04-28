@@ -184,11 +184,13 @@ async function runV2Search({
     const fact = scoreFactSet(features, intent);
     const text = textScore(tokens, rt.room_name, hotelMeta.get(rt.hotel_id)?.name);
     const total = Math.max(0, Math.min(1, 0.8 * fact.total_score + 0.2 * text));
-    const score = Math.round(total * 100);
+    const scoreRaw = total * 100;
+    const score = Math.round(scoreRaw);
     const row = {
       room_name: rt.room_name || "Room",
       room_type_id: rt.room_type_id || null,
       room_score: score,
+      room_score_raw: scoreRaw,
       fact,
       features,
     };
@@ -219,7 +221,7 @@ async function runV2Search({
   const ranked = [];
   for (const [hotelId, rows] of byHotel.entries()) {
     rows.sort((a, b) => {
-      if ((b.room_score || 0) !== (a.room_score || 0)) return (b.room_score || 0) - (a.room_score || 0);
+      if ((b.room_score_raw || 0) !== (a.room_score_raw || 0)) return (b.room_score_raw || 0) - (a.room_score_raw || 0);
       const ah = roomRequestedFactHits(a);
       const bh = roomRequestedFactHits(b);
       if (bh !== ah) return bh - ah;
@@ -230,11 +232,15 @@ async function runV2Search({
       }
       return String(a.room_name || "").localeCompare(String(b.room_name || ""));
     });
-    const best = rows[0]?.room_score || 0;
+    const bestRaw = rows[0]?.room_score_raw || 0;
+    const best = Math.round(bestRaw);
     const meta = hotelMeta.get(hotelId) || {};
-    ranked.push({ hotel_id: hotelId, room_rows: rows, vectorScore: best, hotelScore: null });
+    ranked.push({ hotel_id: hotelId, room_rows: rows, vectorScoreRaw: bestRaw, vectorScore: best, hotelScore: null });
   }
-  ranked.sort((a, b) => b.vectorScore - a.vectorScore);
+  ranked.sort((a, b) => {
+    if ((b.vectorScoreRaw || 0) !== (a.vectorScoreRaw || 0)) return (b.vectorScoreRaw || 0) - (a.vectorScoreRaw || 0);
+    return (b.vectorScore || 0) - (a.vectorScore || 0);
+  });
   const topHotelIds = ranked.slice(0, 250).map((r) => r.hotel_id);
 
   // Plug in hotel-vibe model for V2 hotelScore.
@@ -310,7 +316,7 @@ async function runV2Search({
   if (nbhdRankWeight > 0 && boopParam && topHotelIds.length) {
     try {
       const boopProfileForNbhd = JSON.parse(boopParam);
-      const rankedHotelsLite = ranked.slice(0, 250).map((r) => ({ hotel_id: r.hotel_id, similarity: r.vectorScore / 100 }));
+      const rankedHotelsLite = ranked.slice(0, 250).map((r) => ({ hotel_id: r.hotel_id, similarity: (r.vectorScoreRaw || r.vectorScore) / 100 }));
       const { applyNbhdBoopRank } = require("../lib/nbhd-vibe-rank");
       nbhdFitByHotelId = await applyNbhdBoopRank(fetchClient, city, rankedHotelsLite, boopProfileForNbhd, {
         weight: nbhdRankWeight,
@@ -362,11 +368,13 @@ async function runV2Search({
         size: "",
         beds: "",
         amenities: [],
+        _roomScoreRaw: Number(r.room_score_raw) || Number(r.room_score) || 0,
         _roomMatchCount: Math.max(0, ...ordered.map((x) => Number(x.match_count) || 0)),
         _bathroomPhotoFirst: ordered.some((x) => x.photo_type === "bathroom") ? 1 : 0,
       };
     });
     roomTypes.sort((a, b) => {
+      if ((b._roomScoreRaw || 0) !== (a._roomScoreRaw || 0)) return (b._roomScoreRaw || 0) - (a._roomScoreRaw || 0);
       if ((b.score || 0) !== (a.score || 0)) return (b.score || 0) - (a.score || 0);
       if ((b._roomMatchCount || 0) !== (a._roomMatchCount || 0)) return (b._roomMatchCount || 0) - (a._roomMatchCount || 0);
       if (needsBathroomBias && (b._bathroomPhotoFirst || 0) !== (a._bathroomPhotoFirst || 0)) {
@@ -375,6 +383,7 @@ async function runV2Search({
       return String(a.name || "").localeCompare(String(b.name || ""));
     });
     for (const rt of roomTypes) {
+      delete rt._roomScoreRaw;
       delete rt._roomMatchCount;
       delete rt._bathroomPhotoFirst;
     }
@@ -392,6 +401,7 @@ async function runV2Search({
       roomTypes,
       isMatched: h.vectorScore > 0,
       vectorScore: h.vectorScore,
+      _vectorScoreRaw: h.vectorScoreRaw || h.vectorScore,
       hotelScore: hotelScoreMap.get(h.hotel_id) ?? fallbackHotelScore,
       primary_nbhd: primaryNbhdMap.get(h.hotel_id) || null,
       ...(nbhdFitByHotelId?.has(h.hotel_id) ? { nbhd_fit_pct: nbhdFitByHotelId.get(h.hotel_id) } : {}),
@@ -403,11 +413,13 @@ async function runV2Search({
   });
 
   hotels.sort((a, b) => {
+    if ((b._vectorScoreRaw || 0) !== (a._vectorScoreRaw || 0)) return (b._vectorScoreRaw || 0) - (a._vectorScoreRaw || 0);
     if ((b.vectorScore || 0) !== (a.vectorScore || 0)) return (b.vectorScore || 0) - (a.vectorScore || 0);
     if ((b.hotelScore || 0) !== (a.hotelScore || 0)) return (b.hotelScore || 0) - (a.hotelScore || 0);
     if ((b.rating || 0) !== (a.rating || 0)) return (b.rating || 0) - (a.rating || 0);
     return String(a.name || "").localeCompare(String(b.name || ""));
   });
+  for (const h of hotels) delete h._vectorScoreRaw;
 
   const out = {
     hotels,
