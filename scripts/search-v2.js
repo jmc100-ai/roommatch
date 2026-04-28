@@ -1,4 +1,5 @@
 const { buildFactIntent, scoreFactSet } = require("./fact-catalog");
+const { normalizePolygonRing, pointInPolygon, bboxFromRing } = require("./neighborhood-vibe-data");
 
 function parseMustHaves(raw) {
   if (!raw) return [];
@@ -14,6 +15,17 @@ function parseBbox(raw) {
   if (parts.length !== 4 || parts.some((n) => Number.isNaN(n))) return null;
   const [lat_min, lat_max, lon_min, lon_max] = parts;
   return { lat_min, lat_max, lon_min, lon_max };
+}
+
+function parsePolygon(raw) {
+  if (!raw) return null;
+  try {
+    const parsed = typeof raw === "string" ? JSON.parse(raw) : raw;
+    const ring = normalizePolygonRing(parsed);
+    return ring?.length >= 4 ? ring : null;
+  } catch {
+    return null;
+  }
 }
 
 function normalizeText(s) {
@@ -79,8 +91,28 @@ async function runV2Search({
   const tokens = tokenize(query);
 
   let hotelIdsByGeo = null;
+  const polygonRing = parsePolygon(req.query.polygon || "");
   const bbox = parseBbox(req.query.bbox || "");
-  if (bbox) {
+  if (polygonRing?.length >= 4) {
+    const pb = bboxFromRing(polygonRing);
+    if (pb?.lat_min != null) {
+      const { data: polyHotels } = await fetchClient
+        .from("hotels_cache")
+        .select("hotel_id,lat,lng")
+        .eq("city", city)
+        .gte("lat", pb.lat_min)
+        .lte("lat", pb.lat_max)
+        .gte("lng", pb.lon_min)
+        .lte("lng", pb.lon_max);
+      hotelIdsByGeo = (polyHotels || [])
+        .filter((h) =>
+          Number.isFinite(Number(h.lat)) &&
+          Number.isFinite(Number(h.lng)) &&
+          pointInPolygon(Number(h.lat), Number(h.lng), polygonRing)
+        )
+        .map((h) => h.hotel_id);
+    }
+  } else if (bbox) {
     const { data: bboxHotels } = await fetchClient
       .from("hotels_cache")
       .select("hotel_id")
@@ -368,6 +400,13 @@ async function runV2Search({
         v2_hotel_vibe: hotelScoreMap.get(h.hotel_id) ?? fallbackHotelScore,
       },
     };
+  });
+
+  hotels.sort((a, b) => {
+    if ((b.vectorScore || 0) !== (a.vectorScore || 0)) return (b.vectorScore || 0) - (a.vectorScore || 0);
+    if ((b.hotelScore || 0) !== (a.hotelScore || 0)) return (b.hotelScore || 0) - (a.hotelScore || 0);
+    if ((b.rating || 0) !== (a.rating || 0)) return (b.rating || 0) - (a.rating || 0);
+    return String(a.name || "").localeCompare(String(b.name || ""));
   });
 
   const out = {
