@@ -424,6 +424,86 @@ function inferPhotoSourceFromUrl(url) {
   return null;
 }
 
+function normalizeVibePhotoEntry(raw, elementKey = "", neighborhoodName = "") {
+  if (typeof raw === "string") {
+    return {
+      url: raw,
+      source: inferPhotoSourceFromUrl(raw) || "unknown",
+      query: "",
+      elementKey,
+      neighborhoodName,
+      is_fallback: false,
+      attribution: null,
+      raw,
+    };
+  }
+  const source = raw?.source || inferPhotoSourceFromUrl(raw?.url) || "unknown";
+  return {
+    url: raw?.url || "",
+    source,
+    query: raw?.query || raw?.query_used || "",
+    elementKey,
+    neighborhoodName,
+    is_fallback: raw?.is_fallback === true,
+    attribution: raw?.attribution || null,
+    raw,
+  };
+}
+
+function isBadNeighborhoodScene(entry) {
+  const txt = `${entry.url || ""} ${entry.query || ""} ${entry.elementKey || ""} ${entry.neighborhoodName || ""}`.toLowerCase();
+  // Hard reject transport/parking scenes that look unrelated to "walkable neighborhood vibe".
+  if (/\b(parking|garage|freeway|highway|overpass|underpass|interchange|viaduct|expressway|traffic)\b/.test(txt)) return true;
+  // Generic Flickr keyword dumps are frequently far from neighborhood intent.
+  if (entry.source === "flickr" && /\bstreet,urban,architecture,neighborhood,alley\b/.test(txt)) return true;
+  // Reject obvious indoor/hotel-room context in case it leaks into the pool.
+  if (/\b(lobby|interior|inside|suite|guest\s*room|bed(room)?|bath(room)?|toilet|shower|sink|conference)\b/.test(txt)) return true;
+  return false;
+}
+
+function scoreNeighborhoodScene(entry) {
+  let score = 0;
+  if (entry.source === "google_places") score += 80;
+  else if (entry.source === "wikimedia") score += 60;
+  else if (entry.source === "unsplash") score += 40;
+  else if (entry.source === "pexels") score += 20;
+  else if (entry.source === "flickr") score += 5;
+
+  if (entry.elementKey === "street_feel") score += 24;
+  if (entry.elementKey === "icon_spots") score += 18;
+  if (entry.elementKey === "parks" || entry.elementKey === "greenery") score += 12;
+
+  const txt = `${entry.query || ""} ${entry.elementKey || ""}`.toLowerCase();
+  const nb = String(entry.neighborhoodName || "").toLowerCase();
+  if (nb && txt.includes(nb)) score += 10;
+  if (/\b(street|avenue|boulevard|plaza|square|park|garden|district|neighborhood|landmark|historic|facade|façade|tree-lined)\b/.test(txt)) {
+    score += 8;
+  }
+  if (entry.is_fallback) score -= 8;
+  return score;
+}
+
+function sanitizeVibePhotos(vibePhotos, neighborhoodName = "") {
+  const out = {};
+  for (const [elementKey, arr] of Object.entries(vibePhotos || {})) {
+    if (!Array.isArray(arr) || !arr.length) continue;
+    const scored = [];
+    const seen = new Set();
+    for (const raw of arr) {
+      const entry = normalizeVibePhotoEntry(raw, elementKey, neighborhoodName);
+      if (!entry.url) continue;
+      if (isBadNeighborhoodScene(entry)) continue;
+      const key = entry.url.split("?")[0].toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      scored.push({ raw, s: scoreNeighborhoodScene(entry) });
+    }
+    scored.sort((a, b) => b.s - a.s);
+    if (scored.length > 0) out[elementKey] = scored.map(x => x.raw);
+  }
+  return out;
+}
+
 function pickFirstPhotoFromElementList(arr) {
   if (!Array.isArray(arr) || arr.length === 0) return null;
   const list = arr.map((p) =>
@@ -800,7 +880,7 @@ async function generateNeighborhoods(city, db, geminiKey, unsplashKey, googlePla
         flickrKey,
       });
       row.vibe_elements = vibeData.vibeElements;
-      row.vibe_photos   = vibeData.vibePhotos;
+      row.vibe_photos   = sanitizeVibePhotos(vibeData.vibePhotos, row.name);
       row.vibe_data_version    = "v1";
       row.vibe_last_computed_at = new Date().toISOString();
     } catch (e) {
@@ -892,13 +972,14 @@ async function backfillNeighborhoodPhotos(city, db, unsplashKey, googlePlacesKey
 
   let updated = 0;
   for (const row of rows) {
+    const cleanedVibePhotos = sanitizeVibePhotos(row.vibe_photos || {}, row.name);
     // Primary: pick hero from top-scoring vibe elements (no extra API call)
-    let photo = pickHeroFromVibePhotos(row.vibe_elements, row.vibe_photos);
+    let photo = pickHeroFromVibePhotos(row.vibe_elements, cleanedVibePhotos);
 
     // Dedup: if this hero is already used by another neighborhood, pick an alternate
     if (photo?.url && assignedHeroUrls.has(photo.url)) {
       console.log(`[dedup] ${row.name}: hero collision detected, picking alternate`);
-      const pool = Object.entries(row.vibe_photos || {})
+      const pool = Object.entries(cleanedVibePhotos)
         .flatMap(([, arr]) => (Array.isArray(arr) ? arr : []))
         .filter(p => {
           const u = typeof p === 'string' ? p : p?.url;
@@ -1026,9 +1107,10 @@ async function recomputeNeighborhoodVibes(city, db, unsplashKey, googlePlacesKey
       pexelsKey,
       flickrKey,
     });
+    const freshVibePhotos = sanitizeVibePhotos(vibeData.vibePhotos, row.name);
     // Merge fresh + stored photos (only override categories with real fresh results).
-    const mergedForHero = { ...(row.vibe_photos || {}) };
-    for (const [key, photos] of Object.entries(vibeData.vibePhotos)) {
+    const mergedForHero = { ...(sanitizeVibePhotos(row.vibe_photos || {}, row.name)) };
+    for (const [key, photos] of Object.entries(freshVibePhotos)) {
       if (Array.isArray(photos) && photos.length > 0) mergedForHero[key] = photos;
     }
 
@@ -1069,7 +1151,7 @@ async function recomputeNeighborhoodVibes(city, db, unsplashKey, googlePlacesKey
     }
 
     // mergedForHero is the merged set for storing.
-    const mergedVibePhotos = mergedForHero;
+    const mergedVibePhotos = sanitizeVibePhotos(mergedForHero, row.name);
 
     if (heroPick?.url) assignedHeroUrls.add(heroPick.url);
 
@@ -1217,8 +1299,9 @@ Example output format:
         pexelsKey,
         flickrKey,
       });
+      const cleaned = sanitizeVibePhotos(vibeData.vibePhotos, row.name);
       await db.from("neighborhoods").update({
-        vibe_photos: vibeData.vibePhotos,
+        vibe_photos: cleaned,
         vibe_last_computed_at: new Date().toISOString(),
       }).eq("id", row.id);
       updated++;

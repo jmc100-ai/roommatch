@@ -1,0 +1,55 @@
+. Hallucination Is a Foundational Risk (Core Value Prop)
+Both Gemini and Claude reported "two sinks" on photos that clearly showed one. This isn't a prompt engineering problem you can fully engineer away — it's a known limitation of VLMs on reflective surfaces, mirrors, and ambiguous angles. The structural penalty helps suppress some false positives, but the index contains thousands of incorrect captions you can't see.
+
+Why it matters: The product's core promise is "find rooms with the features you want." If the index confidently claims features that don't exist, trust breaks the first time a user books a hotel expecting double sinks and finds one. Unlike a recommendation engine where bad results are annoying, this can directly cause users to waste money.
+
+There's no feedback loop. Currently there's no mechanism for users to flag incorrect captions, no way to detect degraded results over time, and no re-captioning when models improve.
+
+2. No Booking Integration Breaks the User Journey
+Users find a room at 65% match, see a price — and then what? They have to leave, go to Booking.com or the hotel website, hope the same room is available, and re-enter their dates. That is a significant drop-off point.
+
+LiteAPI has full booking endpoints (pre-book, book, retrieve booking). The rates endpoint you're already calling returns offerId on each room rate. A "Book Now" button that uses that offerId is architecturally a small addition but transforms the product from a discovery tool into a complete booking funnel — and that's where monetization lives (LiteAPI pays commission on completed bookings).
+
+3. Index Goes Stale Silently
+Hotels renovate rooms, update photos, add room types, close permanently. The current architecture indexes once and never updates. After 6 months, the Paris index will show:
+
+Photos of rooms that no longer exist
+Missing photos of new renovations
+Hotels that have closed
+Outdated pricing context in captions
+There's no scheduled re-index, no last-indexed-at check per hotel, and no way to detect drift between the LiteAPI catalog and your index. Search quality degrades invisibly.
+
+4. Match % Confuses Users and Damages Trust
+The current 0–100% scale (with 58% being a "good" result) is counterintuitive. Users interpret a percentage as: "what fraction of what I asked for does this have?" A 58% match for "double sinks" sounds like it half-has double sinks. In reality 58% is near the top of the distribution — a good result.
+
+This is a UX framing problem. Either the scale needs recalibrating (e.g., only show results that would display 70%+, scaled so the realistic range reads as 70–100%), or the label should change ("Strong match" / "Good match" / "Partial match" tiers are more honest).
+
+5. Production Infrastructure Is a Single Point of Failure
+One Render instance with no redundancy. When it deploys (2–3 min downtime) or crashes, the entire product is down.
+No error monitoring. You only know something broke when a user tells you. No Sentry, no alerting.
+No search analytics. You can't see what queries are popular, which return zero results, which hotels get clicked vs. ignored. You can't improve what you can't measure.
+No rate limiting on /api/vsearch. A single automated client could exhaust your Gemini quota and Supabase connection pool simultaneously.
+Supabase storage: room_embeddings alone is already 266MB. You're on a plan with 500MB–8GB depending on tier. Adding London adds another ~280MB. Adding 5 more cities fills the Pro tier.
+6. LiteAPI Dependency Is a Single Point of Failure for the Whole Pipeline
+Every part of the product depends on LiteAPI:
+
+Photo URLs are hosted on their CDN (if they change, all lightbox images break)
+Room names, room IDs, and hotel metadata come from their API
+Live pricing comes from their /hotels/rates endpoint
+If their API goes down, changes pricing, or deprecates an endpoint, the product stops working
+There's also a coverage problem: LiteAPI reports 7,221 Paris hotels but many have no room photos or empty metadata. You don't know what fraction of the "real" Paris hotel market you're actually showing.
+
+7. English-Only Search in French-Dominant Cities
+Room names from LiteAPI for Paris hotels are often French: "Chambre Supérieure", "Suite Présidentielle", "Chambre Deluxe avec Vue". Your caption embeddings are in English (Gemini captions in English), but the room_name field in the hybrid embedding text is the raw French string from LiteAPI. This creates a mismatch in the embedding space that reduces matching accuracy for room-type-level queries.
+
+Summary by Severity
+Issue	Impact	Effort to Fix
+No booking integration	Business-critical (no revenue)	Medium
+Hallucination undermines trust	Core value prop risk	Hard (ongoing)
+Index staleness	Slow product decay	Medium
+Match % framing confuses users	Damages trust fast	Easy
+Single point of failure infra	Production risk	Medium
+No analytics/monitoring	Can't improve what you can't see	Easy
+LiteAPI dependency	Strategic risk	Hard
+French room names in English index	Reduces Paris quality specifically	Easy
+The embedding architecture discussion (per-room-type vs. averaged) is real and worth fixing, but it's improvemen

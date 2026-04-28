@@ -1501,7 +1501,7 @@ app.get("/api/clip-search", async (req, res) => {
 
 // ── Vector search endpoint ────────────────────────────────────────────────────
 app.get("/api/vsearch", async (req, res) => {
-  const requestedVersionRaw = String(req.query.search_version || process.env.SEARCH_VERSION_DEFAULT || "v1").toLowerCase();
+  const requestedVersionRaw = String(req.query.search_version || process.env.SEARCH_VERSION_DEFAULT || "v2").toLowerCase();
   const requestedVersion = requestedVersionRaw === "v2" ? "v2" : "v1";
   if (requestedVersion === "v2") {
     const v2 = await runV2Search({
@@ -1965,12 +1965,18 @@ app.get("/api/vsearch", async (req, res) => {
     // Score = mean of top-3 similarities (intent-type photos first, fallback to all).
     // Feature flag pre-filter in score_room_types ensures every hotel here has confirmed
     // the required features — no post-hoc penalty or boost needed.
+    const boostedByHotelId = new Map(rankedHotels.map(h => [h.hotel_id, h.s_boosted ?? h.similarity]));
+
     const photoHotelScores = [...photoHotelIds].map(hotelId => {
       const hs       = hotelScoreMap.get(hotelId);
       const arr      = hs.intentScores.length > 0 ? hs.intentScores : hs.scores;
       arr.sort((a, b) => b - a);
       const rawScore = arr.slice(0, 3).reduce((s, x) => s + x, 0) / Math.min(3, arr.length);
-      let score = Math.max(0, Math.min(100, (rawScore - SIM_MIN) / simSpan * 100));
+      const boosted = boostedByHotelId.get(hotelId);
+      const rankScore = flagMode === "soft" && detectedFlagKeys.length > 0 && Number.isFinite(boosted)
+        ? boosted
+        : rawScore;
+      let score = Math.max(0, Math.min(100, (rankScore - SIM_MIN) / simSpan * 100));
       // Photo-count penalty: penalises hotels with too few photos overall (poor visual coverage).
       const hpAll = hotelPhotosMap.get(hotelId) || [];
       if (hpAll.length < 3) {
@@ -1985,7 +1991,11 @@ app.get("/api/vsearch", async (req, res) => {
     const remainingHotelScores = rankedHotels
       .filter(h => !photoHotelIds.has(h.hotel_id))
       .map(h => {
-        const score = Math.max(0, Math.min(100, (h.similarity - SIM_MIN) / simSpan * 100));
+        const rankScore =
+          flagMode === "soft" && detectedFlagKeys.length > 0
+            ? (h.s_boosted ?? h.similarity)
+            : h.similarity;
+        const score = Math.max(0, Math.min(100, (rankScore - SIM_MIN) / simSpan * 100));
         return { hotelId: h.hotel_id, topScore: score, hasPhotos: false };
       });
 

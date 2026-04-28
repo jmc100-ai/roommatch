@@ -149,11 +149,20 @@ async function reindexCityV2(city, limit = 200, forceRebuild = true) {
   const hotelsRes = await liteGet(`/data/hotels?${params}`);
   if (!hotelsRes.ok) throw new Error(`LiteAPI /data/hotels failed ${hotelsRes.status}`);
   const hotels = (hotelsRes.data?.data || []);
+  let targetHotels = hotels;
+  if (!forceRebuild) {
+    const { data: existingRows } = await db
+      .from("v2_hotels_cache")
+      .select("hotel_id")
+      .eq("city", city);
+    const existing = new Set((existingRows || []).map((r) => String(r.hotel_id)));
+    targetHotels = hotels.filter((h) => !existing.has(String(h.id || h.hotelId)));
+  }
 
   let hotelsDone = 0;
   let photosDone = 0;
-  for (let i = 0; i < hotels.length; i += BATCH_SIZE) {
-    const batch = hotels.slice(i, i + BATCH_SIZE);
+  for (let i = 0; i < targetHotels.length; i += BATCH_SIZE) {
+    const batch = targetHotels.slice(i, i + BATCH_SIZE);
     await Promise.all(batch.map(async (hotel) => {
       const hotelId = hotel.id || hotel.hotelId;
       const detailRes = await liteGet(`/data/hotel?hotelId=${hotelId}`);
@@ -229,11 +238,19 @@ async function reindexCityV2(city, limit = 200, forceRebuild = true) {
     }).eq("city", city);
   }
 
+  const [{ count: totalHotels }, { count: totalPhotos }] = await Promise.all([
+    db.from("v2_hotels_cache").select("*", { count: "exact", head: true }).eq("city", city),
+    db.from("v2_room_inventory").select("*", { count: "exact", head: true }).eq("city", city),
+  ]);
   await db.from("v2_indexed_cities").update({
-    status: "complete", hotel_count: hotelsDone, photo_count: photosDone,
-    completed_at: new Date().toISOString(), updated_at: new Date().toISOString(),
+    status: "complete",
+    hotel_count: totalHotels || 0,
+    photo_count: totalPhotos || 0,
+    completed_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+    last_error: null,
   }).eq("city", city);
-  return { city, hotelsDone, photosDone };
+  return { city, hotelsDone, photosDone, totalHotels: totalHotels || 0, totalPhotos: totalPhotos || 0 };
 }
 
 module.exports = { reindexCityV2 };

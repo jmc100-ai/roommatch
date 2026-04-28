@@ -12,7 +12,7 @@ module.exports = defineConfig({
   retries: process.env.CI ? 1 : 0,
   reporter: [["list"], ["html", { open: "never" }]],
   use: {
-    baseURL: getBaseUrl(process.argv),
+    baseURL: process.env.PLAYWRIGHT_BASE_URL || getBaseUrl(process.argv),
     trace: "retain-on-failure",
     screenshot: "only-on-failure",
     video: "retain-on-failure",

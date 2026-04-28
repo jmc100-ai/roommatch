@@ -1,3 +1,6 @@
+const path = require("path");
+require("dotenv").config({ path: path.join(__dirname, "..", ".env") });
+
 const { test, expect } = require("@playwright/test");
 const {
   SEARCH_TESTS,
@@ -7,24 +10,68 @@ const {
 
 const UI_TESTS = SEARCH_TESTS;
 
-async function runSearch(page, query, city) {
+/** When SITE_PASSWORD is set, GET / is a login form until POST /auth succeeds. */
+async function ensurePastSiteGate(page) {
   await page.goto("/", { waitUntil: "domcontentloaded" });
+  const authForm = page.locator('form[action="/auth"]');
+  const hasGate = await authForm.isVisible().catch(() => false);
+  if (!hasGate) {
+    await expect(page.locator("#cityInput")).toBeVisible({ timeout: 15_000 });
+    return;
+  }
+  const pw = process.env.SITE_PASSWORD || process.env.PLAYWRIGHT_SITE_PASSWORD;
+  if (!pw) {
+    throw new Error(
+      "Server is using SITE_PASSWORD; set SITE_PASSWORD in .env (or PLAYWRIGHT_SITE_PASSWORD) so UI tests can sign in."
+    );
+  }
+  await page.locator('input[name="password"]').fill(pw);
+  await Promise.all([
+    page.waitForSelector("#cityInput", { state: "visible", timeout: 20_000 }),
+    authForm.locator('button[type="submit"]').click(),
+  ]);
+}
 
-  await page.locator("#queryInput").fill(query);
+/** After Boop skip, first vsearch may open the vibe tour before hotel cards render. */
+async function dismissVibeTourIfShown(page) {
+  const continueBtn = page.getByRole("button", { name: "Continue to hotel list" });
+  try {
+    await continueBtn.waitFor({ state: "visible", timeout: 45_000 });
+    await continueBtn.click();
+  } catch {
+    // No tour (or Street View slow-failed) — results may already be visible.
+  }
+}
+
+async function runSearch(page, query, city) {
+  await ensurePastSiteGate(page);
+
   await page.locator("#cityInput").fill(city);
-
   const cityOptions = page.locator("#cityDropdown .city-option");
-  await expect(cityOptions.first()).toBeVisible();
+  await expect(cityOptions.first()).toBeVisible({ timeout: 20_000 });
   await cityOptions.first().click();
 
+  const skipWizard = page.locator(".boop-skip-tray button", { hasText: "Skip" });
+  await expect(skipWizard).toBeVisible({ timeout: 20_000 });
   await Promise.all([
-    page.waitForResponse((response) => response.url().includes("/api/vsearch") && response.ok()),
-    page.locator("#searchBtn").click(),
+    page.waitForResponse((r) => r.url().includes("/api/vsearch") && r.ok(), { timeout: 120_000 }),
+    skipWizard.click(),
   ]);
+
+  await dismissVibeTourIfShown(page);
+
+  await expect(page.locator("#cmd-q")).toBeVisible({ timeout: 30_000 });
+  await page.locator("#cmd-q").fill(query);
+  await Promise.all([
+    page.waitForResponse((r) => r.url().includes("/api/vsearch") && r.ok(), { timeout: 120_000 }),
+    page.locator(".cmd-go").click(),
+  ]);
+
+  await dismissVibeTourIfShown(page);
 
   const resultCount = page.locator("#resultCount");
   await expect(resultCount).not.toHaveText(/^\s*$/);
-  await expect(page.locator("#results .hotel-card").first()).toBeVisible();
+  await expect(page.locator("#results .hotel-card").first()).toBeVisible({ timeout: 60_000 });
 }
 
 async function topHotels(page, limit = 3) {
