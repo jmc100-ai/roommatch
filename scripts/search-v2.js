@@ -54,6 +54,12 @@ function textScore(tokens, roomName, hotelName) {
   return hits / tokens.length;
 }
 
+const BATHROOM_FACT_KEYS = new Set([
+  "double_sinks", "soaking_tub", "rainfall_shower", "handheld_wand", "separate_toilet_door",
+  "glass_wall_bathroom", "bidet_washlet", "natural_light_bathroom", "stone_surfaces",
+  "anti_fog_mirror", "makeup_vanity", "heated_towel_rack",
+]);
+
 async function runV2Search({
   req,
   supabase,
@@ -135,6 +141,12 @@ async function runV2Search({
   }
 
   const byHotel = new Map();
+  const requestedFactKeys = new Set([
+    ...(intent.hard_filters || []).map((x) => x.fact_key),
+    ...(intent.soft_preferences || []).map((x) => x.fact_key),
+  ]);
+  const requestedList = [...requestedFactKeys].filter(Boolean);
+
   for (const rt of roomFeatureMap.values()) {
     const features = rt.facts || {};
     const fact = scoreFactSet(features, intent);
@@ -152,9 +164,40 @@ async function runV2Search({
     byHotel.get(rt.hotel_id).push(row);
   }
 
+  function roomRequestedFactHits(row) {
+    if (!row || !requestedList.length) return 0;
+    const feats = row.features || {};
+    let hits = 0;
+    for (const fk of requestedList) {
+      if (feats[fk] === true) hits++;
+    }
+    return hits;
+  }
+
+  function roomHasBathroomFacts(row) {
+    const feats = row?.features || {};
+    for (const fk of BATHROOM_FACT_KEYS) {
+      if (feats[fk] === true) return 1;
+    }
+    return 0;
+  }
+
+  const needsBathroomBias = requestedList.some((k) => BATHROOM_FACT_KEYS.has(k));
+
   const ranked = [];
   for (const [hotelId, rows] of byHotel.entries()) {
-    rows.sort((a, b) => b.room_score - a.room_score);
+    rows.sort((a, b) => {
+      if ((b.room_score || 0) !== (a.room_score || 0)) return (b.room_score || 0) - (a.room_score || 0);
+      const ah = roomRequestedFactHits(a);
+      const bh = roomRequestedFactHits(b);
+      if (bh !== ah) return bh - ah;
+      if (needsBathroomBias) {
+        const ab = roomHasBathroomFacts(a);
+        const bb = roomHasBathroomFacts(b);
+        if (bb !== ab) return bb - ab;
+      }
+      return String(a.room_name || "").localeCompare(String(b.room_name || ""));
+    });
     const best = rows[0]?.room_score || 0;
     const meta = hotelMeta.get(hotelId) || {};
     ranked.push({ hotel_id: hotelId, room_rows: rows, vectorScore: best, hotelScore: null });
@@ -194,6 +237,21 @@ async function runV2Search({
     .in("hotel_id", topHotelIds)
     .eq("city", city);
   if (photosErr) return { status: 500, body: { error: photosErr.message } };
+  let photoFactSet = new Set();
+  if (requestedList.length && topHotelIds.length) {
+    const { data: photoFacts, error: pfErr } = await fetchClient
+      .from("v2_room_feature_facts")
+      .select("hotel_id,photo_url,fact_key,fact_value")
+      .in("hotel_id", topHotelIds)
+      .in("fact_key", requestedList)
+      .eq("city", city)
+      .eq("fact_value", 1);
+    if (!pfErr) {
+      for (const pf of (photoFacts || [])) {
+        photoFactSet.add(`${pf.hotel_id}::${pf.photo_url}::${pf.fact_key}`);
+      }
+    }
+  }
   const primaryNbhdResult = await fetchClient.rpc("get_primary_nbhds_for_hotels", { p_hotel_ids: topHotelIds });
   const primaryNbhdMap = new Map();
   if (!primaryNbhdResult.error) {
@@ -236,22 +294,58 @@ async function runV2Search({
     const roomMap = new Map();
     for (const p of allPhotos) {
       const room = p.room_name || "Room";
-      if (!roomMap.has(room)) roomMap.set(room, { photos: [], roomTypeId: p.room_type_id || null });
-      const e = roomMap.get(room);
-      if (e.photos.length < 10) e.photos.push(p.photo_url);
+      const roomKey = `${p.room_type_id || ""}::${room}`;
+      if (!roomMap.has(roomKey)) roomMap.set(roomKey, { photos: [], roomTypeId: p.room_type_id || null });
+      const e = roomMap.get(roomKey);
+      if (e.photos.length < 14) {
+        let matchCount = 0;
+        for (const fk of requestedList) {
+          if (photoFactSet.has(`${p.hotel_id}::${p.photo_url}::${fk}`)) matchCount++;
+        }
+        e.photos.push({
+          url: p.photo_url,
+          photo_type: p.photo_type || "other",
+          match_count: matchCount,
+        });
+      }
     }
     const roomTypes = h.room_rows.slice(0, 8).map((r) => {
-      const e = roomMap.get(r.room_name) || { photos: [], roomTypeId: null };
+      const roomKey = `${r.room_type_id || ""}::${r.room_name}`;
+      const e = roomMap.get(roomKey) || { photos: [], roomTypeId: null };
+      const needsBathroomBias = requestedList.some((k) => BATHROOM_FACT_KEYS.has(k));
+      const ordered = [...(e.photos || [])].sort((a, b) => {
+        if ((b.match_count || 0) !== (a.match_count || 0)) return (b.match_count || 0) - (a.match_count || 0);
+        if (needsBathroomBias) {
+          const aBath = a.photo_type === "bathroom" ? 1 : 0;
+          const bBath = b.photo_type === "bathroom" ? 1 : 0;
+          if (bBath !== aBath) return bBath - aBath;
+        }
+        return 0;
+      });
       return {
         name: r.room_name,
         roomTypeId: r.room_type_id || e.roomTypeId,
-        photos: e.photos,
+        photos: ordered.map((x) => x.url).slice(0, 10),
         score: r.room_score,
         size: "",
         beds: "",
         amenities: [],
+        _roomMatchCount: Math.max(0, ...ordered.map((x) => Number(x.match_count) || 0)),
+        _bathroomPhotoFirst: ordered.some((x) => x.photo_type === "bathroom") ? 1 : 0,
       };
     });
+    roomTypes.sort((a, b) => {
+      if ((b.score || 0) !== (a.score || 0)) return (b.score || 0) - (a.score || 0);
+      if ((b._roomMatchCount || 0) !== (a._roomMatchCount || 0)) return (b._roomMatchCount || 0) - (a._roomMatchCount || 0);
+      if (needsBathroomBias && (b._bathroomPhotoFirst || 0) !== (a._bathroomPhotoFirst || 0)) {
+        return (b._bathroomPhotoFirst || 0) - (a._bathroomPhotoFirst || 0);
+      }
+      return String(a.name || "").localeCompare(String(b.name || ""));
+    });
+    for (const rt of roomTypes) {
+      delete rt._roomMatchCount;
+      delete rt._bathroomPhotoFirst;
+    }
     const fallbackHotelScore = Math.max(0, Math.min(100, Math.round((Number(meta.guest_rating) || 0) * 10)));
     return {
       id: h.hotel_id,
