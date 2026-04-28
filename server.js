@@ -30,6 +30,7 @@ const {
   pointInPolygon,
   bboxFromRing,
 } = require("./scripts/neighborhood-vibe-data");
+const { runV2Search } = require("./scripts/search-v2");
 
 // ── Password gate helpers ─────────────────────────────────────────────────────
 const SITE_PASSWORD = process.env.SITE_PASSWORD || "";
@@ -1497,6 +1498,18 @@ app.get("/api/clip-search", async (req, res) => {
 
 // ── Vector search endpoint ────────────────────────────────────────────────────
 app.get("/api/vsearch", async (req, res) => {
+  const requestedVersionRaw = String(req.query.search_version || process.env.SEARCH_VERSION_DEFAULT || "v1").toLowerCase();
+  const requestedVersion = requestedVersionRaw === "v2" ? "v2" : "v1";
+  if (requestedVersion === "v2") {
+    const v2 = await runV2Search({
+      req,
+      supabase,
+      supabaseAdmin,
+      resolveCityName,
+    });
+    return res.status(v2.status).json(v2.body);
+  }
+
   const { query } = req.query;
   const cityInput = (req.query.city || "").trim();
   // BOOP v4 optional inputs:
@@ -2116,7 +2129,11 @@ app.get("/api/vsearch", async (req, res) => {
     const kpiFlag = tTotal > 3000 ? " ⚠️ KPI BREACH" : "";
     console.log(`[vsearch] TOTAL: ${tTotal}ms${kpiFlag} | ${city}: ${hotels.length} hotels, top score ${allHotels[0]?.topScore?.toFixed(3)}`);
 
-    const stats = { indexed: cityRow?.photo_count || 0 };
+    const stats = {
+      indexed: cityRow?.photo_count || 0,
+      search_version_used: "v1",
+      search_version_requested: requestedVersionRaw,
+    };
     // Neighbourhood blend diagnostics (weight ≠ neighbourhood % on cards; weight is room vs nbhd for *sort*).
     if (Number.isFinite(rawNbhdW)) stats.nbhd_rank_weight_config = rawNbhdW;
     stats.nbhd_rank_weight_active = nbhdRankWeight;
@@ -2139,6 +2156,31 @@ app.get("/api/vsearch", async (req, res) => {
         missPenalty: missPen,
         sample,
       };
+    }
+
+    if (String(req.query.compare || "") === "1") {
+      try {
+        const v2 = await runV2Search({
+          req: { query: { ...req.query, search_version: "v2" } },
+          supabase,
+          supabaseAdmin,
+          resolveCityName,
+        });
+        if (v2?.status === 200 && Array.isArray(v2.body?.hotels)) {
+          const v1Top = hotels.slice(0, 20).map((h) => String(h.id));
+          const v2Top = v2.body.hotels.slice(0, 20).map((h) => String(h.id));
+          const set = new Set(v1Top);
+          const overlap = v2Top.filter((id) => set.has(id)).length;
+          stats.compare = {
+            enabled: true,
+            v1_top_ids: v1Top,
+            v2_top_ids: v2Top,
+            overlap_top20: overlap,
+          };
+        }
+      } catch (e) {
+        stats.compare = { enabled: true, error: e.message };
+      }
     }
 
     res.json({ hotels, query, city, indexing, indexStatus: status, stats });

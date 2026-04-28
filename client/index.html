@@ -4805,6 +4805,18 @@
   let _hasDateSearch  = false;  // true after prices fetched with specific dates
   let _showAvailOnly  = true;   // toggle: only show available rooms (default on when dates entered)
   let _priceCurrency  = 'EUR';  // currency returned by rates API
+  // Debug-only search version controls (set in console):
+  // localStorage.setItem('searchVersion','v2')
+  // localStorage.setItem('searchCompare','1')
+  const SEARCH_VERSION_OVERRIDE = (() => {
+    try {
+      const v = (localStorage.getItem('searchVersion') || '').toLowerCase().trim();
+      return (v === 'v1' || v === 'v2') ? v : null;
+    } catch (_) { return null; }
+  })();
+  const SEARCH_COMPARE_OVERRIDE = (() => {
+    try { return localStorage.getItem('searchCompare') === '1'; } catch (_) { return false; }
+  })();
   const QUERY_HISTORY_KEY = 'roomsearch.recentQueries';
   const CITY_HISTORY_KEY  = 'roomsearch.recentCities';
   const BOOP_PROFILE_KEY  = 'roomsearch.boopProfileByCity.v1';
@@ -7983,6 +7995,8 @@
       if (S.boopProfile && typeof S.boopProfile === 'object') {
         try { vsearchParams.boop_profile = JSON.stringify(S.boopProfile); } catch (_) {}
       }
+      if (SEARCH_VERSION_OVERRIDE) vsearchParams.search_version = SEARCH_VERSION_OVERRIDE;
+      if (SEARCH_COMPARE_OVERRIDE) vsearchParams.compare = '1';
       const resp = await fetch(`${BACKEND}/api/vsearch?` + new URLSearchParams(vsearchParams));
       await nbhdPickerScoresP.catch(() => {});
       if (!resp.ok) {

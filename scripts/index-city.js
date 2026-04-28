@@ -9,6 +9,7 @@
 
 require("dotenv").config();
 const { createClient } = require("@supabase/supabase-js");
+const { extractFactsFromSignals } = require("./fact-catalog");
 
 const LITEAPI_KEY  = process.env.LITEAPI_PROD_KEY || process.env.LITEAPI_KEY || "";
 const GEMINI_KEY   = process.env.GEMINI_KEY  || "";
@@ -201,6 +202,33 @@ function extractFeatureFlags(featureSummary) {
   if (/^DINING TABLE:\s*yes/im.test(f))                                               flags.dining_table = true;
 
   return flags;
+}
+
+async function upsertRoomFacts(db, base, factRows) {
+  if (!Array.isArray(factRows) || factRows.length === 0) return;
+  const payload = factRows.map((r) => ({
+    hotel_id: base.hotel_id,
+    room_type_id: base.room_type_id,
+    city: base.city,
+    country_code: base.country_code || null,
+    fact_key: r.fact_key,
+    fact_value: r.fact_value,
+    confidence: r.confidence,
+    source: r.source || "vision",
+    supplier_value: null,
+    vision_value: r.fact_value,
+    supplier_confidence: null,
+    vision_confidence: r.confidence,
+    extractor_version: "facts-v2-1",
+    updated_at: new Date().toISOString(),
+  }));
+  const { error } = await db.from("room_feature_facts").upsert(payload, {
+    onConflict: "hotel_id,room_type_id,fact_key",
+  });
+  if (error) {
+    // Non-fatal while migration is rolling out.
+    console.warn(`[facts] upsert skipped: ${error.message}`);
+  }
 }
 
 // ── Rate limiters ─────────────────────────────────────────────────────────────
@@ -836,6 +864,23 @@ ${caption}`;
 
         if (!error) {
           embedded++; totalEmbeds++;
+          try {
+            const factRows = extractFactsFromSignals({
+              featureFlags,
+              featureSummary: featureSummaryText,
+              caption: hybridText,
+              roomName: photo.roomName,
+              photoType: detectedType,
+            });
+            await upsertRoomFacts(db, {
+              hotel_id: hotelId,
+              room_type_id: photo.roomTypeId || null,
+              city,
+              country_code: cc,
+            }, factRows);
+          } catch (factErr) {
+            console.warn(`  [facts] extraction failed: ${factErr.message}`);
+          }
         } else {
           console.warn(`  [db] insert error: ${error.message}`, error.details, error.hint);
         }
