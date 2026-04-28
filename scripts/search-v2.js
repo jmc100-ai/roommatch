@@ -28,6 +28,24 @@ function tokenize(query) {
     .filter((t) => t.length >= 3);
 }
 
+async function embedText(text, geminiKey) {
+  if (!text || !geminiKey) return null;
+  const r = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-embedding-001:embedContent?key=${geminiKey}`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ content: { parts: [{ text }] } }),
+      signal: AbortSignal.timeout(8000),
+    }
+  );
+  if (!r.ok) return null;
+  const d = await r.json();
+  const vals = d?.embedding?.values;
+  if (!Array.isArray(vals) || vals.length === 0) return null;
+  return vals.slice(0, 768);
+}
+
 function textScore(tokens, roomName, hotelName) {
   if (!tokens.length) return 0.5;
   const text = `${roomName || ""} ${hotelName || ""}`.toLowerCase();
@@ -51,6 +69,7 @@ async function runV2Search({
   const city = await resolveCityName(cityInput, fetchClient, ["indexed_cities", "hotels_cache"]);
   const mustHaves = parseMustHaves(req.query.must_haves || "");
   const intent = buildFactIntent(query, { mustHaves });
+  const hotelQuery = String(req.query.hotel_query || query).trim();
   const tokens = tokenize(query);
 
   let hotelIdsByGeo = null;
@@ -123,11 +142,36 @@ async function runV2Search({
     rows.sort((a, b) => b.room_score - a.room_score);
     const best = rows[0]?.room_score || 0;
     const meta = hotelMeta.get(hotelId) || {};
-    const hotelScore = Math.max(0, Math.min(100, Math.round((Number(meta.guest_rating) || 0) * 10)));
-    ranked.push({ hotel_id: hotelId, room_rows: rows, vectorScore: best, hotelScore });
+    ranked.push({ hotel_id: hotelId, room_rows: rows, vectorScore: best, hotelScore: null });
   }
   ranked.sort((a, b) => b.vectorScore - a.vectorScore);
   const topHotelIds = ranked.slice(0, 250).map((r) => r.hotel_id);
+
+  // Plug in hotel-vibe model for V2 hotelScore.
+  let hotelScoreMap = new Map();
+  try {
+    const hotelEmbedding = await embedText(hotelQuery, process.env.GEMINI_KEY || "");
+    if (hotelEmbedding && topHotelIds.length) {
+      const hs = await fetchClient.rpc("score_hotels", {
+        query_embedding: hotelEmbedding,
+        search_city: city,
+        hotel_ids: topHotelIds,
+      });
+      if (!hs.error) {
+        let maxRaw = 0;
+        for (const r of (hs.data || [])) {
+          if (r.similarity > maxRaw) maxRaw = r.similarity;
+        }
+        const maxS = maxRaw > 0 ? maxRaw : 0.9;
+        const minS = Math.max(maxS - 0.3, 0);
+        const span = Math.max(maxS - minS, 1e-9);
+        for (const r of (hs.data || [])) {
+          const pct = Math.round(Math.max(0, Math.min(100, ((r.similarity - minS) / span) * 100)));
+          hotelScoreMap.set(r.hotel_id, pct);
+        }
+      }
+    }
+  } catch (_) {}
 
   const { data: photosData, error: photosErr } = await fetchClient.rpc("fetch_hotel_photos", { hotel_ids: topHotelIds });
   if (photosErr) return { status: 500, body: { error: photosErr.message } };
@@ -189,6 +233,7 @@ async function runV2Search({
         amenities: [],
       };
     });
+    const fallbackHotelScore = Math.max(0, Math.min(100, Math.round((Number(meta.guest_rating) || 0) * 10)));
     return {
       id: h.hotel_id,
       name: meta.name || h.hotel_id,
@@ -202,9 +247,13 @@ async function runV2Search({
       roomTypes,
       isMatched: h.vectorScore > 0,
       vectorScore: h.vectorScore,
-      hotelScore: h.hotelScore,
+      hotelScore: hotelScoreMap.get(h.hotel_id) ?? fallbackHotelScore,
       primary_nbhd: primaryNbhdMap.get(h.hotel_id) || null,
       ...(nbhdFitByHotelId?.has(h.hotel_id) ? { nbhd_fit_pct: nbhdFitByHotelId.get(h.hotel_id) } : {}),
+      score_breakdown: {
+        v2_room_match: h.vectorScore,
+        v2_hotel_vibe: hotelScoreMap.get(h.hotel_id) ?? fallbackHotelScore,
+      },
     };
   });
 
@@ -219,6 +268,7 @@ async function runV2Search({
       search_version_requested: String(req.query.search_version || "v2"),
       query_router: intent,
       ranked_hotels: hotels.length,
+      hotel_vibe_model: hotelScoreMap.size > 0 ? "score_hotels" : "fallback_rating",
     },
   };
 
