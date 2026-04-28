@@ -8,9 +8,12 @@ const GEMINI_KEY = process.env.GEMINI_KEY || "";
 const SUPABASE_URL = process.env.SUPABASE_URL || "";
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_ANON_KEY || "";
 
-const BATCH_SIZE = 12;
+const BATCH_SIZE = 4;
 const PHOTO_LIMIT_PER_HOTEL = 60;
-const PHOTO_CONCURRENCY = 5;
+const PHOTO_CONCURRENCY = 1;
+const CAPTION_RATE_PER_MIN = 90;
+let _capWindow = Date.now();
+let _capCount = 0;
 
 const COUNTRY_CODES = {
   "mexico city": "MX",
@@ -44,33 +47,66 @@ function classifyPhoto(photo, roomName = "") {
   return "other";
 }
 
-async function geminiCaption(imageUrl, photoContext = {}) {
+async function geminiCaption(imageUrl, photoContext = {}, retries = 2) {
   if (!GEMINI_KEY) return null;
-  const prompt = [
-    "Analyze this hotel room photo and return compact structured fields.",
-    "Use exact lines:",
-    "PHOTO TYPE: bathroom|bedroom|living area|view|other",
-    "SINKS: none|single sink|double sinks|triple sinks",
-    "BATHTUB: none|bathtub|soaking tub|clawfoot",
-    "SHOWER: none|walk-in shower|rainfall shower|both walk-in and rainfall",
-    "BALCONY OR TERRACE: yes|no",
-    "WINDOWS: floor-to-ceiling windows|standard windows|unknown",
-    "DISTINCTIVE FEATURES: comma-separated concrete features only",
-    `Context room name: ${photoContext.roomName || "unknown"}`,
-    `Context coarse type: ${photoContext.type || "other"}`,
-  ].join("\n");
-  const body = {
-    contents: [{ role: "user", parts: [{ text: prompt }, { inline_data: null }, { file_data: { mime_type: "image/jpeg", file_uri: imageUrl } }] }],
-  };
-  const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=${GEMINI_KEY}`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-    signal: AbortSignal.timeout(30000),
-  });
-  if (!r.ok) return null;
-  const d = await r.json();
-  return d?.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || null;
+  try {
+    const now = Date.now();
+    if (now - _capWindow > 60000) { _capWindow = now; _capCount = 0; }
+    if (_capCount >= CAPTION_RATE_PER_MIN) {
+      const wait = 61000 - (now - _capWindow);
+      await new Promise((resolve) => setTimeout(resolve, Math.max(500, wait)));
+      _capWindow = Date.now();
+      _capCount = 0;
+    }
+    _capCount++;
+
+    const imgRes = await fetch(imageUrl, {
+      headers: { "User-Agent": "Mozilla/5.0" },
+      signal: AbortSignal.timeout(12000),
+    });
+    if (!imgRes.ok) return null;
+    const b64 = Buffer.from(await imgRes.arrayBuffer()).toString("base64");
+    const mime = imgRes.headers.get("content-type")?.split(";")[0] || "image/jpeg";
+    const prompt = [
+      "Analyze this hotel room photo and return compact structured fields.",
+      "Use exact lines:",
+      "PHOTO TYPE: bathroom|bedroom|living area|view|other",
+      "SINKS: none|single sink|double sinks|triple sinks",
+      "BATHTUB: none|bathtub|soaking tub|clawfoot",
+      "SHOWER: none|walk-in shower|rainfall shower|both walk-in and rainfall",
+      "BALCONY OR TERRACE: yes|no",
+      "WINDOWS: floor-to-ceiling windows|standard windows|unknown",
+      "DISTINCTIVE FEATURES: comma-separated concrete features only",
+      `Context room name: ${photoContext.roomName || "unknown"}`,
+      `Context coarse type: ${photoContext.type || "other"}`,
+      "Only include details clearly visible. If uncertain, use unknown/none.",
+    ].join("\n");
+    const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=${GEMINI_KEY}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        contents: [{ parts: [{ inline_data: { mime_type: mime, data: b64 } }, { text: prompt }] }],
+        generationConfig: { maxOutputTokens: 220, temperature: 0.1 },
+      }),
+      signal: AbortSignal.timeout(30000),
+    });
+    if (!r.ok) {
+      const txt = await r.text();
+      if ((r.status === 429 || r.status === 503) && retries > 0) {
+        const delay = (3 - retries) * 2500 + 2500;
+        await new Promise((resolve) => setTimeout(resolve, delay));
+        return geminiCaption(imageUrl, photoContext, retries - 1);
+      }
+      console.warn(`[v2-index] caption HTTP ${r.status}: ${txt.slice(0, 120)}`);
+      return null;
+    }
+    const d = await r.json();
+    const cap = d?.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || null;
+    return cap;
+  } catch (_) {
+    if (retries > 0) return geminiCaption(imageUrl, photoContext, retries - 1);
+    return null;
+  }
 }
 
 function extractFeatureSummary(caption) {
