@@ -25,6 +25,9 @@ function loadNeighborhoodGenerator() {
 function loadBackfillLatlng() {
   return require("./scripts/backfill-latlng");
 }
+function loadIndexCityV2() {
+  return require("./scripts/index-city-v2").reindexCityV2;
+}
 const {
   normalizePolygonRing,
   pointInPolygon,
@@ -3065,6 +3068,42 @@ app.post("/api/index-city", async (req, res) => {
       console.error(`[indexer] FAILED for ${city}:`, e.message);
     });
   res.json({ message: `Indexing ${city} started`, city, limit: limit || 200 });
+});
+
+// ── V2 isolated city index (facts-only datastore) ────────────────────────────
+app.post("/api/v2/reindex-city", async (req, res) => {
+  const { city, limit = 200, secret, force = true } = req.body || {};
+  if (secret !== (process.env.INDEX_SECRET || "roommatch-index")) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
+  if (!city) return res.status(400).json({ error: "city required" });
+  res.json({ message: `V2 reindex started for ${city}`, city, limit, force });
+  loadIndexCityV2()(city, Number(limit) || 200, !!force)
+    .then((r) => console.log(`[v2-index] complete ${city}:`, r))
+    .catch(async (e) => {
+      console.error(`[v2-index] failed ${city}:`, e.message);
+      const fc = supabaseAdmin || supabase;
+      if (fc) {
+        await fc.from("v2_indexed_cities").upsert({
+          city,
+          status: "failed",
+          last_error: e.message,
+          updated_at: new Date().toISOString(),
+        }, { onConflict: "city" });
+      }
+    });
+});
+
+app.get("/api/v2/index-status", async (req, res) => {
+  const cityInput = (req.query.city || "").trim();
+  if (!cityInput || !supabase) return res.json({ status: "unknown" });
+  const city = await resolveCityName(cityInput, supabaseAdmin || supabase, ["v2_indexed_cities", "v2_hotels_cache", "hotels_cache"]);
+  const { data } = await (supabaseAdmin || supabase)
+    .from("v2_indexed_cities")
+    .select("status, hotel_count, photo_count, started_at, completed_at, last_error")
+    .eq("city", city)
+    .single();
+  res.json(data || { status: "none" });
 });
 
 // BOOP v4: incremental pass that only pulls hotel-level amenity photos +

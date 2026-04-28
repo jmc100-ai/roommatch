@@ -87,7 +87,7 @@ async function runV2Search({
   }
 
   const { data: cacheRows, error: cacheErr } = await fetchClient
-    .from("hotels_cache")
+    .from("v2_hotels_cache")
     .select("hotel_id,name,address,star_rating,guest_rating,main_photo,hotel_photos")
     .eq("city", city);
   if (cacheErr) return { status: 500, body: { error: cacheErr.message } };
@@ -113,22 +113,37 @@ async function runV2Search({
     };
   }
 
-  const { data: roomTypes, error: roomErr } = await fetchClient
-    .from("room_types_index")
-    .select("hotel_id,room_name,features")
+  const { data: roomFacts, error: roomErr } = await fetchClient
+    .from("v2_room_feature_facts")
+    .select("hotel_id,room_type_id,room_name,fact_key,fact_value,confidence")
     .eq("city", city)
     .in("hotel_id", eligibleHotelIds.slice(0, 5000));
   if (roomErr) return { status: 500, body: { error: roomErr.message } };
 
+  const roomFeatureMap = new Map(); // hotel::roomTypeId::roomName -> { facts:{} }
+  for (const rf of (roomFacts || [])) {
+    const key = `${rf.hotel_id}::${rf.room_type_id || ""}::${rf.room_name || "Room"}`;
+    if (!roomFeatureMap.has(key)) {
+      roomFeatureMap.set(key, {
+        hotel_id: rf.hotel_id,
+        room_type_id: rf.room_type_id || null,
+        room_name: rf.room_name || "Room",
+        facts: {},
+      });
+    }
+    if (rf.fact_value === 1) roomFeatureMap.get(key).facts[rf.fact_key] = true;
+  }
+
   const byHotel = new Map();
-  for (const rt of (roomTypes || [])) {
-    const features = rt.features || {};
+  for (const rt of roomFeatureMap.values()) {
+    const features = rt.facts || {};
     const fact = scoreFactSet(features, intent);
     const text = textScore(tokens, rt.room_name, hotelMeta.get(rt.hotel_id)?.name);
     const total = Math.max(0, Math.min(1, 0.8 * fact.total_score + 0.2 * text));
     const score = Math.round(total * 100);
     const row = {
       room_name: rt.room_name || "Room",
+      room_type_id: rt.room_type_id || null,
       room_score: score,
       fact,
       features,
@@ -173,7 +188,11 @@ async function runV2Search({
     }
   } catch (_) {}
 
-  const { data: photosData, error: photosErr } = await fetchClient.rpc("fetch_hotel_photos", { hotel_ids: topHotelIds });
+  const { data: photosData, error: photosErr } = await fetchClient
+    .from("v2_room_inventory")
+    .select("hotel_id,room_name,room_type_id,photo_url,photo_type")
+    .in("hotel_id", topHotelIds)
+    .eq("city", city);
   if (photosErr) return { status: 500, body: { error: photosErr.message } };
   const primaryNbhdResult = await fetchClient.rpc("get_primary_nbhds_for_hotels", { p_hotel_ids: topHotelIds });
   const primaryNbhdMap = new Map();
@@ -225,7 +244,7 @@ async function runV2Search({
       const e = roomMap.get(r.room_name) || { photos: [], roomTypeId: null };
       return {
         name: r.room_name,
-        roomTypeId: e.roomTypeId,
+        roomTypeId: r.room_type_id || e.roomTypeId,
         photos: e.photos,
         score: r.room_score,
         size: "",
