@@ -335,6 +335,24 @@ async function reindexCityV2(city, limit = 200, forceRebuild = true) {
     updated_at: new Date().toISOString(),
     last_error: null,
   }).eq("city", city);
+
+  // Copy hotel spatial data to hotels_cache so neighbourhood RPC (get_primary_nbhds_for_hotels)
+  // can assign hotels to neighbourhoods. Only copies hotel_id + coords — no LiteAPI content.
+  try {
+    const { data: v2Hotels } = await db.from("v2_hotels_cache")
+      .select("hotel_id, city, country_code, lat, lng")
+      .eq("city", city)
+      .not("lat", "is", null);
+    if (v2Hotels?.length) {
+      const rows = v2Hotels.map(h => ({ hotel_id: h.hotel_id, city: h.city, country_code: h.country_code, lat: h.lat, lng: h.lng }));
+      const { error: cpErr } = await db.from("hotels_cache").upsert(rows, { onConflict: "hotel_id" });
+      if (cpErr) console.error("[v2-index] hotels_cache copy error:", cpErr.message);
+      else console.log(`[v2-index] copied ${rows.length} hotels to hotels_cache for neighbourhood matching`);
+    }
+  } catch (cpEx) {
+    console.error("[v2-index] hotels_cache copy exception:", cpEx.message);
+  }
+
   return { city, hotelsDone, photosDone, totalHotels: totalHotels || 0, totalPhotos: totalPhotos || 0 };
 }
 
