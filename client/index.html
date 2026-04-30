@@ -1740,7 +1740,8 @@
     .hotel-match-badge--low {
       background: rgba(255,255,255,0.05); color: var(--muted); border-color: rgba(255,255,255,0.12);
     }
-    .book-btn {
+    .book-btn--room { font-size: 0.72rem; padding: 4px 10px; margin-left: 8px; }
+    .book-btn { 
       flex-shrink: 0; display: inline-block; padding: 9px 18px; border-radius: 8px;
       background: var(--accent); color: #0e0c08;
       border: 1px solid var(--accent);
@@ -4655,6 +4656,7 @@
       <span class="cmd-mobile-dates-clear" id="cmd-mobile-dates-clear" onclick="clearResultsDates(event)" aria-label="Clear dates">×</span>
     </button>
     <span id="resultCount" class="result-count"></span>
+    <button type="button" id="debugCopyBtn" onclick="copyDebugSnapshot()" title="Copy debug snapshot for sharing" style="display:none;background:rgba(255,255,255,0.10);border:1px solid rgba(255,255,255,0.25);color:rgba(255,255,255,0.75);font-size:11px;padding:3px 8px;border-radius:5px;cursor:pointer;letter-spacing:0.03em;flex-shrink:0;">⎘ debug</button>
     <div class="view-toggle" id="viewToggle">
       <button class="view-btn active" id="viewBtnCards" onclick="setViewMode('cards')" title="Card view">
         <svg width="15" height="15" viewBox="0 0 15 15" fill="none"><rect x="1" y="1" width="5.5" height="5.5" rx="1" fill="currentColor"/><rect x="8.5" y="1" width="5.5" height="5.5" rx="1" fill="currentColor"/><rect x="1" y="8.5" width="5.5" height="5.5" rx="1" fill="currentColor"/><rect x="8.5" y="8.5" width="5.5" height="5.5" rx="1" fill="currentColor"/></svg>
@@ -4715,6 +4717,33 @@
   const VIBE_TOUR_DEBUG = /^(localhost|127\.0\.0\.1)$/i.test(window.location.hostname);
   /** Last /api/vsearch `stats` — used to align match sort with server nbhd blend weight */
   let _lastVsearchStats = null;
+  /** Last full /api/vsearch response hotels array — for debug snapshot */
+  let _lastVsearchHotels = null;
+  /** Last vsearch URL params — for debug snapshot */
+  let _lastVsearchUrl = null;
+
+  // ── White-label booking config ──────────────────────────────────────────────
+  // Set LITEAPI_WL_DOMAIN in .env (e.g. "travelboop.liteapi.travel" or "book.travelboop.com").
+  // Leave empty to fall back to Google search (current placeholder behaviour).
+  const WL_BASE_URL = (window._WL_BASE_URL || '').replace(/\/$/, '');
+
+  /** Build a white-label deep link for a specific room offer (offerId) or hotel page. */
+  function buildBookUrl(hotel, roomTypeId) {
+    if (!WL_BASE_URL) {
+      // Fallback: Google search until white label is configured
+      return `https://www.google.com/search?q=${encodeURIComponent((hotel.name||'') + ' ' + (hotel.city||'') + ' hotel booking')}`;
+    }
+    // If we have an offerId for this specific room → go straight to checkout
+    const offerId = hotel.offerIds?.[roomTypeId];
+    if (offerId) return `${WL_BASE_URL}/booking?offerId=${encodeURIComponent(offerId)}`;
+
+    // Hotel details page with dates pre-filled (user picks their room on the WL)
+    const params = new URLSearchParams();
+    if (_checkin)  params.set('checkin',  _checkin);
+    if (_checkout) params.set('checkout', _checkout);
+    params.set('occupancies', btoa(JSON.stringify([{ adults: 2, children: [] }])));
+    return `${WL_BASE_URL}/hotels/${hotel.id}?${params.toString()}`;
+  }
   let selectedNeighborhood = null; // { name, bbox?, polygon? } — polygon is geo JSON for /api/vsearch
   let NEIGHBORHOOD_FLOW_ROWS = []; // indexed rows for fetchAndShowNeighborhoods → selectNeighborhoodFlow
   /** True when neighbourhood grid was opened from hotel results (change area) — different chrome + Choose returns to results. */
@@ -6077,6 +6106,7 @@
     for (const o of mustHaveOptions) {
       if (o.flag) mustHaves.push(o.flag);
       if (o.seed) seedExtras.push(o.seed);
+
       // Extra synonym nudges for flag-only options so HyDE lands near the
       // right photo embeddings even when the DB flag filter is what's really
       // doing the work.
@@ -6084,11 +6114,38 @@
       if (o.id === 'work_desk') seedExtras.push('work desk, proper workspace, ergonomic chair');
     }
 
+    // Detect explicit feature requests in freetext and elevate them to must_haves.
+    // This ensures e.g. "double sinks" typed by the user is treated as a primary
+    // criterion rather than a same-weight soft preference alongside ambient style cues.
+    const FREETEXT_FLAG_PATTERNS = [
+      { rx: /\bdouble\s+sink/i,            flag: 'double_sinks' },
+      { rx: /\brainfall\s+shower/i,         flag: 'rainfall_shower' },
+      { rx: /\brain\s+shower/i,             flag: 'rainfall_shower' },
+      { rx: /\bsoaking\s+tub\b/i,           flag: 'soaking_tub' },
+      { rx: /\bfreestanding\s+tub\b/i,      flag: 'soaking_tub' },
+      { rx: /\bwalk[\s-]in\s+shower\b/i,    flag: 'walk_in_shower' },
+      { rx: /\bwalk[\s-]in\s+closet\b/i,    flag: 'walk_in_closet' },
+      { rx: /\bprivate\s+balcony\b/i,       flag: 'private_balcony' },
+      { rx: /\bbalcony\b/i,                 flag: 'private_balcony' },
+      { rx: /\bking\s+bed\b/i,              flag: 'king_bed' },
+      { rx: /\bwater\s+view\b|\bocean\s+view\b|\bsea\s+view\b/i, flag: 'water_view' },
+      { rx: /\bskyline\s+view\b/i,          flag: 'skyline_view' },
+      { rx: /\bbidet\b/i,                   flag: 'bidet_washlet' },
+      { rx: /\bespresso\b/i,                flag: 'espresso_station' },
+    ];
+    if (freetext) {
+      for (const { rx, flag } of FREETEXT_FLAG_PATTERNS) {
+        if (rx.test(freetext) && !mustHaves.includes(flag)) {
+          mustHaves.push(flag);
+        }
+      }
+    }
+
     // Room seed: roomStyle aesthetic → primary signal + feature nudges + freetext.
     const roomStyleLabel = {
       sleek: 'sleek modern contemporary room, clean lines, minimalist, soft greys, natural light',
       cozy:  'warm cozy hotel room, layered textures, wood accents, warm ambient lighting, inviting',
-      distinct: 'distinctive hotel room, historic elegance, ornate moldings and marble, gilded accents, curated character, striking mix of classic architecture and bold modern furniture',
+      distinct: 'distinctive hotel room, bold expressive design, striking decor with personality, artistic character, eclectic mix of materials and textures, curated art pieces, unconventional and one-of-a-kind aesthetic',
     }[ans.roomStyle] || '';
     const roomValueNudge = ans.hotelPersonality === 'economical'
       ? 'clean practical guest room, comfortable basics, unpretentious good value'
@@ -6117,7 +6174,7 @@
     const paceLabel = NBHD_PACE_HOTEL_SNIPPETS[sceneSeed.pace] || '';
     const locationLabel = NBHD_LOCATION_HOTEL_SNIPPETS[sceneSeed.location] || '';
     const hotelCharacterNudge = ans.roomStyle === 'distinct'
-      ? 'grand characterful hotel, heritage architecture, ornate public spaces, design-led suites, memorable interiors'
+      ? 'boutique hotel with strong design character, artistic personality, distinctive interiors, independent or lifestyle brand, memorable and expressive spaces'
       : '';
     const hotelBits = [
       tripLabel ? `hotel for ${tripLabel}` : 'hotel',
@@ -7869,6 +7926,47 @@
     inp.focus();
   }
 
+  // ── Debug snapshot ──────────────────────────────────────────────────────────
+  // Copies a compact JSON blob you can paste into a chat to debug search results.
+  function copyDebugSnapshot() {
+    const btn = document.getElementById('debugCopyBtn');
+    if (!_lastVsearchUrl && !_lastVsearchStats) {
+      if (btn) { btn.textContent = '✗ no data'; setTimeout(() => { btn.textContent = '⎘ debug'; }, 1500); }
+      return;
+    }
+    const hotels = (_lastVsearchHotels || []).slice(0, 10).map((h, i) => ({
+      rank: i + 1,
+      name: h.name,
+      vectorScore: h.vectorScore,
+      hotelScore: h.hotelScore ?? null,
+      topRoom: h.roomTypes?.[0]
+        ? { name: h.roomTypes[0].name, score: h.roomTypes[0].score }
+        : null,
+      rooms: (h.roomTypes || []).slice(0, 5).map(r => ({ name: r.name, score: r.score })),
+    }));
+    const snap = {
+      url: _lastVsearchUrl,
+      stats: _lastVsearchStats,
+      top10: hotels,
+    };
+    const text = JSON.stringify(snap, null, 2);
+    navigator.clipboard.writeText(text).then(() => {
+      if (btn) { btn.textContent = '✓ copied!'; setTimeout(() => { btn.textContent = '⎘ debug'; }, 2000); }
+    }).catch(() => {
+      // Fallback: open in a small overlay
+      const pre = document.createElement('pre');
+      pre.style.cssText = 'position:fixed;top:10px;right:10px;z-index:9999;background:#111;color:#eee;padding:12px;border-radius:8px;font-size:11px;max-width:500px;max-height:80vh;overflow:auto;white-space:pre-wrap;word-break:break-all;border:1px solid #444';
+      pre.textContent = text;
+      const close = document.createElement('button');
+      close.textContent = '✕ close';
+      close.style.cssText = 'display:block;margin-bottom:8px;background:#333;color:#fff;border:none;padding:4px 10px;border-radius:4px;cursor:pointer;font-size:11px';
+      close.onclick = () => pre.remove();
+      pre.prepend(close);
+      document.body.appendChild(pre);
+    });
+  }
+  // ────────────────────────────────────────────────────────────────────────────
+
   function setStatus(msg, loading = false) {
     document.getElementById('status').innerHTML = loading
       ? `<div class="spinner"></div><span>${msg}</span>`
@@ -8015,7 +8113,9 @@
       }
       if (SEARCH_VERSION_OVERRIDE) vsearchParams.search_version = SEARCH_VERSION_OVERRIDE;
       if (SEARCH_COMPARE_OVERRIDE) vsearchParams.compare = '1';
-      const resp = await fetch(`${BACKEND}/api/vsearch?` + new URLSearchParams(vsearchParams));
+      _lastVsearchUrl = `${BACKEND}/api/vsearch?` + new URLSearchParams(vsearchParams);
+      _lastVsearchHotels = null;
+      const resp = await fetch(_lastVsearchUrl);
       await nbhdPickerScoresP.catch(() => {});
       if (!resp.ok) {
         let errMsg = `Search failed (${resp.status})`;
@@ -8024,6 +8124,7 @@
       }
       const data = await resp.json();
       _lastVsearchStats = data.stats || null;
+      _lastVsearchHotels = data.hotels || [];
       const st = data.stats;
       if (st && (st.nbhd_rank_weight_config != null || st.nbhd_blend_applied != null)) {
         console.info(
@@ -8206,7 +8307,7 @@
       const data = await resp.json();
       if (reqId !== _ratesReqId) return;
       _fetchingPrices = false;
-      applyPrices(data.prices || {}, data.roomPrices || {}, data.currency || 'EUR', data.pricedCount || 0);
+      applyPrices(data.prices || {}, data.roomPrices || {}, data.currency || 'EUR', data.pricedCount || 0, data);
     } catch (e) {
       console.warn('[prices]', e.message);
       if (reqId === _ratesReqId) {
@@ -8275,18 +8376,18 @@
               ? `<div class="no-avail-notice">Available for your dates — room photos not in our visual index yet</div>`
               : `<div class="no-avail-notice">No rooms available for these dates — <button class="no-avail-link" onclick="setAvailFilter(false);document.getElementById('availOnlyCheck').checked=false">show all room types</button></div>`)
           : '';
-        roomsEl.innerHTML = roomsSectionHTML(visibleRooms, h.vectorScore, h.roomPrices, _hasDateSearch, notice, openCompactIdx);
+        roomsEl.innerHTML = roomsSectionHTML(visibleRooms, h.vectorScore, h.roomPrices, _hasDateSearch, notice, openCompactIdx, h);
         bindFeaturedStripNavs(roomsEl);
       }
     }
 
   }
 
-  function applyPrices(priceMap, roomPriceMap, currency, pricedCount) {
+  function applyPrices(priceMap, roomPriceMap, currency, pricedCount, ratesData = {}) {
     const sym = currency === 'EUR' ? '€' : '$';
     _priceCurrency = currency;
 
-    // Merge hotel-level and per-room prices onto hotel objects for re-render persistence
+    // Merge hotel-level and per-room prices + offerIds onto hotel objects for re-render persistence
     let roomPricedRooms = 0;
     for (const hotel of _lastHotels) {
       if (priceMap[hotel.id] !== undefined) hotel.price = priceMap[hotel.id];
@@ -8294,6 +8395,8 @@
         hotel.roomPrices = roomPriceMap[hotel.id];
         roomPricedRooms += Object.keys(roomPriceMap[hotel.id]).length;
       }
+      // Store offerIds for white-label checkout deep links
+      if (ratesData.offerIds?.[hotel.id]) hotel.offerIds = ratesData.offerIds[hotel.id];
     }
     console.log(`[prices] hotel prices: ${Object.keys(priceMap).length}, room prices: ${roomPricedRooms} rooms across ${Object.keys(roomPriceMap).length} hotels`);
     _pricesLoaded  = true;
@@ -9334,6 +9437,8 @@
     const nbhdSuffix = selectedNeighborhood?.name ? ` · ${selectedNeighborhood.name}` : '';
     document.getElementById('resultCount').textContent =
       remaining > 0 ? `Showing ${showing} of ${total} hotels${nbhdSuffix}` : `${total} hotel${total !== 1 ? 's' : ''}${nbhdSuffix}`;
+    const dbgBtn = document.getElementById('debugCopyBtn');
+    if (dbgBtn) dbgBtn.style.display = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' ? '' : 'none';
 
     const resultsEl = document.getElementById('results');
     resultsEl.classList.toggle('results-rows', _viewMode === 'rows');
@@ -9385,13 +9490,13 @@
   // openCompactIdx >= 0 (user had that row expanded before an in-place rebuild).
   const COMPACT_SHOW = 3;
 
-  function roomsSectionHTML(roomTypes, hotelScore, roomPrices, hasDateSearch, noAvailNotice, openCompactIdx = -1) {
+  function roomsSectionHTML(roomTypes, hotelScore, roomPrices, hasDateSearch, noAvailNotice, openCompactIdx = -1, hotel = null) {
     if (roomTypes.length === 0) return noAvailNotice;
 
     const featured = roomTypes[0];
     const others   = roomTypes.slice(1);
 
-    const featuredHTML = roomTypeHTML(featured, true, hotelScore, roomPrices, hasDateSearch, 'featured');
+    const featuredHTML = roomTypeHTML(featured, true, hotelScore, roomPrices, hasDateSearch, 'featured', false, hotel);
 
     let othersSection = '';
     if (others.length > 0) {
@@ -9399,11 +9504,11 @@
       const hiddenOthers  = others.slice(COMPACT_SHOW);
 
       const visibleHTML = visibleOthers.map((rt, ci) =>
-        roomTypeHTML(rt, openCompactIdx >= 0 && ci === openCompactIdx, hotelScore, roomPrices, hasDateSearch, 'compact', false)
+        roomTypeHTML(rt, openCompactIdx >= 0 && ci === openCompactIdx, hotelScore, roomPrices, hasDateSearch, 'compact', false, hotel)
       ).join('');
 
       const hiddenHTML = hiddenOthers.map(rt =>
-        roomTypeHTML(rt, false, hotelScore, roomPrices, hasDateSearch, 'compact', true)
+        roomTypeHTML(rt, false, hotelScore, roomPrices, hasDateSearch, 'compact', true, hotel)
       ).join('');
 
       const showMoreBtn = hiddenOthers.length > 0
@@ -9666,7 +9771,7 @@
     const stars    = '★'.repeat(Math.min(Math.max(Math.round(h.starRating || 0), 0), 5));
     const location = [h.address, h.city, h.country].filter(Boolean).join(', ');
     const rating   = h.rating > 0 ? `<span class="hotel-guest-score"><strong>${parseFloat(h.rating).toFixed(1)}</strong> guest score</span>` : '';
-    const bookUrl  = `https://www.google.com/search?q=${encodeURIComponent(h.name + ' ' + (h.city||'') + ' hotel booking')}`;
+    const bookUrl  = buildBookUrl(h, null);
     const clipBadge = h.clipScore > 0 ? `<span class="clip-score-badge">&#9889; ${h.clipScore}% CLIP</span>` : '';
     const hotelIdAttr = escHtml(String(h.id));
 
@@ -9771,12 +9876,12 @@
           </div>
         </div>
         <div id="hotel-rooms-${h.id}">
-          ${roomsSectionHTML(roomTypes, h.vectorScore, h.roomPrices, _hasDateSearch, noAvailNotice)}
+          ${roomsSectionHTML(roomTypes, h.vectorScore, h.roomPrices, _hasDateSearch, noAvailNotice, -1, h)}
         </div>
       </div>`;
   }
 
-  function roomTypeHTML(rt, isTopMatch, hotelScore, hotelRoomPrices, hasDateSearch, variant = 'compact', isHidden = false) {
+  function roomTypeHTML(rt, isTopMatch, hotelScore, hotelRoomPrices, hasDateSearch, variant = 'compact', isHidden = false, hotel = null) {
     const sizeHTML = rt.size ? `<span class="room-size">${rt.size}</span>` : '';
     const bedsHTML = rt.beds ? `<span class="room-beds">${rt.beds}</span>` : '';
 
@@ -9792,6 +9897,12 @@
       : isUnavail
         ? `<span class="room-unavail-badge">not available</span>`
         : '';
+
+    // Per-room Book button: show when there's a price (has offerId → direct checkout; else hotel page)
+    const roomBookUrl = hasPrice && hotel ? buildBookUrl(hotel, rt.roomTypeId) : null;
+    const roomBookHTML = roomBookUrl
+      ? `<a class="book-btn book-btn--room" href="${roomBookUrl}" target="_blank" rel="noopener" onclick="event.stopPropagation()">Book →</a>`
+      : '';
 
     // ── Featured variant (top match room — scrollable strip, same indices as lightbox) ──
     if (variant === 'featured') {
@@ -9827,7 +9938,7 @@
           </div>
           <div class="room-featured-info">
             <div class="room-featured-name">${rt.name}${bedsHTML ? `<span class="room-meta-sep"> · </span>${bedsHTML}` : ''}${sizeHTML ? `<span class="room-meta-sep"> · </span>${sizeHTML}` : ''}</div>
-            <div class="room-featured-meta">${priceHTML}<span class="room-featured-collapse">▾ collapse</span></div>
+            <div class="room-featured-meta">${priceHTML}${roomBookHTML}<span class="room-featured-collapse">▾ collapse</span></div>
           </div>
         </div>`;
     }
@@ -10449,5 +10560,16 @@
 
 <!-- Momentum toast -->
 <div id="mbanner" class="mbanner"></div>
+
+<script>
+  // Fetch client config from server (WL domain, etc.) non-blocking.
+  // WL_BASE_URL is consumed by buildBookUrl() — it reads window._WL_BASE_URL.
+  (async () => {
+    try {
+      const cfg = await fetch(`${BACKEND}/api/config`).then(r => r.json());
+      if (cfg.wl_base_url) window._WL_BASE_URL = cfg.wl_base_url;
+    } catch (_) {}
+  })();
+</script>
 </body>
 </html>

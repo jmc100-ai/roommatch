@@ -1,12 +1,27 @@
-const { buildFactIntent, scoreFactSet } = require("./fact-catalog");
+/**
+ * search-v2.js — V2 fact-based search, scoring mirroring V1 exactly.
+ *
+ * The ONLY difference from V1:
+ *   Room similarity = LLM fact match (0–1) instead of cosine vector similarity.
+ *
+ * Everything else is identical to V1:
+ *   - Soft flag coverage boost  (covMult / missPen env vars)
+ *   - Adaptive SIM_MAX / SIM_MIN / simSpan remapping
+ *   - Mean-of-top-3 scoring for hotel display score
+ *   - Photo-count penalty  (< 3 photos → score × len/3)
+ *   - Room-level remapping + penalty
+ *   - Neighbourhood BOOP blend sort (applyNbhdBoopRank)
+ *   - HOTEL_SIM adaptive remapping for hotelScore
+ */
+
+const { buildFactIntent, buildFactIntentLLM, scoreFactSet } = require("./fact-catalog");
 const { normalizePolygonRing, pointInPolygon, bboxFromRing } = require("./neighborhood-vibe-data");
+
+// ── helpers ──────────────────────────────────────────────────────────────────
 
 function parseMustHaves(raw) {
   if (!raw) return [];
-  return String(raw)
-    .split(",")
-    .map((s) => s.trim())
-    .filter(Boolean);
+  return String(raw).split(",").map((s) => s.trim()).filter(Boolean);
 }
 
 function parseBbox(raw) {
@@ -28,34 +43,13 @@ function parsePolygon(raw) {
   }
 }
 
-function normalizeText(s) {
-  return String(s || "").toLowerCase();
-}
-
 function tokenize(query) {
-  return normalizeText(query)
+  return String(query || "")
+    .toLowerCase()
     .replace(/[^a-z0-9\s]/g, " ")
     .split(/\s+/)
     .map((t) => t.trim())
     .filter((t) => t.length >= 3);
-}
-
-async function embedText(text, geminiKey) {
-  if (!text || !geminiKey) return null;
-  const r = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-embedding-001:embedContent?key=${geminiKey}`,
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ content: { parts: [{ text }] } }),
-      signal: AbortSignal.timeout(8000),
-    }
-  );
-  if (!r.ok) return null;
-  const d = await r.json();
-  const vals = d?.embedding?.values;
-  if (!Array.isArray(vals) || vals.length === 0) return null;
-  return vals.slice(0, 768);
 }
 
 function textScore(tokens, roomName, hotelName) {
@@ -66,33 +60,88 @@ function textScore(tokens, roomName, hotelName) {
   return hits / tokens.length;
 }
 
+async function embedText(text, geminiKey) {
+  if (!text || !geminiKey) return null;
+  try {
+    const r = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-embedding-001:embedContent?key=${geminiKey}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ content: { parts: [{ text }] } }),
+        signal: AbortSignal.timeout(8000),
+      }
+    );
+    if (!r.ok) return null;
+    const d = await r.json();
+    const vals = d?.embedding?.values;
+    if (!Array.isArray(vals) || vals.length === 0) return null;
+    return vals.slice(0, 768);
+  } catch {
+    return null;
+  }
+}
+
+// Bathroom-specific facts — drives intentType detection and photo bias
 const BATHROOM_FACT_KEYS = new Set([
-  "double_sinks", "soaking_tub", "rainfall_shower", "handheld_wand", "separate_toilet_door",
-  "glass_wall_bathroom", "bidet_washlet", "natural_light_bathroom", "stone_surfaces",
-  "anti_fog_mirror", "makeup_vanity", "heated_towel_rack",
+  "double_sinks", "soaking_tub", "rainfall_shower", "handheld_wand",
+  "separate_toilet_door", "glass_wall_bathroom", "bidet_washlet",
+  "natural_light_bathroom", "stone_surfaces", "anti_fog_mirror",
+  "makeup_vanity", "heated_towel_rack",
 ]);
 
-async function runV2Search({
-  req,
-  supabase,
-  supabaseAdmin,
-  resolveCityName,
-}) {
-  const query = String(req.query.query || "").trim();
-  const cityInput = String(req.query.city || "").trim();
-  if (!query || !cityInput) return { status: 400, body: { error: "query and city required" } };
+// For high-ambiguity facts: a single "yes" photo is only trusted when no-votes don't
+// outnumber it. If yes=1 and no>=2, require a second yes to confirm.
+// (yes=1, no=0 → confirm; yes=1, no=1 → confirm; yes=1, no≥2 → wait for second yes;
+//  yes≥2 → always confirm regardless of no count)
+const REQUIRE_MULTI_PHOTO = new Set([
+  "double_sinks", "soaking_tub", "rainfall_shower", "walk_in_shower",
+  "private_balcony", "floor_to_ceiling_windows",
+]);
+
+// ── main export ───────────────────────────────────────────────────────────────
+
+async function runV2Search({ req, supabase, supabaseAdmin, resolveCityName }) {
+  const query     = String(req.query.query || "").trim();
+  const cityInput = String(req.query.city  || "").trim();
+  if (!query || !cityInput)
+    return { status: 400, body: { error: "query and city required" } };
+
   const fetchClient = supabaseAdmin || supabase;
-  if (!fetchClient) return { status: 500, body: { error: "Supabase not configured" } };
+  if (!fetchClient)
+    return { status: 500, body: { error: "Supabase not configured" } };
 
-  const city = await resolveCityName(cityInput, fetchClient, ["indexed_cities", "hotels_cache"]);
+  const city      = await resolveCityName(cityInput, fetchClient, ["indexed_cities", "hotels_cache"]);
   const mustHaves = parseMustHaves(req.query.must_haves || "");
-  const intent = buildFactIntent(query, { mustHaves });
+  // Use LLM-based NLP router (Gemini) to map query → weighted facts; falls back to regex
+  const intent    = await buildFactIntentLLM(query, { mustHaves }, process.env.GEMINI_KEY || "");
   const hotelQuery = String(req.query.hotel_query || query).trim();
-  const tokens = tokenize(query);
+  const tokens    = tokenize(query);
 
+  // ── Env tuning knobs (same names/defaults as V1) ──────────────────────────
+  const GALLERY_LIMIT = 250;
+  const covMult = parseFloat(process.env.SOFT_FLAG_COVERAGE_MULT   || "0.28");
+  const missPen = parseFloat(process.env.SOFT_FLAG_MISS_PENALTY    || "0.08");
+  const rawNbhdW = parseFloat(process.env.VSEARCH_NBHD_RANK_WEIGHT || "0");
+  const nbhdRankWeight = Number.isFinite(rawNbhdW) && rawNbhdW > 0 ? rawNbhdW : 0;
+
+  // Detected fact keys (hard + soft from intent) — mirrors detectedFlagKeys in V1
+  const detectedFactKeys = [
+    ...(intent.hard_filters    || []).map((x) => x.fact_key),
+    ...(intent.soft_preferences || []).map((x) => x.fact_key),
+  ].filter(Boolean);
+  const hasFlags = detectedFactKeys.length > 0;
+
+  // intentType: "bathroom" when bathroom facts are in query (mirrors V1 extractIntentType)
+  const intentType = detectedFactKeys.some((k) => BATHROOM_FACT_KEYS.has(k))
+    ? "bathroom"
+    : null;
+
+  // ── Geo pre-filter (polygon preferred, then bbox) ─────────────────────────
   let hotelIdsByGeo = null;
   const polygonRing = parsePolygon(req.query.polygon || "");
-  const bbox = parseBbox(req.query.bbox || "");
+  const bbox        = parseBbox(req.query.bbox || "");
+
   if (polygonRing?.length >= 4) {
     const pb = bboxFromRing(polygonRing);
     if (pb?.lat_min != null) {
@@ -100,349 +149,567 @@ async function runV2Search({
         .from("hotels_cache")
         .select("hotel_id,lat,lng")
         .eq("city", city)
-        .gte("lat", pb.lat_min)
-        .lte("lat", pb.lat_max)
-        .gte("lng", pb.lon_min)
-        .lte("lng", pb.lon_max);
-      hotelIdsByGeo = (polyHotels || [])
-        .filter((h) =>
-          Number.isFinite(Number(h.lat)) &&
-          Number.isFinite(Number(h.lng)) &&
-          pointInPolygon(Number(h.lat), Number(h.lng), polygonRing)
-        )
-        .map((h) => h.hotel_id);
+        .gte("lat", pb.lat_min).lte("lat", pb.lat_max)
+        .gte("lng", pb.lon_min).lte("lng", pb.lon_max);
+      const inside = (polyHotels || []).filter(
+        (h) => Number.isFinite(Number(h.lat)) && Number.isFinite(Number(h.lng)) &&
+               pointInPolygon(Number(h.lat), Number(h.lng), polygonRing)
+      );
+      hotelIdsByGeo = inside.map((h) => h.hotel_id);
+      console.log(`[v2] polygon filter: ${hotelIdsByGeo.length} hotels`);
+      if (!hotelIdsByGeo.length) hotelIdsByGeo = null;
     }
   } else if (bbox) {
     const { data: bboxHotels } = await fetchClient
       .from("hotels_cache")
       .select("hotel_id")
       .eq("city", city)
-      .gte("lat", bbox.lat_min)
-      .lte("lat", bbox.lat_max)
-      .gte("lng", bbox.lon_min)
-      .lte("lng", bbox.lon_max);
+      .gte("lat", bbox.lat_min).lte("lat", bbox.lat_max)
+      .gte("lng", bbox.lon_min).lte("lng", bbox.lon_max);
     hotelIdsByGeo = (bboxHotels || []).map((h) => h.hotel_id);
+    console.log(`[v2] bbox filter: ${hotelIdsByGeo.length} hotels`);
+    if (!hotelIdsByGeo.length) hotelIdsByGeo = null;
   }
 
-  const { data: cacheRows, error: cacheErr } = await fetchClient
-    .from("v2_hotels_cache")
-    .select("hotel_id,name,address,star_rating,guest_rating,main_photo,hotel_photos")
-    .eq("city", city);
-  if (cacheErr) return { status: 500, body: { error: cacheErr.message } };
-  const hotelMeta = new Map((cacheRows || []).map((r) => [r.hotel_id, r]));
-  const cityHotelIds = [...hotelMeta.keys()];
-  const eligibleHotelIds = hotelIdsByGeo ? cityHotelIds.filter((id) => hotelIdsByGeo.includes(id)) : cityHotelIds;
+  // ── Phase A: load hotel IDs + room facts ──────────────────────────────────
+  // Note: hotel display metadata (name, photo, ratings) is fetched live from
+  // LiteAPI by server.js after runV2Search returns (fetchHotelMetaBatch).
+  // v2_hotels_cache only retains hotel_id + coords after ToS data cleanup.
+  const [cacheResult, factsResult] = await Promise.all([
+    fetchClient
+      .from("v2_hotels_cache")
+      .select("hotel_id")
+      .eq("city", city),
+    fetchClient
+      .from("v2_room_feature_facts")
+      .select("hotel_id,room_type_id,room_name,photo_url,fact_key,fact_value,confidence")
+      .eq("city", city),
+  ]);
+  if (cacheResult.error) return { status: 500, body: { error: cacheResult.error.message } };
+  if (factsResult.error)  return { status: 500, body: { error: factsResult.error.message } };
+
+  // hotelMeta now only used for the set of hotel_ids (no display columns remain)
+  const hotelMeta = new Map((cacheResult.data || []).map((r) => [r.hotel_id, {}]));
+  const cityHotelIds   = [...hotelMeta.keys()];
+  const eligibleHotelIds = hotelIdsByGeo
+    ? cityHotelIds.filter((id) => hotelIdsByGeo.includes(id))
+    : cityHotelIds;
+
   if (!eligibleHotelIds.length) {
     return {
       status: 200,
       body: {
-        hotels: [],
-        query,
-        city,
-        indexing: false,
-        indexStatus: "complete",
-        stats: {
-          search_version_used: "v2",
-          search_version_requested: String(req.query.search_version || "v2"),
-          query_router: intent,
-          ranked_hotels: 0,
-        },
+        hotels: [], query, city, indexing: false, indexStatus: "complete",
+        stats: { search_version_used: "v2", ranked_hotels: 0 },
       },
     };
   }
 
-  const { data: roomFacts, error: roomErr } = await fetchClient
-    .from("v2_room_feature_facts")
-    .select("hotel_id,room_type_id,room_name,fact_key,fact_value,confidence")
-    .eq("city", city)
-    .in("hotel_id", eligibleHotelIds.slice(0, 5000));
-  if (roomErr) return { status: 500, body: { error: roomErr.message } };
+  const eligibleSet = new Set(eligibleHotelIds);
 
-  const roomFeatureMap = new Map(); // hotel::roomTypeId::roomName -> { facts:{} }
-  for (const rf of (roomFacts || [])) {
+  // ── Build per-room-type fact sets + hotel coverage ─────────────────────────
+  // roomTypeMap: `hotel_id::roomTypeId::roomName` → { hotel_id, room_type_id, room_name, facts{}, yesCounts{}, noCounts{} }
+  const roomTypeMap = new Map();
+  // hotelFactHits: hotel_id → Set of fact_keys with fact_value=1 (for coverage)
+  const hotelFactHits = new Map();
+
+  for (const rf of (factsResult.data || [])) {
+    if (!eligibleSet.has(rf.hotel_id)) continue;
     const key = `${rf.hotel_id}::${rf.room_type_id || ""}::${rf.room_name || "Room"}`;
-    if (!roomFeatureMap.has(key)) {
-      roomFeatureMap.set(key, {
-        hotel_id: rf.hotel_id,
+    if (!roomTypeMap.has(key)) {
+      roomTypeMap.set(key, {
+        hotel_id:    rf.hotel_id,
         room_type_id: rf.room_type_id || null,
-        room_name: rf.room_name || "Room",
+        room_name:   rf.room_name || "Room",
         facts: {},
+        yesCounts: {},
+        noCounts:  {},
       });
     }
-    if (rf.fact_value === 1) roomFeatureMap.get(key).facts[rf.fact_key] = true;
+    const entry = roomTypeMap.get(key);
+    if (rf.fact_value === 1) {
+      entry.yesCounts[rf.fact_key] = (entry.yesCounts[rf.fact_key] || 0) + 1;
+    } else if (rf.fact_value === 0) {
+      entry.noCounts[rf.fact_key] = (entry.noCounts[rf.fact_key] || 0) + 1;
+    }
+
+    if (rf.fact_value === 1) {
+      const yes = entry.yesCounts[rf.fact_key];
+      const no  = entry.noCounts[rf.fact_key] || 0;
+
+      let confirmed;
+      if (REQUIRE_MULTI_PHOTO.has(rf.fact_key)) {
+        // yes≥2 always confirms; yes=1 only if no-votes don't outnumber it (no < 2)
+        confirmed = yes >= 2 || no < 2;
+      } else {
+        confirmed = true;
+      }
+
+      if (confirmed) {
+        entry.facts[rf.fact_key] = true;
+        if (!hotelFactHits.has(rf.hotel_id)) hotelFactHits.set(rf.hotel_id, new Set());
+        hotelFactHits.get(rf.hotel_id).add(rf.fact_key);
+      } else {
+        // May have been set true on a previous yes — revoke if now outvoted
+        delete entry.facts[rf.fact_key];
+      }
+    }
   }
 
-  const byHotel = new Map();
-  const requestedFactKeys = new Set([
-    ...(intent.hard_filters || []).map((x) => x.fact_key),
-    ...(intent.soft_preferences || []).map((x) => x.fact_key),
-  ]);
-  const requestedList = [...requestedFactKeys].filter(Boolean);
+  // ── Coverage map: hotel_id → fraction of detectedFactKeys present (mirrors V1 coverageMap) ─
+  const coverageMap = new Map();
+  if (hasFlags) {
+    for (const hotelId of eligibleHotelIds) {
+      const hits = hotelFactHits.get(hotelId);
+      const c = hits
+        ? detectedFactKeys.filter((fk) => hits.has(fk)).length / detectedFactKeys.length
+        : 0;
+      coverageMap.set(hotelId, c);
+    }
+  }
 
-  for (const rt of roomFeatureMap.values()) {
-    const features = rt.facts || {};
-    const fact = scoreFactSet(features, intent);
-    const text = textScore(tokens, rt.room_name, hotelMeta.get(rt.hotel_id)?.name);
-    const total = Math.max(0, Math.min(1, 0.8 * fact.total_score + 0.2 * text));
-    const scoreRaw = total * 100;
-    const score = Math.round(scoreRaw);
-    const row = {
-      room_name: rt.room_name || "Room",
-      room_type_id: rt.room_type_id || null,
-      room_score: score,
-      room_score_raw: scoreRaw,
-      fact,
-      features,
-    };
+  // ── Compute per-room-type raw fact scores (0–1) ────────────────────────────
+  // rawFactScore = 0.8 × factMatchScore + 0.2 × textScore
+  // This is the V2 equivalent of V1's cosine similarity per room type.
+  const byHotel = new Map(); // hotel_id → [{ room_name, room_type_id, rawScore, factResult, features }]
+
+  for (const rt of roomTypeMap.values()) {
+    const meta       = hotelMeta.get(rt.hotel_id) || {};
+    const factResult = scoreFactSet(rt.facts, intent);
+    const txt        = textScore(tokens, rt.room_name, meta.name);
+    const rawScore   = Math.max(0, Math.min(1, 0.8 * factResult.total_score + 0.2 * txt));
+
     if (!byHotel.has(rt.hotel_id)) byHotel.set(rt.hotel_id, []);
-    byHotel.get(rt.hotel_id).push(row);
-  }
-
-  function roomRequestedFactHits(row) {
-    if (!row || !requestedList.length) return 0;
-    const feats = row.features || {};
-    let hits = 0;
-    for (const fk of requestedList) {
-      if (feats[fk] === true) hits++;
-    }
-    return hits;
-  }
-
-  function roomHasBathroomFacts(row) {
-    const feats = row?.features || {};
-    for (const fk of BATHROOM_FACT_KEYS) {
-      if (feats[fk] === true) return 1;
-    }
-    return 0;
-  }
-
-  const needsBathroomBias = requestedList.some((k) => BATHROOM_FACT_KEYS.has(k));
-
-  const ranked = [];
-  for (const [hotelId, rows] of byHotel.entries()) {
-    rows.sort((a, b) => {
-      if ((b.room_score_raw || 0) !== (a.room_score_raw || 0)) return (b.room_score_raw || 0) - (a.room_score_raw || 0);
-      const ah = roomRequestedFactHits(a);
-      const bh = roomRequestedFactHits(b);
-      if (bh !== ah) return bh - ah;
-      if (needsBathroomBias) {
-        const ab = roomHasBathroomFacts(a);
-        const bb = roomHasBathroomFacts(b);
-        if (bb !== ab) return bb - ab;
-      }
-      return String(a.room_name || "").localeCompare(String(b.room_name || ""));
+    byHotel.get(rt.hotel_id).push({
+      room_name:    rt.room_name,
+      room_type_id: rt.room_type_id,
+      rawScore,
+      factResult,
+      features: rt.facts,
     });
-    const bestRaw = rows[0]?.room_score_raw || 0;
-    const best = Math.round(bestRaw);
-    const meta = hotelMeta.get(hotelId) || {};
-    ranked.push({ hotel_id: hotelId, room_rows: rows, vectorScoreRaw: bestRaw, vectorScore: best, hotelScore: null });
   }
-  ranked.sort((a, b) => {
-    if ((b.vectorScoreRaw || 0) !== (a.vectorScoreRaw || 0)) return (b.vectorScoreRaw || 0) - (a.vectorScoreRaw || 0);
-    return (b.vectorScore || 0) - (a.vectorScore || 0);
-  });
-  const topHotelIds = ranked.slice(0, 250).map((r) => r.hotel_id);
 
-  // Plug in hotel-vibe model for V2 hotelScore.
-  let hotelScoreMap = new Map();
-  try {
-    const hotelEmbedding = await embedText(hotelQuery, process.env.GEMINI_KEY || "");
-    if (hotelEmbedding && topHotelIds.length) {
-      const hs = await fetchClient.rpc("score_hotels", {
-        query_embedding: hotelEmbedding,
-        search_city: city,
-        hotel_ids: topHotelIds,
-      });
-      if (!hs.error) {
-        let maxRaw = 0;
-        for (const r of (hs.data || [])) {
-          if (r.similarity > maxRaw) maxRaw = r.similarity;
+  // ── Hotel-level raw sim = MAX room rawScore (mirrors V1 hotelSimMap = max cosine per hotel) ─
+  // hotelSimMap: hotel_id → { rawSim, sBoosted, roomRows[] }
+  const hotelSimMap = new Map();
+  for (const [hotelId, rows] of byHotel.entries()) {
+    const rawSim = Math.max(...rows.map((r) => r.rawScore));
+    hotelSimMap.set(hotelId, { rawSim, sBoosted: rawSim, roomRows: rows });
+  }
+
+  const maxRawSim = hotelSimMap.size
+    ? Math.max(...[...hotelSimMap.values()].map((h) => h.rawSim))
+    : 0;
+
+  // ── Soft flag coverage boost (exact V1 formula) ────────────────────────────
+  if (hasFlags) {
+    let withCov = 0;
+    for (const [hotelId, h] of hotelSimMap.entries()) {
+      const c = coverageMap.get(hotelId) ?? 0;
+      if (c > 0) withCov++;
+      let boosted = h.rawSim * (1 + covMult * c);
+      boosted *= (1 - missPen * (1 - c));
+      h.sBoosted = Math.min(0.999, boosted);
+    }
+    console.log(
+      `[v2] soft_flags: cov_mult=${covMult} miss_penalty=${missPen} ` +
+      `detected=[${detectedFactKeys.join(",")}] hotels_with_coverage=${withCov}/${hotelSimMap.size}`
+    );
+  }
+
+  // ── Sort by sBoosted → pick top GALLERY_LIMIT ──────────────────────────────
+  let rankedHotels = [...hotelSimMap.entries()]
+    .map(([hotel_id, h]) => ({ hotel_id, rawSim: h.rawSim, sBoosted: h.sBoosted, roomRows: h.roomRows }))
+    .sort((a, b) => b.sBoosted - a.sBoosted);
+
+  if (!rankedHotels.length) {
+    return {
+      status: 200,
+      body: {
+        hotels: [], query, city, indexing: false, indexStatus: "complete",
+        stats: { search_version_used: "v2", ranked_hotels: 0 },
+      },
+    };
+  }
+
+  const topHotelIds = rankedHotels.slice(0, GALLERY_LIMIT).map((h) => h.hotel_id);
+
+  // ── Neighbourhood BOOP blend (same as V1) ─────────────────────────────────
+  let nbhdFitByHotelId = null;
+  const boopParam = req.query.boop_profile;
+  if (nbhdRankWeight > 0 && boopParam && rankedHotels.length) {
+    try {
+      const boopProfileForNbhd = JSON.parse(boopParam);
+      // Pass similarity values as V1 expects (0-1 range)
+      const rankedLite = rankedHotels.map((r) => ({
+        hotel_id:   r.hotel_id,
+        similarity: r.sBoosted,
+      }));
+      const { applyNbhdBoopRank } = require("../lib/nbhd-vibe-rank");
+      nbhdFitByHotelId = await applyNbhdBoopRank(
+        fetchClient, city, rankedLite, boopProfileForNbhd,
+        {
+          weight:     nbhdRankWeight,
+          neutralPct: parseFloat(process.env.VSEARCH_NBHD_NEUTRAL_PCT      || "62"),
+          maxHotels:  parseInt(process.env.VSEARCH_NBHD_RANK_MAX_HOTELS    || "5000", 10),
         }
-        const maxS = maxRaw > 0 ? maxRaw : 0.9;
-        const minS = Math.max(maxS - 0.3, 0);
-        const span = Math.max(maxS - minS, 1e-9);
-        for (const r of (hs.data || [])) {
-          const pct = Math.round(Math.max(0, Math.min(100, ((r.similarity - minS) / span) * 100)));
-          hotelScoreMap.set(r.hotel_id, pct);
-        }
+      );
+      if (nbhdFitByHotelId?.size) {
+        console.log(`[v2] nbhd_boop_rank: weight=${nbhdRankWeight} nbhd_scores=${nbhdFitByHotelId.size}`);
+      }
+    } catch (_) {}
+  }
+
+  // ── Phase B: photos + hotelScore + primary-nbhd (parallel) ───────────────
+  const hotelEmbedPromise = embedText(hotelQuery, process.env.GEMINI_KEY || "");
+
+  // Photos come from v2_room_feature_facts via RPC (photo_url dropped from v2_room_inventory).
+  const [photosResult, hotelEmbedding, primaryNbhdResult] = await Promise.all([
+    fetchClient.rpc("get_v2_room_photos", { p_hotel_ids: topHotelIds, p_city: city }),
+    hotelEmbedPromise,
+    fetchClient.rpc("get_primary_nbhds_for_hotels", { p_hotel_ids: topHotelIds }),
+  ]);
+
+  if (photosResult.error) return { status: 500, body: { error: photosResult.error.message } };
+
+  // hotel-vibe score_hotels RPC (same as V1 HOTEL_SIM logic)
+  const hotelVibeSimMap = new Map();
+  let hotelSimMaxRaw = 0;
+  let hotelVibeModel = "fallback_rating";
+  if (hotelEmbedding && topHotelIds.length) {
+    const hs = await fetchClient.rpc("score_hotels", {
+      query_embedding: hotelEmbedding,
+      search_city:     city,
+      hotel_ids:       topHotelIds,
+    });
+    if (!hs.error && hs.data?.length) {
+      hotelVibeModel = "score_hotels";
+      for (const r of hs.data) {
+        hotelVibeSimMap.set(r.hotel_id, r.similarity);
+        if (r.similarity > hotelSimMaxRaw) hotelSimMaxRaw = r.similarity;
       }
     }
-  } catch (_) {}
-
-  const { data: photosData, error: photosErr } = await fetchClient
-    .from("v2_room_inventory")
-    .select("hotel_id,room_name,room_type_id,photo_url,photo_type")
-    .in("hotel_id", topHotelIds)
-    .eq("city", city);
-  if (photosErr) return { status: 500, body: { error: photosErr.message } };
-  let photoFactSet = new Set();
-  if (requestedList.length && topHotelIds.length) {
-    const { data: photoFacts, error: pfErr } = await fetchClient
-      .from("v2_room_feature_facts")
-      .select("hotel_id,photo_url,fact_key,fact_value")
-      .in("hotel_id", topHotelIds)
-      .in("fact_key", requestedList)
-      .eq("city", city)
-      .eq("fact_value", 1);
-    if (!pfErr) {
-      for (const pf of (photoFacts || [])) {
-        photoFactSet.add(`${pf.hotel_id}::${pf.photo_url}::${pf.fact_key}`);
-      }
-    }
   }
-  const primaryNbhdResult = await fetchClient.rpc("get_primary_nbhds_for_hotels", { p_hotel_ids: topHotelIds });
+  const HOTEL_SIM_MAX  = hotelSimMaxRaw > 0 ? hotelSimMaxRaw : 0.9;
+  const HOTEL_SIM_MIN  = Math.max(HOTEL_SIM_MAX - 0.30, 0);
+  const hotelSimSpan   = Math.max(HOTEL_SIM_MAX - HOTEL_SIM_MIN, 1e-9);
+
+  // Primary neighbourhood map
   const primaryNbhdMap = new Map();
   if (!primaryNbhdResult.error) {
     for (const r of (primaryNbhdResult.data || [])) {
       primaryNbhdMap.set(r.hotel_id, {
-        id: r.neighborhood_id,
-        name: r.name,
+        id:         r.neighborhood_id,
+        name:       r.name,
         vibe_short: r.vibe_short,
         attributes: r.attributes || null,
       });
     }
   }
-  const photosByHotel = new Map();
-  for (const p of (photosData || [])) {
+
+  // ── Photo-level fact hit set (for photo ordering, same as V1 feature_flags) ─
+  // Build: `hotel_id::photo_url::fact_key` → true
+  let photoFactSet = new Set();
+  if (hasFlags && topHotelIds.length) {
+    const { data: photoFacts, error: pfErr } = await fetchClient
+      .from("v2_room_feature_facts")
+      .select("hotel_id,photo_url,fact_key,fact_value")
+      .in("hotel_id", topHotelIds)
+      .in("fact_key", detectedFactKeys)
+      .eq("city", city)
+      .eq("fact_value", 1);
+    if (!pfErr) {
+      for (const pf of (photoFacts || [])) {
+        if (pf.photo_url) photoFactSet.add(`${pf.hotel_id}::${pf.photo_url}::${pf.fact_key}`);
+      }
+    }
+  }
+
+  // roomFlagMatchMap: `hotelId::roomName` → count of detectedFactKeys confirmed TRUE
+  // Computed from room-type-level features (byHotel), NOT from photo order.
+  // This is reliable regardless of how many photos we loaded or their DB ordering.
+  const roomFlagMatchMap = new Map();
+  if (hasFlags) {
+    for (const [hotelId, rows] of byHotel.entries()) {
+      for (const r of rows) {
+        const hits = detectedFactKeys.filter((fk) => r.features[fk] === true).length;
+        const key = `${hotelId}::${r.room_name}`;
+        const prev = roomFlagMatchMap.get(key) ?? 0;
+        if (hits > prev) roomFlagMatchMap.set(key, hits);
+      }
+    }
+  }
+
+  // Group photos by hotel, then by room
+  const photosByHotel = new Map(); // hotel_id → [photo rows]
+  for (const p of (photosResult.data || [])) {
     if (!photosByHotel.has(p.hotel_id)) photosByHotel.set(p.hotel_id, []);
     photosByHotel.get(p.hotel_id).push(p);
   }
 
-  // Preserve BOOP neighborhood blend behavior from V1.
-  let nbhdFitByHotelId = null;
-  const rawNbhdW = parseFloat(process.env.VSEARCH_NBHD_RANK_WEIGHT || "0");
-  const nbhdRankWeight = Number.isFinite(rawNbhdW) && rawNbhdW > 0 ? rawNbhdW : 0;
-  const boopParam = req.query.boop_profile;
-  if (nbhdRankWeight > 0 && boopParam && topHotelIds.length) {
-    try {
-      const boopProfileForNbhd = JSON.parse(boopParam);
-      const rankedHotelsLite = ranked.slice(0, 250).map((r) => ({ hotel_id: r.hotel_id, similarity: (r.vectorScoreRaw || r.vectorScore) / 100 }));
-      const { applyNbhdBoopRank } = require("../lib/nbhd-vibe-rank");
-      nbhdFitByHotelId = await applyNbhdBoopRank(fetchClient, city, rankedHotelsLite, boopProfileForNbhd, {
-        weight: nbhdRankWeight,
-        neutralPct: parseFloat(process.env.VSEARCH_NBHD_NEUTRAL_PCT || "62"),
-        maxHotels: parseInt(process.env.VSEARCH_NBHD_RANK_MAX_HOTELS || "5000", 10),
-      });
-    } catch (_) {}
+  // ── Adaptive score remapping (exact V1 constants) ─────────────────────────
+  const SIM_MAX  = maxRawSim > 0 ? maxRawSim : 0.9;
+  const SIM_MIN  = Math.max(SIM_MAX - 0.30, 0);
+  const simSpan  = Math.max(SIM_MAX - SIM_MIN, 1e-9);
+
+  function remap(rawScore) {
+    return Math.max(0, Math.min(100, ((rawScore - SIM_MIN) / simSpan) * 100));
   }
 
-  const hotels = ranked.slice(0, 250).map((h) => {
-    const meta = hotelMeta.get(h.hotel_id) || {};
-    const allPhotos = photosByHotel.get(h.hotel_id) || [];
-    const roomMap = new Map();
-    for (const p of allPhotos) {
-      const room = p.room_name || "Room";
-      const roomKey = `${p.room_type_id || ""}::${room}`;
-      if (!roomMap.has(roomKey)) roomMap.set(roomKey, { photos: [], roomTypeId: p.room_type_id || null });
-      const e = roomMap.get(roomKey);
-      if (e.photos.length < 14) {
-        let matchCount = 0;
-        for (const fk of requestedList) {
-          if (photoFactSet.has(`${p.hotel_id}::${p.photo_url}::${fk}`)) matchCount++;
-        }
-        e.photos.push({
-          url: p.photo_url,
-          photo_type: p.photo_type || "other",
-          match_count: matchCount,
-        });
-      }
+  // ── Build hotel objects (mirrors V1 allHotels loop) ────────────────────────
+  const needsBathroomBias = detectedFactKeys.some((k) => BATHROOM_FACT_KEYS.has(k));
+
+  // roomTypeSimMap: `hotel_id::roomName` → rawScore  (mirrors V1 roomTypeSimMap for room scoring)
+  const roomTypeSimMap = new Map();
+  for (const [hotelId, rows] of byHotel.entries()) {
+    for (const r of rows) {
+      const prev = roomTypeSimMap.get(`${hotelId}::${r.room_name}`) ?? 0;
+      if (r.rawScore > prev) roomTypeSimMap.set(`${hotelId}::${r.room_name}`, r.rawScore);
     }
-    const roomTypes = h.room_rows.slice(0, 8).map((r) => {
-      const roomKey = `${r.room_type_id || ""}::${r.room_name}`;
-      const e = roomMap.get(roomKey) || { photos: [], roomTypeId: null };
-      const needsBathroomBias = requestedList.some((k) => BATHROOM_FACT_KEYS.has(k));
-      const ordered = [...(e.photos || [])].sort((a, b) => {
-        if ((b.match_count || 0) !== (a.match_count || 0)) return (b.match_count || 0) - (a.match_count || 0);
+  }
+
+  // Build hotel scores using photo-count penalty (mirrors V1 photoHotelScores logic)
+  const hotelDisplayScores = new Map(); // hotel_id → { topScore, rankScore }
+
+  for (const h of rankedHotels.slice(0, GALLERY_LIMIT)) {
+    const allPhotos   = photosByHotel.get(h.hotel_id) || [];
+    const totalPhotos = allPhotos.length;
+
+    // Collect per-photo scores for mean-of-top-3 (mirrors V1 hotelScoreMap approach)
+    // Each photo inherits the similarity of its room type.
+    const allPhotoScores    = [];
+    const intentPhotoScores = [];
+    for (const p of allPhotos) {
+      const sim = roomTypeSimMap.get(`${h.hotel_id}::${p.room_name}`) ?? h.rawSim;
+      allPhotoScores.push(sim);
+      if (!intentType || p.photo_type === intentType) intentPhotoScores.push(sim);
+    }
+    const scoringScores = intentPhotoScores.length > 0 ? intentPhotoScores : allPhotoScores;
+    scoringScores.sort((a, b) => b - a);
+    const rawScore = scoringScores.length > 0
+      ? scoringScores.slice(0, 3).reduce((s, x) => s + x, 0) / Math.min(3, scoringScores.length)
+      : h.rawSim;
+
+    // Use boosted hotel sim as rankScore when flags are active (mirrors V1)
+    const rankScore = hasFlags ? h.sBoosted : rawScore;
+    let topScore = remap(rankScore);
+
+    // Photo-count penalty: < 3 total photos → multiply by len/3 (exact V1)
+    if (totalPhotos < 3) {
+      topScore *= totalPhotos / 3;
+      console.log(`[v2] photo-count penalty: ${h.hotel_id} only ${totalPhotos} photos → ${topScore.toFixed(1)}`);
+    }
+
+    hotelDisplayScores.set(h.hotel_id, { topScore, rankScore });
+  }
+
+  // For hotels outside GALLERY_LIMIT: no photo data, use room-type score directly
+  for (const h of rankedHotels.slice(GALLERY_LIMIT)) {
+    const rankScore = hasFlags ? h.sBoosted : h.rawSim;
+    hotelDisplayScores.set(h.hotel_id, { topScore: remap(rankScore), rankScore });
+  }
+
+  // ── Final hotel sort (mirrors V1 allHotels.sort) ──────────────────────────
+  const allHotels = rankedHotels.map((h) => {
+    const { topScore } = hotelDisplayScores.get(h.hotel_id) || { topScore: 0 };
+    return { hotel_id: h.hotel_id, topScore, sBoosted: h.sBoosted, rawSim: h.rawSim };
+  });
+  allHotels.sort((a, b) => b.topScore - a.topScore);
+
+  if (nbhdFitByHotelId?.size > 0 && nbhdRankWeight > 0) {
+    const w = nbhdRankWeight;
+    allHotels.sort((a, b) => {
+      const nbA = nbhdFitByHotelId.get(a.hotel_id) ?? 62;
+      const nbB = nbhdFitByHotelId.get(b.hotel_id) ?? 62;
+      const ca  = (1 - w) * (a.topScore / 100) + w * (nbA / 100);
+      const cb  = (1 - w) * (b.topScore / 100) + w * (nbB / 100);
+      if (Math.abs(cb - ca) > 1e-6) return cb - ca;
+      return b.topScore - a.topScore;
+    });
+  }
+
+  // ── Build response payload ─────────────────────────────────────────────────
+  const hotels = allHotels.map(({ hotel_id: hotelId, topScore }) => {
+    const meta       = hotelMeta.get(hotelId) || {};
+    const score      = Math.round(topScore);
+    const allPhotos  = photosByHotel.get(hotelId) || [];
+    const hasPhotos  = allPhotos.length > 0;
+
+    // hotelScore: same adaptive HOTEL_SIM_MIN/MAX/SPAN as V1
+    const rawHotelSim = hotelVibeSimMap.get(hotelId);
+    const hotelScore  = rawHotelSim != null
+      ? Math.round(Math.max(0, Math.min(100, ((rawHotelSim - HOTEL_SIM_MIN) / hotelSimSpan) * 100)))
+      : null;
+
+    const primaryNbhd = primaryNbhdMap.get(hotelId) || null;
+    const nbhdFitPct  = nbhdFitByHotelId?.get(hotelId);
+
+    if (!hasPhotos) {
+      return {
+        id:          hotelId,
+        name:        hotelId,      // live metadata injected by server.js fetchHotelMetaBatch
+        address:     "",
+        city,
+        country:     "",
+        starRating:  0,
+        rating:      0,
+        mainPhoto:   null,
+        hotelPhotos: [],
+        roomTypes:   [],
+        isMatched:   score > 0,
+        vectorScore: score,
+        hotelScore,
+        primary_nbhd: primaryNbhd,
+        ...(nbhdFitPct != null ? { nbhd_fit_pct: nbhdFitPct } : {}),
+      };
+    }
+
+    // ── Group photos by room (mirrors V1 roomMap) ───────────────────────────
+    // Load ALL photos first (no per-room limit here) so fact-matching photos
+    // are never dropped before sorting. Truncation happens AFTER we sort.
+    const roomMap = new Map(); // roomName → { photos[], roomTypeId }
+    for (const p of allPhotos) {
+      const rName = p.room_name || "Room";
+      if (!roomMap.has(rName)) roomMap.set(rName, { photos: [], roomTypeId: p.room_type_id || null });
+      const entry = roomMap.get(rName);
+      // photo-level fact match count (mirrors V1 countPhotoFlagMatches)
+      let matchCount = 0;
+      for (const fk of detectedFactKeys) {
+        if (photoFactSet.has(`${hotelId}::${p.photo_url}::${fk}`)) matchCount++;
+      }
+      entry.photos.push({
+        url:        p.photo_url,
+        photo_type: p.photo_type || "other",
+        sim:        roomTypeSimMap.get(`${hotelId}::${rName}`) ?? 0,
+        matchCount,
+      });
+    }
+
+    // Sort photos within each room: fact match count DESC, bathroom bias, then sim DESC.
+    // Then truncate to the display limit AFTER sorting so confirmed-fact photos are first.
+    const PHOTOS_PER_ROOM = 10;
+    for (const entry of roomMap.values()) {
+      entry.photos.sort((a, b) => {
+        if (b.matchCount !== a.matchCount) return b.matchCount - a.matchCount;
         if (needsBathroomBias) {
           const aBath = a.photo_type === "bathroom" ? 1 : 0;
           const bBath = b.photo_type === "bathroom" ? 1 : 0;
           if (bBath !== aBath) return bBath - aBath;
         }
-        return 0;
+        return b.sim - a.sim;
       });
+      entry.photos = entry.photos.slice(0, PHOTOS_PER_ROOM);
+    }
+
+    // ── Room entries + flagMatch (mirrors V1 roomEntries) ──────────────────
+    const roomRows = byHotel.get(hotelId) || [];
+    const roomScoreByName = new Map();
+    for (const r of roomRows) {
+      const prev = roomScoreByName.get(r.room_name) ?? 0;
+      if (r.rawScore > prev) roomScoreByName.set(r.room_name, r.rawScore);
+    }
+
+    const roomEntries = [...roomMap.entries()].map(([name, entry]) => {
+      // flagMatch: confirmed fact hits from room-type facts (reliable, independent of photo order)
+      const flagMatch = roomFlagMatchMap.get(`${hotelId}::${name}`) ?? 0;
+
+      // Per-room score: mean of top-3 intent-type photos (mirrors V1 roomScore logic)
+      const intentPhotos = intentType
+        ? entry.photos.filter((p) => p.photo_type === intentType)
+        : [];
+      const scoringPhotos = intentPhotos.length > 0 ? intentPhotos : entry.photos;
+      const sims = scoringPhotos.map((p) => p.sim).sort((a, b) => b - a);
+      const rawRoom = sims.length > 0
+        ? sims.slice(0, 3).reduce((s, x) => s + x, 0) / Math.min(3, sims.length)
+        : (roomScoreByName.get(name) ?? 0);
+
+      let roomScore = remap(rawRoom);
+      // Room-level photo-count penalty (< 3 photos → multiply by len/3)
+      if (entry.photos.length < 3) roomScore *= entry.photos.length / 3;
+
       return {
-        name: r.room_name,
-        roomTypeId: r.room_type_id || e.roomTypeId,
-        photos: ordered.map((x) => x.url).slice(0, 10),
-        score: r.room_score,
-        size: "",
-        beds: "",
-        amenities: [],
-        _roomScoreRaw: Number(r.room_score_raw) || Number(r.room_score) || 0,
-        _roomMatchCount: Math.max(0, ...ordered.map((x) => Number(x.match_count) || 0)),
-        _bathroomPhotoFirst: ordered.some((x) => x.photo_type === "bathroom") ? 1 : 0,
+        name,
+        roomTypeId: entry.roomTypeId,
+        photos:     entry.photos.map((p) => p.url),
+        score:      Math.round(roomScore),
+        flagMatch,
+        size:       "",
+        beds:       "",
+        amenities:  [],
       };
     });
-    roomTypes.sort((a, b) => {
-      if ((b._roomScoreRaw || 0) !== (a._roomScoreRaw || 0)) return (b._roomScoreRaw || 0) - (a._roomScoreRaw || 0);
-      if ((b.score || 0) !== (a.score || 0)) return (b.score || 0) - (a.score || 0);
-      if ((b._roomMatchCount || 0) !== (a._roomMatchCount || 0)) return (b._roomMatchCount || 0) - (a._roomMatchCount || 0);
-      if (needsBathroomBias && (b._bathroomPhotoFirst || 0) !== (a._bathroomPhotoFirst || 0)) {
-        return (b._bathroomPhotoFirst || 0) - (a._bathroomPhotoFirst || 0);
-      }
-      return String(a.name || "").localeCompare(String(b.name || ""));
+
+    // ── Sort rooms: flagMatch DESC then score DESC (exact V1) ───────────────
+    roomEntries.sort((a, b) => {
+      if (hasFlags && b.flagMatch !== a.flagMatch) return b.flagMatch - a.flagMatch;
+      return (b.score || 0) - (a.score || 0);
     });
-    for (const rt of roomTypes) {
-      delete rt._roomScoreRaw;
-      delete rt._roomMatchCount;
-      delete rt._bathroomPhotoFirst;
-    }
-    const fallbackHotelScore = Math.max(0, Math.min(100, Math.round((Number(meta.guest_rating) || 0) * 10)));
+
+    // Strip internal field before returning
+    const roomTypes = roomEntries.map(({ flagMatch: _fm, ...rest }) => rest);
+
     return {
-      id: h.hotel_id,
-      name: meta.name || h.hotel_id,
-      address: meta.address || "",
+      id:          hotelId,
+      name:        hotelId,        // live metadata injected by server.js fetchHotelMetaBatch
+      address:     "",
       city,
-      country: "",
-      starRating: meta.star_rating || 0,
-      rating: meta.guest_rating || 0,
-      mainPhoto: meta.main_photo || null,
-      hotelPhotos: meta.hotel_photos || [],
-      roomTypes,
-      isMatched: h.vectorScore > 0,
-      vectorScore: h.vectorScore,
-      _vectorScoreRaw: h.vectorScoreRaw || h.vectorScore,
-      hotelScore: hotelScoreMap.get(h.hotel_id) ?? fallbackHotelScore,
-      primary_nbhd: primaryNbhdMap.get(h.hotel_id) || null,
-      ...(nbhdFitByHotelId?.has(h.hotel_id) ? { nbhd_fit_pct: nbhdFitByHotelId.get(h.hotel_id) } : {}),
+      country:     "",
+      starRating:  0,
+      rating:      0,
+      mainPhoto:   null,
+      hotelPhotos: [],
+      roomTypes:   roomTypes.slice(0, 8),
+      isMatched:   score > 0,
+      vectorScore: score,
+      hotelScore,
+      primary_nbhd: primaryNbhd,
+      ...(nbhdFitPct != null ? { nbhd_fit_pct: nbhdFitPct } : {}),
       score_breakdown: {
-        v2_room_match: h.vectorScore,
-        v2_hotel_vibe: hotelScoreMap.get(h.hotel_id) ?? fallbackHotelScore,
+        v2_room_match: score,
+        v2_hotel_vibe: hotelScore,
+        sim_max:       parseFloat(SIM_MAX.toFixed(4)),
+        sim_min:       parseFloat(SIM_MIN.toFixed(4)),
       },
     };
   });
 
-  hotels.sort((a, b) => {
-    if ((b._vectorScoreRaw || 0) !== (a._vectorScoreRaw || 0)) return (b._vectorScoreRaw || 0) - (a._vectorScoreRaw || 0);
-    if ((b.vectorScore || 0) !== (a.vectorScore || 0)) return (b.vectorScore || 0) - (a.vectorScore || 0);
-    if ((b.hotelScore || 0) !== (a.hotelScore || 0)) return (b.hotelScore || 0) - (a.hotelScore || 0);
-    if ((b.rating || 0) !== (a.rating || 0)) return (b.rating || 0) - (a.rating || 0);
-    return String(a.name || "").localeCompare(String(b.name || ""));
-  });
-  for (const h of hotels) delete h._vectorScoreRaw;
+  const nbhdBlendApplied = !!(nbhdFitByHotelId?.size > 0 && nbhdRankWeight > 0);
 
-  const out = {
-    hotels,
-    query,
-    city,
-    indexing: false,
-    indexStatus: "complete",
-    stats: {
-      search_version_used: "v2",
-      search_version_requested: String(req.query.search_version || "v2"),
-      query_router: intent,
-      ranked_hotels: hotels.length,
-      hotel_vibe_model: hotelScoreMap.size > 0 ? "score_hotels" : "fallback_rating",
+  console.log(
+    `[v2] ranked: ${hotels.length} hotels | SIM_MAX=${SIM_MAX.toFixed(4)} SIM_MIN=${SIM_MIN.toFixed(4)} ` +
+    `maxRaw=${maxRawSim.toFixed(4)} hotel_vibe=${hotelVibeModel}`
+  );
+
+  return {
+    status: 200,
+    body: {
+      hotels,
+      query,
+      city,
+      indexing:    false,
+      indexStatus: "complete",
+      stats: {
+        search_version_used:      "v2",
+        search_version_requested: String(req.query.search_version || "v2"),
+        query_router:             intent,
+        nlp_router:               intent.router_version || "v2-regex",
+        ranked_hotels:            hotels.length,
+        detected_fact_keys:       detectedFactKeys,
+        intent_type:              intentType,
+        sim_max:                  parseFloat(SIM_MAX.toFixed(4)),
+        sim_min:                  parseFloat(SIM_MIN.toFixed(4)),
+        max_raw_fact_score:       parseFloat(maxRawSim.toFixed(4)),
+        hotel_vibe_model:         hotelVibeModel,
+        nbhd_rank_weight_config:  Number.isFinite(rawNbhdW) ? rawNbhdW : undefined,
+        nbhd_rank_weight_active:  nbhdRankWeight,
+        nbhd_blend_applied:       nbhdBlendApplied,
+        ...(nbhdBlendApplied ? { nbhd_rank_weight: nbhdRankWeight } : {}),
+        ...(String(req.query.compare || "") === "1"
+          ? { compare: { enabled: true, v2_top_ids: hotels.slice(0, 20).map((h) => h.id) } }
+          : {}),
+      },
     },
   };
-
-  if (String(req.query.compare || "") === "1") {
-    out.stats.compare = {
-      enabled: true,
-      v2_top_ids: hotels.slice(0, 20).map((h) => h.id),
-    };
-  }
-  return { status: 200, body: out };
 }
 
 module.exports = { runV2Search };

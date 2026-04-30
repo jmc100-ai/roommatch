@@ -1,17 +1,17 @@
 #!/usr/bin/env node
 require("dotenv").config();
 const { createClient } = require("@supabase/supabase-js");
-const { extractFactsFromSignals } = require("./fact-catalog");
+const { parseStructuredCaption } = require("./fact-catalog");
 
 const LITEAPI_KEY = process.env.LITEAPI_PROD_KEY || process.env.LITEAPI_KEY || "";
 const GEMINI_KEY = process.env.GEMINI_KEY || "";
 const SUPABASE_URL = process.env.SUPABASE_URL || "";
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_ANON_KEY || "";
 
-const BATCH_SIZE = 4;
+const BATCH_SIZE = 20;
 const PHOTO_LIMIT_PER_HOTEL = 60;
-const PHOTO_CONCURRENCY = 1;
-const CAPTION_RATE_PER_MIN = 90;
+const PHOTO_CONCURRENCY = 3;
+const CAPTION_RATE_PER_MIN = 400;
 let _capWindow = Date.now();
 let _capCount = 0;
 
@@ -67,26 +67,114 @@ async function geminiCaption(imageUrl, photoContext = {}, retries = 2) {
     if (!imgRes.ok) return null;
     const b64 = Buffer.from(await imgRes.arrayBuffer()).toString("base64");
     const mime = imgRes.headers.get("content-type")?.split(";")[0] || "image/jpeg";
+    const isLikelyBath = /bath/i.test(photoContext.roomName || "") || photoContext.type === "bathroom";
     const prompt = [
-      "Analyze this hotel room photo and return compact structured fields.",
-      "Use exact lines:",
-      "PHOTO TYPE: bathroom|bedroom|living area|view|other",
-      "SINKS: none|single sink|double sinks|triple sinks",
-      "BATHTUB: none|bathtub|soaking tub|clawfoot",
-      "SHOWER: none|walk-in shower|rainfall shower|both walk-in and rainfall",
-      "BALCONY OR TERRACE: yes|no",
-      "WINDOWS: floor-to-ceiling windows|standard windows|unknown",
-      "DISTINCTIVE FEATURES: comma-separated concrete features only",
-      `Context room name: ${photoContext.roomName || "unknown"}`,
-      `Context coarse type: ${photoContext.type || "other"}`,
-      "Only include details clearly visible. If uncertain, use unknown/none.",
+      "Analyze this hotel room photo. For each field answer ONLY: yes | no | unknown",
+      "Use EXACTLY these field names and format (one per line, no extra text):",
+      "PHOTO_TYPE: bedroom|bathroom|living|view|other",
+      // Bathroom (answer unknown if not a bathroom)
+      "DOUBLE_SINKS: yes|no|unknown",
+      "SOAKING_TUB: yes|no|unknown",
+      "BATHTUB: yes|no|unknown",
+      "RAINFALL_SHOWER: yes|no|unknown",
+      "WALK_IN_SHOWER: yes|no|unknown",
+      "HANDHELD_SHOWER_WAND: yes|no|unknown",
+      "GLASS_BATHROOM_WALL: yes|no|unknown",
+      "STONE_BATHROOM_SURFACES: yes|no|unknown",
+      "NATURAL_LIGHT_BATHROOM: yes|no|unknown",
+      "HEATED_TOWEL_RAIL: yes|no|unknown",
+      "BIDET: yes|no|unknown",
+      "SEPARATE_TOILET_DOOR: yes|no|unknown",
+      "ANTI_FOG_MIRROR: yes|no|unknown",
+      "MAKEUP_VANITY: yes|no|unknown",
+      "TUB_AND_SHOWER_SEPARATE: yes|no|unknown",
+      "COUNTER_SPACE_GENEROUS: yes|no|unknown",
+      "ROLL_IN_SHOWER: yes|no|unknown",
+      "GRAB_BARS: yes|no|unknown",
+      // Bedroom / layout
+      "KING_BED: yes|no|unknown",
+      "CANOPY_BED: yes|no|unknown",
+      "FLOOR_TO_CEILING_WINDOWS: yes|no|unknown",
+      "PRIVATE_BALCONY: yes|no|unknown",
+      "JULIETTE_BALCONY: yes|no|unknown",
+      "HIGH_CEILINGS: yes|no|unknown",
+      "OPEN_PLAN: yes|no|unknown",
+      "LOFT_LAYOUT: yes|no|unknown",
+      "WALK_IN_CLOSET: yes|no|unknown",
+      "KITCHENETTE: yes|no|unknown",
+      "SWIM_UP_ACCESS: yes|no|unknown",
+      "SOFA_BED: yes|no|unknown",
+      "DAYBED_WINDOW_NOOK: yes|no|unknown",
+      "DINING_TABLE: yes|no|unknown",
+      "FULL_LENGTH_MIRROR: yes|no|unknown",
+      "DIVIDED_SEATING: yes|no|unknown",
+      // Flooring & surfaces
+      "HARDWOOD_FLOOR: yes|no|unknown",
+      "STONE_MARBLE_FLOOR: yes|no|unknown",
+      "POLISHED_CONCRETE_FLOOR: yes|no|unknown",
+      "CARPET_FLOOR: yes|no|unknown",
+      "AREA_RUGS: yes|no|unknown",
+      "STATEMENT_WALLPAPER: yes|no|unknown",
+      "EXPOSED_BRICK: yes|no|unknown",
+      "EXPOSED_WOOD_BEAMS: yes|no|unknown",
+      // Amenities
+      "WORK_DESK: yes|no|unknown",
+      "ESPRESSO_MACHINE: yes|no|unknown",
+      "INDOOR_PLANTS: yes|no|unknown",
+      "COCKTAIL_BAR_STATION: yes|no|unknown",
+      "MINI_FRIDGE: yes|no|unknown",
+      "MICROWAVE: yes|no|unknown",
+      "LAUNDRY_IN_ROOM: yes|no|unknown",
+      "RECORD_PLAYER: yes|no|unknown",
+      "SMART_CONTROLS: yes|no|unknown",
+      "INDIVIDUAL_THERMOSTAT: yes|no|unknown",
+      "CEILING_FAN: yes|no|unknown",
+      // Light & mood
+      "HIGH_NATURAL_LIGHT: yes|no|unknown",
+      "DIMMABLE_LIGHTING: yes|no|unknown",
+      "WARM_LIGHTING: yes|no|unknown",
+      "ACCENT_COVE_LIGHTING: yes|no|unknown",
+      "FLOOR_LAMPS: yes|no|unknown",
+      "READING_LIGHTS: yes|no|unknown",
+      "BLACKOUT_SHUTTERS: yes|no|unknown",
+      "STATEMENT_FIXTURE: yes|no|unknown",
+      "ROMANTIC_LIGHTING: yes|no|unknown",
+      // Style
+      "MINIMALIST_STYLE: yes|no|unknown",
+      "MOODY_DARK_STYLE: yes|no|unknown",
+      "EARTH_TONE_PALETTE: yes|no|unknown",
+      "VIBRANT_COLORFUL: yes|no|unknown",
+      "ORGANIC_WOOD_HEAVY: yes|no|unknown",
+      "MID_CENTURY_MODERN: yes|no|unknown",
+      "VINTAGE_FURNITURE: yes|no|unknown",
+      // Views
+      "SKYLINE_VIEW: yes|no|unknown",
+      "WATER_VIEW: yes|no|unknown",
+      "GREEN_VIEW: yes|no|unknown",
+      "COURTYARD_VIEW: yes|no|unknown",
+      "LANDMARK_VIEW: yes|no|unknown",
+      "HIGH_FLOOR: yes|no|unknown",
+      "STREET_LEVEL_VIEW: yes|no|unknown",
+      "BALCONY_FURNITURE: yes|no|unknown",
+      "PRIVACY_SHEERS: yes|no|unknown",
+      "",
+      "STRICT RULES — read before answering:",
+      "- DOUBLE_SINKS: yes ONLY when you can clearly see TWO separate sink basins/bowls each with its own faucet. A single wide rectangular trough sink = no. If only one faucet visible = no. When unsure = unknown.",
+      "- SOAKING_TUB: yes ONLY for a deep freestanding or built-in soaking tub. A standard shallow bathtub = no for SOAKING_TUB but yes for BATHTUB.",
+      "- WALK_IN_SHOWER: yes ONLY if the shower has no step-over barrier and you can walk straight in. A shower with a small lip or curb = no.",
+      "- RAINFALL_SHOWER: yes ONLY if an overhead ceiling-mounted rainfall showerhead is clearly visible.",
+      "- PRIVATE_BALCONY: yes ONLY if an outdoor balcony/terrace attached to this specific room is visible. A view photo without balcony railings = no.",
+      "- FLOOR_TO_CEILING_WINDOWS: yes ONLY if windows extend from floor to ceiling or very close (>85% of wall height).",
+      `Context: room="${photoContext.roomName || "unknown"}" type="${photoContext.type || "other"}"`,
+      isLikelyBath ? "This is likely a bathroom — answer all bathroom fields carefully." : "Answer bathroom fields as unknown unless clearly visible.",
+      "Only answer yes for features CLEARLY and UNAMBIGUOUSLY visible in this photo. When in doubt = unknown.",
     ].join("\n");
     const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=${GEMINI_KEY}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         contents: [{ parts: [{ inline_data: { mime_type: mime, data: b64 } }, { text: prompt }] }],
-        generationConfig: { maxOutputTokens: 220, temperature: 0.1 },
+        generationConfig: { maxOutputTokens: 700, temperature: 0.1 },
       }),
       signal: AbortSignal.timeout(30000),
     });
@@ -111,12 +199,14 @@ async function geminiCaption(imageUrl, photoContext = {}, retries = 2) {
 
 function extractFeatureSummary(caption) {
   if (!caption) return null;
+  // New format: every line is FIELD: yes|no|unknown — pass through all of them.
+  // Also handles old format (PHOTO TYPE / SINKS / BATHTUB…) as a fallback.
   const keep = caption
     .split("\n")
     .map((s) => s.trim())
     .filter(Boolean)
-    .filter((l) => /^(PHOTO TYPE|SINKS|BATHTUB|SHOWER|BALCONY OR TERRACE|WINDOWS|DISTINCTIVE FEATURES)/i.test(l));
-  return keep.length ? keep.join("\n") : null;
+    .filter((l) => /^[A-Z_]+:\s+\S/.test(l));
+  return keep.length ? keep.join("\n") : caption.trim() || null;
 }
 
 async function upsertV2Facts(db, rows) {
@@ -201,18 +291,13 @@ async function reindexCityV2(city, limit = 200, forceRebuild = true) {
         await Promise.all(chunk.map(async (photo) => {
           const cap = await geminiCaption(photo.url, { type: photo.type, roomName: photo.roomName });
           const summary = extractFeatureSummary(cap);
-          const detectedType = (cap?.match(/PHOTO TYPE:\s*([^\n\r]+)/i)?.[1] || photo.type || "other").toLowerCase();
+          // New format uses PHOTO_TYPE: (underscore), old used PHOTO TYPE: (space) — handle both
+          const detectedType = (cap?.match(/PHOTO[_ ]TYPE:\s*([^\n\r]+)/i)?.[1] || photo.type || "other").toLowerCase().trim();
           await db.from("v2_room_inventory").upsert({
             hotel_id: hotelId, city, country_code: cc, room_name: photo.roomName, room_type_id: photo.roomTypeId || null,
             photo_url: photo.url, photo_type: detectedType, caption: cap, feature_summary: summary, source: "vision",
           }, { onConflict: "hotel_id,photo_url" });
-          const factRows = extractFactsFromSignals({
-            featureFlags: {},
-            featureSummary: summary,
-            caption: cap,
-            roomName: photo.roomName,
-            photoType: detectedType,
-          }).map((f) => ({
+          const factRows = parseStructuredCaption(cap).map((f) => ({
             hotel_id: hotelId,
             room_type_id: photo.roomTypeId || null,
             city,

@@ -147,6 +147,50 @@ app.listen(PORT, "0.0.0.0", () => {
   }
 });
 
+// ── In-memory hotel metadata cache (replaces hotels_cache DB reads for display) ──
+// Stores name, main photo, ratings fetched live from LiteAPI; NOT persisted to DB.
+// TTL: 4 hours. Only top-N hotels per search are fetched (those with photo data).
+const _hotelMetaCache = new Map(); // hotelId → { name, mainPhoto, starRating, guestRating, address, expiresAt }
+const HOTEL_META_TTL_MS = 4 * 60 * 60 * 1000;
+
+async function fetchHotelMetaBatch(hotelIds) {
+  const needed = hotelIds.filter(id => {
+    const c = _hotelMetaCache.get(id);
+    return !c || c.expiresAt < Date.now();
+  });
+  if (needed.length) {
+    console.log(`[hotel-meta] fetching ${needed.length} hotels from LiteAPI`);
+    const CHUNK = 20;
+    for (let i = 0; i < needed.length; i += CHUNK) {
+      const results = await Promise.allSettled(needed.slice(i, i + CHUNK).map(async (hotelId) => {
+        const r = await fetch(
+          `https://api.liteapi.travel/v3.0/data/hotel?hotelId=${hotelId}`,
+          { headers: { "X-API-Key": LITEAPI_KEY, "accept": "application/json" } }
+        );
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        const d = await r.json();
+        const h = d?.data;
+        if (!h) throw new Error("no data");
+        _hotelMetaCache.set(hotelId, {
+          name:        h.name        || h.hotelName  || null,
+          mainPhoto:   h.main_photo  || h.mainPhoto  || h.hotelImages?.[0]?.url || null,
+          starRating:  h.starRating  || h.star_rating || 0,
+          guestRating: h.rating      || h.guestRating || h.guest_rating || 0,
+          address:     typeof h.address === "string" ? h.address : (h.address?.line1 || ""),
+          expiresAt:   Date.now() + HOTEL_META_TTL_MS,
+        });
+        return hotelId;
+      }));
+      const ok  = results.filter(r => r.status === "fulfilled").length;
+      const err = results.filter(r => r.status === "rejected").length;
+      if (err > 0) console.warn(`[hotel-meta] chunk ${i}-${i+CHUNK}: ${ok} ok, ${err} errors`);
+    }
+  }
+  const out = {};
+  for (const id of hotelIds) out[id] = _hotelMetaCache.get(id) || null;
+  return out;
+}
+
 const CITY_COORDS = {
   "new york": [40.7128, -74.006], "new york city": [40.7128, -74.006],
   "nyc": [40.7128, -74.006], "manhattan": [40.758, -73.9855],
@@ -697,6 +741,15 @@ if (SITE_PASSWORD) {
     return res.send(loginHtml());
   });
 }
+
+// ── Public client config ──────────────────────────────────────────────────────
+app.get("/api/config", (req, res) => {
+  res.json({
+    wl_base_url: process.env.LITEAPI_WL_DOMAIN
+      ? `https://${process.env.LITEAPI_WL_DOMAIN.replace(/^https?:\/\//, "")}`
+      : "",
+  });
+});
 
 // Disable caching for HTML so new deploys are always picked up immediately.
 // JS/CSS/images use default caching (fine for a single-file app with no hashes).
@@ -1510,6 +1563,25 @@ app.get("/api/vsearch", async (req, res) => {
       supabaseAdmin,
       resolveCityName,
     });
+    if (v2.status === 200 && v2.body?.hotels?.length) {
+      // Inject live hotel metadata (name, photo, ratings) fetched from LiteAPI.
+      // runV2Search returns hotel_id as `name` placeholder; we overwrite here.
+      const hotelIds = v2.body.hotels.map(h => h.id);
+      const t0meta = Date.now();
+      const liveMeta = await fetchHotelMetaBatch(hotelIds);
+      const filled = Object.values(liveMeta).filter(Boolean).length;
+      console.log(`[v2-meta] fetched ${filled}/${hotelIds.length} hotels in ${Date.now()-t0meta}ms`);
+      for (const h of v2.body.hotels) {
+        const m = liveMeta[h.id];
+        if (m) {
+          h.name        = m.name        || h.id;
+          h.mainPhoto   = m.mainPhoto   || null;
+          h.starRating  = m.starRating  || 0;
+          h.rating      = m.guestRating || 0;
+          h.address     = m.address     || "";
+        }
+      }
+    }
     return res.status(v2.status).json(v2.body);
   }
 
@@ -1624,7 +1696,9 @@ app.get("/api/vsearch", async (req, res) => {
       coveragePromise = buildSoftFlagCoveragePromise(city, detectedFlagKeys, fetchClient);
     }
 
-    const hotelsPromise = fetchClient.from("hotels_cache").select("*").eq("city", city);
+    // Only select spatial columns — display metadata (name, photo, ratings) is fetched
+    // live from LiteAPI at response-build time and cached in-memory (fetchHotelMetaBatch).
+    const hotelsPromise = fetchClient.from("hotels_cache").select("hotel_id, city, country_code, lat, lng").eq("city", city);
 
     // 2. HyDE: generate a hypothetical caption matching the room_embeddings vocabulary,
     // then embed it. This handles vocabulary gaps ("multiple sinks" → "double sinks"),
@@ -1841,6 +1915,10 @@ app.get("/api/vsearch", async (req, res) => {
         boopProfileForNbhd = null;
       }
     }
+    // When the user explicitly picked a neighbourhood scene, give neighbourhood fit more pull.
+    if (nbhdRankWeight > 0 && boopProfileForNbhd?.answers?.nbhdScene) {
+      nbhdRankWeight = Math.min(0.72, nbhdRankWeight * 1.25);
+    }
     if (nbhdRankWeight > 0 && boopProfileForNbhd && typeof boopProfileForNbhd === "object" && rankedHotels.length) {
       const { applyNbhdBoopRank } = require("./lib/nbhd-vibe-rank");
       nbhdFitByHotelId = await applyNbhdBoopRank(fetchClient, city, rankedHotels, boopProfileForNbhd, {
@@ -2014,9 +2092,15 @@ app.get("/api/vsearch", async (req, res) => {
       });
     }
 
-    // 6. Build response for all hotels
+    // 6. Fetch hotel display metadata (name, photo, ratings) live from LiteAPI for
+    //    hotels that will actually be rendered (those with photo data).
+    const photoHotelIdList = allHotels.filter(h => h.hasPhotos).map(h => h.hotelId);
+    const liveMeta = await fetchHotelMetaBatch(photoHotelIdList);
+
+    // 7. Build response for all hotels
     const hotels = allHotels.map(({ hotelId, topScore, hasPhotos }) => {
-      const meta           = cacheMap.get(hotelId) || {};
+      // Live metadata for hotels with photos; for stubs use inventory fallback only.
+      const meta           = liveMeta[hotelId] || {};
       const score          = Math.round(topScore);
       const hotelPhotos    = hotelPhotosMap.get(hotelId) || [];
       const fallbackName   = hotelPhotos[0]?.hotel_name || null;
@@ -2034,14 +2118,14 @@ app.get("/api/vsearch", async (req, res) => {
       if (!hasPhotos) {
         return {
           id:          hotelId,
-          name:        meta.name || hotelId,
-          address:     meta.address || "",
+          name:        fallbackName || hotelId,
+          address:     "",
           city,
           country:     "",
-          starRating:  meta.star_rating || 0,
-          rating:      meta.guest_rating || 0,
-          mainPhoto:   meta.main_photo || null,
-          hotelPhotos: meta.hotel_photos || [],
+          starRating:  0,
+          rating:      0,
+          mainPhoto:   null,
+          hotelPhotos: [],
           roomTypes:   [],
           isMatched:   score > 0,
           vectorScore: score,
@@ -2125,10 +2209,10 @@ app.get("/api/vsearch", async (req, res) => {
         address:     meta.address || "",
         city,
         country:     "",
-        starRating:  meta.star_rating || 0,
-        rating:      meta.guest_rating || 0,
-        mainPhoto:   meta.main_photo || null,
-        hotelPhotos: meta.hotel_photos || [],
+        starRating:  meta.starRating || 0,
+        rating:      meta.guestRating || 0,
+        mainPhoto:   meta.mainPhoto || null,
+        hotelPhotos: [],
         roomTypes:   roomTypes.slice(0, 8),
         isMatched:   score > 0,
         vectorScore: score,
@@ -2310,6 +2394,7 @@ app.get("/api/rates", async (req, res) => {
     const ratesList = json?.data?.rates ?? json?.data ?? json?.rates ?? [];
     const prices     = {};  // hotel_id → cheapest $/night (hotel-level display)
     const roomPrices = {};  // hotel_id → { room_type_id → $/night }
+    const offerIds   = {};  // hotel_id → { room_type_id → offerId } for white-label deep links
 
     // Normalize room name for matching: lowercase, trim, collapse whitespace
     const normName = s => (s || "").toLowerCase().trim().replace(/\s+/g, " ");
@@ -2343,13 +2428,20 @@ app.get("/api/rates", async (req, res) => {
         }
 
         // mappedRoomId links back to /data/hotel integer room IDs (stored as room_type_id in DB)
-        const mappedRoomId = rt.rates?.[0]?.mappedRoomId;
+        const firstRate    = rt.rates?.[0];
+        const mappedRoomId = firstRate?.mappedRoomId;
         if (mappedRoomId) {
           withMappedId++;
           const key = String(mappedRoomId);
           if (!roomPrices[hotelId]) roomPrices[hotelId] = {};
           if (!roomPrices[hotelId][key] || perNight < roomPrices[hotelId][key]) {
             roomPrices[hotelId][key] = perNight;
+            // Capture the offerId for this rate — used for white-label checkout deep links
+            const offerId = firstRate?.offerId || firstRate?.offer_id;
+            if (offerId) {
+              if (!offerIds[hotelId]) offerIds[hotelId] = {};
+              offerIds[hotelId][key] = offerId;
+            }
           }
         }
       }
@@ -2359,7 +2451,7 @@ app.get("/api/rates", async (req, res) => {
     const pricedCount = Object.keys(prices).length;
     const roomPricedCount = Object.values(roomPrices).reduce((s, rm) => s + Object.keys(rm).length, 0);
     console.log(`[rates] ${city}: ${pricedCount}/${hotelIds.length} hotels priced, ${roomPricedCount} room type rates`);
-    res.json({ prices, roomPrices, currency: "EUR", nights, pricedCount });
+    res.json({ prices, roomPrices, offerIds, currency: "EUR", nights, pricedCount });
 
   } catch (err) {
     console.error("[rates]", err.message);
