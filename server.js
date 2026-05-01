@@ -3183,18 +3183,20 @@ app.post("/api/backfill-latlng", async (req, res) => {
 
 // ── Manual trigger endpoint (protected) ───────────────────────────────────────
 app.post("/api/index-city", async (req, res) => {
-  const { city: cityRaw, limit, secret } = req.body || {};
+  const { city: cityRaw, limit, secret, min_room_photos } = req.body || {};
   const city = normalizeCityName(cityRaw);
   if (secret !== (process.env.INDEX_SECRET || "roommatch-index")) {
     return res.status(401).json({ error: "Unauthorized" });
   }
   if (!city) return res.status(400).json({ error: "city required" });
+  const opts = {};
+  if (min_room_photos != null) opts.minRoomPhotos = Number(min_room_photos);
   // Fire and forget
-  loadIndexCity()(city, limit || 200)
+  loadIndexCity()(city, limit || 200, opts)
     .catch(e => {
       console.error(`[indexer] FAILED for ${city}:`, e.message);
     });
-  res.json({ message: `Indexing ${city} started`, city, limit: limit || 200 });
+  res.json({ message: `Indexing ${city} started`, city, limit: limit || 200, ...(opts.minRoomPhotos ? { min_room_photos: opts.minRoomPhotos } : {}) });
 });
 
 // ── V2 isolated city index (facts-only datastore) ────────────────────────────

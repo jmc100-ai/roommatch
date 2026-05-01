@@ -661,7 +661,7 @@ function classifyPhoto(photo, roomName, photoIndex = 0) {
 }
 
 // ── Main export (called from server.js) and CLI entry point ───────────────────
-async function indexCity(city, limit = 200) {
+async function indexCity(city, limit = 200, opts = {}) {
   if (!LITEAPI_KEY || !GEMINI_KEY || !SUPABASE_URL || !SUPABASE_KEY) {
     const missing = [
       !LITEAPI_KEY && 'LITEAPI_PROD_KEY',
@@ -674,7 +674,8 @@ async function indexCity(city, limit = 200) {
   console.log(`[indexer] Using ${process.env.SUPABASE_SERVICE_KEY ? 'service' : 'anon'} key for Supabase`);
   const db = getSupabase();
   const cc = COUNTRY_CODES[city.toLowerCase()] || "";
-  console.log(`\n[indexer] Starting: ${city} (${cc}) — limit ${limit}`);
+  const minRoomPhotos = opts.minRoomPhotos ?? null; // null = no filter
+  console.log(`\n[indexer] Starting: ${city} (${cc}) — limit ${limit}${minRoomPhotos ? ` — minRoomPhotos ${minRoomPhotos}` : ''}`);
 
   // Mark as indexing — reset stop_requested flag
   await db.from("indexed_cities").upsert({
@@ -772,6 +773,18 @@ async function indexCity(city, limit = 200) {
 
       // Select up to MAX_PHOTOS per room type, hard cap 90 per hotel
       if (!roomMap.size) { console.log(`  [hotel] ${hotelName.slice(0,30)}: no rooms found`); hotelsDone++; return; }
+
+      // minRoomPhotos filter: skip hotels with no room type meeting the photo threshold
+      if (minRoomPhotos) {
+        const maxPhotosInAnyRoom = Math.max(
+          ...[...roomMap.values()].map(b => b.bathroom.length + b.other.length)
+        );
+        if (maxPhotosInAnyRoom < minRoomPhotos) {
+          console.log(`  [hotel] ${hotelName.slice(0,30)}: skipped — max photos per room type=${maxPhotosInAnyRoom} < ${minRoomPhotos}`);
+          hotelsDone++;
+          return;
+        }
+      }
       const toProcess = [];
       for (const [rName, buckets] of roomMap) {
         if (toProcess.length >= 90) break;   // hard cap: max 90 photos per hotel
