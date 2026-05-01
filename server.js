@@ -1581,8 +1581,13 @@ app.get("/api/vsearch", async (req, res) => {
           h.address     = m.address     || "";
         }
       }
+      return res.status(200).json(v2.body);
     }
-    return res.status(v2.status).json(v2.body);
+    // V2 returned no results (city not yet indexed in V2 or no matches) — fall through to V1.
+    if (v2.status !== 200) {
+      return res.status(v2.status).json(v2.body);
+    }
+    console.log(`[vsearch] V2 returned 0 results for ${req.query.city}, falling back to V1`);
   }
 
   const { query } = req.query;
