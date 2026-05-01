@@ -1,9 +1,11 @@
 /**
  * Applies supabase/add-v2-room-types-index.sql via the Supabase Management API.
- * Uses the personal access token from mcp.json.
+ * Requires SUPABASE_PAT env var (Supabase personal access token).
+ * Usage: SUPABASE_PAT=sbp_... node scripts/run-migration.js
  */
-const ACCESS_TOKEN = "sbp_d6d8ff609d564ae26038a0c9d7fd51a656900d2e";
+const ACCESS_TOKEN = process.env.SUPABASE_PAT || "";
 const PROJECT_ID   = "dmgxrcmdihgsffvqllms";
+if (!ACCESS_TOKEN) { console.error("Error: SUPABASE_PAT env var required"); process.exit(1); }
 
 const STATEMENTS = [
 `CREATE TABLE IF NOT EXISTS v2_room_types_index (
