@@ -266,10 +266,13 @@ async function reindexCityV2(city, limit = 200, forceRebuild = true) {
         .filter(Boolean)
         .filter((u) => u !== mainPhoto)
         .slice(0, 8);
+      // Only write columns that remain after ToS cleanup (name/address/ratings/main_photo dropped).
+      // Display metadata (name, photo, ratings) is fetched live from LiteAPI at search time.
       await db.from("v2_hotels_cache").upsert({
-        hotel_id: hotelId, city, country_code: cc, name: detail.name || hotel.name || hotelId,
-        address: detail.address || "", star_rating: stars, guest_rating: rating, main_photo: mainPhoto,
-        hotel_photos: hotelPhotos, lat: detail.location?.latitude ?? detail.lat ?? null, lng: detail.location?.longitude ?? detail.lng ?? null,
+        hotel_id: hotelId, city, country_code: cc,
+        hotel_photos: hotelPhotos,
+        lat: detail.location?.latitude ?? detail.lat ?? null,
+        lng: detail.location?.longitude ?? detail.lng ?? null,
         cached_at: new Date().toISOString(),
       }, { onConflict: "hotel_id" });
 
