@@ -1616,8 +1616,8 @@ app.get("/api/vsearch", async (req, res) => {
 
   const t0 = Date.now();
   try {
-    // 1. Check if city is indexed
-    const { data: cityRow } = await supabase
+    // 1. Check if city is indexed — use admin key to avoid anon-role permission gaps
+    const { data: cityRow } = await (supabaseAdmin || supabase)
       .from("indexed_cities")
       .select("status, hotel_count, photo_count")
       .eq("city", city)
