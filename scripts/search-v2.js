@@ -171,24 +171,24 @@ async function runV2Search({ req, supabase, supabaseAdmin, resolveCityName }) {
     if (!hotelIdsByGeo.length) hotelIdsByGeo = null;
   }
 
-  // ── Phase A: load hotel IDs + room facts ──────────────────────────────────
-  // Note: hotel display metadata (name, photo, ratings) is fetched live from
-  // LiteAPI by server.js after runV2Search returns (fetchHotelMetaBatch).
-  // v2_hotels_cache only retains hotel_id + coords after ToS data cleanup.
-  const [cacheResult, factsResult] = await Promise.all([
+  // ── Phase A: load pre-aggregated room-type index + hotel IDs ─────────────
+  // v2_room_types_index has one row per (hotel_id, room_name) with confirmed facts
+  // already computed — no need to load raw v2_room_feature_facts for scoring.
+  // This scales to 3600+ hotels with a single small query.
+  const [cacheResult, indexResult] = await Promise.all([
     fetchClient
       .from("v2_hotels_cache")
       .select("hotel_id")
       .eq("city", city),
     fetchClient
-      .from("v2_room_feature_facts")
-      .select("hotel_id,room_type_id,room_name,photo_url,fact_key,fact_value,confidence")
-      .eq("city", city),
+      .from("v2_room_types_index")
+      .select("hotel_id,room_name,facts,photo_count")
+      .eq("city", city)
+      .limit(100000),  // 3600 hotels × ~28 room types = ~100K rows max
   ]);
   if (cacheResult.error) return { status: 500, body: { error: cacheResult.error.message } };
-  if (factsResult.error)  return { status: 500, body: { error: factsResult.error.message } };
+  if (indexResult.error)  return { status: 500, body: { error: indexResult.error.message } };
 
-  // hotelMeta now only used for the set of hotel_ids (no display columns remain)
   const hotelMeta = new Map((cacheResult.data || []).map((r) => [r.hotel_id, {}]));
   const cityHotelIds   = [...hotelMeta.keys()];
   const eligibleHotelIds = hotelIdsByGeo
@@ -207,51 +207,24 @@ async function runV2Search({ req, supabase, supabaseAdmin, resolveCityName }) {
 
   const eligibleSet = new Set(eligibleHotelIds);
 
-  // ── Build per-room-type fact sets + hotel coverage ─────────────────────────
-  // roomTypeMap: `hotel_id::roomTypeId::roomName` → { hotel_id, room_type_id, room_name, facts{}, yesCounts{}, noCounts{} }
-  const roomTypeMap = new Map();
-  // hotelFactHits: hotel_id → Set of fact_keys with fact_value=1 (for coverage)
+  // ── Build per-room confirmed facts + hotel coverage from the pre-built index ─
+  // hotelFactHits: hotel_id → Set of fact_keys confirmed true (for coverage boost)
   const hotelFactHits = new Map();
+  // roomTypeMap: hotel_id → [{ room_name, facts{} }]  (aggregated from index rows)
+  const roomTypeMap = new Map(); // hotel_id → [{room_name, facts}]
 
-  for (const rf of (factsResult.data || [])) {
-    if (!eligibleSet.has(rf.hotel_id)) continue;
-    const key = `${rf.hotel_id}::${rf.room_type_id || ""}::${rf.room_name || "Room"}`;
-    if (!roomTypeMap.has(key)) {
-      roomTypeMap.set(key, {
-        hotel_id:    rf.hotel_id,
-        room_type_id: rf.room_type_id || null,
-        room_name:   rf.room_name || "Room",
-        facts: {},
-        yesCounts: {},
-        noCounts:  {},
-      });
-    }
-    const entry = roomTypeMap.get(key);
-    if (rf.fact_value === 1) {
-      entry.yesCounts[rf.fact_key] = (entry.yesCounts[rf.fact_key] || 0) + 1;
-    } else if (rf.fact_value === 0) {
-      entry.noCounts[rf.fact_key] = (entry.noCounts[rf.fact_key] || 0) + 1;
-    }
+  for (const row of (indexResult.data || [])) {
+    if (!eligibleSet.has(row.hotel_id)) continue;
+    const facts = row.facts || {};
 
-    if (rf.fact_value === 1) {
-      const yes = entry.yesCounts[rf.fact_key];
-      const no  = entry.noCounts[rf.fact_key] || 0;
+    if (!roomTypeMap.has(row.hotel_id)) roomTypeMap.set(row.hotel_id, []);
+    roomTypeMap.get(row.hotel_id).push({ room_name: row.room_name || "Room", facts });
 
-      let confirmed;
-      if (REQUIRE_MULTI_PHOTO.has(rf.fact_key)) {
-        // yes≥2 always confirms; yes=1 only if no-votes don't outnumber it (no < 2)
-        confirmed = yes >= 2 || no < 2;
-      } else {
-        confirmed = true;
-      }
-
-      if (confirmed) {
-        entry.facts[rf.fact_key] = true;
-        if (!hotelFactHits.has(rf.hotel_id)) hotelFactHits.set(rf.hotel_id, new Set());
-        hotelFactHits.get(rf.hotel_id).add(rf.fact_key);
-      } else {
-        // May have been set true on a previous yes — revoke if now outvoted
-        delete entry.facts[rf.fact_key];
+    // Build hotel-level fact hits for coverage scoring
+    for (const [fk, fv] of Object.entries(facts)) {
+      if (fv === true) {
+        if (!hotelFactHits.has(row.hotel_id)) hotelFactHits.set(row.hotel_id, new Set());
+        hotelFactHits.get(row.hotel_id).add(fk);
       }
     }
   }
@@ -269,24 +242,24 @@ async function runV2Search({ req, supabase, supabaseAdmin, resolveCityName }) {
   }
 
   // ── Compute per-room-type raw fact scores (0–1) ────────────────────────────
-  // rawFactScore = 0.8 × factMatchScore + 0.2 × textScore
-  // This is the V2 equivalent of V1's cosine similarity per room type.
+  // rawScore = 0.8 × factMatchScore + 0.2 × textScore
   const byHotel = new Map(); // hotel_id → [{ room_name, room_type_id, rawScore, factResult, features }]
 
-  for (const rt of roomTypeMap.values()) {
-    const meta       = hotelMeta.get(rt.hotel_id) || {};
-    const factResult = scoreFactSet(rt.facts, intent);
-    const txt        = textScore(tokens, rt.room_name, meta.name);
-    const rawScore   = Math.max(0, Math.min(1, 0.8 * factResult.total_score + 0.2 * txt));
+  for (const [hotelId, rooms] of roomTypeMap.entries()) {
+    for (const rt of rooms) {
+      const factResult = scoreFactSet(rt.facts, intent);
+      const txt        = textScore(tokens, rt.room_name, /* hotelName */ undefined);
+      const rawScore   = Math.max(0, Math.min(1, 0.8 * factResult.total_score + 0.2 * txt));
 
-    if (!byHotel.has(rt.hotel_id)) byHotel.set(rt.hotel_id, []);
-    byHotel.get(rt.hotel_id).push({
-      room_name:    rt.room_name,
-      room_type_id: rt.room_type_id,
-      rawScore,
-      factResult,
-      features: rt.facts,
-    });
+      if (!byHotel.has(hotelId)) byHotel.set(hotelId, []);
+      byHotel.get(hotelId).push({
+        room_name:    rt.room_name,
+        room_type_id: null, // not stored in index; resolved via photos in Phase B
+        rawScore,
+        factResult,
+        features: rt.facts,
+      });
+    }
   }
 
   // ── Hotel-level raw sim = MAX room rawScore (mirrors V1 hotelSimMap = max cosine per hotel) ─

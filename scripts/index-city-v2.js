@@ -234,11 +234,25 @@ async function reindexCityV2(city, limit = 200, forceRebuild = true) {
 
   if (forceRebuild) await clearCityV2Data(db, city);
 
-  const params = new URLSearchParams({ limit: String(limit) });
-  if (cc) { params.set("countryCode", cc); params.set("cityName", city); } else { params.set("city", city); }
-  const hotelsRes = await liteGet(`/data/hotels?${params}`);
-  if (!hotelsRes.ok) throw new Error(`LiteAPI /data/hotels failed ${hotelsRes.status}`);
-  const hotels = (hotelsRes.data?.data || []);
+  // Paginate LiteAPI /data/hotels — max 1000 per request, loop until we reach `limit`.
+  const LITEAPI_PAGE_SIZE = 1000;
+  const hotels = [];
+  let offset = 0;
+  while (hotels.length < limit) {
+    const pageSize = Math.min(LITEAPI_PAGE_SIZE, limit - hotels.length);
+    const params = new URLSearchParams({ limit: String(pageSize), offset: String(offset) });
+    if (cc) { params.set("countryCode", cc); params.set("cityName", city); } else { params.set("city", city); }
+    const hotelsRes = await liteGet(`/data/hotels?${params}`);
+    if (!hotelsRes.ok) throw new Error(`LiteAPI /data/hotels failed ${hotelsRes.status}`);
+    const page = hotelsRes.data?.data || [];
+    if (!page.length) break;
+    hotels.push(...page);
+    offset += page.length;
+    console.log(`[v2-index] fetched ${hotels.length} hotels (page ${page.length}, target ${limit})`);
+    if (page.length < pageSize) break; // last page
+  }
+  console.log(`[v2-index] total hotels from LiteAPI: ${hotels.length}`);
+
   let targetHotels = hotels;
   if (!forceRebuild) {
     const { data: existingRows } = await db
@@ -250,6 +264,7 @@ async function reindexCityV2(city, limit = 200, forceRebuild = true) {
   }
 
   let hotelsDone = 0;
+  let hotelsSkippedQuality = 0;
   let photosDone = 0;
   for (let i = 0; i < targetHotels.length; i += BATCH_SIZE) {
     const batch = targetHotels.slice(i, i + BATCH_SIZE);
@@ -258,6 +273,18 @@ async function reindexCityV2(city, limit = 200, forceRebuild = true) {
       const detailRes = await liteGet(`/data/hotel?hotelId=${hotelId}`);
       if (!detailRes.ok) { hotelsDone++; return; }
       const detail = detailRes.data?.data || {};
+
+      // Quality filter: skip hotels with no room having ≥2 photos.
+      // Low-photo properties produce unreliable facts; filtering keeps the index clean.
+      const hasQualityRoom = (detail.rooms || []).some(
+        (room) => (room.photos || []).length >= 2
+      );
+      if (!hasQualityRoom) {
+        hotelsSkippedQuality++;
+        hotelsDone++;
+        return;
+      }
+
       const stars = hotel.starRating || detail.starRating || 0;
       const rating = hotel.rating || hotel.guestRating || detail.rating || 0;
       const mainPhoto = detail.main_photo || detail.mainPhoto || "";
@@ -356,7 +383,27 @@ async function reindexCityV2(city, limit = 200, forceRebuild = true) {
     console.error("[v2-index] hotels_cache copy exception:", cpEx.message);
   }
 
-  return { city, hotelsDone, photosDone, totalHotels: totalHotels || 0, totalPhotos: totalPhotos || 0 };
+  // Auto-rebuild v2_room_types_index (pre-aggregated per-room facts for fast Phase A search).
+  console.log(`[v2-index] rebuilding v2_room_types_index for "${city}"...`);
+  try {
+    const { data: rebuildCount, error: rebuildErr } = await db.rpc(
+      "rebuild_v2_room_types_index_city",
+      { p_city: city }
+    );
+    if (rebuildErr) console.error("[v2-index] rebuild index error:", rebuildErr.message);
+    else console.log(`[v2-index] rebuilt ${rebuildCount} room types in v2_room_types_index`);
+  } catch (rebuildEx) {
+    console.error("[v2-index] rebuild index exception:", rebuildEx.message);
+  }
+
+  console.log(
+    `[v2-index] done: ${hotelsDone} processed, ${hotelsSkippedQuality} skipped (quality filter), ` +
+    `${photosDone} photos captioned`
+  );
+  return {
+    city, hotelsDone, hotelsSkippedQuality, photosDone,
+    totalHotels: totalHotels || 0, totalPhotos: totalPhotos || 0,
+  };
 }
 
 module.exports = { reindexCityV2 };

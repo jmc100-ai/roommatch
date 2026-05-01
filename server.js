@@ -2838,6 +2838,26 @@ app.post("/api/backfill-room-ids", async (req, res) => {
 // Gated to indexed cities only. Caches in DB — first call takes ~4-8s.
 const neighborhoodGenerating = new Set(); // track in-flight generation per city
 
+// Rebuild v2_room_types_index for a city without re-running the full indexer.
+// POST /api/v2/rebuild-city-index {"city":"Mexico City","secret":"roommatch-2026"}
+app.post("/api/v2/rebuild-city-index", async (req, res) => {
+  const { city, secret } = req.body || {};
+  if (secret !== (process.env.INDEX_SECRET || "roommatch-2026")) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
+  if (!city) return res.status(400).json({ error: "city required" });
+  const fc = supabaseAdmin || supabase;
+  if (!fc) return res.status(500).json({ error: "Supabase not configured" });
+  res.json({ message: `Rebuilding v2_room_types_index for "${city}"...` });
+  try {
+    const { data, error } = await fc.rpc("rebuild_v2_room_types_index_city", { p_city: city });
+    if (error) console.error(`[v2-rebuild] ${city} error:`, error.message);
+    else console.log(`[v2-rebuild] ${city}: ${data} room types rebuilt`);
+  } catch (ex) {
+    console.error(`[v2-rebuild] ${city} exception:`, ex.message);
+  }
+});
+
 app.get("/api/neighborhoods", async (req, res) => {
   const cityInput = (req.query.city || "").trim();
   if (!cityInput) return res.status(400).json({ error: "city required" });
