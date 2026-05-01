@@ -212,7 +212,16 @@ function extractFeatureSummary(caption) {
 
 async function upsertV2Facts(db, rows) {
   if (!rows.length) return;
-  const { error } = await db.from("v2_room_feature_facts").upsert(rows, {
+  // Deduplicate by conflict key before upserting — same photo_url+fact_key in one batch
+  // causes "ON CONFLICT DO UPDATE command cannot affect row a second time" in Postgres.
+  const seen = new Set();
+  const deduped = rows.filter(r => {
+    const k = `${r.hotel_id}|${r.room_type_id}|${r.photo_url}|${r.fact_key}`;
+    if (seen.has(k)) return false;
+    seen.add(k);
+    return true;
+  });
+  const { error } = await db.from("v2_room_feature_facts").upsert(deduped, {
     onConflict: "hotel_id,room_type_id,photo_url,fact_key",
   });
   if (error) throw error;
@@ -305,12 +314,14 @@ async function reindexCityV2(city, limit = 200, forceRebuild = true) {
       }, { onConflict: "hotel_id" });
 
       const chosen = [];
+      const seenUrls = new Set();
       for (const room of (detail.rooms || [])) {
         const roomName = room.roomName || room.name || "Room";
         const roomTypeId = room.id || room.roomId || room.roomTypeId || null;
         for (const p of (room.photos || [])) {
           const url = p.url || p.hd_url || "";
-          if (!url) continue;
+          if (!url || seenUrls.has(url)) continue; // deduplicate reused photo URLs across rooms
+          seenUrls.add(url);
           chosen.push({ roomName, roomTypeId, url, type: classifyPhoto(p, roomName) });
           if (chosen.length >= PHOTO_LIMIT_PER_HOTEL) break;
         }
