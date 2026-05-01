@@ -8,10 +8,10 @@ const GEMINI_KEY = process.env.GEMINI_KEY || "";
 const SUPABASE_URL = process.env.SUPABASE_URL || "";
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_ANON_KEY || "";
 
-const BATCH_SIZE = 20;
+const BATCH_SIZE = 15;
 const PHOTO_LIMIT_PER_HOTEL = 60;
-const PHOTO_CONCURRENCY = 3;
-const CAPTION_RATE_PER_MIN = 400;
+const PHOTO_CONCURRENCY = 1;
+const CAPTION_RATE_PER_MIN = 200;
 let _capWindow = Date.now();
 let _capCount = 0;
 
@@ -47,7 +47,7 @@ function classifyPhoto(photo, roomName = "") {
   return "other";
 }
 
-async function geminiCaption(imageUrl, photoContext = {}, retries = 2) {
+async function geminiCaption(imageUrl, photoContext = {}, retries = 5) {
   if (!GEMINI_KEY) return null;
   try {
     const now = Date.now();
@@ -181,7 +181,8 @@ async function geminiCaption(imageUrl, photoContext = {}, retries = 2) {
     if (!r.ok) {
       const txt = await r.text();
       if ((r.status === 429 || r.status === 503) && retries > 0) {
-        const delay = (3 - retries) * 2500 + 2500;
+        const attempt = 6 - retries; // 1..5
+        const delay = Math.min(attempt * attempt * 3000, 60000); // 3s, 12s, 27s, 48s, 60s cap
         await new Promise((resolve) => setTimeout(resolve, delay));
         return geminiCaption(imageUrl, photoContext, retries - 1);
       }
