@@ -8,10 +8,10 @@ const GEMINI_KEY = process.env.GEMINI_KEY || "";
 const SUPABASE_URL = process.env.SUPABASE_URL || "";
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_ANON_KEY || "";
 
-const BATCH_SIZE = 15;
+const BATCH_SIZE = 25;
 const PHOTO_LIMIT_PER_HOTEL = 60;
-const PHOTO_CONCURRENCY = 1;
-const CAPTION_RATE_PER_MIN = 200;
+const PHOTO_CONCURRENCY = 3;
+const CAPTION_RATE_PER_MIN = 500;
 let _capWindow = Date.now();
 let _capCount = 0;
 
