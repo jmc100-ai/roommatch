@@ -172,9 +172,7 @@ async function runV2Search({ req, supabase, supabaseAdmin, resolveCityName }) {
   }
 
   // ── Phase A: load pre-aggregated room-type index + hotel IDs ─────────────
-  // v2_room_types_index has one row per (hotel_id, room_name) with confirmed facts
-  // already computed — no need to load raw v2_room_feature_facts for scoring.
-  // This scales to 3600+ hotels with a single small query.
+  const _t0 = Date.now();
   const [cacheResult, indexResult] = await Promise.all([
     fetchClient
       .from("v2_hotels_cache")
@@ -184,8 +182,9 @@ async function runV2Search({ req, supabase, supabaseAdmin, resolveCityName }) {
       .from("v2_room_types_index")
       .select("hotel_id,room_name,facts,photo_count")
       .eq("city", city)
-      .limit(100000),  // 3600 hotels × ~28 room types = ~100K rows max
+      .limit(100000),
   ]);
+  console.log(`[v2 perf] phase-A db: ${Date.now()-_t0}ms  hotels=${cacheResult.data?.length} index_rows=${indexResult.data?.length}`);
   if (cacheResult.error) return { status: 500, body: { error: cacheResult.error.message } };
   if (indexResult.error)  return { status: 500, body: { error: indexResult.error.message } };
 
@@ -305,10 +304,14 @@ async function runV2Search({ req, supabase, supabaseAdmin, resolveCityName }) {
     };
   }
 
+  console.log(`[v2 perf] scoring: ${Date.now()-_t0}ms  ranked=${rankedHotels.length}`);
+
   const topHotelIds = rankedHotels.slice(0, GALLERY_LIMIT).map((h) => h.hotel_id);
 
   // ── Neighbourhood BOOP blend (same as V1) ─────────────────────────────────
   let nbhdFitByHotelId = null;
+  let nbhdPrimaryByHotel = new Map(); // hotel_id → neighborhood_id (ALL hotels)
+  let nbhdHoodRows = [];              // neighborhood rows with id, name, vibe_short, attributes
   const boopParam = req.query.boop_profile;
   if (nbhdRankWeight > 0 && boopParam && rankedHotels.length) {
     try {
@@ -319,30 +322,45 @@ async function runV2Search({ req, supabase, supabaseAdmin, resolveCityName }) {
         similarity: r.sBoosted,
       }));
       const { applyNbhdBoopRank } = require("../lib/nbhd-vibe-rank");
-      nbhdFitByHotelId = await applyNbhdBoopRank(
+      const nbhdMaxHotels = parseInt(process.env.VSEARCH_NBHD_RANK_MAX_HOTELS || "5000", 10);
+      const nbhdResult = await applyNbhdBoopRank(
         fetchClient, city, rankedLite, boopProfileForNbhd,
         {
-          weight:     nbhdRankWeight,
-          neutralPct: parseFloat(process.env.VSEARCH_NBHD_NEUTRAL_PCT      || "62"),
-          maxHotels:  parseInt(process.env.VSEARCH_NBHD_RANK_MAX_HOTELS    || "5000", 10),
+          weight:         nbhdRankWeight,
+          neutralPct:     parseFloat(process.env.VSEARCH_NBHD_NEUTRAL_PCT || "62"),
+          maxHotels:      nbhdMaxHotels,
+          rpcChunk:       nbhdMaxHotels, // single RPC call — faster than many small batches
+          rpcConcurrency: 1,
         }
       );
+      nbhdFitByHotelId   = nbhdResult.nbhdFitByHotelId;
+      nbhdPrimaryByHotel = nbhdResult.primaryByHotel;
+      nbhdHoodRows       = nbhdResult.hoodRows;
       if (nbhdFitByHotelId?.size) {
-        console.log(`[v2] nbhd_boop_rank: weight=${nbhdRankWeight} nbhd_scores=${nbhdFitByHotelId.size}`);
+        console.log(`[v2] nbhd_boop_rank: weight=${nbhdRankWeight} nbhd_scores=${nbhdFitByHotelId.size} primary_assignments=${nbhdPrimaryByHotel.size}`);
       }
     } catch (_) {}
   }
+
+  console.log(`[v2 perf] post-boop: ${Date.now()-_t0}ms`);
 
   // ── Phase B: photos + hotelScore + primary-nbhd (parallel) ───────────────
   const hotelEmbedPromise = embedText(hotelQuery, process.env.GEMINI_KEY || "");
 
   // Photos come from v2_room_feature_facts via RPC (photo_url dropped from v2_room_inventory).
-  const [photosResult, hotelEmbedding, primaryNbhdResult] = await Promise.all([
+  // When BOOP was active, nbhdPrimaryByHotel already covers ALL hotels — skip redundant RPC.
+  const needPrimaryNbhdRpc = nbhdPrimaryByHotel.size === 0;
+  const phaseB = await Promise.all([
     fetchClient.rpc("get_v2_room_photos", { p_hotel_ids: topHotelIds, p_city: city }),
     hotelEmbedPromise,
-    fetchClient.rpc("get_primary_nbhds_for_hotels", { p_hotel_ids: topHotelIds }),
+    ...(needPrimaryNbhdRpc
+      ? [fetchClient.rpc("get_primary_nbhds_for_hotels", { p_hotel_ids: topHotelIds })]
+      : []),
   ]);
+  const [photosResult, hotelEmbedding] = phaseB;
+  const primaryNbhdRpcResult = needPrimaryNbhdRpc ? phaseB[2] : null;
 
+  console.log(`[v2 perf] phase-B parallel (photos+embed+nbhd): ${Date.now()-_t0}ms  photos=${photosResult.data?.length}`);
   if (photosResult.error) return { status: 500, body: { error: photosResult.error.message } };
 
   // hotel-vibe score_hotels RPC (same as V1 HOTEL_SIM logic)
@@ -367,10 +385,25 @@ async function runV2Search({ req, supabase, supabaseAdmin, resolveCityName }) {
   const HOTEL_SIM_MIN  = Math.max(HOTEL_SIM_MAX - 0.30, 0);
   const hotelSimSpan   = Math.max(HOTEL_SIM_MAX - HOTEL_SIM_MIN, 1e-9);
 
-  // Primary neighbourhood map
+  // Primary neighbourhood map — covers ALL hotels when BOOP was active.
   const primaryNbhdMap = new Map();
-  if (!primaryNbhdResult.error) {
-    for (const r of (primaryNbhdResult.data || [])) {
+  if (nbhdPrimaryByHotel.size > 0 && nbhdHoodRows.length > 0) {
+    // Use already-fetched data from applyNbhdBoopRank (covers all ranked hotels).
+    const hoodById = new Map(nbhdHoodRows.map((h) => [h.id, h]));
+    for (const [hotelId, nbhdId] of nbhdPrimaryByHotel) {
+      const hood = hoodById.get(nbhdId);
+      if (hood) {
+        primaryNbhdMap.set(hotelId, {
+          id:         nbhdId,
+          name:       hood.name,
+          vibe_short: hood.vibe_short,
+          attributes: hood.attributes || null,
+        });
+      }
+    }
+  } else if (primaryNbhdRpcResult && !primaryNbhdRpcResult.error) {
+    // Fallback: no BOOP — use the Phase B RPC result (top 250 hotels only).
+    for (const r of (primaryNbhdRpcResult.data || [])) {
       primaryNbhdMap.set(r.hotel_id, {
         id:         r.neighborhood_id,
         name:       r.name,
@@ -652,6 +685,7 @@ async function runV2Search({ req, supabase, supabaseAdmin, resolveCityName }) {
     `[v2] ranked: ${hotels.length} hotels | SIM_MAX=${SIM_MAX.toFixed(4)} SIM_MIN=${SIM_MIN.toFixed(4)} ` +
     `maxRaw=${maxRawSim.toFixed(4)} hotel_vibe=${hotelVibeModel}`
   );
+  console.log(`[v2 perf] TOTAL: ${Date.now()-_t0}ms`);
 
   return {
     status: 200,

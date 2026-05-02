@@ -4713,7 +4713,8 @@
   let _vibeTourPseudoFullscreen = false;
   let _deferResultsRenderUntilTourClose = false;
   /** hotelId → Street View URL array (possibly empty after a completed fetch) */
-  const _svFrameCache = {};
+  const _svFrameCache = {};        // hotelId → urls[] (settled results)
+  const _svFrameInFlight = {};     // hotelId → Promise (in-flight dedup)
   const VIBE_TOUR_DEBUG = /^(localhost|127\.0\.0\.1)$/i.test(window.location.hostname);
   /** Last /api/vsearch `stats` — used to align match sort with server nbhd blend weight */
   let _lastVsearchStats = null;
@@ -7939,6 +7940,9 @@
       name: h.name,
       vectorScore: h.vectorScore,
       hotelScore: h.hotelScore ?? null,
+      nbhd_fit_pct: h.nbhd_fit_pct ?? null,
+      primary_nbhd: h.primary_nbhd?.name ?? null,
+      effectiveScore: Math.max(0, ...(h.roomTypes || []).map(rt => rt.score || 0)),
       topRoom: h.roomTypes?.[0]
         ? { name: h.roomTypes[0].name, score: h.roomTypes[0].score }
         : null,
@@ -7946,7 +7950,11 @@
     }));
     const snap = {
       url: _lastVsearchUrl,
-      stats: _lastVsearchStats,
+      stats: {
+        ..._lastVsearchStats,
+        luxury_star_penalty_applied: _lastVsearchStats?.luxury_star_penalty_applied ?? false,
+        luxury_pref: _lastVsearchStats?.luxury_pref ?? null,
+      },
       top10: hotels,
     };
     const text = JSON.stringify(snap, null, 2);
@@ -8096,6 +8104,8 @@
     const hasDates = checkin && checkout && checkin < checkout;
 
     const nbhdPickerScoresP = prefetchNbhdPickerMatchMap(S.city);
+    const _t0search = Date.now();
+    console.log(`[perf] search start`);
     try {
       const vsearchParams = { query, city };
       if (activePoly) {
@@ -8116,6 +8126,7 @@
       _lastVsearchUrl = `${BACKEND}/api/vsearch?` + new URLSearchParams(vsearchParams);
       _lastVsearchHotels = null;
       const resp = await fetch(_lastVsearchUrl);
+      console.log(`[perf] search response: ${Date.now() - _t0search}ms`);
       await nbhdPickerScoresP.catch(() => {});
       if (!resp.ok) {
         let errMsg = `Search failed (${resp.status})`;
@@ -8148,6 +8159,7 @@
         setStatus(''); renderEmpty(query, city);
       } else if (hotels.length) {
         setStatus('');
+        console.log(`[perf] render called: ${Date.now() - _t0search}ms`);
         render(hotels, hasDates);  // resets _pricesLoaded = false, sets _fetchingPrices
         if (hasDates) {
           fetchPrices(city, checkin, checkout, reqId);
@@ -8240,6 +8252,14 @@
     const resPre = document.getElementById('results');
     _lbRegistry.length = 0;  // reset photo registry for each new search result
     _lastHotels     = hotels;
+    // Prefetch street-view frames for the top hotel immediately — fire-and-forget so
+    // the tour overlay shows with images already cached rather than waiting on-demand.
+    if (hotels?.length) {
+      const prefetchId = hotels[0]?.id;
+      if (prefetchId && !Object.prototype.hasOwnProperty.call(_svFrameCache, prefetchId)) {
+        fetchStreetViewFrames(prefetchId); // intentionally not awaited
+      }
+    }
     const shouldOpenVibeTour = !!(_vibeTourPending && hotels?.length && S.boopProfile);
     _deferResultsRenderUntilTourClose = shouldOpenVibeTour;
     _vibeTourPending = false;
@@ -8933,23 +8953,28 @@
 
   async function fetchStreetViewFrames(hotelId) {
     if (!hotelId) return [];
+    // Settled cache hit — return immediately
     if (Object.prototype.hasOwnProperty.call(_svFrameCache, hotelId)) {
       return _svFrameCache[hotelId];
     }
-    try {
-      const resp = await fetch(`${BACKEND}/api/street-view?hotelId=${encodeURIComponent(hotelId)}`);
-      if (!resp.ok) {
+    // In-flight dedup — reuse the existing promise rather than firing a second request
+    if (_svFrameInFlight[hotelId]) return _svFrameInFlight[hotelId];
+    const promise = (async () => {
+      try {
+        const cityParam = S.city ? `&city=${encodeURIComponent(S.city)}` : '';
+      const resp = await fetch(`${BACKEND}/api/street-view?hotelId=${encodeURIComponent(hotelId)}${cityParam}`);
+        const urls = resp.ok ? ((await resp.json()).urls || []) : [];
+        _svFrameCache[hotelId] = urls;
+        return urls;
+      } catch (_) {
         _svFrameCache[hotelId] = [];
         return [];
+      } finally {
+        delete _svFrameInFlight[hotelId];
       }
-      const data = await resp.json();
-      const urls = data.urls || [];
-      _svFrameCache[hotelId] = urls;
-      return urls;
-    } catch (_) {
-      _svFrameCache[hotelId] = [];
-      return [];
-    }
+    })();
+    _svFrameInFlight[hotelId] = promise;
+    return promise;
   }
 
   function ensureVibeTourOverlay() {
@@ -9023,8 +9048,10 @@
 
     const minLoadMs = 720;
     const t0 = Date.now();
+    console.log(`[perf] street-view fetch start`);
     const svUrls = await fetchStreetViewFrames(hotelId);
     const elapsed = Date.now() - t0;
+    console.log(`[perf] street-view fetch done: ${elapsed}ms (${svUrls.length} urls, cache=${elapsed < 5 ? 'HIT' : 'MISS'})`);
     if (elapsed < minLoadMs && _vibeTourVisible) {
       await new Promise(r => {
         _vibeTourLoadWaitResolve = r;
@@ -9037,6 +9064,7 @@
       });
     }
     if (!_vibeTourVisible) return;
+    console.log(`[perf] tour popup open`);
     openVibeTourPopup(hotels, svUrls);
   }
 
@@ -9409,10 +9437,13 @@
       });
     } else if (_currentSort === 'match') {
       const wNbhd = typeof _lastVsearchStats?.nbhd_rank_weight === 'number' ? _lastVsearchStats.nbhd_rank_weight : 0;
+      const canFilter = _showAvailOnly && _hasDateSearch && _pricesLoaded;
       hotels.sort((a, b) => {
         if (wNbhd > 0 && a.nbhd_fit_pct != null && b.nbhd_fit_pct != null) {
-          const ra = hotelEffectiveScore(a) / 100;
-          const rb = hotelEffectiveScore(b) / 100;
+          // Use vectorScore (hotel-level, matches server sort basis) unless
+          // availability filtering is active (then room-level effective score is correct).
+          const ra = canFilter ? hotelEffectiveScore(a) / 100 : (a.vectorScore || 0) / 100;
+          const rb = canFilter ? hotelEffectiveScore(b) / 100 : (b.vectorScore || 0) / 100;
           const ca = (1 - wNbhd) * ra + wNbhd * (a.nbhd_fit_pct / 100);
           const cb = (1 - wNbhd) * rb + wNbhd * (b.nbhd_fit_pct / 100);
           const d = cb - ca;

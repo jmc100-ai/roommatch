@@ -100,6 +100,31 @@ const supabaseAdmin = (process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_
   ? createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_KEY)
   : null;
 
+// ── V2-city routing ────────────────────────────────────────────────────────
+// Cities fully indexed through the V2 pipeline use v2_hotels_cache instead of
+// hotels_cache. This set is loaded once at startup and can be refreshed.
+const _v2Cities = new Set();
+async function loadV2Cities() {
+  const db = supabaseAdmin || supabase;
+  if (!db) return;
+  try {
+    const { data } = await db
+      .from("v2_indexed_cities")
+      .select("city")
+      .eq("status", "complete");
+    _v2Cities.clear();
+    for (const row of data || []) _v2Cities.add(normalizeCity(row.city));
+    console.log(`[v2-cities] loaded: [${[..._v2Cities].join(", ")}]`);
+  } catch (e) {
+    console.warn("[v2-cities] load failed (non-fatal):", e.message);
+  }
+}
+function normalizeCity(c) { return (c || "").trim().toLowerCase(); }
+/** Returns "v2_hotels_cache" for V2-indexed cities, "hotels_cache" otherwise. */
+function hotelsCacheFor(city) {
+  return _v2Cities.has(normalizeCity(city)) ? "v2_hotels_cache" : "hotels_cache";
+}
+
 const app         = express();
 // Use production key if set, fall back to sandbox
 const LITEAPI_KEY = process.env.LITEAPI_PROD_KEY || process.env.LITEAPI_KEY || "";
@@ -125,6 +150,7 @@ app.get("/api/public-config", (_req, res) => {
 app.listen(PORT, "0.0.0.0", () => {
   console.log(`[boot] listening on 0.0.0.0:${PORT}`);
   console.log(`[config] Using ${IS_PROD ? "PRODUCTION" : "SANDBOX"} LiteAPI key`);
+  loadV2Cities();
   const nbhdW = parseFloat(process.env.VSEARCH_NBHD_RANK_WEIGHT || "0.22");
   console.log(
     `[config] VSEARCH_NBHD_RANK_WEIGHT=${Number.isFinite(nbhdW) ? nbhdW : "invalid"} (parsed from env; 0 or missing → blend off)`
@@ -160,7 +186,7 @@ async function fetchHotelMetaBatch(hotelIds) {
   });
   if (needed.length) {
     console.log(`[hotel-meta] fetching ${needed.length} hotels from LiteAPI`);
-    const CHUNK = 20;
+    const CHUNK = 50;
     for (let i = 0; i < needed.length; i += CHUNK) {
       const results = await Promise.allSettled(needed.slice(i, i + CHUNK).map(async (hotelId) => {
         const r = await fetch(
@@ -493,7 +519,7 @@ function buildSoftFlagCoveragePromise(city, detectedFlagKeys, fetchClient) {
 
   const cap = parseInt(process.env.SOFT_FLAG_HOTEL_CAP || '1500', 10);
   return fetchClient
-    .from('hotels_cache')
+    .from(hotelsCacheFor(city))
     .select('hotel_id')
     .eq('city', city)
     .then(({ data, error }) => {
@@ -1564,23 +1590,63 @@ app.get("/api/vsearch", async (req, res) => {
       resolveCityName,
     });
     if (v2.status === 200 && v2.body?.hotels?.length) {
-      // Inject live hotel metadata (name, photo, ratings) fetched from LiteAPI.
-      // runV2Search returns hotel_id as `name` placeholder; we overwrite here.
-      const hotelIds = v2.body.hotels.map(h => h.id);
+      // Only fetch LiteAPI metadata for hotels that have photos (top GALLERY_LIMIT).
+      // Stub hotels beyond GALLERY_LIMIT have no photos and don't need name/photo/ratings
+      // from LiteAPI — they show as minimal cards the user rarely scrolls to.
+      const metaIds = v2.body.hotels.filter(h => h.roomTypes?.length > 0).map(h => h.id);
       const t0meta = Date.now();
-      const liveMeta = await fetchHotelMetaBatch(hotelIds);
+      const liveMeta = await fetchHotelMetaBatch(metaIds);
       const filled = Object.values(liveMeta).filter(Boolean).length;
-      console.log(`[v2-meta] fetched ${filled}/${hotelIds.length} hotels in ${Date.now()-t0meta}ms`);
+      console.log(`[v2-meta] fetched ${filled}/${metaIds.length} (photo hotels only, skipped ${v2.body.hotels.length - metaIds.length} stubs) in ${Date.now()-t0meta}ms`);
       for (const h of v2.body.hotels) {
         const m = liveMeta[h.id];
         if (m) {
-          h.name        = m.name        || h.id;
+          h.name        = m.name        || h.name || h.id;
           h.mainPhoto   = m.mainPhoto   || null;
           h.starRating  = m.starRating  || 0;
           h.rating      = m.guestRating || 0;
           h.address     = m.address     || "";
         }
       }
+
+      // ── Star-rating penalty for value-seeking boop profiles ────────────────
+      // hotel_profile_index embeddings don't reliably discriminate luxury vs
+      // value (photo embeddings compress into a narrow cosine range). Use star
+      // rating as a reliable proxy: penalise 4-5★ hotels when luxury_pref < -5.
+      // This adjusts vectorScore (visible to client) so the display score and
+      // sort order both reflect the penalty consistently.
+      try {
+        const boopRaw = req.query.boop_profile;
+        if (boopRaw) {
+          const boopProfile = JSON.parse(decodeURIComponent(boopRaw));
+          const luxuryPref  = Number(boopProfile?.prefs?.luxury ?? 0);
+          if (luxuryPref < -5) {
+            // Max penalty: 25% for luxury=-16, scales linearly. At luxury=-5 ≈ 8%.
+            const luxPenFactor = Math.min(0.30, Math.abs(luxuryPref) / 50);
+            for (const h of v2.body.hotels) {
+              const stars = h.starRating || 3;
+              if (stars > 3) {
+                // penalty grows linearly above 3★: 4★→0.5×factor, 5★→1×factor
+                const penalty = luxPenFactor * Math.min(1, (stars - 3) / 2);
+                h.vectorScore = Math.max(0, Math.round(h.vectorScore * (1 - penalty)));
+              }
+            }
+            // Re-sort after adjusting scores, preserving the neighbourhood blend.
+            const nbhdWeight = v2.body.stats?.nbhd_rank_weight ?? 0;
+            v2.body.hotels.sort((a, b) => {
+              const ca = (1 - nbhdWeight) * (a.vectorScore || 0) / 100 + nbhdWeight * ((a.nbhd_fit_pct ?? 62) / 100);
+              const cb = (1 - nbhdWeight) * (b.vectorScore || 0) / 100 + nbhdWeight * ((b.nbhd_fit_pct ?? 62) / 100);
+              if (Math.abs(cb - ca) > 1e-6) return cb - ca;
+              return (b.vectorScore || 0) - (a.vectorScore || 0);
+            });
+            v2.body.stats.luxury_star_penalty_applied = true;
+            v2.body.stats.luxury_pref = luxuryPref;
+          }
+        }
+      } catch (e) {
+        console.warn("[v2] star-penalty failed (non-fatal):", e.message);
+      }
+
       return res.status(200).json(v2.body);
     }
     // V2 returned no results (city not yet indexed in V2 or no matches) — fall through to V1.
@@ -1703,7 +1769,7 @@ app.get("/api/vsearch", async (req, res) => {
 
     // Only select spatial columns — display metadata (name, photo, ratings) is fetched
     // live from LiteAPI at response-build time and cached in-memory (fetchHotelMetaBatch).
-    const hotelsPromise = fetchClient.from("hotels_cache").select("hotel_id, city, country_code, lat, lng").eq("city", city);
+    const hotelsPromise = fetchClient.from(hotelsCacheFor(city)).select("hotel_id, city, country_code, lat, lng").eq("city", city);
 
     // 2. HyDE: generate a hypothetical caption matching the room_embeddings vocabulary,
     // then embed it. This handles vocabulary gaps ("multiple sinks" → "double sinks"),
@@ -1782,7 +1848,7 @@ app.get("/api/vsearch", async (req, res) => {
           const pb = bboxFromRing(ring);
           if (pb?.lat_min != null) {
             const { data: polyHotels } = await supabase
-              .from("hotels_cache")
+              .from(hotelsCacheFor(city))
               .select("hotel_id, lat, lng")
               .eq("city", city)
               .gte("lat", pb.lat_min).lte("lat", pb.lat_max)
@@ -1804,7 +1870,7 @@ app.get("/api/vsearch", async (req, res) => {
       if (parts.length === 4 && parts.every(n => !isNaN(n))) {
         const [lat_min, lat_max, lon_min, lon_max] = parts;
         const { data: bboxHotels } = await supabase
-          .from("hotels_cache")
+          .from(hotelsCacheFor(city))
           .select("hotel_id")
           .eq("city", city)
           .gte("lat", lat_min).lte("lat", lat_max)
@@ -1926,11 +1992,12 @@ app.get("/api/vsearch", async (req, res) => {
     }
     if (nbhdRankWeight > 0 && boopProfileForNbhd && typeof boopProfileForNbhd === "object" && rankedHotels.length) {
       const { applyNbhdBoopRank } = require("./lib/nbhd-vibe-rank");
-      nbhdFitByHotelId = await applyNbhdBoopRank(fetchClient, city, rankedHotels, boopProfileForNbhd, {
+      const nbhdRankResult = await applyNbhdBoopRank(fetchClient, city, rankedHotels, boopProfileForNbhd, {
         weight: nbhdRankWeight,
         neutralPct: parseFloat(process.env.VSEARCH_NBHD_NEUTRAL_PCT || "62"),
         maxHotels: parseInt(process.env.VSEARCH_NBHD_RANK_MAX_HOTELS || "5000", 10),
       });
+      nbhdFitByHotelId = nbhdRankResult.nbhdFitByHotelId;
       if (nbhdFitByHotelId?.size) {
         console.log(
           `[vsearch] nbhd_boop_rank: weight=${nbhdRankWeight} hotels=${rankedHotels.length} nbhd_scores=${nbhdFitByHotelId.size}`
@@ -2362,7 +2429,7 @@ app.get("/api/rates", async (req, res) => {
     } else {
       const fc = supabaseAdmin || supabase;
       const { data: hotelRows, error: dbErr } = await fc
-        .from("hotels_cache").select("hotel_id").eq("city", city);
+        .from(hotelsCacheFor(city)).select("hotel_id").eq("city", city);
       if (dbErr) throw new Error("DB: " + dbErr.message);
       if (!hotelRows?.length) return res.json({ prices: {}, currency: "EUR", nights, pricedCount: 0 });
       hotelIds = hotelRows.map(h => h.hotel_id);
@@ -3282,7 +3349,8 @@ app.post("/api/rebuild-hotel-profile-index", async (req, res) => {
 const SV_SERVER_KEY = process.env.GOOGLE_STREETVIEW_SERVER_KEY || process.env.GOOGLE_STREETVIEW_KEY || "";
 const SV_BROWSER_KEY = process.env.GOOGLE_STREETVIEW_BROWSER_KEY || process.env.GOOGLE_STREETVIEW_KEY || "";
 const SV_SIGNING_SECRET = process.env.GOOGLE_STREETVIEW_SIGNING_SECRET || "";
-const _svCache = new Map(); // cacheKey → { ts, urls }
+const _svCache = new Map();     // cacheKey → { ts, urls }
+const _svCoordCache = new Map(); // hotelId → { lat, lng }  (permanent, no expiry needed)
 const SV_CACHE_MS = 24 * 60 * 60 * 1000; // 24h
 const SV_CACHE_VERSION = 4; // bump when URL params / signing change (invalidates stale cache)
 let _svUnsignedWarned = false;
@@ -3326,6 +3394,7 @@ function fullStreetViewUrl(pathWithQuery) {
 
 app.get("/api/street-view", async (req, res) => {
   const hotelId = (req.query.hotelId || "").trim();
+  const cityHint = (req.query.city || "").trim(); // optional — used to pick the right cache table
   if (!hotelId) return res.status(400).json({ error: "hotelId required" });
   if (!SV_SERVER_KEY || !SV_BROWSER_KEY) {
     return res.status(503).json({
@@ -3341,19 +3410,34 @@ app.get("/api/street-view", async (req, res) => {
     return res.json({ urls: cached.urls, cached: true });
   }
 
-  // Look up lat/lng from hotels_cache
+  // Look up lat/lng — coord cache first, then DB (single table when city known, parallel otherwise)
   const db = supabaseAdmin || supabase;
-  const { data: row, error } = await db
-    .from("hotels_cache")
-    .select("lat, lng, name")
-    .eq("hotel_id", hotelId)
-    .single();
-
-  if (error || !row?.lat || !row?.lng) {
+  let lat, lng;
+  const cached_coord = _svCoordCache.get(hotelId);
+  if (cached_coord) { lat = cached_coord.lat; lng = cached_coord.lng; }
+  if (!lat || !lng) {
+    const t0db = Date.now();
+    const primaryTable = cityHint ? hotelsCacheFor(cityHint) : null;
+    let row = null;
+    if (primaryTable) {
+      // City is known — query exactly one table
+      const { data } = await db.from(primaryTable).select("lat, lng").eq("hotel_id", hotelId).maybeSingle();
+      row = (data?.lat && data?.lng) ? data : null;
+    } else {
+      // City unknown — query both in parallel
+      const [r1, r2] = await Promise.all([
+        db.from("hotels_cache").select("lat, lng").eq("hotel_id", hotelId).maybeSingle(),
+        db.from("v2_hotels_cache").select("lat, lng").eq("hotel_id", hotelId).maybeSingle(),
+      ]);
+      row = (r1.data?.lat && r1.data?.lng) ? r1.data : (r2.data?.lat && r2.data?.lng) ? r2.data : null;
+    }
+    if (row) { lat = row.lat; lng = row.lng; _svCoordCache.set(hotelId, { lat, lng }); }
+    console.log(`[street-view] db lookup ${hotelId} (${primaryTable || "both"}): ${Date.now() - t0db}ms`);
+  }
+  if (!lat || !lng) {
     return res.status(404).json({ error: "Hotel coordinates not found" });
   }
 
-  const { lat, lng } = row;
   const size = "1280x800";
   const fov = 102;
   const pitch = 0;
@@ -3378,29 +3462,30 @@ app.get("/api/street-view", async (req, res) => {
     { la: lat, ln: lng - lngStep, heading: 90, label: "west" },
   ];
 
-  const urls = [];
+  // Fetch all 4 cardinal-direction metadata calls in parallel — was sequential before (~1.5-2.8s).
+  let urls = [];
+  const t0meta = Date.now();
   try {
-    for (const c of candidates) {
+    const metaResults = await Promise.all(candidates.map(async (c) => {
       const metaPath =
         `/maps/api/streetview/metadata?location=${c.la},${c.ln}&radius=${radius}&source=outdoor&key=${serverKeyQ}`;
       let metaUrl = SV_SIGNING_SECRET ? signGoogleStreetViewPath(metaPath) : null;
       if (!metaUrl) metaUrl = `https://maps.googleapis.com${metaPath}`;
-      const metaResp = await fetch(metaUrl);
-      const meta = await metaResp.json();
-      if (meta.status !== "OK") continue;
-      const panoId = meta.pano_id || meta.panoId;
-      if (panoId) {
-        urls.push(fullStreetViewUrl(svPathFromPano(panoId, c.heading)));
-      } else if (meta.location) {
-        urls.push(fullStreetViewUrl(svPathFromLocation(meta.location.lat, meta.location.lng, c.heading)));
-      } else {
-        urls.push(fullStreetViewUrl(svPathFromLocation(c.la, c.ln, c.heading)));
-      }
-      if (urls.length >= 4) break;
-    }
+      try {
+        const metaResp = await fetch(metaUrl);
+        const meta = await metaResp.json();
+        if (meta.status !== "OK") return null;
+        const panoId = meta.pano_id || meta.panoId;
+        if (panoId) return fullStreetViewUrl(svPathFromPano(panoId, c.heading));
+        if (meta.location) return fullStreetViewUrl(svPathFromLocation(meta.location.lat, meta.location.lng, c.heading));
+        return fullStreetViewUrl(svPathFromLocation(c.la, c.ln, c.heading));
+      } catch (_) { return null; }
+    }));
+    urls = metaResults.filter(Boolean).slice(0, 4);
   } catch (e) {
     console.warn("[street-view] metadata sampling failed:", e.message);
   }
+  console.log(`[street-view] ${hotelId}: metadata ${Date.now() - t0meta}ms → ${urls.length} urls`);
 
   if (!urls.length) {
     console.log(`[street-view] No outdoor curb coverage for ${hotelId} near ${lat},${lng}`);

@@ -9,7 +9,6 @@ const SUPABASE_URL = process.env.SUPABASE_URL || "";
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_ANON_KEY || "";
 
 const BATCH_SIZE = 25;
-const PHOTO_LIMIT_PER_HOTEL = 60;
 const PHOTO_CONCURRENCY = 3;
 const CAPTION_RATE_PER_MIN = 500;
 let _capWindow = Date.now();
@@ -313,19 +312,22 @@ async function reindexCityV2(city, limit = 200, forceRebuild = true) {
         cached_at: new Date().toISOString(),
       }, { onConflict: "hotel_id" });
 
+      const MAX_PHOTOS_PER_ROOM = 5;  // cap per room type to ensure coverage across all rooms
       const chosen = [];
       const seenUrls = new Set();
       for (const room of (detail.rooms || [])) {
         const roomName = room.roomName || room.name || "Room";
         const roomTypeId = room.id || room.roomId || room.roomTypeId || null;
+        let roomPhotoCount = 0;
         for (const p of (room.photos || [])) {
+          if (roomPhotoCount >= MAX_PHOTOS_PER_ROOM) break;
           const url = p.url || p.hd_url || "";
-          if (!url || seenUrls.has(url)) continue; // deduplicate reused photo URLs across rooms
+          if (!url || seenUrls.has(url)) continue;
           seenUrls.add(url);
           chosen.push({ roomName, roomTypeId, url, type: classifyPhoto(p, roomName) });
-          if (chosen.length >= PHOTO_LIMIT_PER_HOTEL) break;
+          roomPhotoCount++;
         }
-        if (chosen.length >= PHOTO_LIMIT_PER_HOTEL) break;
+        // No global PHOTO_LIMIT_PER_HOTEL break — every room type gets its fair share
       }
 
       for (let j = 0; j < chosen.length; j += PHOTO_CONCURRENCY) {

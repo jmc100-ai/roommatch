@@ -668,13 +668,15 @@ async function fetchOsmBoundary(name, city, hintBbox = null) {
 
 async function getHotelCountForBbox(city, bbox, db) {
   const { lat_min, lat_max, lon_min, lon_max } = bbox;
-  const { count } = await db
-    .from("hotels_cache")
+  // Try both tables and return the larger count (covers V1 and V2 cities)
+  const query = (table) => db
+    .from(table)
     .select("hotel_id", { count: "exact", head: true })
     .eq("city", city)
     .gte("lat", lat_min).lte("lat", lat_max)
     .gte("lng", lon_min).lte("lng", lon_max);
-  return count ?? 0;
+  const [r1, r2] = await Promise.all([query("hotels_cache"), query("v2_hotels_cache")]);
+  return Math.max(r1.count ?? 0, r2.count ?? 0);
 }
 
 /** Counts hotels whose coordinates fall inside the bbox.
