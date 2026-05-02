@@ -365,11 +365,15 @@ async function reindexCityV2(city, limit = 200, forceRebuild = true) {
     }).eq("city", city);
   }
 
+  // Use a fresh client for all final steps — the long-lived `db` connection often expires
+  // after multi-hour runs, causing silent failures on status updates and the index rebuild.
+  const dbFinal = getDb();
+
   const [{ count: totalHotels }, { count: totalPhotos }] = await Promise.all([
-    db.from("v2_hotels_cache").select("*", { count: "exact", head: true }).eq("city", city),
-    db.from("v2_room_inventory").select("*", { count: "exact", head: true }).eq("city", city),
+    dbFinal.from("v2_hotels_cache").select("*", { count: "exact", head: true }).eq("city", city),
+    dbFinal.from("v2_room_inventory").select("*", { count: "exact", head: true }).eq("city", city),
   ]);
-  await db.from("v2_indexed_cities").update({
+  await dbFinal.from("v2_indexed_cities").update({
     status: "complete",
     hotel_count: totalHotels || 0,
     photo_count: totalPhotos || 0,
@@ -381,13 +385,13 @@ async function reindexCityV2(city, limit = 200, forceRebuild = true) {
   // Copy hotel spatial data to hotels_cache so neighbourhood RPC (get_primary_nbhds_for_hotels)
   // can assign hotels to neighbourhoods. Only copies hotel_id + coords — no LiteAPI content.
   try {
-    const { data: v2Hotels } = await db.from("v2_hotels_cache")
+    const { data: v2Hotels } = await dbFinal.from("v2_hotels_cache")
       .select("hotel_id, city, country_code, lat, lng")
       .eq("city", city)
       .not("lat", "is", null);
     if (v2Hotels?.length) {
       const rows = v2Hotels.map(h => ({ hotel_id: h.hotel_id, city: h.city, country_code: h.country_code, lat: h.lat, lng: h.lng }));
-      const { error: cpErr } = await db.from("hotels_cache").upsert(rows, { onConflict: "hotel_id" });
+      const { error: cpErr } = await dbFinal.from("hotels_cache").upsert(rows, { onConflict: "hotel_id" });
       if (cpErr) console.error("[v2-index] hotels_cache copy error:", cpErr.message);
       else console.log(`[v2-index] copied ${rows.length} hotels to hotels_cache for neighbourhood matching`);
     }
@@ -398,12 +402,22 @@ async function reindexCityV2(city, limit = 200, forceRebuild = true) {
   // Auto-rebuild v2_room_types_index (pre-aggregated per-room facts for fast Phase A search).
   console.log(`[v2-index] rebuilding v2_room_types_index for "${city}"...`);
   try {
-    const { data: rebuildCount, error: rebuildErr } = await db.rpc(
+    const { data: rebuildCount, error: rebuildErr } = await dbFinal.rpc(
       "rebuild_v2_room_types_index_city",
       { p_city: city }
     );
-    if (rebuildErr) console.error("[v2-index] rebuild index error:", rebuildErr.message);
-    else console.log(`[v2-index] rebuilt ${rebuildCount} room types in v2_room_types_index`);
+    if (rebuildErr) {
+      console.error("[v2-index] rebuild index error:", rebuildErr.message);
+    } else {
+      console.log(`[v2-index] rebuilt ${rebuildCount} room types in v2_room_types_index`);
+      // Verify the rebuild actually landed — if still 0 something is wrong
+      const { count: indexCount } = await dbFinal
+        .from("v2_room_types_index")
+        .select("*", { count: "exact", head: true })
+        .eq("city", city);
+      console.log(`[v2-index] v2_room_types_index now has ${indexCount} rows for ${city}`);
+      if (!indexCount) console.error("[v2-index] WARNING: index count is 0 after rebuild — manual rebuild may be needed");
+    }
   } catch (rebuildEx) {
     console.error("[v2-index] rebuild index exception:", rebuildEx.message);
   }

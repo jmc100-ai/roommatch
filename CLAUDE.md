@@ -419,6 +419,80 @@ If LiteAPI denies permission, change what we persist:
 
 ---
 
+## V2 Search Pipeline (facts-based, parallel to V1)
+
+V2 is an isolated facts-based hotel ranking system running alongside V1. Default since Apr 28 2026.
+
+### Goal
+Index the **full Mexico City catalog** (~3,616 hotels from LiteAPI) with a quality filter: only include hotels that have at least one room type with **≥2 photos**. This is the planned launch catalog.
+
+### V2 Tables (Supabase, project dmgxrcmdihgsffvqllms)
+| Table | Purpose |
+|---|---|
+| `v2_indexed_cities` | Indexing status per city (status: indexing\|complete\|failed) |
+| `v2_hotels_cache` | Hotel metadata: hotel_id, city, country_code, hotel_photos, lat, lng, cached_at |
+| `v2_room_inventory` | One row per photo: hotel_id, photo_url, room_name, room_type_id, photo_type, caption, feature_summary, source, created_at |
+| `v2_room_feature_facts` | Extracted facts: hotel_id, room_type_id, photo_url, fact_key, fact_value, confidence, source, extractor_version |
+| `v2_room_types_index` | Pre-aggregated per-room facts (rebuilt via `rebuild_v2_room_types_index_city` RPC after indexing) |
+
+**CRITICAL SCHEMA NOTE:** `v2_room_inventory` requires a `photo_url TEXT` column and a unique index on `(hotel_id, photo_url)` for upserts to work. This was added May 1 2026 after a failed run that cleared inventory and errored on every insert due to the missing column.
+
+### V2 Indexing Script
+`scripts/index-city-v2.js` — exports `reindexCityV2(city, limit, forceRebuild)`
+
+**Quality filter (already implemented):** skips any hotel where no room type has ≥2 photos.
+
+**Triggered via:**
+```powershell
+# Resume / incremental reindex (DEFAULT — skips hotels already in v2_hotels_cache)
+$body = '{"city":"Mexico City","limit":3616,"secret":"roommatch-2026","force":false}'
+Invoke-RestMethod -Uri "https://roommatch-1fg5.onrender.com/api/v2/reindex-city" -Method POST -ContentType "application/json" -Body $body
+```
+
+> **Always use `force=false` unless you intentionally want to wipe and restart from scratch.**
+> `force=true` clears all v2 data for the city before indexing — only use this if the data is
+> known-bad and you want a clean slate. With `force=false` the indexer skips hotels already
+> present in `v2_hotels_cache` and picks up from where a previous run left off.
+
+**Or run locally (faster, uses local .env):**
+```powershell
+node -e "require('./scripts/index-city-v2').reindexCityV2('Mexico City',3616,false).then(r=>console.log('DONE',JSON.stringify(r))).catch(e=>{console.error(e.message);process.exit(1)});"
+```
+
+### V2 Status Check
+```sql
+SELECT city, status, hotel_count, photo_count, started_at, updated_at, last_error
+FROM v2_indexed_cities WHERE city='Mexico City';
+
+SELECT
+  (SELECT count(*) FROM v2_hotels_cache WHERE city='Mexico City') as hotels,
+  (SELECT count(*) FROM v2_room_inventory WHERE city='Mexico City') as photos,
+  (SELECT count(*) FROM v2_room_inventory WHERE city='Mexico City' AND caption IS NOT NULL AND length(caption)>20) as captioned,
+  (SELECT count(*) FROM v2_room_feature_facts WHERE city='Mexico City') as facts;
+```
+
+### V2 Search Routing
+- `GET /api/vsearch?search_version=v2` — forces V2
+- `GET /api/vsearch?search_version=v1` — forces V1 (comparison)
+- Default is V2 (hardcoded in server.js fallback; override with env `SEARCH_VERSION_DEFAULT`)
+
+### V2 Indexing History (Mexico City)
+| Date | Event |
+|---|---|
+| Apr 28 2026 | Initial V2 run — 116 hotels, captioning broken (file_uri bug) |
+| Apr 28 2026 | Fixed captioning (image-bytes flow), re-ran — 128→249 hotels, 4390 captioned |
+| Apr 28 2026 | Changed default to V2 in server.js |
+| May 1 2026 | Failed run — triggered with limit=3616 via live endpoint; cleared inventory; failed on every inventory insert (missing photo_url column); wrote 154,588 facts orphaned |
+| May 1 2026 | Fixed: added photo_url + unique index to v2_room_inventory; cleared all Mexico City V2 data; launched full reindex limit=3616 |
+
+### V2 Known Issues Fixed
+- **`v2_room_inventory` missing `photo_url`** — fixed May 1 2026 (ALTER TABLE + unique index)
+- **Gemini captioning used file_uri** — fixed Apr 28 (switched to inline image-bytes)
+- **Rate limits on Gemini 2.5 Flash Lite** — handled via CAPTION_RATE_PER_MIN=500 + exponential backoff (5 retries: 3s, 12s, 27s, 48s, 60s cap)
+- **LiteAPI paginates at 1000/page** — indexer loops until `limit` reached
+
+---
+
 ## Known Issues & Next Steps
 
 1. **Hotel-level vibe score** — TODO: The `hotel-match-badge` currently shows the best room's vectorScore as a proxy for "hotel match." This is slightly misleading. When hotel-level vibe scoring is built (as part of the neighborhood vibe phase), replace `hotelEffectiveScore(h)` with a true hotel-level embedding score separate from the room score. The badge label can then be changed to "Hotel Vibe X%". See `hotelHTML()` and `applyPricesInPlace()` in `client/index.html`.
