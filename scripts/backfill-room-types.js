@@ -93,9 +93,12 @@ async function classifyBatch(roomNames) {
     const parsed = JSON.parse(cleaned);
     if (!Array.isArray(parsed)) throw new Error("Response is not an array");
     if (parsed.length !== roomNames.length) {
-      console.warn(`[backfill-rt] length mismatch: sent ${roomNames.length}, got ${parsed.length} — padding with nulls`);
-      // Pad to expected length so positional lookup stays correct
-      while (parsed.length < roomNames.length) parsed.push(null);
+      console.warn(`[backfill-rt] length mismatch: sent ${roomNames.length}, got ${parsed.length} — normalising`);
+      if (parsed.length > roomNames.length) {
+        parsed.splice(roomNames.length); // truncate extras
+      } else {
+        while (parsed.length < roomNames.length) parsed.push(null); // pad missing
+      }
     }
     return parsed;
   } catch (e) {
