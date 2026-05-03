@@ -156,7 +156,10 @@ async function backfillRoomTypes(city, { force = false } = {}) {
   for (let i = 0; i < batches.length; i += CONCURRENCY) {
     const chunk = batches.slice(i, i + CONCURRENCY);
     await Promise.all(chunk.map(async (batch) => {
-      const roomNames = batch.map((r) => r.room_name);
+      // Deduplicate + trim names before sending to Gemini — duplicates in the
+      // batch waste tokens and can confuse the lookup map.
+      const rawNames  = batch.map((r) => r.room_name);
+      const roomNames = [...new Set(rawNames.map((n) => n?.trim()).filter(Boolean))];
       let classifications;
       try {
         classifications = await classifyBatchWithRetry(roomNames);
@@ -166,12 +169,13 @@ async function backfillRoomTypes(city, { force = false } = {}) {
         return;
       }
 
-      // Build a lookup by room_name (Gemini echoes it back)
-      const byName = new Map(classifications.map((c) => [c.room_name, c]));
+      // Build a lookup by trimmed room_name (Gemini echoes names back, may trim whitespace)
+      const byName = new Map(classifications.map((c) => [c.room_name?.trim(), c]));
 
       // Update each row in v2_room_types_index
       await Promise.all(batch.map(async (row) => {
-        const cls = byName.get(row.room_name);
+        // Try exact match first, then trimmed match
+        const cls = byName.get(row.room_name) || byName.get(row.room_name?.trim());
         if (!cls) {
           // Gemini didn't return this room — use safe defaults (no penalty)
           console.warn(`[backfill-rt] no classification for: "${row.room_name}"`);
