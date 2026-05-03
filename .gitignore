@@ -13,3 +13,11 @@ test-results/
 # OS / editor
 .DS_Store
 Thumbs.db
+ 
+# Local debug/log artifacts 
+mcp-err.txt 
+mcp-out.txt 
+mcp-*.log 
+ 
+# Local Windows dev helpers 
+restart-localhost.bat
