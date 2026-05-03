@@ -4905,13 +4905,13 @@
   }
 
   // ── BOOP v4 — Top-neighbourhood refine strip ─────────────────────────────
-  // Tallies hotels by primary_nbhd, takes top 10 (min 2 hotels), renders as a
-  // chip strip above the results. Clicking a chip filters _lastHotels in-place.
-  // When chips would wrap past one row, a "More ›" control expands to full wrap
-  // (no horizontal scroll — scroll was unreliable cross-browser).
+  // Tallies hotels by primary_nbhd, takes top 10 (min 2 hotels). On desktop the
+  // first 5 (after "All") render inline; the rest live behind a "More ▾" button
+  // that toggles a dropdown panel. On mobile (≤640px) the dropdown is hidden
+  // via CSS and ALL chips render inline so users can swipe-scroll.
   let _nbhdFilter = null;
-  let _nbhdRefineExpanded = false;
-  const NBHD_REFINE_COLLAPSED_MAX_PX = 42;
+  let _nbhdRefineDropdownOpen = false;
+  const NBHD_REFINE_INLINE_LIMIT = 5;
 
   let _availMountRaf = null;
   function scheduleSyncAvailFilterMount() {
@@ -4943,41 +4943,22 @@
 
   window.addEventListener('resize', scheduleSyncAvailFilterMount);
 
-  function syncNbhdRefineMoreBtn() {
-    const strip = document.getElementById('nbhd-refine-strip');
-    if (!strip || strip.style.display === 'none') return;
-    const chipsEl = strip.querySelector('.nbhd-refine-chips');
-    const moreEl = strip.querySelector('.nbhd-refine-more');
-    if (!chipsEl || !moreEl) return;
-    if (_nbhdRefineExpanded) {
-      moreEl.hidden = false;
-      moreEl.textContent = 'Show less';
-      moreEl.setAttribute('aria-expanded', 'true');
-      return;
-    }
-    strip.classList.remove('nbhd-refine-strip--collapsed', 'nbhd-refine-strip--expanded');
-    chipsEl.style.maxHeight = 'none';
-    const naturalH = chipsEl.scrollHeight;
-    const needsMore = naturalH > NBHD_REFINE_COLLAPSED_MAX_PX + 1;
-    moreEl.hidden = !needsMore;
-    moreEl.textContent = 'More ›';
-    if (!moreEl.hidden) moreEl.setAttribute('aria-expanded', 'false');
-    if (needsMore) strip.classList.add('nbhd-refine-strip--collapsed');
-    chipsEl.style.maxHeight = '';
+  function closeNbhdRefineDropdown() {
+    const dd = document.getElementById('nbhd-refine-dropdown');
+    const btn = document.getElementById('nbhd-refine-more-btn');
+    if (dd) dd.hidden = true;
+    if (btn) btn.setAttribute('aria-expanded', 'false');
+    _nbhdRefineDropdownOpen = false;
   }
 
-  function toggleNbhdRefineExpand() {
-    const strip = document.getElementById('nbhd-refine-strip');
-    if (!strip) return;
-    const moreEl = strip.querySelector('.nbhd-refine-more');
-    if (moreEl && moreEl.hidden) return;
-    _nbhdRefineExpanded = !_nbhdRefineExpanded;
-    strip.classList.toggle('nbhd-refine-strip--expanded', _nbhdRefineExpanded);
-    strip.classList.toggle('nbhd-refine-strip--collapsed', !_nbhdRefineExpanded);
-    if (moreEl) {
-      moreEl.textContent = _nbhdRefineExpanded ? 'Show less' : 'More ›';
-      moreEl.setAttribute('aria-expanded', _nbhdRefineExpanded ? 'true' : 'false');
-    }
+  function toggleNbhdRefineExpand(ev) {
+    if (ev) { ev.preventDefault(); ev.stopPropagation(); }
+    const dd = document.getElementById('nbhd-refine-dropdown');
+    const btn = document.getElementById('nbhd-refine-more-btn');
+    if (!dd || !btn) return;
+    _nbhdRefineDropdownOpen = !_nbhdRefineDropdownOpen;
+    dd.hidden = !_nbhdRefineDropdownOpen;
+    btn.setAttribute('aria-expanded', _nbhdRefineDropdownOpen ? 'true' : 'false');
   }
 
   function renderNbhdRefineStrip(hotelsAfterFilters) {
@@ -5005,21 +4986,37 @@
       if (dm0 && af0) dm0.appendChild(af0);
       strip.style.display = 'none';
       strip.innerHTML = '';
-      _nbhdRefineExpanded = false;
+      closeNbhdRefineDropdown();
       scheduleSyncAvailFilterMount();
       return;
     }
-    const chips = [
-      `<button type="button" class="nbhd-chip ${_nbhdFilter ? '' : 'active'}" onclick="setNbhdFilter(null)">All</button>`,
-      ...entries.map(e => {
-        const isActive = _nbhdFilter === e.nbhd.name ? 'active' : '';
-        return `<button type="button" class="nbhd-chip ${isActive}" onclick="setNbhdFilter('${e.nbhd.name.replace(/'/g,"\\'")}')" title="${escHtml(e.nbhd.vibe_short || '')}">
+    const chipHtml = (e, extraOnClick) => {
+      const isActive = _nbhdFilter === e.nbhd.name ? 'active' : '';
+      const safeName = e.nbhd.name.replace(/'/g, "\\'");
+      const handler = extraOnClick
+        ? `${extraOnClick};setNbhdFilter('${safeName}')`
+        : `setNbhdFilter('${safeName}')`;
+      return `<button type="button" class="nbhd-chip ${isActive}" onclick="${handler}" title="${escHtml(e.nbhd.vibe_short || '')}">
           <span class="nbhd-chip-name">${escHtml(e.nbhd.name)}</span>
           <span class="nbhd-chip-count">${e.count}</span>
         </button>`;
-      })
-    ];
-    _nbhdRefineExpanded = false;
+    };
+    // Desktop layout: "All" + first 5 stay inline; rest go into the dropdown.
+    // Mobile (≤640px) hides the More wrap via CSS and reveals the overflow
+    // chips inline (wrapped in .nbhd-refine-mobile-overflow) so swipe-scroll
+    // still shows every chip.
+    const inlineEntries = entries.slice(0, NBHD_REFINE_INLINE_LIMIT);
+    const overflowEntries = entries.slice(NBHD_REFINE_INLINE_LIMIT);
+    const desktopInlineHtml = [
+      `<button type="button" class="nbhd-chip ${_nbhdFilter ? '' : 'active'}" onclick="setNbhdFilter(null)">All</button>`,
+      ...inlineEntries.map(e => chipHtml(e))
+    ].join('');
+    const mobileOverflowHtml = overflowEntries.map(e => chipHtml(e)).join('');
+    const dropdownHtml = overflowEntries
+      .map(e => chipHtml(e, 'closeNbhdRefineDropdown()'))
+      .join('');
+    const showMore = overflowEntries.length > 0;
+    closeNbhdRefineDropdown();
     strip.className = 'nbhd-refine-strip';
     const dmStrip = document.getElementById('availFilterMountDesktop');
     const afStrip = document.getElementById('availFilter');
@@ -5035,17 +5032,17 @@
           <div class="nbhd-refine-avail-slot" id="nbhd-refine-avail-slot"></div>
         </div>
         <div class="nbhd-refine-main">
-          <div class="nbhd-refine-chips" id="nbhd-refine-chips">${chips.join('')}</div>
-          <button type="button" class="nbhd-refine-more" onclick="toggleNbhdRefineExpand()" aria-expanded="false" aria-controls="nbhd-refine-chips">More ›</button>
+          <div class="nbhd-refine-chips" id="nbhd-refine-chips">${desktopInlineHtml}<span class="nbhd-refine-mobile-overflow">${mobileOverflowHtml}</span></div>
+          ${showMore ? `
+          <div class="nbhd-refine-more-wrap">
+            <button type="button" class="nbhd-refine-more" id="nbhd-refine-more-btn" onclick="toggleNbhdRefineExpand(event)" aria-expanded="false" aria-haspopup="true" aria-controls="nbhd-refine-dropdown">More <span class="nbhd-refine-more-arr">▾</span></button>
+            <div class="nbhd-refine-dropdown" id="nbhd-refine-dropdown" role="menu" hidden>${dropdownHtml}</div>
+          </div>` : ''}
         </div>
         ${osmCredit}
       </div>`;
     strip.style.display = '';
     scheduleSyncAvailFilterMount();
-    requestAnimationFrame(() => {
-      syncNbhdRefineMoreBtn();
-      window.requestAnimationFrame(() => syncNbhdRefineMoreBtn());
-    });
   }
 
   function setNbhdFilter(name) {
@@ -5735,6 +5732,12 @@
     if (!w.contains(ev.target)) closeSortMorePop();
   });
   document.addEventListener('click', (ev) => {
+    if (!_nbhdRefineDropdownOpen) return;
+    const wrap = document.querySelector('.nbhd-refine-more-wrap');
+    if (!wrap) return;
+    if (!wrap.contains(ev.target)) closeNbhdRefineDropdown();
+  });
+  document.addEventListener('click', (ev) => {
     const ids = cityDateIds();
     const picker = document.getElementById(ids.wrapper);
     const pop = document.getElementById(ids.pop);
@@ -5747,6 +5750,7 @@
   document.addEventListener('keydown', (ev) => {
     if (ev.key === 'Escape') closeSortMorePop();
     if (ev.key === 'Escape') closeCityDateRangePicker();
+    if (ev.key === 'Escape') closeNbhdRefineDropdown();
   });
   window.addEventListener('resize', () => {
     const pop = document.getElementById(cityDateIds().pop);

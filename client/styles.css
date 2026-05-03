@@ -853,32 +853,83 @@
       align-items:flex-start;
       gap:8px;
     }
-    /* Chips scroll horizontally on every viewport (matches mobile). Desktop
-       gets a thin styled scrollbar so users see there is more content; mobile
-       hides the bar and relies on swipe (override below in @media ≤640px). */
+    /* Desktop: clean inline pill row. Only the first 5 pills (+ "All") are
+       rendered into .nbhd-refine-chips; the rest live in .nbhd-refine-dropdown
+       behind the "More ▾" button so the row never visually overflows.
+       Mobile (≤640px): the dropdown is suppressed and ALL pills are rendered
+       inline, swipe-scrolling horizontally (override below). */
     .nbhd-refine-chips {
       flex:1 1 auto;
       min-width:0;
       display:flex;
       flex-wrap:nowrap;
       gap:6px;
-      overflow-x:auto;
-      overflow-y:hidden;
-      scrollbar-width:thin;
-      scrollbar-color:rgba(255,255,255,.18) transparent;
+      overflow:hidden;
     }
-    .nbhd-refine-chips > .nbhd-chip { flex-shrink:0; }
-    .nbhd-refine-chips::-webkit-scrollbar { height:6px; }
-    .nbhd-refine-chips::-webkit-scrollbar-track { background:transparent; }
-    .nbhd-refine-chips::-webkit-scrollbar-thumb {
-      background:rgba(255,255,255,.15);
+    .nbhd-refine-chips .nbhd-chip { flex-shrink:0; }
+    /* Mobile-only inline overflow span: lives inside .nbhd-refine-chips so its
+       chips participate in the same flex row. Hidden on desktop (overflow is
+       reached via the More dropdown); shown on mobile so swipe-scroll exposes
+       every chip. `display:contents` lets the inner buttons act like direct
+       children of the flex parent. */
+    .nbhd-refine-mobile-overflow { display:none; }
+    .nbhd-refine-more-wrap {
+      position:relative;
+      flex:0 0 auto;
+    }
+    .nbhd-refine-more {
+      display:inline-flex; align-items:center; gap:6px;
+      padding:6px 12px;
+      border:1px solid rgba(255,255,255,.1);
       border-radius:100px;
+      background:rgba(255,255,255,.03);
+      color:var(--text);
+      font-family:'DM Sans',sans-serif;
+      font-size:12px;
+      cursor:pointer;
+      white-space:nowrap;
+      transition:border-color .15s, color .15s, background .15s;
     }
-    .nbhd-refine-chips::-webkit-scrollbar-thumb:hover { background:rgba(255,255,255,.28); }
-    /* Legacy "More" button — chips now scroll horizontally so the button is no
-       longer needed. Hidden across all viewports; JS keeps the element in the
-       DOM but it is never visually shown. */
-    .nbhd-refine-more { display:none; }
+    .nbhd-refine-more:hover { border-color:rgba(201,169,110,.5); color:var(--accent2); }
+    .nbhd-refine-more[aria-expanded="true"] {
+      border-color:rgba(201,169,110,.5);
+      color:var(--accent2);
+      background:rgba(201,169,110,.08);
+    }
+    .nbhd-refine-more-arr {
+      font-size:9px;
+      opacity:.85;
+      transition:transform .15s;
+      display:inline-block;
+    }
+    .nbhd-refine-more[aria-expanded="true"] .nbhd-refine-more-arr {
+      transform:rotate(180deg);
+    }
+    .nbhd-refine-dropdown {
+      position:absolute;
+      top:calc(100% + 6px);
+      right:0;
+      min-width:240px;
+      max-width:320px;
+      max-height:400px;
+      overflow-y:auto;
+      display:flex;
+      flex-direction:column;
+      gap:6px;
+      padding:10px;
+      background:rgba(18,18,22,.98);
+      backdrop-filter:blur(12px);
+      -webkit-backdrop-filter:blur(12px);
+      border:1px solid var(--border);
+      border-radius:12px;
+      box-shadow:0 16px 40px rgba(0,0,0,.55);
+      z-index:50;
+    }
+    .nbhd-refine-dropdown[hidden] { display:none; }
+    .nbhd-refine-dropdown .nbhd-chip {
+      width:100%;
+      justify-content:space-between;
+    }
     @media (max-width: 640px) {
       .nbhd-refine-inner {
         flex-direction: column;
@@ -916,12 +967,20 @@
       .nbhd-refine-chips {
         width: 100%;
         max-width: 100%;
+        overflow-x: auto;
+        overflow-y: hidden;
         scrollbar-width: none;
         -webkit-overflow-scrolling: touch;
         overscroll-behavior-x: contain;
         touch-action: pan-x;
       }
       .nbhd-refine-chips::-webkit-scrollbar { display: none; }
+      /* Mobile keeps swipe-scroll; the More dropdown is desktop-only. */
+      .nbhd-refine-more-wrap,
+      .nbhd-refine-more,
+      .nbhd-refine-dropdown { display: none !important; }
+      /* Show the overflow chips inline so swipe-scroll exposes them. */
+      .nbhd-refine-mobile-overflow { display: contents; }
     }
     .nbhd-chip {
       display:inline-flex; align-items:center; gap:6px;
