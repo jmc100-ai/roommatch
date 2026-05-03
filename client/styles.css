@@ -912,7 +912,15 @@
         white-space: normal;
         max-width: min(190px, 42vw);
       }
+      .nbhd-refine-main {
+        width: 100%;
+        max-width: 100%;
+        min-width: 0;
+        overflow: hidden;
+      }
       .nbhd-refine-chips {
+        width: 100%;
+        max-width: 100%;
         flex-wrap: nowrap;
         overflow-x: auto;
         scrollbar-width: none;
