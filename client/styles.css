@@ -853,37 +853,32 @@
       align-items:flex-start;
       gap:8px;
     }
+    /* Chips scroll horizontally on every viewport (matches mobile). Desktop
+       gets a thin styled scrollbar so users see there is more content; mobile
+       hides the bar and relies on swipe (override below in @media ≤640px). */
     .nbhd-refine-chips {
       flex:1 1 auto;
       min-width:0;
       display:flex;
-      flex-wrap:wrap;
+      flex-wrap:nowrap;
       gap:6px;
+      overflow-x:auto;
+      overflow-y:hidden;
+      scrollbar-width:thin;
+      scrollbar-color:rgba(255,255,255,.18) transparent;
     }
-    .nbhd-refine-strip.nbhd-refine-strip--collapsed .nbhd-refine-chips {
-      max-height:40px;
-      overflow:hidden;
+    .nbhd-refine-chips > .nbhd-chip { flex-shrink:0; }
+    .nbhd-refine-chips::-webkit-scrollbar { height:6px; }
+    .nbhd-refine-chips::-webkit-scrollbar-track { background:transparent; }
+    .nbhd-refine-chips::-webkit-scrollbar-thumb {
+      background:rgba(255,255,255,.15);
+      border-radius:100px;
     }
-    .nbhd-refine-strip.nbhd-refine-strip--expanded .nbhd-refine-chips {
-      max-height:none;
-      overflow:visible;
-    }
-    .nbhd-refine-more {
-      flex-shrink:0;
-      margin-top:2px;
-      padding:4px 2px 4px 8px;
-      border:none;
-      background:transparent;
-      font-family:'DM Sans',sans-serif;
-      font-size:12px;
-      font-weight:500;
-      letter-spacing:.04em;
-      color:var(--accent);
-      cursor:pointer;
-      white-space:nowrap;
-      align-self:flex-start;
-    }
-    .nbhd-refine-more:hover { color:var(--accent2); text-decoration:underline; }
+    .nbhd-refine-chips::-webkit-scrollbar-thumb:hover { background:rgba(255,255,255,.28); }
+    /* Legacy "More" button — chips now scroll horizontally so the button is no
+       longer needed. Hidden across all viewports; JS keeps the element in the
+       DOM but it is never visually shown. */
+    .nbhd-refine-more { display:none; }
     @media (max-width: 640px) {
       .nbhd-refine-inner {
         flex-direction: column;
@@ -921,23 +916,12 @@
       .nbhd-refine-chips {
         width: 100%;
         max-width: 100%;
-        flex-wrap: nowrap;
-        overflow-x: auto;
         scrollbar-width: none;
         -webkit-overflow-scrolling: touch;
         overscroll-behavior-x: contain;
         touch-action: pan-x;
       }
       .nbhd-refine-chips::-webkit-scrollbar { display: none; }
-      /* Override collapsed/expanded max-height so horizontal scroll is never clipped */
-      .nbhd-refine-strip.nbhd-refine-strip--collapsed .nbhd-refine-chips,
-      .nbhd-refine-strip.nbhd-refine-strip--expanded .nbhd-refine-chips {
-        max-height: none;
-        overflow-x: auto;
-        overflow-y: visible;
-      }
-      #nbhd-refine-strip .nbhd-chip { flex-shrink: 0; }
-      .nbhd-refine-more { display: none; }
     }
     .nbhd-chip {
       display:inline-flex; align-items:center; gap:6px;
