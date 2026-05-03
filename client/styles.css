@@ -4313,8 +4313,17 @@
         gap: 6px;
         padding-bottom: 2px;
         scrollbar-width: none;
+        -webkit-overflow-scrolling: touch;
+        overscroll-behavior-x: contain;
+        touch-action: pan-x;
       }
       .cmd-row-vibe::-webkit-scrollbar { display: none; }
+      /* Unwrap vibe-chip-row so chips become direct flex children of cmd-row-vibe
+         and sit on one scrollable line next to the "Your vibe" label. */
+      .cmd-row-vibe .vibe-chip-row { display: contents; }
+      .cmd-row-vibe .vibe-row-label { flex-shrink: 0; }
+      .cmd-row-vibe .vibe-chip,
+      .cmd-row-vibe .advanced-search-btn { flex-shrink: 0; }
       .cmd-row-vibe .vibe-row-spacer { display: none; }
       .cmd-row-vibe .vibe-search-btn { display: none; }
       .sort-bar-trailer .cmd-mobile-dates-chip {
