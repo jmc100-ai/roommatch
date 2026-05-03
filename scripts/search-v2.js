@@ -132,23 +132,31 @@ async function runV2Search({ req, supabase, supabaseAdmin, resolveCityName }) {
   function groupSizePenalty(roomName) {
     if (!roomName) return 1;
     const n = roomName.toLowerCase();
-    // Patterns that indicate this room is designed for a larger group than expected:
-    const isMultiBed  = /\b([2-9]|two|three|four|five)\s*-?\s*bedroom\b/.test(n);
-    const isFamilyRm  = /\bfamily\s+(room|suite|apartment)\b/.test(n);
-    const isDorm      = /\b(dormitory|hostel\s*bed|bunk\s*bed|dorm\b|bed\s+in\s+\d+[\s-]*bed|mixed\s+dorm)\b/.test(n);
+
+    // Multi-bedroom: "2BR", "2-bedroom", "two bedroom", etc.
+    const isMultiBed = /\b([2-9]|two|three|four|five)\s*-?\s*bedroom\b|\b[2-9][\s-]?br\b/.test(n);
+    // Family-labelled rooms
+    const isFamilyRm = /\bfamily\s+(room|suite|apartment)\b/.test(n);
+    // Any room explicitly called an "apartment" (1-bed, studio, plain "Apartment, Balcony", etc.)
+    // True hotel suites say "Suite", "Junior Suite", "King Room" — not "apartment".
+    const isApartment = /\bapartment\b/.test(n);
+    // Hostel / shared dorm beds
+    const isDorm = /\b(dormitory|hostel\s*bed|bunk\s*bed|dorm\b|bed\s+in\s+\d+[\s-]*bed|mixed\s+dorm)\b/.test(n);
 
     if (groupSize === "solo") {
-      if (isMultiBed || isFamilyRm) return 0.12;
-      if (isDorm) return 0.15;
+      if (isMultiBed || isFamilyRm) return 0.10;
+      if (isApartment)              return 0.35;
+      if (isDorm)                   return 0.15;
       return 1;
     }
     if (groupSize === "couple") {
-      if (isMultiBed || isFamilyRm) return 0.15;
-      if (isDorm) return 0.15;
+      if (isMultiBed || isFamilyRm) return 0.12;
+      if (isApartment)              return 0.40;
+      if (isDorm)                   return 0.12;
       return 1;
     }
     if (groupSize === "group") {
-      // Groups are fine with most rooms; only penalise hostel dorm beds
+      // Groups are fine with apartments and multi-bed rooms; only penalise hostel dorm beds
       if (isDorm) return 0.35;
       return 1;
     }
