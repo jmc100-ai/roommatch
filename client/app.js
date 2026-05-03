@@ -1910,13 +1910,18 @@
                  onkeydown="if(event.key==='Enter'){event.preventDefault();boopFinish();}"
                  class="boop-deal-freetext-input" />
         </div>
-        <div class="boop-keywords-block">
-          <label for="boop-keywords-input" class="boop-keywords-label">Search keywords (advanced)</label>
-          <div class="boop-keywords-help">The text we match rooms against. Auto-built from your answers — edit only if you want fine control.</div>
-          <textarea id="boop-keywords-input" class="boop-keywords-input"
-                    placeholder="Auto-generated from your wizard answers"
-                    oninput="BOOP.advancedKeywords=this.value">${escHtml(kwValue)}</textarea>
-        </div>
+        <details class="boop-keywords-details">
+          <summary class="boop-keywords-summary">
+            <span class="boop-keywords-summary-label">Search keywords — Advanced</span>
+            <span class="boop-keywords-summary-arr" aria-hidden="true">▸</span>
+          </summary>
+          <div class="boop-keywords-block">
+            <div class="boop-keywords-help">The text we match rooms against. Auto-built from your answers — edit only if you want fine control.</div>
+            <textarea id="boop-keywords-input" class="boop-keywords-input"
+                      placeholder="Auto-generated from your wizard answers"
+                      oninput="BOOP.advancedKeywords=this.value">${escHtml(kwValue)}</textarea>
+          </div>
+        </details>
       </div>
       <div class="boop-freetext-actions">
         <button type="button" class="boop-btn subtle" onclick="${backHandler}">${backLabel}</button>

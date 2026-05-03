@@ -4602,8 +4602,43 @@
     }
 
     /* Q5 (extras) advanced-keywords textarea + notes textarea */
-    .boop-keywords-block {
+    .boop-keywords-details {
       margin-top: 18px;
+    }
+    .boop-keywords-summary {
+      list-style: none;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 10px;
+      border-radius: 100px;
+      background: rgba(255,255,255,0.04);
+      border: 1px solid rgba(255,255,255,0.08);
+      font-size: 11px;
+      letter-spacing: 0.05em;
+      font-weight: 500;
+      color: var(--accent2);
+      user-select: none;
+      transition: background 0.15s, border-color 0.15s;
+    }
+    .boop-keywords-summary:hover {
+      background: rgba(255,255,255,0.07);
+      border-color: rgba(255,255,255,0.14);
+    }
+    .boop-keywords-summary::-webkit-details-marker { display: none; }
+    .boop-keywords-summary::marker { content: ''; }
+    .boop-keywords-summary-arr {
+      display: inline-block;
+      transition: transform 0.18s ease;
+      font-size: 10px;
+      opacity: 0.7;
+    }
+    .boop-keywords-details[open] .boop-keywords-summary-arr {
+      transform: rotate(90deg);
+    }
+    .boop-keywords-block {
+      margin-top: 10px;
       display: flex;
       flex-direction: column;
       gap: 6px;
