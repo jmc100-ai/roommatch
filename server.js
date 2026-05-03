@@ -3290,6 +3290,23 @@ app.post("/api/v2/reindex-city", async (req, res) => {
     });
 });
 
+// ── V2 room-type classification backfill (Gemini text, no vision) ────────────
+app.post("/api/v2/backfill-room-types", async (req, res) => {
+  const { city, secret, force = false } = req.body || {};
+  if (secret !== (process.env.INDEX_SECRET || "roommatch-index")) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
+  if (!city) return res.status(400).json({ error: "city required" });
+  res.json({ message: `Room-type classification backfill started for ${city}`, city, force });
+  try {
+    const { backfillRoomTypes } = require("./scripts/backfill-room-types");
+    const result = await backfillRoomTypes(city, { force: !!force });
+    console.log(`[backfill-rt] complete:`, result);
+  } catch (e) {
+    console.error(`[backfill-rt] failed for ${city}:`, e.message);
+  }
+});
+
 app.get("/api/v2/index-status", async (req, res) => {
   const cityInput = (req.query.city || "").trim();
   if (!cityInput || !supabase) return res.json({ status: "unknown" });

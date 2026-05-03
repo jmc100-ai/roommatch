@@ -127,36 +127,47 @@ async function runV2Search({ req, supabase, supabaseAdmin, resolveCityName }) {
     if (gs === "solo" || gs === "couple" || gs === "group") groupSize = gs;
   } catch (_) {}
 
-  // Returns a [0-1] multiplier to apply to rawScore based on how well the
-  // room name matches the expected group size.
-  function groupSizePenalty(roomName) {
-    if (!roomName) return 1;
-    const n = roomName.toLowerCase();
+  // Returns a [0-1] multiplier to apply to rawScore based on group size fit.
+  //
+  // Primary: reads Gemini-classified boolean facts from v2_room_types_index
+  //   (is_apartment, is_multi_bedroom, is_hostel_dorm) — language-agnostic.
+  // Fallback: regex on room name for rooms not yet classified (pre-backfill).
+  function groupSizePenalty(facts, roomName) {
+    // Determine classification source
+    const hasGeminiFacts = facts &&
+      (facts.is_apartment !== undefined ||
+       facts.is_multi_bedroom !== undefined ||
+       facts.is_hostel_dorm !== undefined);
 
-    // Multi-bedroom: "2BR", "2-bedroom", "two bedroom", etc.
-    const isMultiBed = /\b([2-9]|two|three|four|five)\s*-?\s*bedroom\b|\b[2-9][\s-]?br\b/.test(n);
-    // Family-labelled rooms
-    const isFamilyRm = /\bfamily\s+(room|suite|apartment)\b/.test(n);
-    // Any room explicitly called an "apartment" (1-bed, studio, plain "Apartment, Balcony", etc.)
-    // True hotel suites say "Suite", "Junior Suite", "King Room" — not "apartment".
-    const isApartment = /\bapartment\b/.test(n);
-    // Hostel / shared dorm beds
-    const isDorm = /\b(dormitory|hostel\s*bed|bunk\s*bed|dorm\b|bed\s+in\s+\d+[\s-]*bed|mixed\s+dorm)\b/.test(n);
+    let isMultiBed, isApartment, isDorm;
+
+    if (hasGeminiFacts) {
+      isMultiBed  = facts.is_multi_bedroom === true;
+      isApartment = facts.is_apartment     === true;
+      isDorm      = facts.is_hostel_dorm   === true;
+    } else {
+      // Regex fallback for rooms not yet classified by backfill-room-types.js
+      const n = (roomName || "").toLowerCase();
+      isMultiBed  = /\b([2-9]|two|three|four|five)\s*-?\s*bedroom\b|\b[2-9][\s-]?br\b/.test(n);
+      isApartment = /\bapartment\b/.test(n) ||
+                    /\bfamily\s+(room|suite|apartment)\b/.test(n);
+      isDorm      = /\b(dormitory|hostel\s*bed|bunk\s*bed|dorm\b|bed\s+in\s+\d+[\s-]*bed|mixed\s+dorm)\b/.test(n);
+    }
 
     if (groupSize === "solo") {
-      if (isMultiBed || isFamilyRm) return 0.10;
-      if (isApartment)              return 0.35;
-      if (isDorm)                   return 0.15;
+      if (isMultiBed)  return 0.10;
+      if (isApartment) return 0.35;
+      if (isDorm)      return 0.15;
       return 1;
     }
     if (groupSize === "couple") {
-      if (isMultiBed || isFamilyRm) return 0.12;
-      if (isApartment)              return 0.40;
-      if (isDorm)                   return 0.12;
+      if (isMultiBed)  return 0.12;
+      if (isApartment) return 0.40;
+      if (isDorm)      return 0.12;
       return 1;
     }
     if (groupSize === "group") {
-      // Groups are fine with apartments and multi-bed rooms; only penalise hostel dorm beds
+      // Groups welcome apartments and multi-bed; only penalise hostel dorm beds
       if (isDorm) return 0.35;
       return 1;
     }
@@ -294,7 +305,7 @@ async function runV2Search({ req, supabase, supabaseAdmin, resolveCityName }) {
       const factResult = scoreFactSet(rt.facts, intent);
       const txt        = textScore(tokens, rt.room_name, /* hotelName */ undefined);
       const rawScore   = Math.max(0, Math.min(1,
-        (0.8 * factResult.total_score + 0.2 * txt) * groupSizePenalty(rt.room_name)
+        (0.8 * factResult.total_score + 0.2 * txt) * groupSizePenalty(rt.facts, rt.room_name)
       ));
 
       if (!byHotel.has(hotelId)) byHotel.set(hotelId, []);
