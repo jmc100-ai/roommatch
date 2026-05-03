@@ -32,8 +32,8 @@ const GEMINI_KEY   = process.env.GEMINI_KEY   || "";
 const SUPABASE_URL = process.env.SUPABASE_URL || "";
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_ANON_KEY || "";
 
-const BATCH_SIZE   = 60;   // room names per Gemini call
-const CONCURRENCY  = 4;    // parallel Gemini requests
+const BATCH_SIZE   = 40;   // room names per Gemini call (smaller = fewer truncations)
+const CONCURRENCY  = 3;    // parallel Gemini requests
 const GEMINI_MODEL = "gemini-2.5-flash-lite";
 
 function getDb() {
@@ -92,6 +92,11 @@ async function classifyBatch(roomNames) {
     const cleaned = raw.replace(/^```(?:json)?\s*/i, "").replace(/\s*```\s*$/i, "").trim();
     const parsed = JSON.parse(cleaned);
     if (!Array.isArray(parsed)) throw new Error("Response is not an array");
+    if (parsed.length !== roomNames.length) {
+      console.warn(`[backfill-rt] length mismatch: sent ${roomNames.length}, got ${parsed.length} — padding with nulls`);
+      // Pad to expected length so positional lookup stays correct
+      while (parsed.length < roomNames.length) parsed.push(null);
+    }
     return parsed;
   } catch (e) {
     console.warn("[backfill-rt] JSON parse error:", e.message, "\nRaw:", raw.slice(0, 300));
@@ -101,14 +106,18 @@ async function classifyBatch(roomNames) {
 
 // ── Retry wrapper ─────────────────────────────────────────────────────────────
 
-async function classifyBatchWithRetry(roomNames, retries = 3) {
+async function classifyBatchWithRetry(roomNames, retries = 6) {
   for (let attempt = 1; attempt <= retries; attempt++) {
     try {
       return await classifyBatch(roomNames);
     } catch (err) {
       if (attempt === retries) throw err;
-      const delay = attempt * 3000;
-      console.warn(`[backfill-rt] batch failed (attempt ${attempt}): ${err.message} — retrying in ${delay}ms`);
+      // 503 / overload: back off longer (15s, 30s, 45s, 60s, 60s)
+      const is503 = err.message.includes("503") || err.message.includes("UNAVAILABLE") || err.message.includes("overload");
+      const delay = is503
+        ? Math.min(attempt * 15000, 60000)
+        : Math.min(attempt * attempt * 2000, 30000);
+      console.warn(`[backfill-rt] batch failed (attempt ${attempt}): ${err.message.slice(0, 80)} — retrying in ${delay / 1000}s`);
       await new Promise((r) => setTimeout(r, delay));
     }
   }
@@ -180,7 +189,8 @@ async function backfillRoomTypes(city, { force = false } = {}) {
       // Update each row in v2_room_types_index
       await Promise.all(batch.map(async (row) => {
         const cls = byUniqueName.get(row.room_name?.trim());
-        if (!cls) {
+        if (!cls || cls === null) {
+          // Gemini returned null (length mismatch padding) or missing — skip, will retry on next --force run
           console.warn(`[backfill-rt] no classification for: "${row.room_name}"`);
           errors++;
           return;
