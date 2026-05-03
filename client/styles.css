@@ -821,7 +821,7 @@
     }
     .nbhd-refine-inner {
       display:flex;
-      flex-wrap:wrap;
+      flex-wrap:nowrap;
       align-items:flex-start;
       gap:8px 16px;
       max-width:var(--max);
