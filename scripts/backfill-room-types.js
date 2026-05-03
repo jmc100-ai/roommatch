@@ -50,17 +50,19 @@ async function classifyBatch(roomNames) {
   const prompt = [
     "Classify each hotel/accommodation room name below into three boolean categories.",
     "",
-    "For EACH room name return a JSON object with EXACTLY these fields:",
-    '  "room_name": the original room name (copy exactly)',
+    "Return a JSON array with EXACTLY one object per room, in the SAME ORDER as the input.",
+    "Each object has EXACTLY these fields (no room_name field — match by position):",
     '  "is_apartment": true if this is an apartment or vacation-rental unit',
     '    (e.g. "2BR apartment", "studio apartment", "flat", "departamento", "apartamento",',
-    '     "apartament", "wohnung", any room called "apartment"). Set false for hotel rooms,',
+    '     "apartament", "wohnung", any room called "apartment"). false for hotel rooms,',
     '    suites, penthouses, studios that are clearly hotel-branded.',
     '  "is_multi_bedroom": true if the room has 2 or more SEPARATE bedrooms',
-    '    (e.g. "two-bedroom", "2BR", "3BR", "dos habitaciones", "twin share" is NOT multi-bedroom).',
-    '  "is_hostel_dorm": true ONLY for hostel dormitory / bunk beds / shared dorm rooms.',
+    '    (e.g. "two-bedroom", "2BR", "3BR", "2 Bedrooms"). false for studio, 1-bedroom,',
+    '    or standard hotel rooms. "twin share" and "double" are NOT multi-bedroom.',
+    '  "is_hostel_dorm": true ONLY for hostel dormitory, bunk bed, or shared dorm.',
     "",
-    "Return a valid JSON array only. No markdown fences, no explanation.",
+    `The array MUST have exactly ${roomNames.length} elements.`,
+    "Return valid JSON array only. No markdown, no explanation.",
     "",
     "Room names:",
     numbered,
@@ -87,9 +89,10 @@ async function classifyBatch(roomNames) {
   const d = await r.json();
   const raw = d?.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || "[]";
   try {
-    // Strip markdown fences if Gemini ignores responseMimeType
     const cleaned = raw.replace(/^```(?:json)?\s*/i, "").replace(/\s*```\s*$/i, "").trim();
-    return JSON.parse(cleaned);
+    const parsed = JSON.parse(cleaned);
+    if (!Array.isArray(parsed)) throw new Error("Response is not an array");
+    return parsed;
   } catch (e) {
     console.warn("[backfill-rt] JSON parse error:", e.message, "\nRaw:", raw.slice(0, 300));
     return [];
@@ -156,28 +159,28 @@ async function backfillRoomTypes(city, { force = false } = {}) {
   for (let i = 0; i < batches.length; i += CONCURRENCY) {
     const chunk = batches.slice(i, i + CONCURRENCY);
     await Promise.all(chunk.map(async (batch) => {
-      // Deduplicate + trim names before sending to Gemini — duplicates in the
-      // batch waste tokens and can confuse the lookup map.
-      const rawNames  = batch.map((r) => r.room_name);
-      const roomNames = [...new Set(rawNames.map((n) => n?.trim()).filter(Boolean))];
+      // Deduplicate + trim — build a deduped ordered list for Gemini,
+      // then map results back to original rows by position.
+      const trimmedNames = batch.map((r) => r.room_name?.trim() || "");
+      const uniqueNames  = [...new Set(trimmedNames.filter(Boolean))];
       let classifications;
       try {
-        classifications = await classifyBatchWithRetry(roomNames);
+        classifications = await classifyBatchWithRetry(uniqueNames);
       } catch (err) {
         console.error(`[backfill-rt] batch error: ${err.message}`);
         errors += batch.length;
         return;
       }
 
-      // Build a lookup by trimmed room_name (Gemini echoes names back, may trim whitespace)
-      const byName = new Map(classifications.map((c) => [c.room_name?.trim(), c]));
+      // Positional lookup: uniqueNames[i] → classifications[i]
+      const byUniqueName = new Map(
+        uniqueNames.map((name, i) => [name, classifications[i]])
+      );
 
       // Update each row in v2_room_types_index
       await Promise.all(batch.map(async (row) => {
-        // Try exact match first, then trimmed match
-        const cls = byName.get(row.room_name) || byName.get(row.room_name?.trim());
+        const cls = byUniqueName.get(row.room_name?.trim());
         if (!cls) {
-          // Gemini didn't return this room — use safe defaults (no penalty)
           console.warn(`[backfill-rt] no classification for: "${row.room_name}"`);
           errors++;
           return;
