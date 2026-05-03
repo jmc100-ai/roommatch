@@ -118,6 +118,43 @@ async function runV2Search({ req, supabase, supabaseAdmin, resolveCityName }) {
   const hotelQuery = String(req.query.hotel_query || query).trim();
   const tokens    = tokenize(query);
 
+  // ── Group size — room-level capacity penalty ───────────────────────────────
+  // Read from boop_profile.answers.group_size; default "couple".
+  let groupSize = "couple";
+  try {
+    const bp = req.query.boop_profile ? JSON.parse(req.query.boop_profile) : null;
+    const gs = bp?.answers?.group_size;
+    if (gs === "solo" || gs === "couple" || gs === "group") groupSize = gs;
+  } catch (_) {}
+
+  // Returns a [0-1] multiplier to apply to rawScore based on how well the
+  // room name matches the expected group size.
+  function groupSizePenalty(roomName) {
+    if (!roomName) return 1;
+    const n = roomName.toLowerCase();
+    // Patterns that indicate this room is designed for a larger group than expected:
+    const isMultiBed  = /\b([2-9]|two|three|four|five)\s*-?\s*bedroom\b/.test(n);
+    const isFamilyRm  = /\bfamily\s+(room|suite|apartment)\b/.test(n);
+    const isDorm      = /\b(dormitory|hostel\s*bed|bunk\s*bed|dorm\b|bed\s+in\s+\d+[\s-]*bed|mixed\s+dorm)\b/.test(n);
+
+    if (groupSize === "solo") {
+      if (isMultiBed || isFamilyRm) return 0.12;
+      if (isDorm) return 0.15;
+      return 1;
+    }
+    if (groupSize === "couple") {
+      if (isMultiBed || isFamilyRm) return 0.15;
+      if (isDorm) return 0.15;
+      return 1;
+    }
+    if (groupSize === "group") {
+      // Groups are fine with most rooms; only penalise hostel dorm beds
+      if (isDorm) return 0.35;
+      return 1;
+    }
+    return 1;
+  }
+
   // ── Env tuning knobs (same names/defaults as V1) ──────────────────────────
   const GALLERY_LIMIT = 250;
   const covMult = parseFloat(process.env.SOFT_FLAG_COVERAGE_MULT   || "0.28");
@@ -248,7 +285,9 @@ async function runV2Search({ req, supabase, supabaseAdmin, resolveCityName }) {
     for (const rt of rooms) {
       const factResult = scoreFactSet(rt.facts, intent);
       const txt        = textScore(tokens, rt.room_name, /* hotelName */ undefined);
-      const rawScore   = Math.max(0, Math.min(1, 0.8 * factResult.total_score + 0.2 * txt));
+      const rawScore   = Math.max(0, Math.min(1,
+        (0.8 * factResult.total_score + 0.2 * txt) * groupSizePenalty(rt.room_name)
+      ));
 
       if (!byHotel.has(hotelId)) byHotel.set(hotelId, []);
       byHotel.get(hotelId).push({
