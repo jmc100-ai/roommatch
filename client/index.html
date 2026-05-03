@@ -177,7 +177,8 @@
     <div class="chapter">
       <div class="chapter-inner">
         <div class="chapter-top">
-          <button class="back-btn" onclick="goToStep('city')"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 3L5 8l5 5"/></svg> Back to City</button>
+          <button class="back-btn boop-back-original" onclick="goToStep('city')"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 3L5 8l5 5"/></svg> Back to City</button>
+          <button class="back-btn boop-back-overlay" onclick="closeBoopOverlay()" type="button">← Back to results</button>
           <h1 class="chapter-h1">Let's shape your <em>vibe</em></h1>
           <p class="chapter-sub">A quick visual check to find your right vibe. You can skip to room search results any time.</p>
         </div>
@@ -298,27 +299,34 @@
   <!-- Command bar -->
   <div class="cmd" id="cmd">
     <div class="cmd-inner">
-      <div class="cmd-seg cmd-mobile-visible" onclick="goToStep('city')">
-        <div class="cmd-l">City</div>
-        <div class="cmd-v" id="cv-city">—</div>
-      </div>
-      <div class="cmd-seg cmd-mobile-visible" onclick="goToStep('nbhd')">
-        <div class="cmd-l">Neighbourhood</div>
-        <div class="cmd-v cmd-v-row" id="cv-nbhd-wrap">
-          <span class="cmd-v-text" id="cv-nbhd">—</span>
-          <button type="button" class="cmd-clear" id="cv-nbhd-clear" onclick="clearResultsNeighborhood(event)" aria-label="Clear neighbourhood">×</button>
+      <div class="cmd-row-where">
+        <div class="cmd-seg cmd-mobile-visible" onclick="goToStep('city')">
+          <div class="cmd-l">City</div>
+          <div class="cmd-v" id="cv-city">—</div>
+        </div>
+        <div class="cmd-seg cmd-mobile-visible" onclick="goToStep('nbhd')">
+          <div class="cmd-l">Neighbourhood</div>
+          <div class="cmd-v cmd-v-row" id="cv-nbhd-wrap">
+            <span class="cmd-v-text" id="cv-nbhd">—</span>
+            <button type="button" class="cmd-clear" id="cv-nbhd-clear" onclick="clearResultsNeighborhood(event)" aria-label="Clear neighbourhood">×</button>
+          </div>
+        </div>
+        <div class="cmd-seg" onclick="toggleDatesTray(event)">
+          <div class="cmd-l">Dates</div>
+          <div class="cmd-v ph" id="cv-dates">Add dates</div>
         </div>
       </div>
-      <div class="cmd-seg" onclick="toggleDatesTray(event)">
-        <div class="cmd-l">Dates</div>
-        <div class="cmd-v ph" id="cv-dates">Add dates</div>
+      <div class="cmd-row-vibe" id="cmd-row-vibe">
+        <span class="vibe-row-label">Your vibe</span>
+        <div class="vibe-chip-row" id="vibe-chip-row"></div>
+        <button type="button" class="advanced-search-btn" onclick="openBoopFromChip('extras')">
+          Advanced search <span class="advanced-search-arr">▾</span>
+        </button>
+        <span class="vibe-row-spacer"></span>
+        <button type="button" class="vibe-search-btn" onclick="cmdSearch()" title="Re-run the current search">
+          <span class="vibe-search-icon" aria-hidden="true">↻</span> Search
+        </button>
       </div>
-      <div class="cmd-search">
-        <span class="cmd-icon">✦</span>
-        <input id="cmd-q" type="text" placeholder="Refine your room vibe — describe the room…"
-               onkeydown="if(event.key==='Enter')cmdSearch()"/>
-      </div>
-      <button class="cmd-go" onclick="cmdSearch()">Search</button>
     </div>
     <div class="cmd-tray" id="cmd-tray">
       <div class="cmd-tray-inner">

@@ -307,14 +307,16 @@
   ];
 
   // App state
-  const S = { city:null, nbhd:null, nbhdBbox:null, style:null, q:null, checkin:null, checkout:null, hotelQ:null, mustHaves:null };
+  const S = { city:null, nbhd:null, nbhdBbox:null, style:null, q:null, checkin:null, checkout:null, hotelQ:null, mustHaves:null, boopReentryFromChip:false };
   let _flowFeatIdx = 0;
 
   // Boop intro profile (persisted per city).
   // `dealbreakers` is the legacy multi-select Set; it's reused as the
   // must-haves picker (each id matches a BOOP_QUESTIONS musthaves option).
   // `freetext` is optional prose appended to room + hotel HyDE seeds and used for light nbhd pref nudges.
-  const BOOP = { idx:0, prefs:{}, answers:{ group_size:'couple' }, dealbreakers:new Set(), slider:0, saved:null, freetext:'' };
+  // `advancedKeywords` is an optional editable override for the auto-generated room HyDE seed
+  // surfaced on the Q5 (extras) screen as "Search keywords (advanced)".
+  const BOOP = { idx:0, prefs:{}, answers:{ group_size:'couple' }, dealbreakers:new Set(), slider:0, saved:null, freetext:'', advancedKeywords:'' };
   const BOOP_WIZARD_IMAGES = {}; // cityKey -> { questionId: { optionId: url } }
   const BOOP_WIZARD_CITY_FALLBACKS = {}; // cityKey -> { questionId: url }
   const BOOP_WIZARD_FETCHING = new Set();
@@ -722,6 +724,7 @@
     BOOP.dealbreakers = new Set();
     BOOP.slider = 0;
     BOOP.freetext = '';
+    BOOP.advancedKeywords = '';
   }
 
   function applyBoopWeights(weights) {
@@ -1320,14 +1323,36 @@
     const q = BOOP_QUESTIONS.find(x => x.id === questionId);
     const o = (q?.options || []).find(x => x.id === optionId);
     if (!q || !o) return;
+    // In overlay re-entry mode the user may re-pick the same question. Subtract
+    // the previously-applied weights for that question first so prefs do not
+    // double-accumulate.
+    const prevOptionId = BOOP.answers[questionId];
+    if (S.boopReentryFromChip && prevOptionId && prevOptionId !== optionId) {
+      const prev = (q.options || []).find(x => x.id === prevOptionId);
+      if (prev && prev.weights) {
+        Object.entries(prev.weights).forEach(([k, v]) => {
+          BOOP.prefs[k] = (BOOP.prefs[k] || 0) - v;
+        });
+      }
+    }
     BOOP.answers[questionId] = optionId;
     if (questionId === 'stayVibe' && STAY_VIBE_DERIVED[optionId]) {
       BOOP.answers.roomStyle = STAY_VIBE_DERIVED[optionId].roomStyle;
       BOOP.answers.hotelPersonality = STAY_VIBE_DERIVED[optionId].hotelPersonality;
     }
-    applyBoopWeights(o.weights);
-    BOOP.idx += 1;
-    renderBoopQuestion();
+    // Only apply weights if this is a new pick (or no previous pick). Re-picking
+    // the same option is a no-op so we don't double up.
+    if (!S.boopReentryFromChip || prevOptionId !== optionId) {
+      applyBoopWeights(o.weights);
+    }
+    if (S.boopReentryFromChip) {
+      // In overlay mode stay on the same screen so the user can confirm by
+      // pressing the explicit "Find hotels →" button.
+      renderBoopQuestion();
+    } else {
+      BOOP.idx += 1;
+      renderBoopQuestion();
+    }
   }
 
   function boopSliderChanged(v) {
@@ -1541,11 +1566,13 @@
   function boopFinish() {
     const normalizedAnswers = migrateBoopProfileAnswersIfNeeded({ ...BOOP.answers });
     const reconciledPrefs = reconcileTripEnvWeights(normalizedAnswers, BOOP.prefs);
+    const advancedKw = (BOOP.advancedKeywords || '').trim();
     const profile = {
       answers: normalizedAnswers,
       prefs: reconciledPrefs,
       dealbreakers: Array.from(BOOP.dealbreakers),
       freetext: BOOP.freetext || '',
+      advancedKeywords: advancedKw || null,
       updatedAt: Date.now(),
     };
     BOOP.answers = normalizedAnswers;
@@ -1553,15 +1580,180 @@
     saveBoopProfileForCity(S.city, profile);
     clearNbhdPickerMatchCache();
 
+    // Drop the overlay-mode chrome before transitioning to results so the
+    // results screen renders cleanly (no fixed backdrop / blur left behind).
+    if (S.boopReentryFromChip) {
+      document.body.classList.remove('boop-overlay-mode');
+      // Hide #discovery-flow immediately to avoid a visual flash while the
+      // search request is being kicked off.
+      const df = document.getElementById('discovery-flow');
+      if (df) df.style.display = 'none';
+      const sr = document.getElementById('st-results');
+      if (sr) sr.style.display = 'block';
+      document.body.classList.add('has-results');
+    }
+
     // BOOP v4 — skip nbhd + style selection; go straight to results.
     // User can still refine neighbourhood via the results-page refine strip.
     runBoopSearch(profile);
   }
 
+  // ── Vibe chips on results toolbar ────────────────────────────────
+  // Steps that surface as taps on the results-page chip strip. Q5 (extras) is
+  // exposed via the separate "Advanced search ▾" button next to the chips.
+  const VIBE_CHIP_STEPS = ['trip', 'stayVibe', 'nbhdScene', 'musthaves'];
+
+  // Icon for the must-have chip. Mirrors the labels in BOOP_QUESTIONS musthaves.
+  const MUSTHAVE_ICONS = {
+    balcony: '🌅',
+    spa_bathroom: '🛁',
+    spacious: '🏠',
+    work_desk: '💼',
+  };
+  const GROUP_ICONS = { solo: '👤', couple: '👥', group: '👥' };
+  const GROUP_LABELS = { solo: 'Solo', couple: 'Couple', group: 'Group' };
+
+  function _activeBoopProfileForChips() {
+    if (boopProfileHasAnySignal(S.boopProfile)) return S.boopProfile;
+    if (S.city) {
+      const saved = loadBoopProfileForCity(S.city);
+      if (boopProfileHasAnySignal(saved)) return saved;
+    }
+    return null;
+  }
+
+  function renderVibeChips() {
+    const row = document.getElementById('vibe-chip-row');
+    if (!row) return;
+    const profile = _activeBoopProfileForChips() || {};
+    const ans = profile.answers || {};
+    const dealbreakers = new Set(Array.isArray(profile.dealbreakers) ? profile.dealbreakers : []);
+    const groupSize = ans.group_size || 'couple';
+
+    const chips = [];
+    for (const stepKey of VIBE_CHIP_STEPS) {
+      if (stepKey === 'musthaves') {
+        const mh = BOOP_QUESTIONS.find(q => q.id === 'musthaves');
+        const pickedOpts = (mh?.options || []).filter(o => dealbreakers.has(o.id));
+        const groupIcon = GROUP_ICONS[groupSize] || '👥';
+        const groupLabel = GROUP_LABELS[groupSize] || 'Couple';
+        let text, icon = groupIcon;
+        if (pickedOpts.length === 0) {
+          text = groupLabel;
+        } else if (pickedOpts.length === 1) {
+          icon = MUSTHAVE_ICONS[pickedOpts[0].id] || groupIcon;
+          text = `${groupLabel} · ${pickedOpts[0].label}`;
+        } else {
+          icon = MUSTHAVE_ICONS[pickedOpts[0].id] || groupIcon;
+          text = `${groupLabel} · ${pickedOpts.length} must-haves`;
+        }
+        chips.push(_chipHtml(stepKey, icon, text, false));
+        continue;
+      }
+      const q = BOOP_QUESTIONS.find(x => x.id === stepKey);
+      const optId = ans[stepKey];
+      const opt = (q?.options || []).find(o => o.id === optId);
+      if (opt) {
+        chips.push(_chipHtml(stepKey, opt.emoji || '', opt.title || opt.label || '', false));
+      } else {
+        chips.push(_chipHtml(stepKey, '', _emptyChipLabelFor(stepKey), true));
+      }
+    }
+    row.innerHTML = chips.join('');
+  }
+
+  function _emptyChipLabelFor(stepKey) {
+    if (stepKey === 'trip') return '+ Trip';
+    if (stepKey === 'stayVibe') return '+ Stay vibe';
+    if (stepKey === 'nbhdScene') return '+ Neighbourhood';
+    return '+ Add';
+  }
+
+  function _chipHtml(stepKey, icon, label, isEmpty) {
+    const safeLabel = escHtml(label);
+    const safeStep = escHtml(stepKey);
+    if (isEmpty) {
+      return `<button type="button" class="vibe-chip vibe-chip-empty" onclick="openBoopFromChip('${safeStep}')">${safeLabel}</button>`;
+    }
+    const iconHtml = icon ? `<span class="vibe-chip-icon">${escHtml(icon)}</span>` : '';
+    return `<button type="button" class="vibe-chip" onclick="openBoopFromChip('${safeStep}')" aria-label="Edit ${safeLabel}">${iconHtml}<span class="vibe-chip-text">${safeLabel}</span><span class="vibe-chip-pencil" aria-hidden="true">✎</span></button>`;
+  }
+
+  // Open the existing Boop wizard at a specific question, rendered as a modal
+  // overlay over the results screen. Reuses #st-boop markup + renderBoopQuestion
+  // so the look/feel matches the first-time flow.
+  function openBoopFromChip(stepKey) {
+    if (!S.city) { flashMsg('Pick a city first'); return; }
+    const allSteps = ['trip', 'stayVibe', 'nbhdScene', 'musthaves', 'extras'];
+    let idx = allSteps.indexOf(stepKey);
+    if (idx < 0) idx = BOOP_QUESTIONS.findIndex(q => q.id === stepKey);
+    if (idx < 0) idx = 0;
+    // Hydrate BOOP state from whatever profile we have (S.boopProfile or saved
+    // for this city) so re-picks operate on the user's existing answers and
+    // any text in extras / advanced keywords pre-populates correctly.
+    const profile = _activeBoopProfileForChips()
+      || (S.city ? loadBoopProfileForCity(S.city) : null)
+      || null;
+    resetBoopState();
+    if (profile) {
+      BOOP.answers = { ...(profile.answers || { group_size: 'couple' }) };
+      BOOP.prefs = { ...(profile.prefs || {}) };
+      BOOP.dealbreakers = new Set(Array.isArray(profile.dealbreakers) ? profile.dealbreakers : []);
+      BOOP.freetext = profile.freetext || '';
+      BOOP.advancedKeywords = (profile.advancedKeywords || '').toString();
+      BOOP.saved = profile;
+    }
+    BOOP.idx = idx;
+    S.boopReentryFromChip = true;
+    document.body.classList.add('boop-overlay-mode');
+    // Make sure the wizard chapter is visible inside #discovery-flow before
+    // we display the flow as an overlay. showFlowStep wires the panel display
+    // toggles; the .boop-overlay-mode CSS handles the rest.
+    showFlowStep('boop');
+    renderBoopQuestion();
+    // Trap scroll on the results page while the overlay is open.
+    if (typeof window !== 'undefined') window.scrollTo({ top: 0 });
+  }
+
+  function closeBoopOverlay() {
+    document.body.classList.remove('boop-overlay-mode');
+    S.boopReentryFromChip = false;
+    // Hide the wizard chapter and restore the results view.
+    const df = document.getElementById('discovery-flow');
+    if (df) df.style.display = 'none';
+    const sr = document.getElementById('st-results');
+    if (sr) sr.style.display = 'block';
+    document.body.classList.add('has-results');
+    // Refresh the chip labels in case anything was edited mid-session.
+    renderVibeChips();
+  }
+
+  // ESC + click-on-backdrop close the overlay. We attach once on script load
+  // and let the .boop-overlay-mode body class gate behaviour.
+  if (typeof document !== 'undefined') {
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && document.body.classList.contains('boop-overlay-mode')) {
+        e.preventDefault();
+        closeBoopOverlay();
+      }
+    });
+    document.addEventListener('click', (e) => {
+      if (!document.body.classList.contains('boop-overlay-mode')) return;
+      // Backdrop click = the overlay container itself, not its modal child.
+      const df = document.getElementById('discovery-flow');
+      if (df && e.target === df) closeBoopOverlay();
+    });
+  }
+
   // Build seeds + trigger vector search. Shared by boopFinish() and the
   // returning-user review screen's "Find hotels" button.
   function runBoopSearch(profile) {
-    const { roomSeed, hotelSeed, mustHaves } = buildBoopSeeds(profile);
+    const { roomSeed: autoRoomSeed, hotelSeed, mustHaves } = buildBoopSeeds(profile);
+    // If the user edited the "Search keywords (advanced)" textarea on Q5 we
+    // honour their override as the room-side HyDE seed. The hotel seed +
+    // mustHaves are still derived from the wizard answers.
+    const overrideKw = (profile?.advancedKeywords || '').trim();
+    const roomSeed = overrideKw || autoRoomSeed;
     S.q = roomSeed;   // store as the active query so breadcrumbs + refinements work
     S.hotelQ = hotelSeed;
     S.mustHaves = mustHaves;
@@ -1592,13 +1784,17 @@
     */
     const savedUi = '';
 
+    const overlayMode = !!S.boopReentryFromChip;
     let body = '';
     if (q.type === 'cards') {
       const gridClass = (q.options && q.options.length === 4)
         ? ' boop-grid--quad'
         : ((q.options && q.options.length >= 3) ? ' boop-grid--triple' : '');
-      body = `<div class="boop-grid${gridClass}">${q.options.map((o, cardIdx) => `
-        <button class="boop-card" onclick="boopChoose('${q.id}','${o.id}')">
+      const currentPick = BOOP.answers[q.id];
+      body = `<div class="boop-grid${gridClass}">${q.options.map((o, cardIdx) => {
+        const isCurrent = overlayMode && o.id === currentPick;
+        return `
+        <button class="boop-card${isCurrent ? ' boop-card--current' : ''}" onclick="boopChoose('${q.id}','${o.id}')">
           <div class="boop-card-media">
             <img src="${boopGetDynamicImage(q.id, o.id, o.image)}" alt="${o.title}" ${q.id === 'trip' ? `loading="eager" decoding="async"${cardIdx === 0 ? ' fetchpriority="high"' : ''}` : 'loading="lazy"'} onerror="this.onerror=null;this.src='https://images.unsplash.com/photo-1477959858617-67f85cf4f1df?auto=format&fit=crop&w=1200&q=80';" />
             <div class="boop-card-grad"></div>
@@ -1609,7 +1805,16 @@
             </div>
           </div>
         </button>
-      `).join('')}</div>`;
+      `;
+      }).join('')}</div>`;
+      // Overlay re-entry from a chip: surface an explicit "Find hotels" button
+      // so the user can commit the (re-)pick without auto-advancing.
+      if (overlayMode) {
+        body += `<div class="boop-actions" style="margin-top:18px">
+          <button type="button" class="boop-btn subtle" onclick="closeBoopOverlay()">Cancel</button>
+          <button type="button" class="boop-btn primary" onclick="boopFinish()">Find hotels →</button>
+        </div>`;
+      }
     } else if (q.type === 'slider') {
       const blend = boopBlend(BOOP.slider);
       body = `<div class="boop-slider-wrap">
@@ -1628,7 +1833,9 @@
         <button class="boop-btn primary" onclick="boopConfirmSlider()">Use this preference</button>
       </div>`;
     } else if (q.type === 'chips') {
-      const toolbarNote = 'Optional — pick any that matter, then continue to add notes or search.';
+      const toolbarNote = overlayMode
+        ? 'Update what matters most, then re-run your search.'
+        : 'Optional — pick any that matter, then continue to add notes or search.';
       const gs = BOOP.answers.group_size || 'couple';
       const groupPickHtml = `
       <div class="boop-group-pick">
@@ -1654,11 +1861,15 @@
           </div>
         </div>
       </div>`;
+      const continueLabel = overlayMode ? 'Find hotels →' : 'Continue →';
+      const continueHandler = overlayMode ? 'boopFinish()' : 'boopNext()';
+      const backHandler = overlayMode ? 'closeBoopOverlay()' : 'boopBack()';
+      const backLabel = overlayMode ? 'Cancel' : '&lt; back';
       body = `<div class="boop-deal-toolbar">
         <p class="boop-note boop-deal-toolbar-note">${toolbarNote}</p>
         <div class="boop-deal-toolbar-actions">
-          <a class="boop-deal-back-link" href="#" onclick="event.preventDefault();boopBack();">&lt; back</a>
-          <button type="button" class="boop-btn primary" onclick="boopNext()">Continue →</button>
+          <a class="boop-deal-back-link" href="#" onclick="event.preventDefault();${backHandler};">${backLabel}</a>
+          <button type="button" class="boop-btn primary" onclick="${continueHandler}">${continueLabel}</button>
         </div>
       </div>
       ${groupPickHtml}
@@ -1676,6 +1887,20 @@
         </button>
       `).join('')}</div></div>`;
     } else if (q.type === 'freetext') {
+      // Build the would-be auto-generated room HyDE seed from the live BOOP
+      // state so the user can see exactly what we're going to embed and tweak
+      // it if they want fine control (Q5 advanced search).
+      const previewProfile = {
+        answers: { ...(BOOP.answers || {}) },
+        prefs: { ...(BOOP.prefs || {}) },
+        dealbreakers: Array.from(BOOP.dealbreakers || []),
+        freetext: BOOP.freetext || '',
+      };
+      let autoKeywords = '';
+      try { autoKeywords = buildBoopSeeds(previewProfile).roomSeed || ''; } catch (_) { autoKeywords = ''; }
+      const kwValue = (BOOP.advancedKeywords && BOOP.advancedKeywords.trim()) ? BOOP.advancedKeywords : autoKeywords;
+      const backLabel = overlayMode ? 'Cancel' : 'Back';
+      const backHandler = overlayMode ? 'closeBoopOverlay()' : 'boopBack()';
       body = `<div class="boop-freetext-block">
         <div class="boop-deal-freetext" style="margin-top:0">
           <label for="boop-freetext-input" class="boop-deal-freetext-label">Your words <span class="boop-deal-freetext-opt">(optional)</span></label>
@@ -1685,9 +1910,16 @@
                  onkeydown="if(event.key==='Enter'){event.preventDefault();boopFinish();}"
                  class="boop-deal-freetext-input" />
         </div>
+        <div class="boop-keywords-block">
+          <label for="boop-keywords-input" class="boop-keywords-label">Search keywords (advanced)</label>
+          <div class="boop-keywords-help">The text we match rooms against. Auto-built from your answers — edit only if you want fine control.</div>
+          <textarea id="boop-keywords-input" class="boop-keywords-input"
+                    placeholder="Auto-generated from your wizard answers"
+                    oninput="BOOP.advancedKeywords=this.value">${escHtml(kwValue)}</textarea>
+        </div>
       </div>
       <div class="boop-freetext-actions">
-        <button type="button" class="boop-btn subtle" onclick="boopBack()">Back</button>
+        <button type="button" class="boop-btn subtle" onclick="${backHandler}">${backLabel}</button>
         <button type="button" class="boop-btn primary" onclick="boopFinish()">Find hotels →</button>
       </div>`;
     } else {
@@ -1695,7 +1927,9 @@
     }
 
     const backBtn = BOOP.idx > 0 ? `<button class="boop-btn subtle" onclick="boopBack()">Back</button>` : '<span></span>';
-    const nav = q.type === 'cards'
+    // In overlay (chip re-entry) mode the cards body already renders its own
+    // Cancel + "Find hotels →" footer — skip the legacy back-only nav row.
+    const nav = (q.type === 'cards' && !overlayMode)
       ? (BOOP.idx > 0 ? `<div class="boop-actions">${backBtn}</div>` : '')
       : '';
 
@@ -2867,8 +3101,12 @@
     }
     const cnClear = document.getElementById('cv-nbhd-clear');
     if (cnClear) cnClear.classList.toggle('visible', !!S.nbhd && !String(S.nbhd).startsWith('All of'));
+    // cmd-q was removed when the toolbar was replaced by the vibe-chip row;
+    // the legacy lookup is left as a defensive no-op (`if (cq)`) so other
+    // callers that may still reference it don't break.
     const cq = document.getElementById('cmd-q');
     if (cq && S.q) cq.value = S.q;
+    renderVibeChips();
     const cd = document.getElementById('cv-dates');
     if (cd) {
       if (S.checkin && S.checkout) {
@@ -2916,7 +3154,12 @@
   }
 
   function enterResultsLoadingMode() {
+    // Always exit any chip-re-entry overlay before showing results so the
+    // fixed backdrop / blur is removed and #discovery-flow can hide cleanly.
+    document.body.classList.remove('boop-overlay-mode');
+    S.boopReentryFromChip = false;
     syncCommandBarFromState();
+    renderVibeChips();
     document.getElementById('discovery-flow').style.display = 'none';
     document.getElementById('st-results').style.display = 'block';
     document.body.classList.add('has-results');
@@ -2966,10 +3209,18 @@
   }
 
   // ── COMMAND BAR ──────────────────────────────────────
+  // The long search-text input was replaced by the vibe-chip row + the wizard's
+  // Q5 "Search keywords (advanced)" textarea (May 2026). The Search button
+  // here is now a refresh affordance — it re-runs the existing query for the
+  // current city / neighbourhood / dates state.
   function cmdSearch() {
-    const q = document.getElementById('cmd-q')?.value?.trim();
-    if (q) { S.style = q.length > 24 ? q.slice(0,22)+'…' : q; S.q = q; }
-    if (!S.q) { flashMsg('Enter a search query'); return; }
+    if (!S.q) {
+      // No query yet — funnel back into the wizard via Advanced search so the
+      // user can build one (this should be rare; chip clicks already cover it).
+      openBoopFromChip('extras');
+      return;
+    }
+    if (!S.city) { flashMsg('Pick a city first'); return; }
     startSearch();
   }
 
