@@ -13,7 +13,7 @@ Supabase project ID: **dmgxrcmdihgsffvqllms**
 ## Architecture
 
 ```
-FRONTEND (client/index.html)
+FRONTEND (client/index.html + client/styles.css + client/app.js)
   → Express backend (server.js) on Render paid tier
   → Vector Search (only mode — LiteAPI room-search is broken)
 
@@ -94,7 +94,9 @@ roommatch/
 ├── render.yaml                  — Render deployment config
 ├── CLAUDE.md                    — this file
 ├── client/
-│   └── index.html               — full frontend (single file, vanilla JS)
+│   ├── index.html               — HTML skeleton only (markup, meta tags, links to css/js)
+│   ├── styles.css               — all CSS (extracted from index.html May 2026)
+│   └── app.js                   — all frontend JS (extracted from index.html May 2026)
 ├── scripts/
 │   ├── index-city.js            — batch indexing script (captions + embeddings + feature flags)
 │   ├── backfill-room-ids.js     — backfill room_type_id for existing rows
@@ -109,6 +111,20 @@ roommatch/
     │                              score_room_types, fetch_hotel_photos
     └── migrate-3072.sql         — SUPERSEDED, do not use
 ```
+
+### Frontend file split (May 2026)
+
+`client/index.html` was previously a single 473 KB / 10,165-line file containing all HTML, CSS, and JS. It grew too large for reliable agent edits (StrReplace collisions, context-window cost). It was split into:
+- `client/index.html` — HTML skeleton + `<link>` and `<script src>` tags only
+- `client/styles.css` — all CSS rules
+- `client/app.js` — all frontend JS
+
+**Going forward:**
+- **Add new CSS to `client/styles.css`**, NOT inline in `index.html`
+- **Add new JS to `client/app.js`**, NOT inline in `index.html`
+- `index.html` should stay small (~500 lines) — only markup changes
+- Express serves `client/` as static, so `/styles.css` and `/app.js` resolve directly
+- If `app.js` grows beyond ~5,000 lines, split it into ES modules organized by concern (wizard, search, neighborhoods, results, vibes)
 
 ---
 
@@ -444,19 +460,14 @@ Index the **full Mexico City catalog** (~3,616 hotels from LiteAPI) with a quali
 
 **Triggered via:**
 ```powershell
-# Resume / incremental reindex (DEFAULT — skips hotels already in v2_hotels_cache)
-$body = '{"city":"Mexico City","limit":3616,"secret":"roommatch-2026","force":false}'
+# Full Mexico City reindex (all ~3616 hotels, forceRebuild=true clears first)
+$body = '{"city":"Mexico City","limit":3616,"secret":"roommatch-2026","force":true}'
 Invoke-RestMethod -Uri "https://roommatch-1fg5.onrender.com/api/v2/reindex-city" -Method POST -ContentType "application/json" -Body $body
 ```
 
-> **Always use `force=false` unless you intentionally want to wipe and restart from scratch.**
-> `force=true` clears all v2 data for the city before indexing — only use this if the data is
-> known-bad and you want a clean slate. With `force=false` the indexer skips hotels already
-> present in `v2_hotels_cache` and picks up from where a previous run left off.
-
 **Or run locally (faster, uses local .env):**
 ```powershell
-node -e "require('./scripts/index-city-v2').reindexCityV2('Mexico City',3616,false).then(r=>console.log('DONE',JSON.stringify(r))).catch(e=>{console.error(e.message);process.exit(1)});"
+node -e "require('./scripts/index-city-v2').reindexCityV2('Mexico City',3616,true).then(r=>console.log('DONE',JSON.stringify(r))).catch(e=>{console.error(e.message);process.exit(1)});"
 ```
 
 ### V2 Status Check
@@ -519,10 +530,19 @@ SELECT
 **TRIGGER PHRASE:** When user says "go build vibe plan", start at Phase 0 (licensing gate check), then proceed phase by phase.
 
 ### Product Vision
-3-step search flow replacing the current single search box:
-1. **City** — user types/selects a city (existing autocomplete)
-2. **Neighborhood** — Gemini-generated neighborhood cards with vibe descriptions + Unsplash photos; user picks one (or skips to see all)
-3. **Room** — current vector search, now geo-filtered to the chosen neighborhood bounding box + optional photo-tap vibe presets
+The implemented search flow is:
+1. **City + optional dates** — user types/selects a city (autocomplete) and optionally enters check-in/check-out dates
+2. **"Let's shape your vibe" — 5-question Boop wizard** (`#st-boop`) — users go through this immediately after city selection; this is the primary engagement path. The wizard has 5 inner screens driven by `BOOP_QUESTIONS`:
+   - Q1 `trip`: "Have you been to this city before?" (single-tap)
+   - Q2 `stayVibe`: "What kind of stay feels right?" (single-tap)
+   - Q3 `nbhdScene`: "What kind of area should wrap your hotel?" (single-tap)
+   - Q4 `musthaves`: "Pick what matters most" + group size (multi-select)
+   - Q5 `extras`: "Anything else we should know?" (free text; "Find hotels →")
+   - Completing the wizard calls `boopFinish()` → `runBoopSearch()` → jumps directly to results (skipping nbhd/style/dates steps unless user navigates back)
+3. **Post-boop flow steps** (only reached via back-navigation or returning users): `nbhd` ("Find your neighbourhood vibe", Step 3 of 5) → `style` ("Choose your room vibe", Step 4 of 5) → `dates` ("When are you going?", Step 5 of 5) → results
+4. **Room search results** (`#st-results`) — vector search results, replaces `#discovery-flow`
+
+**Key UX note:** Users do NOT use the neighbourhood grid as a primary first-action. The neighbourhood card grid is a post-boop step that most users skip (boop goes directly to results). Trending searches and discovery features belong on the room search results screen or within the Boop wizard, not on the neighbourhood grid.
 
 ### PHASE 0 — Licensing Gate (MUST DO FIRST)
 Before writing any code:
@@ -677,15 +697,18 @@ Add `refreshHotelCounts(city, db)` as final step of `rebuild_room_types_index_ci
 
 ---
 
-### PHASE 3 — Frontend 3-Step Flow
+### PHASE 3 — Frontend Wizard Flow
 
-**Goal:** Replace single search box with city → neighborhood → room UX.
+**Goal:** City+dates → "Let's shape your vibe" Boop wizard → room results. (See Product Vision above for implemented step IDs and flow.)
 
 #### Step layout
 ```
-[Step 1: City]          — existing autocomplete input, unchanged
-[Step 2: Neighborhood]  — card grid, generated by /api/neighborhoods
-[Step 3: Room Search]   — existing search box + results, now with active bbox
+[Pre-wizard]  City autocomplete + optional dates
+[#st-boop]    "Let's shape your vibe" — 5-question Boop wizard (primary path → direct to results)
+[#st-nbhd]    Neighbourhood grid (Step 3 of 5, reached via back-nav or returning users)
+[#st-style]   Room vibe presets (Step 4 of 5)
+[#st-dates]   Date picker (Step 5 of 5)
+[#st-results] Results — hides #discovery-flow entirely
 ```
 
 #### Step 2 UI details

@@ -70,7 +70,7 @@ function pickFromAltPoolEntry(alt) {
 function buildNeighborhoodPrompt(city) {
   return `Act as a local travel expert with deep knowledge of hotel neighborhoods.
 
-For ${city}, return the top 8–10 distinct areas where travelers typically stay.
+For ${city}, return the top 8–11 distinct areas where travelers typically stay.
 Cover ALL of these zone types that exist in the city — do NOT omit any category that applies:
 1. Iconic first-timer neighborhoods (historic centre, top cultural district)
 2. Trendy / bohemian areas (café culture, art galleries, local dining)
@@ -79,6 +79,11 @@ Cover ALL of these zone types that exist in the city — do NOT omit any categor
    — these are often NOT residential but ARE major hotel zones; include them (e.g. Paseo de la Reforma
    in Mexico City, Champs-Élysées in Paris, Mayfair in London, Midtown in NYC)
 5. Authentic local neighborhoods for returning travelers
+6. Airport / transport-hub zones — if the city has a major international airport with a significant
+   cluster of hotels nearby, include it as its own area using the local name or a clear label
+   (e.g. "Aeropuerto" for Mexico City, "Heathrow Area" for London, "Airport Zone" for generic).
+   Airport zones typically have: walkability_dining limited, walkability_tourist_spots limited,
+   street_energy moderate, skyline_character mixed, green_spaces minimal, tags: ["business"].
 Do NOT bundle two distinct areas into one entry (e.g. "Reforma/Juárez" should be two separate entries).
 If a grand boulevard or hotel strip is distinct from the colonia it runs through, list it separately.
 Include a mix of areas for first-time visitors AND returning travelers who want to go deeper.
