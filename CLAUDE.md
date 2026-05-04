@@ -472,9 +472,126 @@ SELECT
    - **Inline summary:** see "VIBE PLAN" section below
    - When user says **"go build vibe plan"**, read the plan file first, then work through the phases in order.
 
-3. **Update test-search-quality.js expected counts** after re-indexing any city.
+4. **Hotel Details Page + Property Type** — see "HOTEL DETAILS PLAN" section below. When user says **"go build hotel details"**, read that section first.
 
-4. **Consider Supabase logging table** to avoid parsing Render logs for analytics.
+5. **Update test-search-quality.js expected counts** after re-indexing any city.
+
+6. **Consider Supabase logging table** to avoid parsing Render logs for analytics.
+
+---
+
+## What We Will NOT Build (Explicit Scope Exclusions)
+
+These are intentionally out of scope. Do not build these without explicit user instruction:
+
+- **SEO-optimised static hotel pages** at `/hotel/:id` — requires SSR or static generation. Current architecture is a single-page app served from Express. Not worth adding until traffic justifies it.
+- **User reviews or ratings** — we show LiteAPI guest ratings (fetched live), not user-generated content.
+- **Map view** inside the hotel details panel — adds map SDK dependency and complexity. A link to Google Maps / Apple Maps with the hotel address is sufficient.
+- **Full booking flow** — we show a "See rates →" CTA that triggers the existing dates tray. We do not handle the booking transaction.
+- **Real-time availability inside hotel panel** — rates come from the existing `/api/rates` endpoint tied to the search dates. Not surfaced per-hotel in isolation.
+- **Hotel comparison feature** — side-by-side comparison across hotels.
+- **Save / favourites / wishlist** — requires user accounts, which we don't have.
+- **Social sharing beyond URL deep-link** — `?hotel=` param is sufficient; no OG tags or share sheets needed yet.
+- **Storing hotel metadata (name, description, amenities) in the DB** — always live-fetch from LiteAPI. See Data Source Licensing section.
+- **Hotel photos in our own CDN/storage** — always hotlink to LiteAPI/cupid.travel URLs.
+- **`backfill-facts-from-captions` operation** — facts pipeline is one-way (index → facts → index rebuild). If facts need to change, re-index the city. Do not build a path that re-reads stored captions from `v2_room_inventory`.
+
+---
+
+## HOTEL DETAILS PLAN
+
+**TRIGGER PHRASE:** When user says "go build hotel details", read this section first.
+
+### Goal
+Slide-in hotel details panel on search results. Users tap "Details →" on any hotel card to see full metadata, amenities, all room type photos, and a "See rates →" CTA. Also classifies apartment rentals vs. hotels with a property type badge.
+
+### Option B — Licensing risk reduction (do first, independent of UI)
+1. **NULL captions + feature_summary in `v2_room_inventory`** — these are indexing pipeline artifacts, not needed after facts are extracted. The indexer generates captions live; it never re-reads them from DB. Safe to null existing rows and stop writing them going forward. Zero search/display impact.
+2. **Never persist hotel metadata to DB** — enforced by V2 architecture. Do not regress.
+
+### Phase 0 — Verify LiteAPI `/data/hotel` response fields
+Before writing schema migrations, hit `/api/debug-photos?hotelId=<id>` or add a one-line raw logger to `fetchHotelMetaBatch` to confirm which fields are available: `propertyType`/`accommodationType`, `hotelDescription`/`description`, `hotelFacilities`/`amenities`, `checkInOut.checkIn`/`checkOut`. This determines property type classification strategy.
+
+### Phase 1 — `property_type` column on `v2_hotels_cache`
+```sql
+ALTER TABLE v2_hotels_cache ADD COLUMN IF NOT EXISTS property_type TEXT DEFAULT 'hotel';
+CREATE INDEX IF NOT EXISTS v2_hotels_cache_proptype ON v2_hotels_cache(city, property_type);
+```
+**Classification logic (in priority order):**
+1. Use LiteAPI `propertyType`/`accommodationType` field if present and non-null
+2. Fall back to room-name heuristics: if ALL room types for a hotel match rental patterns (`/apartment|vacation home|house|villa|loft|dormitory|hostel/i`) → `apartment_rental` or `hostel`. If any non-rental room type exists → `hotel`.
+3. Default: `hotel`
+
+**Backfill:** `POST /api/backfill-property-types` endpoint — scans `v2_room_inventory` grouped by hotel, applies heuristics, updates `v2_hotels_cache.property_type`. Also update `index-city-v2.js` to write `property_type` during future indexing runs.
+
+**Gotchas:**
+- "Apartment Suite" at a Marriott ≠ apartment rental. Heuristic must require ALL room types to match, not just one.
+- Paris/KL use V1 `hotels_cache` — no `property_type` column there. Phase 5 toggle must be hidden for V1 cities.
+
+### Phase 2 — `GET /api/hotel/:hotelId` endpoint
+Returns everything the details panel needs. Logic:
+1. Load `v2_room_types_index` rows (facts per room type) — DB
+2. Load `v2_room_inventory` rows (photo URLs per room type, grouped) — DB
+3. Load `v2_hotels_cache` (hotel_photos, lat, lng, property_type) — DB
+4. **REUSE `_hotelMetaCache`** (the existing 30-min in-memory map in `fetchHotelMetaBatch`) for name, star_rating, guest_rating, address, description, amenities, check-in/check-out — live LiteAPI call on miss, never write to DB
+5. Load neighbourhood from `neighborhoods` table — DB
+6. Sanitise LiteAPI description text (strip HTML tags) before returning
+
+**Gotchas:**
+- Reuse `_hotelMetaCache`, do NOT create a second cache for the same LiteAPI endpoint.
+- Add in-flight deduplication: if 10 users open same hotel simultaneously on a cold cache, collapse to 1 LiteAPI call.
+- V1 hotels (Paris/KL): `v2_room_types_index` won't have data. Fall back to `room_embeddings` for room photo data.
+- Null-check `hotel_photos` — some rows have `[]`. Hero image falls back to first `v2_room_inventory` photo.
+- LiteAPI descriptions may contain HTML — sanitise before sending to client.
+
+### Phase 3 — Slide-in panel UI
+**Desktop:** right-side drawer (~45% width), slides in over results. Results stay scrollable behind.
+**Mobile:** fullscreen bottom sheet, back button or swipe-down-from-top-60px closes it.
+
+**Panel sections (top → bottom):**
+- Hero photo + close button (×)
+- Hotel name, star pills, guest rating badge, neighbourhood chip
+- Property type chip: `🏠 Apartment` for non-hotels (neutral language, not penalising)
+- Check-in / check-out times
+- About — description, 3-line clamp + "Read more" expand. Strip HTML first.
+- Amenities grid — first 8 icons + labels, "+ N more" expands inline
+- Room types — each room: horizontal photo scroll strip + facts chips + room name
+- "See rates →" CTA — triggers existing dates tray (do not build a separate booking flow)
+
+**URL / history:**
+- On panel open: `history.pushState({panel: hotelId}, '', currentURL + '&hotel=hotelId')`
+- On panel close: `history.back()` or `history.replaceState` to strip `?hotel=`
+- `popstate` listener closes panel on browser back
+- On page load: if `?hotel=` param present AND `?city=` also present, auto-run search then open panel
+
+**Gotchas:**
+- Z-index: hotel panel = `z-index: 150`; wizard overlay (`boop-overlay-mode`) = `z-index: 200`. Wizard always wins.
+- Mobile swipe: only close on swipe-down from top 60px of sheet header, not from within scrollable content.
+- Panel is an overlay — never `display:none` `#st-results` when panel is open.
+- LiteAPI description HTML → sanitise. XSS risk if set via `innerHTML` unsanitised.
+
+### Phase 4 — Search results card integration
+- Add **"Details →"** as a small text link (12px, muted) next to the "Vibe tour" button in each hotel card footer. Works for both photo-rich and stub (no-photo) cards.
+- Add **property type chip** on card header for `apartment_rental`/`hostel`: `🏠 Apartment` or `🛏 Hostel`. Neutral — not negative. Some users want apartments.
+
+### Phase 5 — "Hotels only" filter toggle
+- **Default: "All properties"** (opt-in filter, not opt-out). Avoids silent result count drops for existing users.
+- Toggle label: "Hotels only" — hides `apartment_rental`, `hostel`. Apartments remain accessible.
+- State: `sessionStorage` (not `localStorage`) — per-tab, not permanent.
+- When active: show beneath result count "N apartments & rentals hidden · Show all"
+- Only show toggle for V2 cities (Mexico City). Hide or grey out for Paris/KL (V1, no property_type).
+- Requires DB index on `(city, property_type)` — add in Phase 1 migration.
+
+### Build order
+| Phase | Effort | Blocker |
+|---|---|---|
+| Option B: null captions in v2_room_inventory | 1 hr | none |
+| Phase 0: verify LiteAPI response fields | 30 min | none |
+| Phase 1: property_type column + backfill | 2 hrs | Phase 0 |
+| Phase 2: /api/hotel/:hotelId | 2 hrs | Phase 1 |
+| Phase 3: slide-in panel UI | 5–7 hrs | Phase 2 |
+| Phase 4: Details link + property badge on cards | 1 hr | Phase 3 |
+| Phase 5: Hotels only toggle | 1 hr | Phase 1 |
 
 ---
 
