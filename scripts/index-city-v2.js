@@ -304,21 +304,34 @@ async function reindexCityV2(city, limit = 200, forceRebuild = true) {
         .slice(0, 8);
 
       // Classify property type: prefer LiteAPI field, fall back to room-name heuristics.
-      const RENTAL_RE = /\b(apartment|vacation home|vacation rental|house|villa|hostel|dormitory|dorm|bunk bed)\b/i;
-      const HOSTEL_RE = /\b(hostel|dormitory|dorm|bunk bed)\b/i;
+      // Types: hotel | apartment | vacation_home | villa | hostel
+      const HOSTEL_RE      = /\b(hostel|dormitory|dorm|bunk bed)\b/i;
+      const VILLA_RE       = /\bvilla\b/i;
+      const VACHOME_RE     = /\b(vacation home|vacation rental|house)\b/i;
+      const APARTMENT_RE   = /\bapartment\b/i;
+      const ANY_RENTAL_RE  = /\b(apartment|vacation home|vacation rental|house|villa|hostel|dormitory|dorm|bunk bed)\b/i;
+
       let property_type = "hotel";
       const liteApiType = detail.propertyType || detail.accommodationType || null;
       if (liteApiType) {
         const lt = liteApiType.toLowerCase();
-        if (/hostel/.test(lt) || /dormitory/.test(lt)) property_type = "hostel";
-        else if (/apartment|rental|villa|vacation/.test(lt)) property_type = "apartment_rental";
+        if (HOSTEL_RE.test(lt))                          property_type = "hostel";
+        else if (/\bvilla\b/.test(lt))                   property_type = "villa";
+        else if (/vacation home|vacation rental|house/.test(lt)) property_type = "vacation_home";
+        else if (/apartment|rental/.test(lt))            property_type = "apartment";
       } else {
         const rooms = detail.rooms || [];
         if (rooms.length > 0) {
-          const rentalCount = rooms.filter(r => RENTAL_RE.test(r.roomName || r.name || "")).length;
-          const hostelCount = rooms.filter(r => HOSTEL_RE.test(r.roomName || r.name || "")).length;
+          const names = rooms.map(r => r.roomName || r.name || "");
+          const rentalCount  = names.filter(n => ANY_RENTAL_RE.test(n)).length;
           if (rentalCount === rooms.length) {
-            property_type = hostelCount > 0 ? "hostel" : "apartment_rental";
+            const hostelCount  = names.filter(n => HOSTEL_RE.test(n)).length;
+            const villaCount   = names.filter(n => VILLA_RE.test(n)).length;
+            const vachomeCount = names.filter(n => VACHOME_RE.test(n)).length;
+            if (hostelCount > 0)       property_type = "hostel";
+            else if (villaCount > 0)   property_type = "villa";
+            else if (vachomeCount > 0) property_type = "vacation_home";
+            else                       property_type = "apartment";
           }
         }
       }

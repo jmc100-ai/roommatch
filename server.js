@@ -3639,8 +3639,10 @@ app.post("/api/backfill-property-types", async (req, res) => {
   if (!city) return res.status(400).json({ error: "city required" });
   const db = supabaseAdmin || supabase;
   try {
-    const RENTAL_RE = /\b(apartment|vacation home|vacation rental|house|villa|hostel|dormitory|dorm|bunk bed)\b/i;
-    const HOSTEL_RE = /\b(hostel|dormitory|dorm|bunk bed)\b/i;
+    const HOSTEL_RE     = /\b(hostel|dormitory|dorm|bunk bed)\b/i;
+    const VILLA_RE      = /\bvilla\b/i;
+    const VACHOME_RE    = /\b(vacation home|vacation rental|house)\b/i;
+    const ANY_RENTAL_RE = /\b(apartment|vacation home|vacation rental|house|villa|hostel|dormitory|dorm|bunk bed)\b/i;
     // Fetch all room inventory rows for city (hotel_id + room_name only)
     const { data: rows, error: fetchErr } = await db
       .from("v2_room_inventory")
@@ -3655,11 +3657,16 @@ app.post("/api/backfill-property-types", async (req, res) => {
     }
     let updated = 0;
     for (const [hotelId, roomNames] of byHotel.entries()) {
-      const rentalCount = roomNames.filter(n => RENTAL_RE.test(n)).length;
-      const hostelCount = roomNames.filter(n => HOSTEL_RE.test(n)).length;
+      const rentalCount  = roomNames.filter(n => ANY_RENTAL_RE.test(n)).length;
+      const hostelCount  = roomNames.filter(n => HOSTEL_RE.test(n)).length;
+      const villaCount   = roomNames.filter(n => VILLA_RE.test(n)).length;
+      const vachomeCount = roomNames.filter(n => VACHOME_RE.test(n)).length;
       let property_type = "hotel";
       if (rentalCount === roomNames.length) {
-        property_type = hostelCount > 0 ? "hostel" : "apartment_rental";
+        if (hostelCount > 0)       property_type = "hostel";
+        else if (villaCount > 0)   property_type = "villa";
+        else if (vachomeCount > 0) property_type = "vacation_home";
+        else                       property_type = "apartment";
       }
       const { error: upErr } = await db.from("v2_hotels_cache")
         .update({ property_type })

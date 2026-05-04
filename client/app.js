@@ -150,7 +150,7 @@
   let _fetchingPrices = false;  // true while /api/rates is in flight (shows skeleton)
   let _hasDateSearch  = false;  // true after prices fetched with specific dates
   let _showAvailOnly  = true;   // toggle: only show available rooms (default on when dates entered)
-  let _hotelsOnlyFilter = false; // toggle: hide apartment_rental + hostel property types
+  let _propTypeFilter = 'all'; // dropdown: all | hotel | apartment | vacation_home | villa | hostel
   let _priceCurrency  = 'EUR';  // currency returned by rates API
   // Debug-only search version controls (set in console):
   // localStorage.setItem('searchVersion','v2')
@@ -3504,13 +3504,13 @@
   document.addEventListener('DOMContentLoaded', () => {
     initTopnavMenuAndStatic();
     scheduleSyncAvailFilterMount();
-    // Restore hotels-only filter from sessionStorage
+    // Restore property-type filter from sessionStorage
     try {
-      const saved = sessionStorage.getItem('hotelsOnly');
-      if (saved === '1') {
-        _hotelsOnlyFilter = true;
-        const cb = document.getElementById('hotels-only-check');
-        if (cb) cb.checked = true;
+      const saved = sessionStorage.getItem('propTypeFilter');
+      if (saved && saved !== 'all') {
+        _propTypeFilter = saved;
+        const sel = document.getElementById('propTypeSelect');
+        if (sel) sel.value = saved;
       }
     } catch (_) {}
   });
@@ -3884,10 +3884,13 @@
     _showAvailOnly  = false;
     const availFilter = document.getElementById('availFilter');
     if (availFilter) availFilter.style.display = 'none';
-    // Show hotels-only toggle when at least one result has property_type set (V2 cities)
+    // Show property-type dropdown when results include non-hotel property types (V2 cities)
     const hasPropertyTypes = (hotels || []).some(h => h.property_type && h.property_type !== 'hotel');
-    const hotelsOnlyToggle = document.getElementById('hotelsOnlyToggle');
-    if (hotelsOnlyToggle) hotelsOnlyToggle.style.display = hasPropertyTypes ? 'inline-flex' : 'none';
+    const propTypeFilter = document.getElementById('propTypeFilter');
+    if (propTypeFilter) propTypeFilter.style.display = hasPropertyTypes ? 'flex' : 'none';
+    // Reset dropdown to current state
+    const propTypeSelect = document.getElementById('propTypeSelect');
+    if (propTypeSelect) propTypeSelect.value = _propTypeFilter;
     scheduleSyncAvailFilterMount();
     _setRatesStatus('', '');
     document.body.classList.add('has-results');
@@ -4116,9 +4119,9 @@
     renderSorted();
   }
 
-  function setHotelsOnlyFilter(val) {
-    _hotelsOnlyFilter = val;
-    try { sessionStorage.setItem('hotelsOnly', val ? '1' : '0'); } catch (_) {}
+  function setPropTypeFilter(val) {
+    _propTypeFilter = val || 'all';
+    try { sessionStorage.setItem('propTypeFilter', _propTypeFilter); } catch (_) {}
     _displayedCount = 10;
     renderSorted();
   }
@@ -5018,8 +5021,13 @@
     if (_nbhdFilter) {
       hotels = hotels.filter(h => h?.primary_nbhd?.name === _nbhdFilter);
     }
-    if (_hotelsOnlyFilter) {
-      hotels = hotels.filter(h => !h.property_type || h.property_type === 'hotel' || h.property_type === 'resort');
+    if (_propTypeFilter && _propTypeFilter !== 'all') {
+      hotels = hotels.filter(h => {
+        const pt = h.property_type || 'hotel';
+        // legacy apartment_rental maps to apartment
+        const normalized = pt === 'apartment_rental' ? 'apartment' : pt;
+        return normalized === _propTypeFilter;
+      });
     }
     if (_currentSort === 'rating') {
       hotels.sort((a, b) => (b.rating || 0) - (a.rating || 0));
@@ -5425,6 +5433,9 @@
 
   let _panelHotelId = null;
   const _panelInflight = new Map();
+  let _hpCarouselIdx = 0;
+  let _hpLightboxIdx = 0;
+  let _hpLightboxUrls = [];
 
   async function openHotelPanel(hotelId) {
     if (_panelHotelId === hotelId) return;
@@ -5435,6 +5446,8 @@
     const body     = document.getElementById('hotel-panel-body');
     if (!panel || !body) return;
 
+    _hpCarouselIdx = 0;
+    _hpLightboxIdx = 0;
     body.innerHTML = hotelPanelSkeletonHTML();
     panel.classList.add('open');
     if (backdrop) backdrop.classList.add('open');
@@ -5517,16 +5530,47 @@
 
   function hotelPanelHTML(d) {
     const stars   = '★'.repeat(Math.min(Math.max(Math.round(d.star_rating || 0), 0), 5));
-    const heroUrl = (d.hotel_photos && d.hotel_photos[0]) || (d.room_types?.[0]?.photos?.[0]) || null;
-    const heroHTML = heroUrl
-      ? `<img class="hp-hero" src="${escHtml(heroUrl)}" alt="" loading="eager" onerror="this.style.display='none'">`
-      : `<div class="hp-hero-placeholder"></div>`;
+
+    // Build full photo list: hotel_photos first, then room photos to fill gaps
+    const allPhotos = [...(d.hotel_photos || [])];
+    for (const rt of (d.room_types || [])) {
+      for (const url of (rt.photos || [])) {
+        if (!allPhotos.includes(url)) allPhotos.push(url);
+        if (allPhotos.length >= 30) break;
+      }
+      if (allPhotos.length >= 30) break;
+    }
+    const photoCount = allPhotos.length;
+
+    // Photo carousel
+    const carouselImgs = allPhotos.map((url, i) =>
+      `<img class="hp-carousel-img${i === 0 ? ' active' : ''}" src="${escHtml(url)}" data-idx="${i}" alt="" loading="${i === 0 ? 'eager' : 'lazy'}" onerror="this.closest('.hp-carousel-slide')?.remove();hpCarouselReindex()" onclick="openHpLightbox(${i})">`
+    ).join('');
+    const carouselHTML = photoCount > 0 ? `
+      <div class="hp-carousel" id="hp-carousel">
+        <div class="hp-carousel-track" id="hp-carousel-track">${carouselImgs}</div>
+        ${photoCount > 1 ? `
+        <button class="hp-carousel-btn hp-carousel-prev" onclick="hpCarouselStep(-1)" aria-label="Previous photo">‹</button>
+        <button class="hp-carousel-btn hp-carousel-next" onclick="hpCarouselStep(1)" aria-label="Next photo">›</button>
+        <div class="hp-carousel-dots" id="hp-carousel-dots">${allPhotos.map((_,i) => `<span class="hp-dot${i===0?' active':''}" onclick="hpCarouselGo(${i})"></span>`).join('')}</div>
+        ` : ''}
+      </div>` : `<div class="hp-hero-placeholder"></div>`;
+
+    // Lightbox
+    const lightboxHTML = photoCount > 0 ? `
+      <div class="hp-lightbox" id="hp-lightbox" onclick="closeHpLightbox()">
+        <button class="hp-lb-close" onclick="closeHpLightbox()">✕</button>
+        <button class="hp-lb-prev" onclick="event.stopPropagation();hpLightboxStep(-1)">‹</button>
+        <img class="hp-lb-img" id="hp-lb-img" src="" alt="">
+        <button class="hp-lb-next" onclick="event.stopPropagation();hpLightboxStep(1)">›</button>
+        <div class="hp-lb-counter" id="hp-lb-counter"></div>
+      </div>` : '';
 
     const propChip = d.property_type === 'apartment_rental'
       ? `<span class="hp-proptype-chip">🏠 Apartment</span>`
       : d.property_type === 'hostel' ? `<span class="hp-proptype-chip">🛏 Hostel</span>` : '';
     const nbhdChip = d.primary_nbhd?.name
-      ? `<span class="hp-nbhd-chip">📍 ${escHtml(d.primary_nbhd.name)}</span>` : '';
+      ? `<button class="hp-nbhd-chip" onclick="closeHotelPanel();goToStep('nbhd')" title="Explore this neighbourhood">📍 ${escHtml(d.primary_nbhd.name)}</button>` : '';
     const ratingBadge = d.guest_rating > 0
       ? `<span class="hp-rating">${parseFloat(d.guest_rating).toFixed(1)}</span>` : '';
     const timesHTML = (d.check_in || d.check_out)
@@ -5552,31 +5596,9 @@
           ${amenRest.length > 0 ? `<button class="hp-amenities-more" onclick="toggleHpAmenities()">+ ${amenRest.length} more</button>` : ''}
          </div>` : '';
 
-    // Room types
-    const FACT_LABELS = {
-      walk_in_shower: 'Walk-in shower', soaking_tub: 'Soaking tub', rainfall_shower: 'Rainfall shower',
-      double_sinks: 'Double sinks', bathtub: 'Bathtub', balcony: 'Balcony', fireplace: 'Fireplace',
-      city_view: 'City view', floor_to_ceiling_windows: 'Floor-to-ceiling windows',
-      in_room_hot_tub: 'In-room hot tub', private_plunge_pool: 'Plunge pool',
-      high_natural_light: 'Natural light', hardwood_parquet: 'Hardwood floors',
-    };
-    const roomsHTML = (d.room_types || []).map(rt => {
-      const photos = (rt.photos || []).map(url =>
-        `<img class="hp-room-photo" src="${escHtml(url)}" alt="" loading="lazy" onerror="this.style.display='none'">`
-      ).join('');
-      const facts = Object.entries(rt.facts || {})
-        .filter(([, v]) => v === true)
-        .map(([k]) => FACT_LABELS[k] ? `<span class="hp-fact-chip">${escHtml(FACT_LABELS[k])}</span>` : '')
-        .join('');
-      return `<div class="hp-room">
-        <div class="hp-room-name">${escHtml(rt.room_name)}</div>
-        ${photos ? `<div class="hp-room-photos">${photos}</div>` : ''}
-        ${facts ? `<div class="hp-room-facts">${facts}</div>` : ''}
-      </div>`;
-    }).join('');
-
     return `
-      ${heroHTML}
+      ${lightboxHTML}
+      ${carouselHTML}
       <div class="hp-meta">
         <div class="hp-name">${escHtml(d.name || d.hotel_id)}</div>
         <div class="hp-sub">
@@ -5589,9 +5611,8 @@
       </div>
       ${descHTML}
       ${amenHTML}
-      ${roomsHTML ? `<div class="hp-section"><div class="hp-section-title">Room Types</div>${roomsHTML}</div>` : ''}
-      <div class="hp-cta">
-        <button class="hp-see-rates-btn" onclick="closeHotelPanel();toggleDatesTray()">See rates →</button>
+      <div class="hp-close-footer">
+        <button class="hp-close-btn" onclick="closeHotelPanel()">Close</button>
       </div>`;
   }
 
@@ -5616,6 +5637,88 @@
       } catch (_) {}
     }
   }
+
+  // ── Hotel panel photo carousel ────────────────────────────────────────────
+
+  function hpCarouselGo(idx) {
+    const track = document.getElementById('hp-carousel-track');
+    if (!track) return;
+    const imgs = track.querySelectorAll('.hp-carousel-img');
+    if (!imgs.length) return;
+    _hpCarouselIdx = ((idx % imgs.length) + imgs.length) % imgs.length;
+    imgs.forEach((img, i) => img.classList.toggle('active', i === _hpCarouselIdx));
+    const dots = document.querySelectorAll('#hp-carousel-dots .hp-dot');
+    dots.forEach((d, i) => d.classList.toggle('active', i === _hpCarouselIdx));
+  }
+
+  function hpCarouselStep(dir) { hpCarouselGo(_hpCarouselIdx + dir); }
+
+  function hpCarouselReindex() {
+    const track = document.getElementById('hp-carousel-track');
+    if (!track) return;
+    const imgs = track.querySelectorAll('.hp-carousel-img');
+    imgs.forEach((img, i) => img.dataset.idx = i);
+    if (_hpCarouselIdx >= imgs.length) hpCarouselGo(imgs.length - 1);
+  }
+
+  // Swipe support for carousel on mobile
+  (function() {
+    let swipeX = 0;
+    document.addEventListener('touchstart', e => {
+      const el = e.target.closest('#hp-carousel');
+      if (el) swipeX = e.touches[0].clientX;
+    }, { passive: true });
+    document.addEventListener('touchend', e => {
+      const el = e.target.closest('#hp-carousel');
+      if (!el) return;
+      const dx = e.changedTouches[0].clientX - swipeX;
+      if (Math.abs(dx) > 40) hpCarouselStep(dx < 0 ? 1 : -1);
+    }, { passive: true });
+  })();
+
+  // ── Hotel panel lightbox ───────────────────────────────────────────────────
+
+  function openHpLightbox(idx) {
+    // Only open lightbox on desktop (non-touch)
+    if (window.matchMedia('(hover: none)').matches) return;
+    const track = document.getElementById('hp-carousel-track');
+    if (!track) return;
+    _hpLightboxUrls = Array.from(track.querySelectorAll('.hp-carousel-img')).map(img => img.src);
+    if (!_hpLightboxUrls.length) return;
+    const lb = document.getElementById('hp-lightbox');
+    if (!lb) return;
+    lb.classList.add('open');
+    document.body.style.overflow = 'hidden';
+    hpLightboxGo(idx);
+  }
+
+  function closeHpLightbox() {
+    const lb = document.getElementById('hp-lightbox');
+    if (!lb) return;
+    lb.classList.remove('open');
+    // Only restore overflow if panel is also not needing it locked
+    if (_panelHotelId) document.body.style.overflow = 'hidden';
+    else document.body.style.overflow = '';
+  }
+
+  function hpLightboxGo(idx) {
+    _hpLightboxIdx = ((idx % _hpLightboxUrls.length) + _hpLightboxUrls.length) % _hpLightboxUrls.length;
+    const img = document.getElementById('hp-lb-img');
+    const counter = document.getElementById('hp-lb-counter');
+    if (img) img.src = _hpLightboxUrls[_hpLightboxIdx];
+    if (counter) counter.textContent = `${_hpLightboxIdx + 1} / ${_hpLightboxUrls.length}`;
+  }
+
+  function hpLightboxStep(dir) { hpLightboxGo(_hpLightboxIdx + dir); }
+
+  // Keyboard nav for lightbox
+  document.addEventListener('keydown', e => {
+    const lb = document.getElementById('hp-lightbox');
+    if (!lb?.classList.contains('open')) return;
+    if (e.key === 'ArrowRight') hpLightboxStep(1);
+    else if (e.key === 'ArrowLeft') hpLightboxStep(-1);
+    else if (e.key === 'Escape') closeHpLightbox();
+  });
 
   // ── End Hotel Details Panel ────────────────────────────────────────────────
 

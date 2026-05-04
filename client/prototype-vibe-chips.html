@@ -1,0 +1,584 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RoomMatch — Vibe Chips → Wizard Reuse Prototype</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Cormorant+Garamond:wght@500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0a0a0a;
+    --bg2: #121212;
+    --bg3: #181818;
+    --surface: rgba(255,255,255,0.03);
+    --surface-hi: rgba(255,255,255,0.06);
+    --border: rgba(255,255,255,0.10);
+    --border-hi: rgba(255,255,255,0.18);
+    --text: #f5f5f5;
+    --muted: #a4a4a4;
+    --muted2: #6f6f6f;
+    --accent: #c9a96e;
+    --accent2: #e8c178;
+    --max: 1280px;
+  }
+  * { box-sizing: border-box; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'DM Sans', sans-serif;
+    margin: 0;
+    line-height: 1.5;
+  }
+  .container { max-width: var(--max); margin: 0 auto; padding: 24px; }
+
+  .annotation-block {
+    background: rgba(201,169,110,0.06);
+    border: 1px solid rgba(201,169,110,0.2);
+    border-left: 3px solid var(--accent);
+    padding: 14px 18px;
+    margin: 0 0 24px;
+    border-radius: 6px;
+    color: var(--muted);
+    font-size: 13px;
+  }
+  .annotation-block strong { color: var(--accent2); }
+
+  /* ── Site nav ─────────────────────────────────────────────────── */
+  .site-nav {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 18px 28px;
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+  }
+  .logo {
+    display: flex; align-items: center; gap: 8px;
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 22px; font-weight: 600;
+  }
+  .logo .dot { width: 22px; height: 22px; border: 2px solid var(--accent); border-radius: 50%; }
+  .logo .boop { color: var(--accent2); font-weight: 600; }
+  .nav-links { display: flex; gap: 28px; }
+  .nav-links a { color: var(--muted); text-decoration: none; font-size: 14px; }
+  .nav-links a:hover { color: var(--text); }
+  .beta-pill { padding: 4px 12px; border: 1px solid var(--border-hi); border-radius: 100px; font-size: 10px; letter-spacing: 0.15em; color: var(--muted); }
+
+  /* ── Search toolbar ──────────────────────────────────────────── */
+  .search-toolbar {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 14px;
+    margin: 24px 0 20px;
+    display: flex; flex-direction: column; gap: 10px;
+  }
+  .row-where { display: flex; gap: 10px; }
+  .row-vibe { display: flex; align-items: center; gap: 8px; padding: 4px 0 4px 4px; flex-wrap: wrap; }
+  .row-vibe .row-spacer { flex: 1 1 auto; }
+  .field {
+    display: flex; flex-direction: column; justify-content: center;
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 12px; padding: 8px 14px;
+    min-width: 130px; cursor: pointer; flex: 1 1 auto;
+    transition: border-color 0.15s;
+  }
+  .field:hover { border-color: var(--border-hi); }
+  .field-label { font-size: 9px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted2); margin-bottom: 2px; }
+  .field-value { font-size: 14px; font-weight: 500; }
+  .field-value.placeholder { color: var(--muted2); }
+  .field .caret { display: inline-block; opacity: 0.5; margin-left: 6px; font-size: 10px; }
+
+  .vibe-label { font-size: 9px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted2); margin-right: 4px; flex-shrink: 0; }
+  .vibe-chip {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 7px 13px;
+    background: var(--surface-hi); border: 1px solid var(--border);
+    border-radius: 100px;
+    font-size: 13px; font-weight: 500; color: var(--text);
+    cursor: pointer; white-space: nowrap; flex-shrink: 0;
+    font-family: inherit;
+    transition: all 0.15s;
+  }
+  .vibe-chip:hover {
+    background: rgba(201,169,110,0.12);
+    border-color: rgba(201,169,110,0.4);
+    color: var(--accent2);
+  }
+  .vibe-chip .icon { font-size: 14px; opacity: 0.85; }
+  .vibe-chip .edit-pencil { opacity: 0; margin-left: -4px; margin-right: -4px; transition: opacity 0.15s, margin 0.15s; font-size: 10px; }
+  .vibe-chip:hover .edit-pencil { opacity: 0.7; margin-left: 0; margin-right: 0; }
+  .advanced-btn {
+    background: transparent; border: 1px solid var(--border);
+    border-radius: 100px; padding: 7px 13px;
+    color: var(--muted); font-family: inherit;
+    font-size: 13px; font-weight: 500; cursor: pointer;
+    display: inline-flex; align-items: center; gap: 6px;
+    transition: all 0.15s;
+  }
+  .advanced-btn:hover { color: var(--accent2); border-color: rgba(201,169,110,0.4); }
+  .advanced-btn .arr { font-size: 10px; opacity: 0.7; }
+  .search-btn {
+    background: linear-gradient(180deg, var(--accent2) 0%, var(--accent) 100%);
+    color: #1a1a1a; border: none; border-radius: 8px;
+    padding: 9px 28px; height: 38px; min-width: 130px;
+    font-family: inherit; font-size: 13px; font-weight: 600;
+    cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+    flex-shrink: 0;
+  }
+  .search-btn:hover { filter: brightness(1.08); }
+
+  /* ── Sort + count row ────────────────────────────────────────── */
+  .sort-row { display: flex; align-items: center; gap: 14px; padding: 14px 0; border-bottom: 1px solid rgba(255,255,255,0.04); flex-wrap: wrap; }
+  .sort-label { font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted2); }
+  .sort-pill { padding: 6px 14px; background: transparent; border: 1px solid var(--border); border-radius: 100px; color: var(--muted); font-family: inherit; font-size: 13px; cursor: pointer; }
+  .sort-pill:hover { color: var(--text); border-color: var(--border-hi); }
+  .sort-pill.active { background: rgba(201,169,110,0.12); border-color: var(--accent); color: var(--accent2); }
+  .sort-spacer { flex: 1 1 auto; }
+  .result-count { font-size: 13px; color: var(--muted); }
+  .view-toggle { display: flex; gap: 4px; }
+  .view-toggle button { width: 36px; height: 32px; background: transparent; border: 1px solid var(--border); border-radius: 8px; color: var(--muted); cursor: pointer; }
+  .view-toggle button.active { background: var(--surface-hi); color: var(--text); }
+
+  /* ── Top neighborhoods ────────────────────────────────────────── */
+  .nbhd-strip { background: rgba(255,255,255,0.02); border-bottom: 1px solid rgba(255,255,255,0.05); padding: 12px 0; }
+  .nbhd-strip-inner { display: flex; align-items: center; gap: 14px; max-width: var(--max); margin: 0 auto; padding: 0 24px; }
+  .nbhd-strip-label { font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted2); flex-shrink: 0; }
+  .nbhd-chips { display: flex; gap: 6px; flex-wrap: nowrap; overflow: hidden; flex: 1 1 auto; min-width: 0; }
+  .nbhd-chip { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border: 1px solid var(--border); border-radius: 100px; background: rgba(255,255,255,0.03); color: var(--muted); font-size: 12px; cursor: pointer; flex-shrink: 0; white-space: nowrap; }
+  .nbhd-chip:hover { color: var(--text); border-color: var(--border-hi); }
+  .nbhd-chip.active { background: rgba(201,169,110,0.15); border-color: var(--accent); color: var(--accent2); }
+  .nbhd-chip .count { font-size: 10px; color: var(--muted2); }
+  .nbhd-more { background: transparent; border: none; color: var(--accent); font-size: 12px; cursor: pointer; padding: 6px 8px; flex-shrink: 0; font-family: inherit; }
+
+  /* ── Results sketch ──────────────────────────────────────────── */
+  .results { padding: 24px 0; }
+  .hotel-card { background: var(--bg2); border: 1px solid var(--border); border-radius: 16px; overflow: hidden; margin-bottom: 16px; }
+  .hotel-card-photos { display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 2px; height: 220px; background: #000; }
+  .hotel-photo { background: linear-gradient(135deg, #2a2a30 0%, #1a1a20 100%); position: relative; display: flex; align-items: center; justify-content: center; }
+  .hotel-photo .badge { position: absolute; top: 12px; left: 12px; padding: 5px 10px; background: rgba(0,0,0,0.7); border: 1px solid var(--border); border-radius: 100px; font-size: 11px; backdrop-filter: blur(6px); }
+  .hotel-photo .badge .pin { color: var(--accent); margin-right: 4px; }
+  .hotel-photo .badge .match { color: var(--accent2); margin-left: 4px; font-weight: 600; }
+  .hotel-photo .placeholder-text { font-size: 11px; color: var(--muted2); font-style: italic; }
+  .hotel-card-meta { padding: 16px 18px; display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; }
+  .hotel-name { font-size: 16px; font-weight: 600; margin-bottom: 4px; }
+  .hotel-loc { font-size: 12px; color: var(--muted); }
+  .hotel-stars { font-size: 11px; color: var(--accent); margin-top: 4px; }
+  .hotel-price { font-size: 20px; font-weight: 600; }
+  .hotel-price-suffix { font-size: 11px; color: var(--muted); }
+
+  /* ── Wizard re-entry overlay ──────────────────────────────────── */
+  .wizard-overlay {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.7); backdrop-filter: blur(6px);
+    z-index: 200;
+    display: none; align-items: flex-start; justify-content: center;
+    padding: 60px 20px 20px;
+    overflow-y: auto;
+  }
+  .wizard-overlay.show { display: flex; animation: fadein 0.18s ease-out; }
+  @keyframes fadein { from { opacity: 0; } to { opacity: 1; } }
+  .wizard-modal {
+    background: var(--bg2);
+    border: 1px solid var(--border-hi);
+    border-radius: 22px;
+    width: 100%; max-width: 720px;
+    padding: 32px 36px 28px;
+    box-shadow: 0 30px 80px rgba(0,0,0,0.7);
+    position: relative;
+  }
+  .wizard-back {
+    background: transparent; border: none;
+    color: var(--muted); font-family: inherit; font-size: 13px;
+    cursor: pointer; padding: 0; margin-bottom: 16px;
+    display: inline-flex; align-items: center; gap: 6px;
+  }
+  .wizard-back:hover { color: var(--text); }
+  .wizard-progress {
+    display: flex; gap: 6px; margin-bottom: 26px;
+  }
+  .wizard-dot { flex: 1 1 auto; height: 3px; background: var(--border); border-radius: 2px; transition: background 0.2s; }
+  .wizard-dot.active { background: var(--accent); }
+  .wizard-eyebrow {
+    font-size: 10px; letter-spacing: 0.16em; text-transform: uppercase;
+    color: var(--accent); margin-bottom: 10px;
+  }
+  .wizard-title {
+    font-family: 'Cormorant Garamond', serif;
+    font-weight: 500; font-size: 32px;
+    margin: 0 0 6px; line-height: 1.15;
+  }
+  .wizard-title em { color: var(--accent2); font-style: italic; }
+  .wizard-sub {
+    font-size: 14px; color: var(--muted);
+    margin-bottom: 26px;
+  }
+  .wizard-cards { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
+  .wizard-card {
+    padding: 18px 20px;
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 14px; cursor: pointer;
+    transition: all 0.15s;
+    display: flex; align-items: center; gap: 14px;
+    text-align: left;
+  }
+  .wizard-card:hover { border-color: var(--border-hi); background: var(--surface-hi); }
+  .wizard-card.selected {
+    border-color: var(--accent);
+    background: rgba(201,169,110,0.10);
+  }
+  .wizard-card .emoji { font-size: 22px; flex-shrink: 0; }
+  .wizard-card .text { display: flex; flex-direction: column; gap: 2px; }
+  .wizard-card .text-title { font-size: 14px; font-weight: 500; color: var(--text); }
+  .wizard-card .text-sub { font-size: 11px; color: var(--muted2); }
+  .wizard-actions {
+    margin-top: 28px;
+    display: flex; gap: 10px; align-items: center;
+  }
+  .wizard-actions .skip {
+    background: transparent; border: none; color: var(--muted);
+    font-family: inherit; font-size: 13px; cursor: pointer; padding: 8px;
+  }
+  .wizard-actions .skip:hover { color: var(--text); }
+  .wizard-actions .actions-right { margin-left: auto; display: flex; gap: 8px; }
+  .wizard-secondary {
+    background: transparent; border: 1px solid var(--border);
+    color: var(--muted); padding: 9px 18px; border-radius: 8px;
+    cursor: pointer; font-family: inherit; font-size: 13px;
+  }
+  .wizard-primary {
+    background: linear-gradient(180deg, var(--accent2) 0%, var(--accent) 100%);
+    color: #1a1a1a; border: none; padding: 9px 22px;
+    border-radius: 8px; cursor: pointer; font-family: inherit;
+    font-size: 13px; font-weight: 600;
+  }
+  .wizard-primary:hover { filter: brightness(1.08); }
+  .wizard-help {
+    margin-top: 18px;
+    font-size: 11px; color: var(--muted2); text-align: center;
+  }
+
+  @media (max-width: 720px) {
+    .nav-links { display: none; }
+    .row-where { flex-direction: column; }
+    .row-where .field { width: 100%; }
+    .row-vibe { flex-wrap: nowrap; overflow-x: auto; padding-right: 8px; }
+    .row-vibe .row-spacer { display: none; }
+    .search-btn { display: none; }   /* mobile: chip-edit auto-saves & re-runs search */
+    .hotel-card-photos { grid-template-columns: 1fr; height: 180px; }
+    .hotel-card-photos .hotel-photo:nth-child(n+2) { display: none; }
+    .wizard-overlay { padding: 0; }
+    .wizard-modal {
+      border-radius: 0;
+      min-height: 100vh;
+      max-width: 100%;
+      padding: 24px 22px;
+    }
+    .wizard-cards { grid-template-columns: 1fr; }
+    .wizard-title { font-size: 26px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="site-nav">
+  <div class="logo"><span class="dot"></span><span>Travel<span class="boop">Boop</span></span></div>
+  <div class="nav-links">
+    <a href="#">Search</a><a href="#">How it works</a><a href="#">About</a><a href="#">Privacy</a><a href="#">Terms</a><a href="#">Contact</a>
+  </div>
+  <div class="beta-pill">BETA</div>
+</div>
+
+<div class="container">
+
+  <div class="annotation-block">
+    <strong>Wizard reuse approach.</strong> Tap any vibe chip → opens the existing wizard (as a modal overlay) at that exact step.
+    User changes the answer, presses <em>Update</em>, returns to results with re-run search. No new popover/bottom-sheet patterns; no new mobile UX work; consistent with the first-time experience.
+    <br><br>
+    <strong>Try it:</strong> click <em>First-timer</em>, <em>Modern &amp; sleek</em>, <em>Trendy &amp; local</em>, or <em>Couple · Soaking tub</em>.
+  </div>
+
+  <!-- Search toolbar -->
+  <div class="search-toolbar">
+    <div class="row-where">
+      <div class="field">
+        <span class="field-label">City</span>
+        <span class="field-value">Mexico City <span class="caret">▾</span></span>
+      </div>
+      <div class="field">
+        <span class="field-label">Neighborhood</span>
+        <span class="field-value placeholder">— <span class="caret">▾</span></span>
+      </div>
+      <div class="field">
+        <span class="field-label">Dates</span>
+        <span class="field-value placeholder">Add dates</span>
+      </div>
+    </div>
+    <div class="row-vibe">
+      <span class="vibe-label">Your vibe</span>
+      <button class="vibe-chip" onclick="openWizard('trip')">
+        <span class="icon">🧭</span> First-timer <span class="edit-pencil">✏</span>
+      </button>
+      <button class="vibe-chip" onclick="openWizard('stayVibe')">
+        <span class="icon">🛏</span> Modern &amp; sleek <span class="edit-pencil">✏</span>
+      </button>
+      <button class="vibe-chip" onclick="openWizard('nbhdScene')">
+        <span class="icon">🌆</span> Trendy &amp; local <span class="edit-pencil">✏</span>
+      </button>
+      <button class="vibe-chip" onclick="openWizard('musthaves')">
+        <span class="icon">🛁</span> Couple · Soaking tub <span class="edit-pencil">✏</span>
+      </button>
+      <button class="advanced-btn" onclick="openWizard('extras')">
+        Advanced search <span class="arr">▾</span>
+      </button>
+      <span class="row-spacer"></span>
+      <button class="search-btn"><span class="icon">↻</span> Search</button>
+    </div>
+  </div>
+
+  <div class="sort-row">
+    <span class="sort-label">Sort</span>
+    <button class="sort-pill active">Best Match</button>
+    <button class="sort-pill">Match + Price</button>
+    <button class="sort-pill">Best Value</button>
+    <button class="sort-pill">Best Price</button>
+    <button class="sort-pill">Guest Rating</button>
+    <button class="sort-pill">Stars</button>
+    <span class="sort-spacer"></span>
+    <span class="result-count">Showing 10 of 3,497 hotels</span>
+    <div class="view-toggle"><button class="active">▦</button><button>≡</button></div>
+  </div>
+
+</div>
+
+<div class="nbhd-strip">
+  <div class="nbhd-strip-inner">
+    <span class="nbhd-strip-label">Top neighbourhoods</span>
+    <div class="nbhd-chips">
+      <button class="nbhd-chip active">All</button>
+      <button class="nbhd-chip">Condesa <span class="count">718</span></button>
+      <button class="nbhd-chip">Polanco <span class="count">500</span></button>
+      <button class="nbhd-chip">Centro Histórico <span class="count">479</span></button>
+      <button class="nbhd-chip">Paseo de la Reforma <span class="count">444</span></button>
+      <button class="nbhd-chip">Coyoacán <span class="count">354</span></button>
+    </div>
+    <button class="nbhd-more">More ▾</button>
+  </div>
+</div>
+
+<div class="container">
+  <div class="results">
+
+    <div class="hotel-card">
+      <div class="hotel-card-photos">
+        <div class="hotel-photo">
+          <span class="badge"><span class="pin">📍</span> Roma Norte · vibe ·<span class="match">95% match</span></span>
+          <span class="placeholder-text">[Hotel photo 1]</span>
+        </div>
+        <div class="hotel-photo"><span class="placeholder-text">[Photo 2]</span></div>
+        <div class="hotel-photo"><span class="placeholder-text">[Photo 3]</span></div>
+      </div>
+      <div class="hotel-card-meta">
+        <div>
+          <div class="hotel-name">Casa Habita Boutique Hotel</div>
+          <div class="hotel-loc">Roma Norte, Mexico City · 0.4 mi from center</div>
+          <div class="hotel-stars">★★★★ · 4.6 guest rating</div>
+        </div>
+        <div style="text-align:right">
+          <div class="hotel-price">$284</div>
+          <div class="hotel-price-suffix">avg / night</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="hotel-card">
+      <div class="hotel-card-photos">
+        <div class="hotel-photo">
+          <span class="badge"><span class="pin">📍</span> Polanco · vibe ·<span class="match">91% match</span></span>
+          <span class="placeholder-text">[Hotel photo 1]</span>
+        </div>
+        <div class="hotel-photo"><span class="placeholder-text">[Photo 2]</span></div>
+        <div class="hotel-photo"><span class="placeholder-text">[Photo 3]</span></div>
+      </div>
+      <div class="hotel-card-meta">
+        <div>
+          <div class="hotel-name">The Wild Oscar</div>
+          <div class="hotel-loc">Polanco, Mexico City · 1.2 mi from center</div>
+          <div class="hotel-stars">★★★★★ · 4.8 guest rating</div>
+        </div>
+        <div style="text-align:right">
+          <div class="hotel-price">$412</div>
+          <div class="hotel-price-suffix">avg / night</div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- Wizard re-entry overlay (mimics existing #st-boop screen) -->
+<div class="wizard-overlay" id="wizardOverlay" onclick="closeWizardOverlay(event)">
+  <div class="wizard-modal" onclick="event.stopPropagation()">
+    <button class="wizard-back" onclick="closeWizard()">← Back to results</button>
+    <div class="wizard-progress" id="wizardProgress"></div>
+    <div class="wizard-eyebrow" id="wizardEyebrow"></div>
+    <h1 class="wizard-title" id="wizardTitle"></h1>
+    <p class="wizard-sub" id="wizardSub"></p>
+    <div class="wizard-cards" id="wizardCards"></div>
+    <div class="wizard-actions">
+      <button class="skip" onclick="closeWizard()">Skip</button>
+      <div class="actions-right">
+        <button class="wizard-secondary" onclick="closeWizard()">Cancel</button>
+        <button class="wizard-primary" onclick="updateAndClose()">Update &amp; search</button>
+      </div>
+    </div>
+    <div class="wizard-help">Changes here re-run your search instantly.</div>
+  </div>
+</div>
+
+<script>
+  const STEPS = ['trip','stayVibe','nbhdScene','musthaves','extras'];
+  const QUESTIONS = {
+    trip: {
+      eyebrow: 'Mexico City · Step 1 of 5',
+      title: 'Have you been to this <em>city</em> before?',
+      sub: "We'll tilt the search a bit based on your familiarity.",
+      cards: [
+        { emoji: '🧭', title: 'First-timer', sub: 'Show me iconic neighborhoods I should know' },
+        { emoji: '📍', title: 'Returning', sub: 'I want something off the beaten path' },
+        { emoji: '🤷', title: 'A little of both', sub: 'Mix it up' },
+      ],
+      selected: 0,
+    },
+    stayVibe: {
+      eyebrow: 'Mexico City · Step 2 of 5',
+      title: 'What kind of stay <em>feels right</em>?',
+      sub: 'Pick the room mood that resonates most.',
+      cards: [
+        { emoji: '🛏', title: 'Modern & sleek', sub: 'Clean lines, minimalist, contemporary' },
+        { emoji: '🪵', title: 'Cozy & traditional', sub: 'Warm woods, layered textiles, intimate' },
+        { emoji: '✨', title: 'Luxurious & refined', sub: 'Marble, brass, polished finishes' },
+        { emoji: '🎨', title: 'Bold & design-forward', sub: 'Statement pieces, color, personality' },
+        { emoji: '🌿', title: 'Natural & airy', sub: 'Light woods, plants, soft palette' },
+        { emoji: '🏛', title: 'Classic & elegant', sub: 'Timeless decor, formal touches' },
+      ],
+      selected: 0,
+    },
+    nbhdScene: {
+      eyebrow: 'Mexico City · Step 3 of 5',
+      title: 'What kind of area should <em>wrap your hotel</em>?',
+      sub: 'The vibe of the streets just outside.',
+      cards: [
+        { emoji: '🌆', title: 'Trendy & local', sub: 'Cafés, indie shops, real residents' },
+        { emoji: '🏛', title: 'Classic & central', sub: 'Landmarks, history, walkable to everything' },
+        { emoji: '🌃', title: 'Lively nightlife', sub: 'Bars, music, late-night energy' },
+        { emoji: '🌳', title: 'Calm & residential', sub: 'Quiet, leafy, low-key' },
+        { emoji: '☕', title: 'Café & artsy', sub: 'Galleries, coffee culture, creatives' },
+        { emoji: '🛍', title: 'Upscale & polished', sub: 'High-end retail, fine dining' },
+      ],
+      selected: 0,
+    },
+    musthaves: {
+      eyebrow: 'Mexico City · Step 4 of 5',
+      title: 'Pick what <em>matters most</em>',
+      sub: "Tap multiple. We'll prioritize rooms that show these clearly in photos.",
+      cards: [
+        { emoji: '🛁', title: 'Soaking tub', sub: '' },
+        { emoji: '🚿', title: 'Walk-in shower', sub: '' },
+        { emoji: '🌅', title: 'Balcony', sub: '' },
+        { emoji: '🪟', title: 'Great view', sub: '' },
+        { emoji: '🏊', title: 'Pool', sub: '' },
+        { emoji: '🛏', title: 'King bed', sub: '' },
+      ],
+      multi: true,
+      selectedSet: new Set([0]),
+    },
+    extras: {
+      eyebrow: 'Mexico City · Step 5 of 5',
+      title: 'Anything <em>else</em> we should know?',
+      sub: 'Free text, totally optional — e.g. "great gym", "quiet street", "near a metro stop".',
+      isText: true,
+      placeholder: 'Type any extras here…',
+      currentText: '',
+      keywordsLabel: 'Search keywords (advanced)',
+      keywordsHelp: 'The text we match rooms against. Auto-built from your wizard answers — edit only if you want fine control.',
+      currentKeywords: 'sleek modern contemporary room, clean lines, minimalist, soft greys, natural light',
+    },
+  };
+
+  function openWizard(stepKey) {
+    const idx = STEPS.indexOf(stepKey);
+    if (idx === -1) return;
+    const cfg = QUESTIONS[stepKey];
+
+    // Progress dots
+    const progress = document.getElementById('wizardProgress');
+    progress.innerHTML = STEPS.map((s,i) =>
+      `<div class="wizard-dot${i <= idx ? ' active' : ''}"></div>`
+    ).join('');
+
+    document.getElementById('wizardEyebrow').textContent = cfg.eyebrow;
+    document.getElementById('wizardTitle').innerHTML = cfg.title;
+    document.getElementById('wizardSub').textContent = cfg.sub;
+
+    const cards = document.getElementById('wizardCards');
+    if (cfg.isText) {
+      cards.style.gridTemplateColumns = '1fr';
+      cards.innerHTML = `
+        <div style="display:flex; flex-direction:column; gap:6px;">
+          <textarea style="width:100%; min-height:60px; background:rgba(0,0,0,0.35); border:1px solid var(--border); border-radius:10px; padding:12px 14px; color:var(--text); font-family:inherit; font-size:13px; line-height:1.5; resize:vertical;" placeholder="${cfg.placeholder}">${cfg.currentText}</textarea>
+        </div>
+        <div style="margin-top:18px; display:flex; flex-direction:column; gap:6px;">
+          <div style="font-size:11px; color:var(--accent2); letter-spacing:0.05em; font-weight:500;">${cfg.keywordsLabel}</div>
+          <div style="font-size:12px; color:var(--muted2); margin-bottom:4px;">${cfg.keywordsHelp}</div>
+          <textarea style="width:100%; min-height:60px; background:rgba(0,0,0,0.35); border:1px solid var(--border); border-radius:10px; padding:12px 14px; color:var(--text); font-family:inherit; font-size:13px; line-height:1.5; resize:vertical;">${cfg.currentKeywords}</textarea>
+        </div>
+      `;
+    } else {
+      cards.style.gridTemplateColumns = 'repeat(2, 1fr)';
+      cards.innerHTML = cfg.cards.map((c, i) => {
+        let isSelected;
+        if (cfg.multi) isSelected = cfg.selectedSet.has(i);
+        else isSelected = (i === cfg.selected);
+        return `
+          <button class="wizard-card${isSelected ? ' selected' : ''}" onclick="pickCard('${stepKey}', ${i})">
+            <span class="emoji">${c.emoji}</span>
+            <span class="text">
+              <span class="text-title">${c.title}</span>
+              ${c.sub ? `<span class="text-sub">${c.sub}</span>` : ''}
+            </span>
+          </button>
+        `;
+      }).join('');
+    }
+
+    document.getElementById('wizardOverlay').classList.add('show');
+    document.body.style.overflow = 'hidden';
+  }
+
+  function pickCard(stepKey, idx) {
+    const cfg = QUESTIONS[stepKey];
+    if (cfg.multi) {
+      if (cfg.selectedSet.has(idx)) cfg.selectedSet.delete(idx);
+      else cfg.selectedSet.add(idx);
+    } else {
+      cfg.selected = idx;
+    }
+    openWizard(stepKey);  // re-render
+  }
+
+  function closeWizard() {
+    document.getElementById('wizardOverlay').classList.remove('show');
+    document.body.style.overflow = '';
+  }
+
+  function closeWizardOverlay(ev) {
+    if (ev.target.id === 'wizardOverlay') closeWizard();
+  }
+
+  function updateAndClose() {
+    closeWizard();
+  }
+
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') closeWizard();
+  });
+</script>
+</body>
+</html>

@@ -416,17 +416,24 @@
     <button class="sort-btn" data-sort="stars" onclick="setSortBy('stars')">Stars</button>
   </div>
   <div id="availFilterMountDesktop" class="avail-filter-mount-desktop">
+    <div class="prop-type-filter" id="propTypeFilter" style="display:none">
+      <label class="prop-type-label" for="propTypeSelect">Show:</label>
+      <select id="propTypeSelect" class="prop-type-select" onchange="setPropTypeFilter(this.value)">
+        <option value="all">All properties</option>
+        <option value="hotel">Hotels</option>
+        <option value="apartment">Apartments</option>
+        <option value="vacation_home">Vacation homes</option>
+        <option value="villa">Villas</option>
+        <option value="hostel">Hostels</option>
+      </select>
+    </div>
     <div class="avail-filter" id="availFilter" style="display:none" title="Only show room types with availability for your dates">
-      <label class="avail-filter-label" for="availOnlyCheck">Available rooms only</label>
+      <label class="avail-filter-label" for="availOnlyCheck">Available only</label>
       <label class="toggle-switch">
         <input type="checkbox" id="availOnlyCheck" onchange="setAvailFilter(this.checked)">
         <span class="toggle-track"></span>
       </label>
     </div>
-    <label class="hotels-only-toggle" id="hotelsOnlyToggle" style="display:none" title="Hide apartments and hostels from results">
-      <input type="checkbox" id="hotels-only-check" onchange="setHotelsOnlyFilter(this.checked)">
-      <span>Hotels only</span>
-    </label>
   </div>
   <span id="ratesStatus" class="rates-status"></span>
   <div class="sort-bar-trailer">
@@ -481,10 +488,7 @@
 <!-- Hotel details slide-in panel -->
 <div id="hotel-panel-backdrop" class="hotel-panel-backdrop" onclick="closeHotelPanel()"></div>
 <div id="hotel-panel" class="hotel-panel" role="dialog" aria-modal="true" aria-label="Hotel details">
-  <div class="hotel-panel-header">
-    <button class="hotel-panel-back" onclick="closeHotelPanel()">← Back</button>
-    <button class="hotel-panel-close" onclick="closeHotelPanel()">✕</button>
-  </div>
+  <button class="hotel-panel-close" onclick="closeHotelPanel()" aria-label="Close">✕</button>
   <div id="hotel-panel-body" class="hotel-panel-body">
     <!-- filled by JS -->
   </div>
