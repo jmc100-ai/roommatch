@@ -302,6 +302,27 @@ async function reindexCityV2(city, limit = 200, forceRebuild = true) {
         .filter(Boolean)
         .filter((u) => u !== mainPhoto)
         .slice(0, 8);
+
+      // Classify property type: prefer LiteAPI field, fall back to room-name heuristics.
+      const RENTAL_RE = /\b(apartment|vacation home|vacation rental|house|villa|hostel|dormitory|dorm|bunk bed)\b/i;
+      const HOSTEL_RE = /\b(hostel|dormitory|dorm|bunk bed)\b/i;
+      let property_type = "hotel";
+      const liteApiType = detail.propertyType || detail.accommodationType || null;
+      if (liteApiType) {
+        const lt = liteApiType.toLowerCase();
+        if (/hostel/.test(lt) || /dormitory/.test(lt)) property_type = "hostel";
+        else if (/apartment|rental|villa|vacation/.test(lt)) property_type = "apartment_rental";
+      } else {
+        const rooms = detail.rooms || [];
+        if (rooms.length > 0) {
+          const rentalCount = rooms.filter(r => RENTAL_RE.test(r.roomName || r.name || "")).length;
+          const hostelCount = rooms.filter(r => HOSTEL_RE.test(r.roomName || r.name || "")).length;
+          if (rentalCount === rooms.length) {
+            property_type = hostelCount > 0 ? "hostel" : "apartment_rental";
+          }
+        }
+      }
+
       // Only write columns that remain after ToS cleanup (name/address/ratings/main_photo dropped).
       // Display metadata (name, photo, ratings) is fetched live from LiteAPI at search time.
       await db.from("v2_hotels_cache").upsert({
@@ -309,6 +330,7 @@ async function reindexCityV2(city, limit = 200, forceRebuild = true) {
         hotel_photos: hotelPhotos,
         lat: detail.location?.latitude ?? detail.lat ?? null,
         lng: detail.location?.longitude ?? detail.lng ?? null,
+        property_type,
         cached_at: new Date().toISOString(),
       }, { onConflict: "hotel_id" });
 
@@ -339,7 +361,7 @@ async function reindexCityV2(city, limit = 200, forceRebuild = true) {
           const detectedType = (cap?.match(/PHOTO[_ ]TYPE:\s*([^\n\r]+)/i)?.[1] || photo.type || "other").toLowerCase().trim();
           await db.from("v2_room_inventory").upsert({
             hotel_id: hotelId, city, country_code: cc, room_name: photo.roomName, room_type_id: photo.roomTypeId || null,
-            photo_url: photo.url, photo_type: detectedType, caption: cap, feature_summary: summary, source: "vision",
+            photo_url: photo.url, photo_type: detectedType, source: "vision",
           }, { onConflict: "hotel_id,photo_url" });
           const factRows = parseStructuredCaption(cap).map((f) => ({
             hotel_id: hotelId,

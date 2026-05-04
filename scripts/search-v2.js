@@ -232,7 +232,7 @@ async function runV2Search({ req, supabase, supabaseAdmin, resolveCityName }) {
   const [cacheResult, indexResult] = await Promise.all([
     fetchClient
       .from("v2_hotels_cache")
-      .select("hotel_id")
+      .select("hotel_id, property_type")
       .eq("city", city),
     fetchClient
       .from("v2_room_types_index")
@@ -244,7 +244,7 @@ async function runV2Search({ req, supabase, supabaseAdmin, resolveCityName }) {
   if (cacheResult.error) return { status: 500, body: { error: cacheResult.error.message } };
   if (indexResult.error)  return { status: 500, body: { error: indexResult.error.message } };
 
-  const hotelMeta = new Map((cacheResult.data || []).map((r) => [r.hotel_id, {}]));
+  const hotelMeta = new Map((cacheResult.data || []).map((r) => [r.hotel_id, { property_type: r.property_type || "hotel" }]));
   const cityHotelIds   = [...hotelMeta.keys()];
   const eligibleHotelIds = hotelIdsByGeo
     ? cityHotelIds.filter((id) => hotelIdsByGeo.includes(id))
@@ -607,22 +607,24 @@ async function runV2Search({ req, supabase, supabaseAdmin, resolveCityName }) {
 
     const primaryNbhd = primaryNbhdMap.get(hotelId) || null;
     const nbhdFitPct  = nbhdFitByHotelId?.get(hotelId);
+    const propertyType = meta.property_type || "hotel";
 
     if (!hasPhotos) {
       return {
-        id:          hotelId,
-        name:        hotelId,      // live metadata injected by server.js fetchHotelMetaBatch
-        address:     "",
+        id:           hotelId,
+        name:         hotelId,      // live metadata injected by server.js fetchHotelMetaBatch
+        address:      "",
         city,
-        country:     "",
-        starRating:  0,
-        rating:      0,
-        mainPhoto:   null,
-        hotelPhotos: [],
-        roomTypes:   [],
-        isMatched:   score > 0,
-        vectorScore: score,
+        country:      "",
+        starRating:   0,
+        rating:       0,
+        mainPhoto:    null,
+        hotelPhotos:  [],
+        roomTypes:    [],
+        isMatched:    score > 0,
+        vectorScore:  score,
         hotelScore,
+        property_type: propertyType,
         primary_nbhd: primaryNbhd,
         ...(nbhdFitPct != null ? { nbhd_fit_pct: nbhdFitPct } : {}),
       };
@@ -717,15 +719,16 @@ async function runV2Search({ req, supabase, supabaseAdmin, resolveCityName }) {
       name:        hotelId,        // live metadata injected by server.js fetchHotelMetaBatch
       address:     "",
       city,
-      country:     "",
-      starRating:  0,
-      rating:      0,
-      mainPhoto:   null,
-      hotelPhotos: [],
-      roomTypes:   roomTypes.slice(0, 8),
-      isMatched:   score > 0,
-      vectorScore: score,
+      country:      "",
+      starRating:   0,
+      rating:       0,
+      mainPhoto:    null,
+      hotelPhotos:  [],
+      roomTypes:    roomTypes.slice(0, 8),
+      isMatched:    score > 0,
+      vectorScore:  score,
       hotelScore,
+      property_type: propertyType,
       primary_nbhd: primaryNbhd,
       ...(nbhdFitPct != null ? { nbhd_fit_pct: nbhdFitPct } : {}),
       score_breakdown: {

@@ -150,6 +150,7 @@
   let _fetchingPrices = false;  // true while /api/rates is in flight (shows skeleton)
   let _hasDateSearch  = false;  // true after prices fetched with specific dates
   let _showAvailOnly  = true;   // toggle: only show available rooms (default on when dates entered)
+  let _hotelsOnlyFilter = false; // toggle: hide apartment_rental + hostel property types
   let _priceCurrency  = 'EUR';  // currency returned by rates API
   // Debug-only search version controls (set in console):
   // localStorage.setItem('searchVersion','v2')
@@ -390,7 +391,6 @@
       id:'musthaves',
       label:'Must-haves',
       title:'Pick what matters most',
-      sub:'Optional — pick as many as apply. Next, you can add notes in your own words.',
       type:'chips',
       options:[
         { id:'balcony',      flag:'balcony',   label:'Balcony or view',    hint:'Outdoor space or a real view from the room.',                         image:'images/wizard/musthave-balcony.png' },
@@ -404,7 +404,7 @@
       id:'extras',
       label:'Your notes',
       title:'Anything else we should know?',
-      sub:'Describe anything else you are looking for across your neighbourhood, hotel, and room vibe — street energy, character, views, or small details. This is blended into your search to nudge how we choose your rooms',
+      sub:'Describe anything else you are looking for across your neighbourhood, hotel, and room vibe — street energy, character, views, or small details.',
       type:'freetext',
     }
   ];
@@ -1833,9 +1833,9 @@
         <button class="boop-btn primary" onclick="boopConfirmSlider()">Use this preference</button>
       </div>`;
     } else if (q.type === 'chips') {
-      const toolbarNote = overlayMode
+      const mustHaveInstruction = overlayMode
         ? 'Update what matters most, then re-run your search.'
-        : 'Optional — pick any that matter, then continue to add notes or search.';
+        : 'Optional - pick any that matter.';
       const gs = BOOP.answers.group_size || 'couple';
       const groupPickHtml = `
       <div class="boop-group-pick">
@@ -1865,14 +1865,14 @@
       const continueHandler = overlayMode ? 'boopFinish()' : 'boopNext()';
       const backHandler = overlayMode ? 'closeBoopOverlay()' : 'boopBack()';
       const backLabel = overlayMode ? 'Cancel' : '&lt; back';
-      body = `<div class="boop-deal-toolbar">
-        <p class="boop-note boop-deal-toolbar-note">${toolbarNote}</p>
+      body = `<div class="boop-deal-toolbar boop-deal-toolbar--compact">
         <div class="boop-deal-toolbar-actions">
           <a class="boop-deal-back-link" href="#" onclick="event.preventDefault();${backHandler};">${backLabel}</a>
           <button type="button" class="boop-btn primary" onclick="${continueHandler}">${continueLabel}</button>
         </div>
       </div>
       ${groupPickHtml}
+      <p class="boop-note boop-musthave-instruction">${mustHaveInstruction}</p>
       <div class="boop-deal-list-shell"><div class="boop-deal-list">${q.options.map(o => `
         <button type="button" class="boop-deal-row ${BOOP.dealbreakers.has(o.id) ? 'active' : ''}" aria-pressed="${BOOP.dealbreakers.has(o.id) ? 'true' : 'false'}" aria-label="${escHtml(o.label)}${o.hint ? '. ' + escHtml(o.hint) : ''}" onclick="boopToggleDealbreaker('${o.id}')">
           <div class="boop-deal-row-media">
@@ -1948,7 +1948,7 @@
       </div>
       <div class="boop-q-head">
         <div class="boop-q-title">${q.title}</div>
-        <div class="boop-q-sub">${q.sub || ''}</div>
+        ${q.sub ? `<div class="boop-q-sub">${q.sub}</div>` : ''}
       </div>
       ${savedUi}
       ${body}
@@ -3125,10 +3125,10 @@
     const md = document.getElementById('cmd-mobile-dates-label');
     if (md) {
       if (S.checkin && S.checkout) {
-        md.textContent = 'Dates: ' + fmtDate(S.checkin) + ' – ' + fmtDate(S.checkout);
+        md.textContent = fmtDate(S.checkin) + ' – ' + fmtDate(S.checkout);
         md.classList.remove('ph');
       } else {
-        md.textContent = 'Dates: Add dates';
+        md.textContent = 'Add dates';
         md.classList.add('ph');
       }
     }
@@ -3504,6 +3504,15 @@
   document.addEventListener('DOMContentLoaded', () => {
     initTopnavMenuAndStatic();
     scheduleSyncAvailFilterMount();
+    // Restore hotels-only filter from sessionStorage
+    try {
+      const saved = sessionStorage.getItem('hotelsOnly');
+      if (saved === '1') {
+        _hotelsOnlyFilter = true;
+        const cb = document.getElementById('hotels-only-check');
+        if (cb) cb.checked = true;
+      }
+    } catch (_) {}
   });
 
   function setQuery(chip) {
@@ -3875,6 +3884,10 @@
     _showAvailOnly  = false;
     const availFilter = document.getElementById('availFilter');
     if (availFilter) availFilter.style.display = 'none';
+    // Show hotels-only toggle when at least one result has property_type set (V2 cities)
+    const hasPropertyTypes = (hotels || []).some(h => h.property_type && h.property_type !== 'hotel');
+    const hotelsOnlyToggle = document.getElementById('hotelsOnlyToggle');
+    if (hotelsOnlyToggle) hotelsOnlyToggle.style.display = hasPropertyTypes ? 'inline-flex' : 'none';
     scheduleSyncAvailFilterMount();
     _setRatesStatus('', '');
     document.body.classList.add('has-results');
@@ -4099,6 +4112,13 @@
 
   function setAvailFilter(availOnly) {
     _showAvailOnly  = availOnly;
+    _displayedCount = 10;
+    renderSorted();
+  }
+
+  function setHotelsOnlyFilter(val) {
+    _hotelsOnlyFilter = val;
+    try { sessionStorage.setItem('hotelsOnly', val ? '1' : '0'); } catch (_) {}
     _displayedCount = 10;
     renderSorted();
   }
@@ -4998,6 +5018,9 @@
     if (_nbhdFilter) {
       hotels = hotels.filter(h => h?.primary_nbhd?.name === _nbhdFilter);
     }
+    if (_hotelsOnlyFilter) {
+      hotels = hotels.filter(h => !h.property_type || h.property_type === 'hotel' || h.property_type === 'resort');
+    }
     if (_currentSort === 'rating') {
       hotels.sort((a, b) => (b.rating || 0) - (a.rating || 0));
     } else if (_currentSort === 'stars') {
@@ -5398,6 +5421,204 @@
     return `<div class="vibe-triplet">${pills.join('')}</div>`;
   }
 
+  // ── Hotel Details Panel ────────────────────────────────────────────────────
+
+  let _panelHotelId = null;
+  const _panelInflight = new Map();
+
+  async function openHotelPanel(hotelId) {
+    if (_panelHotelId === hotelId) return;
+    _panelHotelId = hotelId;
+
+    const panel    = document.getElementById('hotel-panel');
+    const backdrop = document.getElementById('hotel-panel-backdrop');
+    const body     = document.getElementById('hotel-panel-body');
+    if (!panel || !body) return;
+
+    body.innerHTML = hotelPanelSkeletonHTML();
+    panel.classList.add('open');
+    if (backdrop) backdrop.classList.add('open');
+    document.body.style.overflow = 'hidden';
+
+    const url = new URL(location.href);
+    url.searchParams.set('hotel', hotelId);
+    history.pushState({ hotelPanel: hotelId }, '', url.toString());
+
+    try {
+      if (!_panelInflight.has(hotelId)) {
+        _panelInflight.set(hotelId,
+          fetch(`${BACKEND}/api/hotel/${encodeURIComponent(hotelId)}`)
+            .then(r => r.json())
+            .finally(() => _panelInflight.delete(hotelId))
+        );
+      }
+      const data = await _panelInflight.get(hotelId);
+      if (_panelHotelId !== hotelId) return;
+      body.innerHTML = hotelPanelHTML(data);
+    } catch (e) {
+      body.innerHTML = `<div style="padding:32px;color:var(--muted);text-align:center">Could not load hotel details.<br><button onclick="closeHotelPanel()" style="margin-top:12px;background:none;border:1px solid rgba(255,255,255,.15);color:var(--text);padding:8px 16px;border-radius:8px;cursor:pointer;font-family:'DM Sans',sans-serif">Close</button></div>`;
+    }
+  }
+
+  function closeHotelPanel() {
+    const panel    = document.getElementById('hotel-panel');
+    const backdrop = document.getElementById('hotel-panel-backdrop');
+    if (!panel || !panel.classList.contains('open')) return;
+    panel.classList.remove('open');
+    if (backdrop) backdrop.classList.remove('open');
+    document.body.style.overflow = '';
+    _panelHotelId = null;
+
+    const url = new URL(location.href);
+    if (url.searchParams.has('hotel')) {
+      url.searchParams.delete('hotel');
+      history.replaceState(null, '', url.toString());
+    }
+  }
+
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape' && _panelHotelId) closeHotelPanel();
+  });
+
+  window.addEventListener('popstate', e => {
+    if (_panelHotelId && !(e.state?.hotelPanel)) closeHotelPanel();
+  });
+
+  // Mobile swipe-down from top 60px to close
+  (function() {
+    let touchStartY = 0;
+    const panelEl = document.getElementById('hotel-panel');
+    if (!panelEl) return;
+    panelEl.addEventListener('touchstart', e => {
+      touchStartY = e.touches[0].clientY;
+    }, { passive: true });
+    panelEl.addEventListener('touchend', e => {
+      const dy = e.changedTouches[0].clientY - touchStartY;
+      if (dy > 60 && touchStartY < 80) closeHotelPanel();
+    }, { passive: true });
+  })();
+
+  function hotelPanelSkeletonHTML() {
+    return `
+      <div class="hp-hero-placeholder hp-skeleton"></div>
+      <div class="hp-meta">
+        <div class="hp-skeleton" style="height:22px;width:70%;margin-bottom:8px;border-radius:6px"></div>
+        <div class="hp-skeleton" style="height:14px;width:45%;margin-bottom:16px;border-radius:6px"></div>
+      </div>
+      <div class="hp-section">
+        <div class="hp-skeleton" style="height:12px;width:30%;margin-bottom:10px;border-radius:4px"></div>
+        <div class="hp-skeleton" style="height:60px;border-radius:8px"></div>
+      </div>
+      <div class="hp-section">
+        <div class="hp-skeleton" style="height:12px;width:30%;margin-bottom:10px;border-radius:4px"></div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">${Array(6).fill('<div class="hp-skeleton" style="height:28px;width:80px;border-radius:100px"></div>').join('')}</div>
+      </div>`;
+  }
+
+  function hotelPanelHTML(d) {
+    const stars   = '★'.repeat(Math.min(Math.max(Math.round(d.star_rating || 0), 0), 5));
+    const heroUrl = (d.hotel_photos && d.hotel_photos[0]) || (d.room_types?.[0]?.photos?.[0]) || null;
+    const heroHTML = heroUrl
+      ? `<img class="hp-hero" src="${escHtml(heroUrl)}" alt="" loading="eager" onerror="this.style.display='none'">`
+      : `<div class="hp-hero-placeholder"></div>`;
+
+    const propChip = d.property_type === 'apartment_rental'
+      ? `<span class="hp-proptype-chip">🏠 Apartment</span>`
+      : d.property_type === 'hostel' ? `<span class="hp-proptype-chip">🛏 Hostel</span>` : '';
+    const nbhdChip = d.primary_nbhd?.name
+      ? `<span class="hp-nbhd-chip">📍 ${escHtml(d.primary_nbhd.name)}</span>` : '';
+    const ratingBadge = d.guest_rating > 0
+      ? `<span class="hp-rating">${parseFloat(d.guest_rating).toFixed(1)}</span>` : '';
+    const timesHTML = (d.check_in || d.check_out)
+      ? `<div class="hp-times">${d.check_in ? `<span>Check-in <strong>${escHtml(d.check_in)}</strong></span>` : ''}${d.check_out ? `<span>Check-out <strong>${escHtml(d.check_out)}</strong></span>` : ''}</div>` : '';
+
+    // Description
+    const descHTML = d.description
+      ? `<div class="hp-section">
+          <div class="hp-section-title">About</div>
+          <div class="hp-desc clamped" id="hp-desc-text">${escHtml(d.description)}</div>
+          <button class="hp-desc-toggle" onclick="toggleHpDesc()">Read more</button>
+         </div>` : '';
+
+    // Amenities
+    const amenList = Array.isArray(d.amenities) ? d.amenities : [];
+    const amenFirst8 = amenList.slice(0, 8).map(a => `<span class="hp-amenity">${escHtml(a)}</span>`).join('');
+    const amenRest   = amenList.slice(8);
+    const amenDataAll = amenRest.length > 0 ? ` data-all='${escHtml(JSON.stringify(amenList))}'` : '';
+    const amenHTML = amenList.length > 0
+      ? `<div class="hp-section">
+          <div class="hp-section-title">Amenities</div>
+          <div class="hp-amenities" id="hp-amenities-wrap"${amenDataAll}>${amenFirst8}</div>
+          ${amenRest.length > 0 ? `<button class="hp-amenities-more" onclick="toggleHpAmenities()">+ ${amenRest.length} more</button>` : ''}
+         </div>` : '';
+
+    // Room types
+    const FACT_LABELS = {
+      walk_in_shower: 'Walk-in shower', soaking_tub: 'Soaking tub', rainfall_shower: 'Rainfall shower',
+      double_sinks: 'Double sinks', bathtub: 'Bathtub', balcony: 'Balcony', fireplace: 'Fireplace',
+      city_view: 'City view', floor_to_ceiling_windows: 'Floor-to-ceiling windows',
+      in_room_hot_tub: 'In-room hot tub', private_plunge_pool: 'Plunge pool',
+      high_natural_light: 'Natural light', hardwood_parquet: 'Hardwood floors',
+    };
+    const roomsHTML = (d.room_types || []).map(rt => {
+      const photos = (rt.photos || []).map(url =>
+        `<img class="hp-room-photo" src="${escHtml(url)}" alt="" loading="lazy" onerror="this.style.display='none'">`
+      ).join('');
+      const facts = Object.entries(rt.facts || {})
+        .filter(([, v]) => v === true)
+        .map(([k]) => FACT_LABELS[k] ? `<span class="hp-fact-chip">${escHtml(FACT_LABELS[k])}</span>` : '')
+        .join('');
+      return `<div class="hp-room">
+        <div class="hp-room-name">${escHtml(rt.room_name)}</div>
+        ${photos ? `<div class="hp-room-photos">${photos}</div>` : ''}
+        ${facts ? `<div class="hp-room-facts">${facts}</div>` : ''}
+      </div>`;
+    }).join('');
+
+    return `
+      ${heroHTML}
+      <div class="hp-meta">
+        <div class="hp-name">${escHtml(d.name || d.hotel_id)}</div>
+        <div class="hp-sub">
+          ${stars ? `<span class="hp-stars">${stars}</span>` : ''}
+          ${ratingBadge}
+          ${nbhdChip}
+          ${propChip}
+        </div>
+        ${timesHTML}
+      </div>
+      ${descHTML}
+      ${amenHTML}
+      ${roomsHTML ? `<div class="hp-section"><div class="hp-section-title">Room Types</div>${roomsHTML}</div>` : ''}
+      <div class="hp-cta">
+        <button class="hp-see-rates-btn" onclick="closeHotelPanel();toggleDatesTray()">See rates →</button>
+      </div>`;
+  }
+
+  function toggleHpDesc() {
+    const el  = document.getElementById('hp-desc-text');
+    const btn = el?.nextElementSibling;
+    if (!el) return;
+    const clamped = el.classList.toggle('clamped');
+    if (btn) btn.textContent = clamped ? 'Read more' : 'Show less';
+  }
+
+  function toggleHpAmenities() {
+    const wrap = document.getElementById('hp-amenities-wrap');
+    const btn  = wrap?.nextElementSibling;
+    if (!wrap || !btn) return;
+    const allJson = wrap.dataset.all;
+    if (allJson) {
+      try {
+        const all = JSON.parse(allJson);
+        wrap.innerHTML = all.map(a => `<span class="hp-amenity">${escHtml(a)}</span>`).join('');
+        btn.remove();
+      } catch (_) {}
+    }
+  }
+
+  // ── End Hotel Details Panel ────────────────────────────────────────────────
+
   function hotelHTML(h) {
     const stars    = '★'.repeat(Math.min(Math.max(Math.round(h.starRating || 0), 0), 5));
     const location = [h.address, h.city, h.country].filter(Boolean).join(', ');
@@ -5493,6 +5714,8 @@
               ${stars ? `<span class="stars">${stars}</span>` : ''}
               ${location ? `<span class="hotel-location">${location}</span>` : ''}
               ${rating}${clipBadge}
+              ${h.property_type === 'apartment_rental' ? '<span class="property-type-chip">🏠 Apartment</span>' : ''}
+              ${h.property_type === 'hostel' ? '<span class="property-type-chip">🛏 Hostel</span>' : ''}
             </div>
           </div>
           <div class="hotel-header-right">
@@ -5502,6 +5725,7 @@
                 <span class="price-note" id="hotel-price-note-${h.id}">${priceNote}</span>
               </div>
               <button type="button" class="hotel-tour-link" data-hotel-id="${hotelIdAttr}" onclick="openVibeTourForHotel(this.dataset.hotelId)">Vibe tour</button>
+              <button type="button" class="hotel-details-btn" data-hotel-id="${hotelIdAttr}" onclick="openHotelPanel(this.dataset.hotelId)">Details</button>
               <a class="book-btn" href="${bookUrl}" target="_blank" rel="noopener">Find &amp; Book →</a>
             </div>
           </div>

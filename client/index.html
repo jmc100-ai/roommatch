@@ -311,6 +311,20 @@
             <button type="button" class="cmd-clear" id="cv-nbhd-clear" onclick="clearResultsNeighborhood(event)" aria-label="Clear neighbourhood">×</button>
           </div>
         </div>
+        <div
+          class="cmd-seg cmd-seg--dates-mobile-only"
+          id="cmd-mobile-dates-wrap"
+          role="button"
+          tabindex="0"
+          onclick="openMobileResultsDatePicker(event)"
+          onkeydown="if((event.key==='Enter'||event.key===' ')&&event.target===this){event.preventDefault();openMobileResultsDatePicker(event);}"
+        >
+          <div class="cmd-l">Dates</div>
+          <div class="cmd-v cmd-v-row">
+            <span class="cmd-v-text cmd-mobile-dates-label ph" id="cmd-mobile-dates-label">Add dates</span>
+            <button type="button" class="cmd-clear" id="cmd-mobile-dates-clear" onclick="clearResultsDates(event)" aria-label="Clear dates">×</button>
+          </div>
+        </div>
         <div class="cmd-seg" onclick="toggleDatesTray(event)">
           <div class="cmd-l">Dates</div>
           <div class="cmd-v ph" id="cv-dates">Add dates</div>
@@ -409,13 +423,13 @@
         <span class="toggle-track"></span>
       </label>
     </div>
+    <label class="hotels-only-toggle" id="hotelsOnlyToggle" style="display:none" title="Hide apartments and hostels from results">
+      <input type="checkbox" id="hotels-only-check" onchange="setHotelsOnlyFilter(this.checked)">
+      <span>Hotels only</span>
+    </label>
   </div>
   <span id="ratesStatus" class="rates-status"></span>
   <div class="sort-bar-trailer">
-    <button type="button" class="cmd-mobile-dates-chip" id="cmd-mobile-dates-chip" onclick="openMobileResultsDatePicker(event)">
-      <span class="cmd-mobile-dates-label ph" id="cmd-mobile-dates-label">Dates: Add dates</span>
-      <span class="cmd-mobile-dates-clear" id="cmd-mobile-dates-clear" onclick="clearResultsDates(event)" aria-label="Clear dates">×</span>
-    </button>
     <span id="resultCount" class="result-count"></span>
     <button type="button" id="debugCopyBtn" onclick="copyDebugSnapshot()" title="Copy debug snapshot for sharing" style="display:none;background:rgba(255,255,255,0.10);border:1px solid rgba(255,255,255,0.25);color:rgba(255,255,255,0.75);font-size:11px;padding:3px 8px;border-radius:5px;cursor:pointer;letter-spacing:0.03em;flex-shrink:0;">⎘ debug</button>
     <div class="view-toggle" id="viewToggle">
@@ -461,6 +475,18 @@
       <div id="lb-counter"></div>
       <div class="lb-thumbs" id="lb-thumbs"></div>
     </div>
+  </div>
+</div>
+
+<!-- Hotel details slide-in panel -->
+<div id="hotel-panel-backdrop" class="hotel-panel-backdrop" onclick="closeHotelPanel()"></div>
+<div id="hotel-panel" class="hotel-panel" role="dialog" aria-modal="true" aria-label="Hotel details">
+  <div class="hotel-panel-header">
+    <button class="hotel-panel-back" onclick="closeHotelPanel()">← Back</button>
+    <button class="hotel-panel-close" onclick="closeHotelPanel()">✕</button>
+  </div>
+  <div id="hotel-panel-body" class="hotel-panel-body">
+    <!-- filled by JS -->
   </div>
 </div>
 

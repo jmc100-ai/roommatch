@@ -197,12 +197,24 @@ async function fetchHotelMetaBatch(hotelIds) {
         const d = await r.json();
         const h = d?.data;
         if (!h) throw new Error("no data");
+        const rawDesc = h.hotelDescription || h.description || h.longDescription || "";
+        const cleanDesc = typeof rawDesc === "string"
+          ? rawDesc.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim()
+          : "";
+        const rawFacilities = h.hotelFacilities || h.amenities || h.facilities || [];
+        const amenities = Array.isArray(rawFacilities)
+          ? rawFacilities.map(f => (typeof f === "string" ? f : f?.name || f?.facilityName || "")).filter(Boolean)
+          : [];
         _hotelMetaCache.set(hotelId, {
           name:        h.name        || h.hotelName  || null,
           mainPhoto:   h.main_photo  || h.mainPhoto  || h.hotelImages?.[0]?.url || null,
           starRating:  h.starRating  || h.star_rating || 0,
           guestRating: h.rating      || h.guestRating || h.guest_rating || 0,
           address:     typeof h.address === "string" ? h.address : (h.address?.line1 || ""),
+          description: cleanDesc,
+          amenities,
+          checkIn:     h.checkInOut?.checkIn  || h.checkIn  || null,
+          checkOut:    h.checkInOut?.checkOut || h.checkOut || null,
           expiresAt:   Date.now() + HOTEL_META_TTL_MS,
         });
         return hotelId;
@@ -3510,6 +3522,158 @@ app.get("/api/street-view", async (req, res) => {
   }
   _svCache.set(cacheKey, { ts: Date.now(), urls });
   res.json({ urls, coverage: true });
+});
+
+// ── GET /api/hotel/:hotelId — hotel details panel data ──────────────────────
+// Returns hotel metadata, room type photos, facts, and primary neighbourhood.
+// In-flight deduplication prevents thundering herd on cold cache.
+const _hotelDetailInflight = new Map();
+app.get("/api/hotel/:hotelId", async (req, res) => {
+  const hotelId = req.params.hotelId;
+  if (!hotelId) return res.status(400).json({ error: "hotelId required" });
+
+  if (_hotelDetailInflight.has(hotelId)) {
+    try {
+      const cached = await _hotelDetailInflight.get(hotelId);
+      return res.json(cached);
+    } catch (e) {
+      return res.status(500).json({ error: e.message });
+    }
+  }
+
+  const fetchPromise = (async () => {
+    const db = supabaseAdmin || supabase;
+
+    // 1. DB: v2_hotels_cache
+    const [cacheRes, roomTypesRes, photosRes] = await Promise.all([
+      db.from("v2_hotels_cache").select("hotel_photos, lat, lng, property_type, city, country_code").eq("hotel_id", hotelId).maybeSingle(),
+      db.from("v2_room_types_index").select("room_name, facts, photo_count").eq("hotel_id", hotelId).limit(30),
+      db.from("v2_room_inventory").select("photo_url, photo_type, room_name").eq("hotel_id", hotelId).limit(300),
+    ]);
+
+    const cacheRow = cacheRes.data || {};
+    const city     = cacheRow.city || null;
+
+    // 2. Live LiteAPI metadata (reuses shared _hotelMetaCache)
+    await fetchHotelMetaBatch([hotelId]);
+    const meta = _hotelMetaCache.get(hotelId) || {};
+
+    // 3. Group room photos
+    const photosByRoom = new Map();
+    for (const p of (photosRes.data || [])) {
+      const rn = p.room_name || "Room";
+      if (!photosByRoom.has(rn)) photosByRoom.set(rn, []);
+      if (photosByRoom.get(rn).length < 12) photosByRoom.get(rn).push(p.photo_url);
+    }
+
+    // 4. Build room_types array (merge index facts with photo URLs)
+    const roomTypesIndex = roomTypesRes.data || [];
+    const roomTypes = roomTypesIndex.map(rt => ({
+      room_name:   rt.room_name,
+      photos:      photosByRoom.get(rt.room_name) || [],
+      photo_count: rt.photo_count || 0,
+      facts:       rt.facts || {},
+    }));
+    // Include any rooms from inventory that have photos but no index entry
+    for (const [rn, photos] of photosByRoom.entries()) {
+      if (!roomTypes.find(rt => rt.room_name === rn)) {
+        roomTypes.push({ room_name: rn, photos, photo_count: photos.length, facts: {} });
+      }
+    }
+
+    // 5. Primary neighbourhood (bbox check)
+    let primaryNbhd = null;
+    if (city && cacheRow.lat && cacheRow.lng) {
+      const { data: nbhds } = await db.from("neighborhoods")
+        .select("name, vibe_short, bbox")
+        .eq("city", city)
+        .limit(20);
+      if (nbhds?.length) {
+        const lat = cacheRow.lat, lng = cacheRow.lng;
+        for (const n of nbhds) {
+          const b = n.bbox;
+          if (b && lat >= b.lat_min && lat <= b.lat_max && lng >= b.lon_min && lng <= b.lon_max) {
+            primaryNbhd = { name: n.name, vibe_short: n.vibe_short };
+            break;
+          }
+        }
+      }
+    }
+
+    return {
+      hotel_id:      hotelId,
+      name:          meta.name || hotelId,
+      star_rating:   meta.starRating || 0,
+      guest_rating:  meta.guestRating || 0,
+      address:       meta.address || "",
+      city:          city || "",
+      lat:           cacheRow.lat || null,
+      lng:           cacheRow.lng || null,
+      description:   meta.description || "",
+      amenities:     meta.amenities || [],
+      check_in:      meta.checkIn  || null,
+      check_out:     meta.checkOut || null,
+      property_type: cacheRow.property_type || "hotel",
+      hotel_photos:  cacheRow.hotel_photos || [],
+      room_types:    roomTypes,
+      primary_nbhd:  primaryNbhd,
+    };
+  })();
+
+  _hotelDetailInflight.set(hotelId, fetchPromise);
+  fetchPromise.finally(() => _hotelDetailInflight.delete(hotelId));
+
+  try {
+    const data = await fetchPromise;
+    res.json(data);
+  } catch (e) {
+    console.error("[hotel-detail]", hotelId, e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ── POST /api/backfill-property-types — re-classify property_type for a city ──
+app.post("/api/backfill-property-types", async (req, res) => {
+  const { city, secret } = req.body || {};
+  if (secret !== process.env.INDEX_SECRET) return res.status(403).json({ error: "forbidden" });
+  if (!city) return res.status(400).json({ error: "city required" });
+  const db = supabaseAdmin || supabase;
+  try {
+    const RENTAL_RE = /\b(apartment|vacation home|vacation rental|house|villa|hostel|dormitory|dorm|bunk bed)\b/i;
+    const HOSTEL_RE = /\b(hostel|dormitory|dorm|bunk bed)\b/i;
+    // Fetch all room inventory rows for city (hotel_id + room_name only)
+    const { data: rows, error: fetchErr } = await db
+      .from("v2_room_inventory")
+      .select("hotel_id, room_name")
+      .eq("city", city);
+    if (fetchErr) throw new Error(fetchErr.message);
+    // Group by hotel_id
+    const byHotel = new Map();
+    for (const r of (rows || [])) {
+      if (!byHotel.has(r.hotel_id)) byHotel.set(r.hotel_id, []);
+      byHotel.get(r.hotel_id).push(r.room_name || "");
+    }
+    let updated = 0;
+    for (const [hotelId, roomNames] of byHotel.entries()) {
+      const rentalCount = roomNames.filter(n => RENTAL_RE.test(n)).length;
+      const hostelCount = roomNames.filter(n => HOSTEL_RE.test(n)).length;
+      let property_type = "hotel";
+      if (rentalCount === roomNames.length) {
+        property_type = hostelCount > 0 ? "hostel" : "apartment_rental";
+      }
+      const { error: upErr } = await db.from("v2_hotels_cache")
+        .update({ property_type })
+        .eq("hotel_id", hotelId)
+        .eq("city", city);
+      if (upErr) console.warn("[backfill-property-types] update failed for", hotelId, upErr.message);
+      else updated++;
+    }
+    console.log(`[backfill-property-types] ${city}: updated ${updated}/${byHotel.size} hotels`);
+    res.json({ ok: true, city, updated, total: byHotel.size });
+  } catch (e) {
+    console.error("[backfill-property-types]", e.message);
+    res.status(500).json({ error: e.message });
+  }
 });
 
 app.get("*", (req, res) => {
