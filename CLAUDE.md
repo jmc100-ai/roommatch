@@ -571,8 +571,27 @@ Returns everything the details panel needs. Logic:
 - LiteAPI description HTML → sanitise. XSS risk if set via `innerHTML` unsanitised.
 
 ### Phase 4 — Search results card integration
-- Add **"Details →"** as a small text link (12px, muted) next to the "Vibe tour" button in each hotel card footer. Works for both photo-rich and stub (no-photo) cards.
-- Add **property type chip** on card header for `apartment_rental`/`hostel`: `🏠 Apartment` or `🛏 Hostel`. Neutral — not negative. Some users want apartments.
+
+**"Details" entry point — exact location in `hotelHTML()`:**
+The `.hotel-actions` div (inside `.hotel-header-right`) already contains:
+`[price display]` · `[Vibe tour button]` · `[Find & Book → link]`
+
+Add **"Details"** as a small ghost button between "Vibe tour" and "Find & Book →":
+```html
+<button type="button" class="hotel-details-btn"
+        data-hotel-id="${hotelIdAttr}"
+        onclick="openHotelDetails(this.dataset.hotelId)">Details</button>
+```
+- Style: no fill, subtle border, same height as "Vibe tour" button, 12–13px text
+- Works for both photo-rich and stub (no-photo) cards — panel shows metadata + amenities even without room photos
+
+**Property type chip — exact location:**
+In `.hotel-meta` row (below hotel name, alongside stars and location), add a chip for non-hotel property types only:
+```html
+${h.propertyType === 'apartment_rental' ? '<span class="property-type-chip">🏠 Apartment</span>' : ''}
+${h.propertyType === 'hostel' ? '<span class="property-type-chip">🛏 Hostel</span>' : ''}
+```
+Neutral language — not penalising. Some users want apartments.
 
 ### Phase 5 — "Hotels only" filter toggle
 - **Default: "All properties"** (opt-in filter, not opt-out). Avoids silent result count drops for existing users.
