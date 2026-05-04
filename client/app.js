@@ -1941,11 +1941,12 @@
     const stepIdx = BOOP.idx + 1;
     const stepTotal = BOOP_QUESTIONS.length;
     wrap.innerHTML = `
+      ${overlayMode ? '' : `
       <div class="boop-progress-row" role="group" aria-label="Question ${stepIdx} of ${stepTotal}">
         <span class="boop-progress-step">${stepIdx} of ${stepTotal}</span>
         <div class="boop-progress"><i style="width:${p}%"></i></div>
         <div class="boop-skip-tray"><button type="button" class="boop-btn subtle" onclick="boopSkipToResults()">Skip</button></div>
-      </div>
+      </div>`}
       <div class="boop-q-head">
         <div class="boop-q-title">${q.title}</div>
         ${q.sub ? `<div class="boop-q-sub">${q.sub}</div>` : ''}
