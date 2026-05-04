@@ -356,82 +356,36 @@ node scripts/test-search-quality.js --base-url=http://localhost:3000
 
 ---
 
-## Data Source Licensing — MUST READ BEFORE BUILDING
+## Data Source Licensing
 
-### LiteAPI Terms (Updated September 2025)
-LiteAPI's terms **prohibit**:
-- Storing, copying, or creating databases from LiteAPI data outside the permitted scope
-- Building, training, or enriching third-party datasets or machine learning models
-- Mapping LiteAPI data to third-party sources
+### Current approach: lowest-risk architecture
 
-The permitted scope is narrowly: browsing properties, displaying rates, enabling bookings.
+LiteAPI's terms restrict creating databases from their data. We have not received (and may never receive) explicit permission. The V2 pipeline is deliberately designed to minimise what we persist.
 
-**What this means for our architecture:**
+**Risk profile by data type:**
 
-| What we store | Status |
-|---|---|
-| `hotels_cache` (names, ratings, photo URLs) | Likely violates — explicit database of LiteAPI data |
-| `room_embeddings.photo_url` | Likely violates — bulk copy of their content identifiers |
-| Gemini-generated captions (from LiteAPI photos) | Gray area — transformed output but derived from their photos |
-| Vector embeddings (768 floats) | Gray area — two degrees removed from LiteAPI data |
-| Neighborhood vibes (pure Gemini, no LiteAPI data) | Clean — no LiteAPI data involved |
-
-**Gemini API terms:** Clean. Generated content (captions, embeddings, neighborhood text) belongs to us. Storing it is not restricted.
-
-**Unsplash terms:** Clean. Attribution required (planned). Hotlinking allowed. No bulk download.
-
-### Decision Tree — Before Building the Neighborhood Feature
-
-```
-STEP 1: Email LiteAPI (hello@nuitee.com)
-  → Explain: precomputing visual search embeddings from hotel photos
-    for a room recommendation product
-  → Ask for written permission or enterprise agreement
-
-  If YES (permission granted):
-    → Proceed with current architecture as planned
-    → Keep hotels_cache + room_embeddings exactly as-is
-
-  If NO or no response in 1 week:
-    → Use "embeddings-only" architecture (see below)
-    → OR apply to Hotelbeds (explicit Cache API, weeks to onboard)
-```
-
-### Embeddings-Only Architecture (LiteAPI fallback)
-If LiteAPI denies permission, change what we persist:
-- **Keep:** `hotel_id` + `room_name` + `embedding` vector (mathematical derivative, strong legal argument)
-- **Remove from DB:** `photo_url`, captions, hotel metadata from hotels_cache
-- **At search time:** fetch photo URLs + hotel names live from LiteAPI using ranked hotel_ids
-- **Tradeoff:** +150-250ms per search. Photo URLs must be fetched fresh — old embeddings remain valid.
-
-### Alternative Data Sources (if moving off LiteAPI entirely)
-
-| Option | Photos | Caching | Access | Cost | Timeline |
-|---|---|---|---|---|---|
-| LiteAPI + permission | Yes | Permitted | Self-service | Low | Days |
-| Embeddings-only (no LiteAPI data stored) | Live fetch | n/a | Self-service | Low | 1 day rework |
-| **Hotelbeds** | Yes (room codes) | **Explicitly permitted via Cache API** | Application required | Higher | Weeks |
-| SerpApi Google Hotels Photos | Yes (basic categories) | Unknown | Self-service | ~$50/mo | Days |
-| Amadeus | **No photos in v3** | n/a | Self-service | Free sandbox | Ruled out |
-
-**Hotelbeds** is the best long-term commercial option — they have a dedicated Cache API explicitly designed for "getting their portfolio into YOUR local system." Requires commercial agreement.
-
-### Hotelbeds vs LiteAPI — Product Quality Comparison
-
-| Dimension | LiteAPI | Hotelbeds |
+| What we store | Risk | Status |
 |---|---|---|
-| Hotel coverage | 2M+ (aggregated) | 250K (directly contracted) |
-| Photo quality | Good, varies by source | GIATA standard — consistent |
-| Room type linkage | roomName + room_type_id | roomCode (e.g. DBT.DX) |
-| Caching | Prohibited | Explicitly permitted via Cache API |
-| Pricing | Dynamic | Wholesale (negotiated, hourly cache) |
-| Access | Self-service today | Commercial agreement + certification (weeks) |
-| Cost | $3/booking + 2.5% order | Commission on margin |
-| Developer experience | Modern, REST, MCP-native | B2B, older patterns |
+| Boolean facts (`walk_in_shower: true`) per hotel_id + room_name | Very low — abstract derived work, no LiteAPI expression | ✅ Keep |
+| Vector embeddings (768 floats) | Very low — pure math derivative | ✅ Keep |
+| `hotel_id`, `room_name`, `room_type_id` (identifiers) | Low — identifiers, not copyrightable content | ✅ Keep |
+| Photo URLs in `v2_room_inventory` / `v2_room_feature_facts` | Low–medium — hotlinking references, not stored content | ✅ Keep for now (display only) |
+| Gemini captions / `feature_summary` in `v2_room_inventory` | Medium — our text but derived from their photos | ⚠️ Candidate for removal |
+| Hotel name, star rating, address persisted to DB | Higher — LiteAPI metadata | ❌ Never persist — always live-fetch |
+| Hotel description, amenities persisted to DB | High — LiteAPI content | ❌ Never persist — always live-fetch |
+| Neighborhood vibes (pure Gemini, no LiteAPI data) | None | ✅ Clean |
 
-**Verdict:** Hotelbeds produces marginally better/more consistent data (GIATA is the industry standard photo source LiteAPI also draws from), and has **explicit caching permission** — the decisive legal advantage. LiteAPI has 8x more hotels and is far simpler to use today. At commercial scale, Hotelbeds is the right long-term partner. Also worth evaluating: **GIATA direct** (1.4M+ properties mapped, addresses + geocodes + photos + room types — the source Hotelbeds uses).
+**Key rules for all agents:**
+- **Never add hotel metadata columns** (name, description, amenities, address, star_rating, guest_rating) to `v2_hotels_cache` as persistent fields. Always fetch live via LiteAPI at query/display time, cache in memory only (30–60 min TTL).
+- Hotel details page (when built): live-fetch from LiteAPI `/data/hotel`, short in-memory cache, no DB write.
+- The `v2_room_types_index` (our primary search index) contains zero LiteAPI data — only boolean facts we derived. This is the cleanest part of the architecture.
+- `v2_room_inventory` captions/feature_summary are the next candidate to remove to further reduce risk. Not urgent, but do not expand what we store there.
 
-### GATE: Do not start building the neighborhood feature until LiteAPI response is received or a data source decision is made. Ask the user to confirm before proceeding.
+**Long-term: Hotelbeds** has an explicit Cache API that permits storing their data. Requires a commercial agreement (weeks to onboard). Worth pursuing at commercial scale — they are the right long-term data partner. Also worth evaluating: **GIATA direct** (1.4M+ properties, the source Hotelbeds itself uses).
+
+**Gemini API terms:** Clean. Generated content belongs to us. No restrictions on storing it.
+
+**Unsplash terms:** Clean. Attribution required (displayed on neighbourhood cards). Hotlinking allowed.
 
 ---
 
@@ -516,8 +470,7 @@ SELECT
 3. **Neighborhood Vibe + Visual Search** — full plan in two places:
    - **Cursor plan file (authoritative, most detailed):** `C:\Users\jmc10\.cursor\plans\neighborhood_vibe_+_visual_search_39871fcd.plan.md`
    - **Inline summary:** see "VIBE PLAN" section below
-   - **GATE**: resolve LiteAPI licensing FIRST (see "Data Source Licensing" above). Do NOT build until resolved.
-   - When user says **"go build vibe plan"**, read the plan file first, then work through the phases in order, confirming the gate first.
+   - When user says **"go build vibe plan"**, read the plan file first, then work through the phases in order.
 
 3. **Update test-search-quality.js expected counts** after re-indexing any city.
 
@@ -527,7 +480,7 @@ SELECT
 
 ## VIBE PLAN — Neighborhood Vibe + Visual Room Search
 
-**TRIGGER PHRASE:** When user says "go build vibe plan", start at Phase 0 (licensing gate check), then proceed phase by phase.
+**TRIGGER PHRASE:** When user says "go build vibe plan", read this section first then work through phases in order.
 
 ### Product Vision
 The implemented search flow is:
@@ -543,15 +496,6 @@ The implemented search flow is:
 4. **Room search results** (`#st-results`) — vector search results, replaces `#discovery-flow`
 
 **Key UX note:** Users do NOT use the neighbourhood grid as a primary first-action. The neighbourhood card grid is a post-boop step that most users skip (boop goes directly to results). Trending searches and discovery features belong on the room search results screen or within the Boop wizard, not on the neighbourhood grid.
-
-### PHASE 0 — Licensing Gate (MUST DO FIRST)
-Before writing any code:
-- Check whether LiteAPI permission has been received (email hello@nuitee.com)
-- If YES: proceed with current architecture (hotels_cache, photo_url, all as-is)
-- If NO/no response after 1 week: use embeddings-only architecture (see "Data Source Licensing" section) OR switch to Hotelbeds
-- **Ask user explicitly before proceeding past this gate**
-
----
 
 ### PHASE 1 — Lat/Lng + Bbox Filter (backend only, no UI change)
 
