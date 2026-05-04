@@ -948,15 +948,12 @@
         margin-left: auto;
         justify-content: flex-end;
       }
+      .nbhd-refine-avail-slot { display: flex; align-items: center; gap: 10px; }
       .nbhd-refine-avail-slot .avail-filter { gap: 6px; margin: 0; }
-      .nbhd-refine-avail-slot .avail-filter-label {
-        font-size: 9px;
-        letter-spacing: 0.06em;
-        text-align: right;
-        line-height: 1.2;
-        white-space: normal;
-        max-width: min(190px, 42vw);
-      }
+      .nbhd-refine-avail-slot .avail-filter-label { font-size: 11px; white-space: nowrap; }
+      .nbhd-refine-avail-slot .prop-type-filter { gap: 5px; }
+      .nbhd-refine-avail-slot .prop-type-label { font-size: 11px; }
+      .nbhd-refine-avail-slot .prop-type-select { font-size: 11px; padding: 3px 22px 3px 8px; }
       .nbhd-refine-main {
         width: 100%;
         max-width: 100%;

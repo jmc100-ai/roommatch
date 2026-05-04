@@ -5209,23 +5209,19 @@
     });
   }
 
-  /** Desktop: #availFilter stays in sort bar. Mobile (≤640px): move into nbhd strip next to “Top neighbourhoods”. */
+  /** Desktop: filters stay in sort bar. Mobile: move both into nbhd strip. */
   function syncAvailFilterMount() {
-    const avail = document.getElementById('availFilter');
+    const avail        = document.getElementById('availFilter');
+    const propType     = document.getElementById('propTypeFilter');
     const desktopMount = document.getElementById('availFilterMountDesktop');
-    const stripSlot = document.getElementById('nbhd-refine-avail-slot');
-    if (!avail || !desktopMount) return;
-    const shown = typeof window.getComputedStyle !== 'undefined' && window.getComputedStyle(avail).display !== 'none';
+    const stripSlot    = document.getElementById('nbhd-refine-avail-slot');
+    if (!desktopMount) return;
     const mobile = typeof window.matchMedia !== 'undefined' && window.matchMedia('(max-width: 640px)').matches;
-    if (!shown) {
-      desktopMount.appendChild(avail);
-      return;
-    }
-    if (mobile && stripSlot) {
-      stripSlot.appendChild(avail);
-    } else {
-      desktopMount.appendChild(avail);
-    }
+    [propType, avail].forEach(el => {
+      if (!el) return;
+      if (mobile && stripSlot) stripSlot.appendChild(el);
+      else desktopMount.appendChild(el);
+    });
   }
 
   window.addEventListener('resize', scheduleSyncAvailFilterMount);
