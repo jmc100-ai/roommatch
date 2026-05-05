@@ -33,7 +33,7 @@ const {
   pointInPolygon,
   bboxFromRing,
 } = require("./scripts/neighborhood-vibe-data");
-const { runV2Search } = require("./scripts/search-v2");
+const { runV2Search, invalidatePhaseACache } = require("./scripts/search-v2");
 
 // ── Password gate helpers ─────────────────────────────────────────────────────
 const SITE_PASSWORD = process.env.SITE_PASSWORD || "";
@@ -2936,7 +2936,11 @@ app.post("/api/v2/rebuild-city-index", async (req, res) => {
   try {
     const { data, error } = await fc.rpc("rebuild_v2_room_types_index_city", { p_city: city });
     if (error) console.error(`[v2-rebuild] ${city} error:`, error.message);
-    else console.log(`[v2-rebuild] ${city}: ${data} room types rebuilt`);
+    else {
+      console.log(`[v2-rebuild] ${city}: ${data} room types rebuilt`);
+      invalidatePhaseACache(city);
+      console.log(`[v2-rebuild] ${city}: phase-A cache invalidated`);
+    }
   } catch (ex) {
     console.error(`[v2-rebuild] ${city} exception:`, ex.message);
   }

@@ -17,6 +17,24 @@
 const { buildFactIntent, buildFactIntentLLM, scoreFactSet } = require("./fact-catalog");
 const { normalizePolygonRing, pointInPolygon, bboxFromRing } = require("./neighborhood-vibe-data");
 
+// ── Phase-A in-memory cache (per city, 5-minute TTL) ─────────────────────────
+// Avoids re-fetching 3,500+ hotel cache rows + 9,600+ index rows on every search.
+const _phaseACache = new Map(); // city → { ts, hotelRows, indexRows }
+const PHASE_A_TTL_MS = 5 * 60 * 1000;
+
+function getPhaseACache(city) {
+  const entry = _phaseACache.get(city);
+  if (entry && Date.now() - entry.ts < PHASE_A_TTL_MS) return entry;
+  return null;
+}
+function setPhaseACache(city, hotelRows, indexRows) {
+  _phaseACache.set(city, { ts: Date.now(), hotelRows, indexRows });
+}
+function invalidatePhaseACache(city) {
+  if (city) _phaseACache.delete(city);
+  else _phaseACache.clear();
+}
+
 // ── helpers ──────────────────────────────────────────────────────────────────
 
 function parseMustHaves(raw) {
@@ -229,22 +247,33 @@ async function runV2Search({ req, supabase, supabaseAdmin, resolveCityName }) {
 
   // ── Phase A: load pre-aggregated room-type index + hotel IDs ─────────────
   const _t0 = Date.now();
-  const [cacheResult, indexResult] = await Promise.all([
-    fetchClient
-      .from("v2_hotels_cache")
-      .select("hotel_id, property_type")
-      .eq("city", city),
-    fetchClient
-      .from("v2_room_types_index")
-      .select("hotel_id,room_name,facts,photo_count")
-      .eq("city", city)
-      .limit(100000),
-  ]);
-  console.log(`[v2 perf] phase-A db: ${Date.now()-_t0}ms  hotels=${cacheResult.data?.length} index_rows=${indexResult.data?.length}`);
-  if (cacheResult.error) return { status: 500, body: { error: cacheResult.error.message } };
-  if (indexResult.error)  return { status: 500, body: { error: indexResult.error.message } };
+  let hotelRows, indexRows;
+  const cached = getPhaseACache(city);
+  if (cached) {
+    hotelRows = cached.hotelRows;
+    indexRows = cached.indexRows;
+    console.log(`[v2 perf] phase-A db: 0ms (cache hit)  hotels=${hotelRows.length} index_rows=${indexRows.length}`);
+  } else {
+    const [cacheResult, indexResult] = await Promise.all([
+      fetchClient
+        .from("v2_hotels_cache")
+        .select("hotel_id, property_type")
+        .eq("city", city),
+      fetchClient
+        .from("v2_room_types_index")
+        .select("hotel_id,room_name,facts,photo_count")
+        .eq("city", city)
+        .limit(100000),
+    ]);
+    if (cacheResult.error) return { status: 500, body: { error: cacheResult.error.message } };
+    if (indexResult.error)  return { status: 500, body: { error: indexResult.error.message } };
+    hotelRows = cacheResult.data || [];
+    indexRows = indexResult.data || [];
+    setPhaseACache(city, hotelRows, indexRows);
+    console.log(`[v2 perf] phase-A db: ${Date.now()-_t0}ms  hotels=${hotelRows.length} index_rows=${indexRows.length}`);
+  }
 
-  const hotelMeta = new Map((cacheResult.data || []).map((r) => [r.hotel_id, { property_type: r.property_type || "hotel" }]));
+  const hotelMeta = new Map((hotelRows).map((r) => [r.hotel_id, { property_type: r.property_type || "hotel" }]));
   const cityHotelIds   = [...hotelMeta.keys()];
   const eligibleHotelIds = hotelIdsByGeo
     ? cityHotelIds.filter((id) => hotelIdsByGeo.includes(id))
@@ -268,7 +297,7 @@ async function runV2Search({ req, supabase, supabaseAdmin, resolveCityName }) {
   // roomTypeMap: hotel_id → [{ room_name, facts{} }]  (aggregated from index rows)
   const roomTypeMap = new Map(); // hotel_id → [{room_name, facts}]
 
-  for (const row of (indexResult.data || [])) {
+  for (const row of indexRows) {
     if (!eligibleSet.has(row.hotel_id)) continue;
     const facts = row.facts || {};
 
@@ -402,41 +431,44 @@ async function runV2Search({ req, supabase, supabaseAdmin, resolveCityName }) {
 
   console.log(`[v2 perf] post-boop: ${Date.now()-_t0}ms`);
 
-  // ── Phase B: photos + hotelScore + primary-nbhd (parallel) ───────────────
+  // ── Phase B: photos + hotel-embed + score_hotels + primary-nbhd (all parallel) ──
   const hotelEmbedPromise = embedText(hotelQuery, process.env.GEMINI_KEY || "");
 
-  // Photos come from v2_room_feature_facts via RPC (photo_url dropped from v2_room_inventory).
-  // When BOOP was active, nbhdPrimaryByHotel already covers ALL hotels — skip redundant RPC.
+  // score_hotels needs the embedding — chain it off the embed promise so it
+  // runs as soon as the embedding is ready without blocking the photo fetch.
+  const hotelVibePromise = hotelEmbedPromise.then(embedding => {
+    if (!embedding || !topHotelIds.length) return null;
+    return fetchClient.rpc("score_hotels", {
+      query_embedding: embedding,
+      search_city:     city,
+      hotel_ids:       topHotelIds,
+    });
+  });
+
   const needPrimaryNbhdRpc = nbhdPrimaryByHotel.size === 0;
   const phaseB = await Promise.all([
-    fetchClient.rpc("get_v2_room_photos", { p_hotel_ids: topHotelIds, p_city: city }),
+    fetchClient.rpc("get_v2_room_photos", { p_hotel_ids: topHotelIds, p_city: city, p_max_per_hotel: 10 }),
     hotelEmbedPromise,
+    hotelVibePromise,
     ...(needPrimaryNbhdRpc
       ? [fetchClient.rpc("get_primary_nbhds_for_hotels", { p_hotel_ids: topHotelIds })]
       : []),
   ]);
-  const [photosResult, hotelEmbedding] = phaseB;
-  const primaryNbhdRpcResult = needPrimaryNbhdRpc ? phaseB[2] : null;
+  const [photosResult, hotelEmbedding, hotelVibeResult] = phaseB;
+  const primaryNbhdRpcResult = needPrimaryNbhdRpc ? phaseB[3] : null;
 
   console.log(`[v2 perf] phase-B parallel (photos+embed+nbhd): ${Date.now()-_t0}ms  photos=${photosResult.data?.length}`);
   if (photosResult.error) return { status: 500, body: { error: photosResult.error.message } };
 
-  // hotel-vibe score_hotels RPC (same as V1 HOTEL_SIM logic)
+  // hotel-vibe score from parallel result
   const hotelVibeSimMap = new Map();
   let hotelSimMaxRaw = 0;
   let hotelVibeModel = "fallback_rating";
-  if (hotelEmbedding && topHotelIds.length) {
-    const hs = await fetchClient.rpc("score_hotels", {
-      query_embedding: hotelEmbedding,
-      search_city:     city,
-      hotel_ids:       topHotelIds,
-    });
-    if (!hs.error && hs.data?.length) {
-      hotelVibeModel = "score_hotels";
-      for (const r of hs.data) {
-        hotelVibeSimMap.set(r.hotel_id, r.similarity);
-        if (r.similarity > hotelSimMaxRaw) hotelSimMaxRaw = r.similarity;
-      }
+  if (hotelVibeResult && !hotelVibeResult.error && hotelVibeResult.data?.length) {
+    hotelVibeModel = "score_hotels";
+    for (const r of hotelVibeResult.data) {
+      hotelVibeSimMap.set(r.hotel_id, r.similarity);
+      if (r.similarity > hotelSimMaxRaw) hotelSimMaxRaw = r.similarity;
     }
   }
   const HOTEL_SIM_MAX  = hotelSimMaxRaw > 0 ? hotelSimMaxRaw : 0.9;
@@ -780,4 +812,4 @@ async function runV2Search({ req, supabase, supabaseAdmin, resolveCityName }) {
   };
 }
 
-module.exports = { runV2Search };
+module.exports = { runV2Search, invalidatePhaseACache };
