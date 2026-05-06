@@ -797,6 +797,11 @@ function _wlBaseUrlFromEnv() {
   const d = process.env.LITEAPI_WL_DOMAIN;
   return d ? `https://${d.replace(/^https?:\/\//, "").replace(/\/$/, "")}` : "";
 }
+function _maptilerKeyFromEnv() {
+  // Public-by-design (used in tile URLs that the browser fetches). MUST be
+  // restricted by HTTP referrer in the Maptiler dashboard for production.
+  return (process.env.MAPTILER_KEY || "").trim();
+}
 let _indexHtmlSrc = null;
 function _readIndexHtml() {
   if (_indexHtmlSrc == null || process.env.NODE_ENV !== "production") {
@@ -806,9 +811,14 @@ function _readIndexHtml() {
 }
 function serveAppHtml(res) {
   // Re-inject per request so env changes take effect immediately on next deploy/restart.
-  // The placeholder is wrapped in JS string quotes in the HTML, so we encode any quotes.
-  const wl = _wlBaseUrlFromEnv().replace(/[\\"']/g, "");
-  const html = _readIndexHtml().replace(/__WL_BASE_URL__/g, wl);
+  // Strip JS-string-breakers from injected values; placeholders sit inside
+  // double-quoted JS string literals in index.html.
+  const safe = (s) => String(s || "").replace(/[\\"']/g, "");
+  const wl  = safe(_wlBaseUrlFromEnv());
+  const mt  = safe(_maptilerKeyFromEnv());
+  const html = _readIndexHtml()
+    .replace(/__WL_BASE_URL__/g, wl)
+    .replace(/__MAPTILER_KEY__/g, mt);
   res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
   res.setHeader("Pragma", "no-cache");
   res.setHeader("Expires", "0");
@@ -822,11 +832,14 @@ app.get("/", (_req, res) => serveAppHtml(res));
 app.get("/hotel/:hotelId", (_req, res) => serveAppHtml(res));
 
 // ── Public client config ──────────────────────────────────────────────────────
-// Kept as a fallback (window._WL_BASE_URL is normally already injected by
-// serveAppHtml above; the client also fetches this so a missed injection
-// is recoverable).
+// Kept as a fallback (window._WL_BASE_URL / window._MAPTILER_KEY are normally
+// already injected by serveAppHtml above; the client also fetches this so a
+// missed injection is recoverable).
 app.get("/api/config", (req, res) => {
-  res.json({ wl_base_url: _wlBaseUrlFromEnv() });
+  res.json({
+    wl_base_url:   _wlBaseUrlFromEnv(),
+    maptiler_key:  _maptilerKeyFromEnv(),
+  });
 });
 
 // Static assets — set { index: false } so Express never auto-serves

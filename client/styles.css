@@ -3832,6 +3832,183 @@
       background:rgba(0,0,0,.2);
     }
 
+    /* ── Neighbourhood map module (top of #st-nbhd) ───────────────────── */
+    .nbhd-map-module {
+      position: relative;
+      width: 100%;
+      height: clamp(320px, 38vh, 460px);
+      margin: 8px 0 28px;
+      border-radius: 16px;
+      overflow: hidden;
+      background: #0d0d10;
+      border: 1px solid rgba(255,255,255,0.08);
+      box-shadow: 0 12px 36px rgba(0,0,0,0.45);
+      isolation: isolate; /* contain map z-index */
+    }
+    .nbhd-map-canvas {
+      position: absolute; inset: 0;
+      background: linear-gradient(160deg,#1a1812 0%,#0c0a07 100%);
+    }
+    /* Force the MapLibre attribution to a discreet footer */
+    .nbhd-map-canvas .maplibregl-ctrl-bottom-right,
+    .nbhd-map-canvas .maplibregl-ctrl-bottom-left {
+      pointer-events: auto;
+    }
+    .nbhd-map-canvas .maplibregl-ctrl-attrib {
+      background: rgba(0,0,0,0.55) !important;
+      color: rgba(232,228,220,0.7) !important;
+      font-size: 10px !important;
+      padding: 2px 6px !important;
+      border-radius: 6px 0 0 0 !important;
+    }
+    .nbhd-map-canvas .maplibregl-ctrl-attrib a { color: rgba(232,228,220,0.85) !important; }
+    .nbhd-map-canvas .maplibregl-ctrl-logo { opacity: 0.6; }
+
+    .nbhd-map-status {
+      position: absolute; inset: 0;
+      display: flex; align-items: center; justify-content: center;
+      color: var(--muted); font-size: 13px; letter-spacing: 0.04em;
+      text-transform: uppercase;
+      background: linear-gradient(160deg,rgba(20,18,12,0.9),rgba(8,7,5,0.95));
+      pointer-events: none;
+      transition: opacity 0.25s;
+      z-index: 5;
+    }
+    .nbhd-map-status.is-hidden { opacity: 0; }
+    .nbhd-map-status.is-error  { color: #d8a85c; text-transform: none; letter-spacing: 0.01em; padding: 0 24px; text-align: center; }
+
+    .nbhd-map-legend {
+      position: absolute; top: 12px; right: 12px;
+      z-index: 6;
+      display: flex; flex-direction: column; gap: 4px;
+      background: rgba(12,12,14,0.78);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 10px;
+      padding: 8px 10px;
+      font-size: 11px; color: rgba(232,228,220,0.85);
+      line-height: 1.2;
+      pointer-events: none;
+    }
+    .nbhd-map-legend-title { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 2px; }
+    .nbhd-map-legend-row { display: inline-flex; align-items: center; gap: 6px; }
+    .nbhd-map-legend-dot { width: 9px; height: 9px; border-radius: 50%; display: inline-block; }
+
+    .nbhd-map-reset {
+      position: absolute; bottom: 14px; left: 14px;
+      z-index: 6;
+      background: rgba(12,12,14,0.85);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      border: 1px solid rgba(255,255,255,0.14);
+      color: rgba(232,228,220,0.92);
+      padding: 7px 12px;
+      border-radius: 100px;
+      font: inherit; font-size: 12px;
+      cursor: pointer;
+      transition: background 0.15s, border-color 0.15s, transform 0.05s;
+      opacity: 0;
+      pointer-events: none;
+    }
+    .nbhd-map-module.is-ready .nbhd-map-reset { opacity: 1; pointer-events: auto; }
+    .nbhd-map-reset:hover { background: rgba(20,20,22,0.95); border-color: rgba(255,255,255,0.24); }
+    .nbhd-map-reset:active { transform: scale(0.97); }
+
+    /* Custom HTML markers (placed by JS as MapLibre Marker elements). */
+    .nbhd-marker {
+      position: relative;
+      width: 56px;
+      transform: translate(-50%, -100%);
+      cursor: pointer;
+      will-change: transform;
+      pointer-events: auto;
+    }
+    .nbhd-marker-badge {
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      width: 56px; height: 56px;
+      border-radius: 50%;
+      background: var(--marker-bg, #6f6a64);
+      color: #1a1410;
+      font: 600 14px/1 'DM Sans', sans-serif;
+      box-shadow: 0 6px 14px rgba(0,0,0,0.45), 0 0 0 2px rgba(0,0,0,0.35);
+      border: 2px solid rgba(255,255,255,0.7);
+      transition: transform 0.18s, box-shadow 0.18s, border-color 0.18s;
+    }
+    .nbhd-marker-badge .nbhd-marker-pct { font-size: 14px; }
+    .nbhd-marker-badge .nbhd-marker-pct-suffix { font-size: 9px; opacity: 0.75; margin-top: 1px; letter-spacing: 0.04em; text-transform: uppercase; }
+    .nbhd-marker-stem {
+      position: absolute;
+      left: 50%; bottom: -8px;
+      width: 12px; height: 12px;
+      transform: translateX(-50%) rotate(45deg);
+      background: var(--marker-bg, #6f6a64);
+      border-right: 2px solid rgba(255,255,255,0.7);
+      border-bottom: 2px solid rgba(255,255,255,0.7);
+      z-index: -1;
+    }
+    .nbhd-marker-label {
+      position: absolute;
+      left: 50%; top: calc(100% + 8px);
+      transform: translateX(-50%);
+      white-space: nowrap;
+      max-width: 200px; overflow: hidden; text-overflow: ellipsis;
+      font: 600 11px/1.2 'DM Sans', sans-serif;
+      color: rgba(232,228,220,0.95);
+      background: rgba(10,10,12,0.78);
+      backdrop-filter: blur(6px);
+      -webkit-backdrop-filter: blur(6px);
+      padding: 3px 8px;
+      border-radius: 6px;
+      border: 1px solid rgba(255,255,255,0.08);
+      pointer-events: none;
+      opacity: 0.92;
+    }
+    .nbhd-marker:hover .nbhd-marker-badge,
+    .nbhd-marker.is-hover .nbhd-marker-badge {
+      transform: scale(1.12);
+      border-color: #fff;
+      box-shadow: 0 10px 22px rgba(0,0,0,0.55), 0 0 0 2px rgba(0,0,0,0.4);
+    }
+    .nbhd-marker:hover .nbhd-marker-stem,
+    .nbhd-marker.is-hover .nbhd-marker-stem {
+      border-right-color: #fff; border-bottom-color: #fff;
+    }
+    /* Vibe-tier ramp (set on .nbhd-marker as inline --marker-bg by JS, but
+       these classes provide a fallback if a marker forgot the variable). */
+    .nbhd-marker--t4 { --marker-bg: #c9a96e; }
+    .nbhd-marker--t3 { --marker-bg: #d8a85c; }
+    .nbhd-marker--t2 { --marker-bg: #9b8a6a; }
+    .nbhd-marker--t1 { --marker-bg: #6f6a64; }
+    .nbhd-marker--t0 { --marker-bg: #5b5650; }
+
+    /* Card highlight states driven by map hover/click */
+    .nbhd-card-new.is-map-hover {
+      border-color: rgba(201,169,110,0.85) !important;
+      box-shadow: 0 0 0 2px rgba(201,169,110,0.3), 0 14px 44px rgba(0,0,0,0.52) !important;
+      transform: translateY(-3px);
+    }
+    @keyframes nbhdMapFlash {
+      0%   { box-shadow: 0 0 0 0 rgba(201,169,110,0.0), 0 14px 44px rgba(0,0,0,0.52); }
+      30%  { box-shadow: 0 0 0 6px rgba(201,169,110,0.55), 0 14px 44px rgba(0,0,0,0.52); }
+      100% { box-shadow: 0 0 0 0 rgba(201,169,110,0.0), 0 14px 44px rgba(0,0,0,0.52); }
+    }
+    .nbhd-card-new.is-map-flash {
+      animation: nbhdMapFlash 1.3s ease-out 1;
+      border-color: rgba(201,169,110,0.85) !important;
+    }
+
+    /* Mobile adjustments */
+    @media (max-width: 760px) {
+      .nbhd-map-module { height: clamp(220px, 36vh, 280px); margin: 4px 0 18px; border-radius: 12px; }
+      .nbhd-map-legend { top: 8px; right: 8px; padding: 6px 8px; font-size: 10px; }
+      .nbhd-map-reset  { bottom: 10px; left: 10px; padding: 6px 10px; font-size: 11px; }
+      .nbhd-marker     { width: 48px; }
+      .nbhd-marker-badge { width: 48px; height: 48px; }
+      .nbhd-marker-badge .nbhd-marker-pct { font-size: 13px; }
+      .nbhd-marker-label { font-size: 10.5px; max-width: 140px; }
+    }
+
     /* ── Neighbourhood cards (full large-card drilldown) */
     .nbhd-grid-new { display:flex; flex-direction:column; gap:36px; width:100%; min-width:0; }
     .nbhd-card-new {

@@ -2482,11 +2482,10 @@
         if (hoods.length) {
           Object.keys(NBHD_CARD_DATA).forEach(k => delete NBHD_CARD_DATA[k]);
           NBHD_RESERVED_HEROES = new Set(hoods.map(h => h.photo_url).filter(Boolean));
-          grid.innerHTML = hoods.map((h, idx) => {
-            const cardId = `n${idx}`;
-            NBHD_CARD_DATA[cardId] = h;
-            return renderNbhdCard(h, cardId);
-          }).join('') + renderNbhdSkip(city);
+          const cardEntries = hoods.map((h, idx) => ({ cardId: `n${idx}`, h }));
+          for (const { cardId, h } of cardEntries) NBHD_CARD_DATA[cardId] = h;
+          grid.innerHTML = cardEntries.map(({ cardId, h }) => renderNbhdCard(h, cardId)).join('') + renderNbhdSkip(city);
+          renderNbhdMap(city, cardEntries);
           return;
         }
       }
@@ -2500,11 +2499,10 @@
       NBHD_RESERVED_HEROES = new Set(fallback.map(h => h.photo_url).filter(Boolean));
       const rankedFallback = rankNeighborhoodsByBoop(fallback);
       fillNbhdPickerMatchCacheFromRanked(city, rankedFallback);
-      grid.innerHTML = rankedFallback.map((h, idx) => {
-        const cardId = `f${idx}`;
-        NBHD_CARD_DATA[cardId] = h;
-        return renderNbhdCard(h, cardId);
-      }).join('') + renderNbhdSkip(city);
+      const fallbackEntries = rankedFallback.map((h, idx) => ({ cardId: `f${idx}`, h }));
+      for (const { cardId, h } of fallbackEntries) NBHD_CARD_DATA[cardId] = h;
+      grid.innerHTML = fallbackEntries.map(({ cardId, h }) => renderNbhdCard(h, cardId)).join('') + renderNbhdSkip(city);
+      renderNbhdMap(city, fallbackEntries);
     } else {
       // No neighbourhood data at all — skip step gracefully
       pickNbhd('All of ' + city, null);
@@ -2598,6 +2596,338 @@
       : '';
     pickNbhd(h.name, bbox, h.polygon || null);
   }
+
+  // ── Neighbourhood map module (MapLibre GL + Maptiler tiles) ────────────────
+  // Lazy-loaded on first render. Renders polygons (when available) + circular
+  // vibe-% markers for each neighbourhood. Click a marker → scroll to the
+  // matching card in the grid below + flash highlight. Hover (desktop) →
+  // bidirectional highlight between marker and card.
+  const NBHD_MAP_LIB_URL = 'https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js';
+  const NBHD_MAP_CSS_URL = 'https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css';
+  let _nbhdMapLibPromise = null;
+  let _nbhdMap           = null;
+  let _nbhdMapMarkers    = [];          // [{cardId, marker, hover, click}]
+  let _nbhdMapBounds     = null;        // last fitBounds target so Reset works
+  let _nbhdMapCardListenersBound = false;
+
+  function _vibeColorForPct(p) {
+    if (p >= 85) return { bg: '#c9a96e', tier: 4 };
+    if (p >= 70) return { bg: '#d8a85c', tier: 3 };
+    if (p >= 50) return { bg: '#9b8a6a', tier: 2 };
+    if (p >  0)  return { bg: '#6f6a64', tier: 1 };
+    return            { bg: '#5b5650', tier: 0 };
+  }
+
+  function _setNbhdMapStatus(text, isError) {
+    const el = document.getElementById('nbhd-map-status');
+    if (!el) return;
+    if (text == null) {
+      el.classList.add('is-hidden');
+      el.classList.remove('is-error');
+      return;
+    }
+    el.textContent = text;
+    el.classList.remove('is-hidden');
+    el.classList.toggle('is-error', !!isError);
+  }
+
+  function _bboxCentroid(bbox) {
+    if (!bbox) return null;
+    const lat_min = Number(bbox.lat_min), lat_max = Number(bbox.lat_max);
+    const lon_min = Number(bbox.lon_min), lon_max = Number(bbox.lon_max);
+    if (![lat_min, lat_max, lon_min, lon_max].every(Number.isFinite)) return null;
+    return { lat: (lat_min + lat_max) / 2, lng: (lon_min + lon_max) / 2 };
+  }
+
+  // polygon.ring is stored as [[lat, lng], ...] (lat first). MapLibre needs
+  // GeoJSON [lng, lat]. Returns null if the ring is malformed.
+  function _polygonRingToGeoJSON(ring) {
+    if (!Array.isArray(ring) || ring.length < 3) return null;
+    const coords = ring
+      .map(p => Array.isArray(p) && Number.isFinite(+p[0]) && Number.isFinite(+p[1]) ? [+p[1], +p[0]] : null)
+      .filter(Boolean);
+    if (coords.length < 3) return null;
+    if (coords[0][0] !== coords[coords.length - 1][0] || coords[0][1] !== coords[coords.length - 1][1]) {
+      coords.push(coords[0]); // close the ring for GeoJSON
+    }
+    return [coords]; // GeoJSON Polygon: [outerRing]
+  }
+
+  function _bindNbhdCardHoverListeners() {
+    if (_nbhdMapCardListenersBound) return;
+    const grid = document.getElementById('nbhd-grid');
+    if (!grid) return;
+    grid.addEventListener('mouseover', e => {
+      const card = e.target.closest && e.target.closest('.nbhd-card-new[data-nbhd-card]');
+      if (!card) return;
+      _setNbhdMarkerHover(card.dataset.nbhdCard, true);
+    });
+    grid.addEventListener('mouseout', e => {
+      const card = e.target.closest && e.target.closest('.nbhd-card-new[data-nbhd-card]');
+      if (!card) return;
+      const next = e.relatedTarget && e.relatedTarget.closest && e.relatedTarget.closest('.nbhd-card-new[data-nbhd-card]');
+      if (next === card) return;
+      _setNbhdMarkerHover(card.dataset.nbhdCard, false);
+    });
+    _nbhdMapCardListenersBound = true;
+  }
+
+  function _setNbhdMarkerHover(cardId, on) {
+    const entry = _nbhdMapMarkers.find(m => m.cardId === cardId);
+    if (!entry) return;
+    entry.markerEl.classList.toggle('is-hover', !!on);
+  }
+
+  function _setNbhdCardHover(cardId, on) {
+    const card = document.querySelector(`.nbhd-card-new[data-nbhd-card="${CSS.escape(cardId)}"]`);
+    if (!card) return;
+    card.classList.toggle('is-map-hover', !!on);
+  }
+
+  function _scrollAndFlashCard(cardId) {
+    const card = document.querySelector(`.nbhd-card-new[data-nbhd-card="${CSS.escape(cardId)}"]`);
+    if (!card) return;
+    card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    card.classList.remove('is-map-flash'); // restart animation
+    void card.offsetWidth;
+    card.classList.add('is-map-flash');
+    setTimeout(() => card.classList.remove('is-map-flash'), 1500);
+  }
+
+  function _ensureMapLibre() {
+    if (window.maplibregl) return Promise.resolve(window.maplibregl);
+    if (_nbhdMapLibPromise) return _nbhdMapLibPromise;
+    _nbhdMapLibPromise = new Promise((resolve, reject) => {
+      // CSS first
+      if (!document.querySelector('link[data-maplibre]')) {
+        const link = document.createElement('link');
+        link.rel = 'stylesheet';
+        link.href = NBHD_MAP_CSS_URL;
+        link.dataset.maplibre = '1';
+        document.head.appendChild(link);
+      }
+      const s = document.createElement('script');
+      s.src = NBHD_MAP_LIB_URL;
+      s.async = true;
+      s.crossOrigin = 'anonymous';
+      s.onload  = () => window.maplibregl ? resolve(window.maplibregl) : reject(new Error('maplibregl missing after load'));
+      s.onerror = () => reject(new Error('Failed to load MapLibre GL from CDN'));
+      document.head.appendChild(s);
+    });
+    return _nbhdMapLibPromise;
+  }
+
+  function _styleUrlForMaptiler(key) {
+    if (!key) return null;
+    // Streets style; switch to "outdoor-v2" or "basic-v2" if you prefer.
+    return `https://api.maptiler.com/maps/streets-v2/style.json?key=${encodeURIComponent(key)}`;
+  }
+
+  function _fallbackRasterStyle() {
+    // Free OSM raster fallback so the module still works without a Maptiler key.
+    // OSM's tile usage policy discourages high-volume embedding — only used as a
+    // courtesy until MAPTILER_KEY is configured.
+    return {
+      version: 8,
+      sources: {
+        'osm': {
+          type: 'raster',
+          tiles: [
+            'https://a.tile.openstreetmap.org/{z}/{x}/{y}.png',
+            'https://b.tile.openstreetmap.org/{z}/{x}/{y}.png',
+            'https://c.tile.openstreetmap.org/{z}/{x}/{y}.png',
+          ],
+          tileSize: 256,
+          attribution: '© OpenStreetMap contributors',
+          maxzoom: 19,
+        },
+      },
+      layers: [{ id: 'osm', type: 'raster', source: 'osm' }],
+    };
+  }
+
+  function resetNbhdMap() {
+    if (!_nbhdMap || !_nbhdMapBounds) return;
+    _nbhdMap.fitBounds(_nbhdMapBounds, { padding: 50, duration: 600, maxZoom: 14 });
+  }
+
+  // Tag each card in the grid with data-nbhd-card so map ↔ card lookup works.
+  // Card order in the DOM matches the entries[] order produced upstream.
+  function _annotateCardsForMap(entries) {
+    const cards = document.querySelectorAll('#nbhd-grid .nbhd-card-new');
+    cards.forEach((el, i) => {
+      const cardId = entries[i]?.cardId;
+      if (cardId) el.setAttribute('data-nbhd-card', cardId);
+    });
+  }
+
+  async function renderNbhdMap(city, entries) {
+    const root = document.getElementById('nbhd-map-module');
+    if (!root) return;
+
+    // Tag each card so click + hover wiring can find them.
+    _annotateCardsForMap(entries);
+    _bindNbhdCardHoverListeners();
+
+    // Filter to neighbourhoods that have at least a bbox.
+    const plottable = entries.filter(({ h }) => _bboxCentroid(h.bbox));
+    if (plottable.length === 0) {
+      _setNbhdMapStatus('No map data for this city yet', true);
+      root.classList.remove('is-ready');
+      return;
+    }
+
+    let maplibregl;
+    try {
+      _setNbhdMapStatus('Loading map…');
+      maplibregl = await _ensureMapLibre();
+    } catch (e) {
+      console.warn('[nbhd-map]', e.message);
+      _setNbhdMapStatus('Map library unavailable', true);
+      return;
+    }
+
+    const key      = (window._MAPTILER_KEY || '').trim();
+    const styleUrl = _styleUrlForMaptiler(key);
+    const initialStyle = styleUrl || _fallbackRasterStyle();
+
+    // Compute bounds union from all plottable bboxes.
+    let minLat =  90, maxLat = -90, minLng =  180, maxLng = -180;
+    for (const { h } of plottable) {
+      const b = h.bbox;
+      minLat = Math.min(minLat, +b.lat_min);
+      maxLat = Math.max(maxLat, +b.lat_max);
+      minLng = Math.min(minLng, +b.lon_min);
+      maxLng = Math.max(maxLng, +b.lon_max);
+    }
+    const bounds = new maplibregl.LngLatBounds([minLng, minLat], [maxLng, maxLat]);
+    _nbhdMapBounds = bounds;
+
+    // Tear down previous map (city change, profile re-rank).
+    if (_nbhdMap) {
+      try { _nbhdMap.remove(); } catch (_) {}
+      _nbhdMap = null;
+      _nbhdMapMarkers = [];
+    }
+
+    const canvas = document.getElementById('nbhd-map-canvas');
+    if (!canvas) return;
+
+    let map;
+    try {
+      map = new maplibregl.Map({
+        container: canvas,
+        style: initialStyle,
+        bounds,
+        fitBoundsOptions: { padding: 50, maxZoom: 14 },
+        attributionControl: { compact: true },
+        cooperativeGestures: false,
+      });
+    } catch (e) {
+      console.warn('[nbhd-map] init failed', e.message);
+      _setNbhdMapStatus('Could not load map', true);
+      return;
+    }
+    _nbhdMap = map;
+    map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'bottom-right');
+
+    map.on('load', () => {
+      // Polygon overlay layer (one source with all neighbourhood features).
+      const features = [];
+      for (const { cardId, h } of plottable) {
+        const ring = h.polygon && Array.isArray(h.polygon.ring) ? h.polygon.ring : null;
+        const coords = ring ? _polygonRingToGeoJSON(ring) : null;
+        if (!coords) continue;
+        const pct = nbhdBoopVibeScore(h);
+        const { bg } = _vibeColorForPct(pct);
+        features.push({
+          type: 'Feature',
+          properties: { cardId, name: h.name, color: bg, pct },
+          geometry: { type: 'Polygon', coordinates: coords },
+        });
+      }
+      if (features.length) {
+        map.addSource('nbhd-polys', { type: 'geojson', data: { type: 'FeatureCollection', features } });
+        map.addLayer({
+          id:   'nbhd-poly-fill',
+          type: 'fill',
+          source: 'nbhd-polys',
+          paint: {
+            'fill-color': ['get', 'color'],
+            'fill-opacity': 0.18,
+            'fill-outline-color': ['get', 'color'],
+          },
+        });
+        map.addLayer({
+          id:   'nbhd-poly-outline',
+          type: 'line',
+          source: 'nbhd-polys',
+          paint: {
+            'line-color': ['get', 'color'],
+            'line-width': 2,
+            'line-opacity': 0.85,
+          },
+        });
+        // Click polygon → same as click marker
+        map.on('click', 'nbhd-poly-fill', e => {
+          const id = e.features?.[0]?.properties?.cardId;
+          if (id) _scrollAndFlashCard(id);
+        });
+        map.on('mouseenter', 'nbhd-poly-fill', () => map.getCanvas().style.cursor = 'pointer');
+        map.on('mouseleave', 'nbhd-poly-fill', () => map.getCanvas().style.cursor = '');
+      }
+
+      // Custom HTML markers (one per neighbourhood).
+      _nbhdMapMarkers = [];
+      for (const { cardId, h } of plottable) {
+        const c = _bboxCentroid(h.bbox);
+        if (!c) continue;
+        const pct = nbhdBoopVibeScore(h);
+        const { bg, tier } = _vibeColorForPct(pct);
+
+        const el = document.createElement('div');
+        el.className = `nbhd-marker nbhd-marker--t${tier}`;
+        el.style.setProperty('--marker-bg', bg);
+        el.dataset.cardId = cardId;
+        el.innerHTML = `
+          <div class="nbhd-marker-badge">
+            <span class="nbhd-marker-pct">${pct > 0 ? pct + '%' : '—'}</span>
+            ${pct > 0 ? '<span class="nbhd-marker-pct-suffix">vibe</span>' : ''}
+          </div>
+          <div class="nbhd-marker-stem"></div>
+          <div class="nbhd-marker-label">${escHtml(h.name || '')}</div>
+        `;
+        // Hover on marker → highlight card
+        el.addEventListener('mouseenter', () => _setNbhdCardHover(cardId, true));
+        el.addEventListener('mouseleave', () => _setNbhdCardHover(cardId, false));
+        // Click marker → scroll + flash card
+        el.addEventListener('click', e => {
+          e.stopPropagation();
+          _scrollAndFlashCard(cardId);
+        });
+
+        const marker = new maplibregl.Marker({ element: el, anchor: 'bottom' })
+          .setLngLat([c.lng, c.lat])
+          .addTo(map);
+        _nbhdMapMarkers.push({ cardId, marker, markerEl: el });
+      }
+
+      _setNbhdMapStatus(null);
+      root.classList.add('is-ready');
+    });
+
+    map.on('error', e => {
+      // Style errors (bad key / network) — fall back to OSM raster if not already.
+      const msg = (e && e.error && e.error.message) || '';
+      console.warn('[nbhd-map] map error:', msg);
+      if (key && /key|auth|forbidden|401|403/i.test(msg)) {
+        try { map.setStyle(_fallbackRasterStyle()); } catch (_) {}
+      }
+    });
+  }
+  // expose for inline onclick on the Reset button
+  window.resetNbhdMap = resetNbhdMap;
+  // ── End neighbourhood map module ───────────────────────────────────────────
 
   function pickNbhd(name, bbox, polygon) {
     S.nbhd    = name;

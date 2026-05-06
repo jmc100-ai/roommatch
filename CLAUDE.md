@@ -82,6 +82,7 @@ SOFT_FLAG_HOTEL_CAP    — max hotels scanned for coverage in soft mode (default
 UNSPLASH_KEY           — (not yet set) free key from unsplash.com/developers — needed for neighborhood card photos
 SITE_PASSWORD          — (not yet set) simple password gate for the frontend; omit to disable gate (API routes never gated)
 LITEAPI_WL_DOMAIN      — LiteAPI white-label domain WITHOUT scheme, e.g. `travelboop.nuitee.link`. Server prefixes `https://` and serves via `/api/config` AND injects into `window._WL_BASE_URL` in served HTML so `buildBookUrl()` in client/app.js has it on first render. Empty/unset → "Find & Book" buttons fall back to a Google search.
+MAPTILER_KEY           — Maptiler API key (free tier: 100k tile loads/month at maptiler.com). Powers the neighbourhood-vibe-page map module (MapLibre GL). Server exposes via `/api/config` AND injects into `window._MAPTILER_KEY` in served HTML so the map can boot before any /api/config fetch. **Must be restricted by HTTP referrer in the Maptiler dashboard** (Allowed origins: `travelboop.com`, `www.travelboop.com`, `roommatch-1fg5.onrender.com`, `localhost:*`). Unset → map falls back to OSM raster tiles (works but lower quality + against OSM tile usage policy at scale).
 ```
 
 ### White-label booking links (Find & Book buttons)
@@ -475,6 +476,8 @@ SELECT
 ---
 
 ## Known Issues & Next Steps
+
+0. **Neighbourhood vibe map module (built May 6 2026)** — `#st-nbhd` now renders a MapLibre GL map at the top of the page (above the card grid) with one circular vibe-% marker per neighbourhood + polygon shading when `polygon.ring` is available. Markers are colored by vibe-% tier (gold ≥85, amber ≥70, bronze ≥50, slate <50). Click a marker (or polygon) → scroll the matching card into view + 1.3s gold flash highlight. Hover (desktop) is bidirectional between marker and card. Map lazy-loads MapLibre from CDN on first show and uses Maptiler `streets-v2` style when `MAPTILER_KEY` is set; falls back to OSM raster tiles otherwise. Module renders inside `#nbhd-map-module` (CSS in `client/styles.css` under "Neighbourhood map module"); core JS lives in `client/app.js` (`renderNbhdMap`, `_ensureMapLibre`, `_vibeColorForPct`, `resetNbhdMap`). Re-renders on every `fetchAndShowNeighborhoodsNew` call (city change or returning to step). **Action required: sign up at maptiler.com (free), set `MAPTILER_KEY` in `.env` and Render env, restrict by HTTP referrer in the Maptiler dashboard.**
 
 1. **Hotel-level vibe score** — TODO: The `hotel-match-badge` currently shows the best room's vectorScore as a proxy for "hotel match." This is slightly misleading. When hotel-level vibe scoring is built (as part of the neighborhood vibe phase), replace `hotelEffectiveScore(h)` with a true hotel-level embedding score separate from the room score. The badge label can then be changed to "Hotel Vibe X%". See `hotelHTML()` and `applyPricesInPlace()` in `client/index.html`.
 

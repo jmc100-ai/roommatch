@@ -7,8 +7,11 @@
   <title>TravelBoop — Find your vibe</title>
   <meta name="description" content="TravelBoop: neighbourhood picks, AI visual search on real hotel rooms — your Boop when vibe and space line up." />
   <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-  <!-- Server-injected client config (WL base URL, etc.) — must run BEFORE app.js so buildBookUrl() has it on first render. -->
-  <script>window._WL_BASE_URL = "__WL_BASE_URL__";</script>
+  <!-- Server-injected client config (WL base URL, Maptiler key, etc.) — must run BEFORE app.js so buildBookUrl() / nbhd map have these on first render. -->
+  <script>
+    window._WL_BASE_URL  = "__WL_BASE_URL__";
+    window._MAPTILER_KEY = "__MAPTILER_KEY__";
+  </script>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet" />
@@ -202,6 +205,19 @@
             <h1 class="chapter-h1">Find your <em>neighbourhood vibe</em></h1>
             <p class="chapter-sub" id="nbhd-chapter-sub">Every card is a neighbourhood vibe — the feel of where you'll stay. Pick an area to focus your search, or open the whole city.</p>
           </div>
+        </div>
+        <!-- Map module (lazy-renders MapLibre GL on first show; populated by initNbhdMap()) -->
+        <div class="nbhd-map-module" id="nbhd-map-module" aria-label="Neighbourhood map">
+          <div class="nbhd-map-canvas" id="nbhd-map-canvas"></div>
+          <div class="nbhd-map-legend" aria-hidden="true">
+            <span class="nbhd-map-legend-title">Vibe match</span>
+            <span class="nbhd-map-legend-row"><i class="nbhd-map-legend-dot" style="background:#c9a96e"></i> 85+</span>
+            <span class="nbhd-map-legend-row"><i class="nbhd-map-legend-dot" style="background:#d8a85c"></i> 70+</span>
+            <span class="nbhd-map-legend-row"><i class="nbhd-map-legend-dot" style="background:#9b8a6a"></i> 50+</span>
+            <span class="nbhd-map-legend-row"><i class="nbhd-map-legend-dot" style="background:#6f6a64"></i> &lt;50</span>
+          </div>
+          <button type="button" class="nbhd-map-reset" id="nbhd-map-reset" onclick="resetNbhdMap()">Reset view</button>
+          <div class="nbhd-map-status" id="nbhd-map-status">Loading map…</div>
         </div>
         <div class="chapter-body">
           <div class="nbhd-grid-new" id="nbhd-grid"></div>
