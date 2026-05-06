@@ -3836,7 +3836,7 @@
     .nbhd-map-module {
       position: relative;
       width: 100%;
-      height: clamp(320px, 38vh, 460px);
+      height: clamp(272px, 32vh, 390px);
       margin: 8px 0 28px;
       border-radius: 16px;
       overflow: hidden;
@@ -4003,7 +4003,7 @@
 
     /* Mobile adjustments */
     @media (max-width: 760px) {
-      .nbhd-map-module { height: clamp(220px, 36vh, 280px); margin: 4px 0 18px; border-radius: 12px; }
+      .nbhd-map-module { height: clamp(187px, 30vh, 238px); margin: 4px 0 18px; border-radius: 12px; }
       .nbhd-map-legend { top: 8px; right: 8px; padding: 6px 8px; font-size: 10px; }
       .nbhd-map-reset  { bottom: 10px; left: 10px; padding: 6px 10px; font-size: 11px; }
       .nbhd-marker     { width: 48px; }

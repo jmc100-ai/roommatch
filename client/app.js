@@ -2768,7 +2768,11 @@
 
   function resetNbhdMap() {
     if (!_nbhdMap || !_nbhdMapBounds) return;
-    _nbhdMap.fitBounds(_nbhdMapBounds, { padding: 50, duration: 600, maxZoom: 14 });
+    _nbhdMap.fitBounds(_nbhdMapBounds, {
+      padding: { top: 38, bottom: 50, left: 36, right: 36 },
+      duration: 600,
+      maxZoom: 15,
+    });
   }
 
   // Tag each card in the grid with data-nbhd-card so map ↔ card lookup works.
@@ -2848,7 +2852,10 @@
         container: canvas,
         style: initialStyle,
         bounds,
-        fitBoundsOptions: { padding: 50, maxZoom: 14 },
+        // Tighter padding = more zoom. Asymmetric to leave room for the
+        // marker label that hangs below each centroid (~24-30px) and for the
+        // badge that sits above (~32px), without cropping at any edge.
+        fitBoundsOptions: { padding: { top: 38, bottom: 50, left: 36, right: 36 }, maxZoom: 15 },
         attributionControl: { compact: true },
       });
     } catch (e) {
