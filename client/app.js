@@ -62,8 +62,8 @@
 
     // Hotel details page with dates pre-filled (user picks their room on the WL)
     const params = new URLSearchParams();
-    if (_checkin)  params.set('checkin',  _checkin);
-    if (_checkout) params.set('checkout', _checkout);
+    if (S.checkin)  params.set('checkin',  S.checkin);
+    if (S.checkout) params.set('checkout', S.checkout);
     params.set('occupancies', btoa(JSON.stringify([{ adults: 2, children: [] }])));
     return `${wl}/hotels/${hotel.id}?${params.toString()}`;
   }
