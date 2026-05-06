@@ -40,26 +40,32 @@
   let _lastVsearchUrl = null;
 
   // ── White-label booking config ──────────────────────────────────────────────
-  // Set LITEAPI_WL_DOMAIN in .env (e.g. "travelboop.liteapi.travel" or "book.travelboop.com").
-  // Leave empty to fall back to Google search (current placeholder behaviour).
-  const WL_BASE_URL = (window._WL_BASE_URL || '').replace(/\/$/, '');
+  // Set LITEAPI_WL_DOMAIN in Render env (e.g. "travelboop.nuitee.link").
+  // The server injects window._WL_BASE_URL into index.html so it's available
+  // BEFORE this module runs. We also read at CALL TIME (not module init) so
+  // any late /api/config fallback fetch is honoured too.
+  // Leave empty to fall back to Google search (placeholder).
+  function _wlBaseUrl() {
+    return (window._WL_BASE_URL || '').replace(/\/$/, '');
+  }
 
   /** Build a white-label deep link for a specific room offer (offerId) or hotel page. */
   function buildBookUrl(hotel, roomTypeId) {
-    if (!WL_BASE_URL) {
+    const wl = _wlBaseUrl();
+    if (!wl) {
       // Fallback: Google search until white label is configured
       return `https://www.google.com/search?q=${encodeURIComponent((hotel.name||'') + ' ' + (hotel.city||'') + ' hotel booking')}`;
     }
     // If we have an offerId for this specific room → go straight to checkout
     const offerId = hotel.offerIds?.[roomTypeId];
-    if (offerId) return `${WL_BASE_URL}/booking?offerId=${encodeURIComponent(offerId)}`;
+    if (offerId) return `${wl}/booking?offerId=${encodeURIComponent(offerId)}`;
 
     // Hotel details page with dates pre-filled (user picks their room on the WL)
     const params = new URLSearchParams();
     if (_checkin)  params.set('checkin',  _checkin);
     if (_checkout) params.set('checkout', _checkout);
     params.set('occupancies', btoa(JSON.stringify([{ adults: 2, children: [] }])));
-    return `${WL_BASE_URL}/hotels/${hotel.id}?${params.toString()}`;
+    return `${wl}/hotels/${hotel.id}?${params.toString()}`;
   }
   let selectedNeighborhood = null; // { name, bbox?, polygon? } — polygon is geo JSON for /api/vsearch
   let NEIGHBORHOOD_FLOW_ROWS = []; // indexed rows for fetchAndShowNeighborhoods → selectNeighborhoodFlow
@@ -3706,7 +3712,7 @@
     if (typeof query === 'string' && query.trim()) S.q = query.trim();
     hideBanner();
     enterResultsLoadingMode();
-    setStatus(`Searching for "${query}"${statusSuffix}…`, true);
+    setStatus('');
 
     // Increment race ID — any in-flight rates response with an older ID will be discarded
     const reqId = ++_ratesReqId;
@@ -5426,106 +5432,215 @@
     return `<div class="vibe-triplet">${pills.join('')}</div>`;
   }
 
-  // ── Hotel Details Panel ────────────────────────────────────────────────────
+  // ── Hotel Details — full page (replaces the legacy slide-out panel) ────────
+  // Route:    GET /hotel/:hotelId
+  // Container: #st-hotel-detail (parallel to #st-results / #discovery-flow).
+  // Reuses the existing /api/hotel/:hotelId data + the hp-* element styles
+  // (carousel, lightbox, sections, reviews, amenities) inside a richer page
+  // layout (.hpage-*) with sticky sidebar + mobile sticky CTA bar.
 
-  let _panelHotelId = null;
-  const _panelInflight = new Map();
-  let _hpCarouselIdx = 0;
-  let _hpLightboxIdx = 0;
+  let _detailHotelId    = null;
+  let _detailHotelData  = null;       // last loaded payload (for sticky-sidebar duplication, etc.)
+  const _detailInflight = new Map();
+  // Saved view state so closing the detail page restores the user's prior
+  // results/discovery view + scroll position without re-running search.
+  let _detailReturnState = null;      // { results: bool, scrollY: number }
+  let _hpCarouselIdx  = 0;
+  let _hpLightboxIdx  = 0;
   let _hpLightboxUrls = [];
+  // Reviews UI state — purely in-memory, never persisted client-side either.
+  // (We rely on the server for caching; this just tracks pagination + IO observer.)
+  const _hpReviewsState = { hotelId: null, offset: 0, limit: 10, total: null, loading: false, observer: null };
 
-  async function openHotelPanel(hotelId) {
-    if (_panelHotelId === hotelId) return;
-    _panelHotelId = hotelId;
+  function _detailHotelIdFromPath() {
+    const m = location.pathname.match(/^\/hotel\/([^\/?#]+)/);
+    return m ? decodeURIComponent(m[1]) : null;
+  }
 
-    const panel    = document.getElementById('hotel-panel');
-    const backdrop = document.getElementById('hotel-panel-backdrop');
-    const body     = document.getElementById('hotel-panel-body');
-    if (!panel || !body) return;
+  // Build the URL for /hotel/:id while preserving useful search context
+  // (city / q / hotel) so the page is shareable AND back-context survives reload.
+  function _detailHrefFor(hotelId) {
+    const params = new URLSearchParams();
+    if (S.city)   params.set('city', S.city);
+    if (S.q)      params.set('q',    S.q);
+    const qs = params.toString();
+    return `/hotel/${encodeURIComponent(hotelId)}${qs ? '?' + qs : ''}`;
+  }
 
-    _hpCarouselIdx = 0;
-    _hpLightboxIdx = 0;
-    body.innerHTML = hotelPanelSkeletonHTML();
-    panel.classList.add('open');
-    if (backdrop) backdrop.classList.add('open');
-    document.body.style.overflow = 'hidden';
+  // Public entry — called by Details button, hero image click, guest-score badge.
+  // opts: { scrollTo?: 'reviews', _fromPopstate?: bool } (internal)
+  async function openHotelDetailPage(hotelId, opts) {
+    if (!hotelId) return;
+    opts = opts || {};
+    const scrollTo = opts.scrollTo;
+    const fromPop  = !!opts._fromPopstate;
 
-    const url = new URL(location.href);
-    url.searchParams.set('hotel', hotelId);
-    history.pushState({ hotelPanel: hotelId }, '', url.toString());
+    // Already showing this hotel — just honor scroll intent.
+    if (_detailHotelId === hotelId) {
+      if (scrollTo === 'reviews') _hpScrollToReviews({ smooth: true });
+      return;
+    }
+
+    // Capture return state on first transition into the page (not on popstate forward).
+    if (!fromPop) {
+      _detailReturnState = {
+        results: document.body.classList.contains('has-results'),
+        scrollY: window.scrollY || 0,
+      };
+    }
+
+    _detailHotelId   = hotelId;
+    _detailHotelData = null;
+    _hpCarouselIdx   = 0;
+    _hpLightboxIdx   = 0;
+
+    const root = document.getElementById('st-hotel-detail');
+    if (!root) return;
+
+    // Toggle visibility purely via body class (CSS owns hide/show of other views).
+    root.style.display = 'block';
+    document.body.classList.add('has-hotel-detail');
+    document.body.style.overflow = ''; // ensure not stuck locked from any prior modal
+
+    // Render skeleton while we fetch.
+    root.innerHTML = hotelDetailPageSkeletonHTML();
+    window.scrollTo(0, 0);
+
+    // Push URL only when not arriving via popstate (avoids history loop).
+    if (!fromPop) {
+      const href = _detailHrefFor(hotelId);
+      try {
+        history.pushState({ hotelDetail: hotelId }, '', href);
+      } catch (_) {}
+    }
 
     try {
-      if (!_panelInflight.has(hotelId)) {
-        _panelInflight.set(hotelId,
+      if (!_detailInflight.has(hotelId)) {
+        _detailInflight.set(hotelId,
           fetch(`${BACKEND}/api/hotel/${encodeURIComponent(hotelId)}`)
             .then(r => r.json())
-            .finally(() => _panelInflight.delete(hotelId))
+            .finally(() => _detailInflight.delete(hotelId))
         );
       }
-      const data = await _panelInflight.get(hotelId);
-      if (_panelHotelId !== hotelId) return;
-      body.innerHTML = hotelPanelHTML(data);
+      const data = await _detailInflight.get(hotelId);
+      if (_detailHotelId !== hotelId) return; // user navigated away
+      _detailHotelData = data;
+      root.innerHTML = hotelDetailPageHTML(data);
+      _attachHpReviewsObserver(hotelId);
+      // Defer scroll to reviews until after layout settles.
+      if (scrollTo === 'reviews') {
+        requestAnimationFrame(() => _hpScrollToReviews({ smooth: false }));
+      }
     } catch (e) {
-      body.innerHTML = `<div style="padding:32px;color:var(--muted);text-align:center">Could not load hotel details.<br><button onclick="closeHotelPanel()" style="margin-top:12px;background:none;border:1px solid rgba(255,255,255,.15);color:var(--text);padding:8px 16px;border-radius:8px;cursor:pointer;font-family:'DM Sans',sans-serif">Close</button></div>`;
+      root.innerHTML = `<div class="hpage-error">
+        <div class="hpage-error-msg">Couldn't load hotel details.</div>
+        <button class="hp-close-btn" onclick="closeHotelDetailPage()">Back</button>
+      </div>`;
     }
   }
 
-  function closeHotelPanel() {
-    const panel    = document.getElementById('hotel-panel');
-    const backdrop = document.getElementById('hotel-panel-backdrop');
-    if (!panel || !panel.classList.contains('open')) return;
-    panel.classList.remove('open');
-    if (backdrop) backdrop.classList.remove('open');
-    document.body.style.overflow = '';
-    _panelHotelId = null;
+  // Internal close — restores prior view + URL.
+  // fromPop=true means popstate triggered the close (don't push history again).
+  function closeHotelDetailPage(opts) {
+    opts = opts || {};
+    const fromPop = !!opts._fromPopstate;
 
-    const url = new URL(location.href);
-    if (url.searchParams.has('hotel')) {
-      url.searchParams.delete('hotel');
-      history.replaceState(null, '', url.toString());
+    const root = document.getElementById('st-hotel-detail');
+    if (!root || root.style.display === 'none') return;
+
+    root.style.display = 'none';
+    root.innerHTML = ''; // free memory
+    document.body.classList.remove('has-hotel-detail');
+    _detailHotelId   = null;
+    _detailHotelData = null;
+
+    // Tear down reviews observer so a fresh open re-arms it.
+    if (_hpReviewsState.observer) {
+      try { _hpReviewsState.observer.disconnect(); } catch (_) {}
+      _hpReviewsState.observer = null;
+    }
+    _hpReviewsState.hotelId = null;
+    _hpReviewsState.offset  = 0;
+    _hpReviewsState.total   = null;
+    _hpReviewsState.loading = false;
+
+    // Restore prior view (the CSS rules tied to body.has-results / its absence
+    // already drive #st-results vs. #discovery-flow visibility, so we just
+    // restore scroll position).
+    if (_detailReturnState && _detailReturnState.results) {
+      const y = _detailReturnState.scrollY || 0;
+      requestAnimationFrame(() => window.scrollTo(0, y));
+    } else {
+      // Fresh load to /hotel/:id (no prior results in memory) — go home cleanly.
+      window.scrollTo(0, 0);
+    }
+    _detailReturnState = null;
+
+    // Reset URL to root (or wherever we returned to).
+    if (!fromPop) {
+      try {
+        history.pushState({}, '', '/');
+      } catch (_) {}
     }
   }
 
-  document.addEventListener('keydown', e => {
-    if (e.key === 'Escape' && _panelHotelId) closeHotelPanel();
-  });
-
+  // Browser back/forward handler.
   window.addEventListener('popstate', e => {
-    if (_panelHotelId && !(e.state?.hotelPanel)) closeHotelPanel();
+    const onDetailUrl = !!_detailHotelIdFromPath();
+    if (onDetailUrl) {
+      // Forward into a hotel page (e.g. user pressed Forward).
+      const id = _detailHotelIdFromPath();
+      if (id && id !== _detailHotelId) openHotelDetailPage(id, { _fromPopstate: true });
+    } else if (_detailHotelId) {
+      // Back out of a hotel page.
+      closeHotelDetailPage({ _fromPopstate: true });
+    }
   });
 
-  // Mobile swipe-down from top 60px to close
-  (function() {
-    let touchStartY = 0;
-    const panelEl = document.getElementById('hotel-panel');
-    if (!panelEl) return;
-    panelEl.addEventListener('touchstart', e => {
-      touchStartY = e.touches[0].clientY;
-    }, { passive: true });
-    panelEl.addEventListener('touchend', e => {
-      const dy = e.changedTouches[0].clientY - touchStartY;
-      if (dy > 60 && touchStartY < 80) closeHotelPanel();
-    }, { passive: true });
-  })();
+  // ESC closes detail page (mirrors panel behavior; lightbox handles its own ESC).
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape' && _detailHotelId) {
+      const lb = document.getElementById('hp-lightbox');
+      if (lb && lb.classList.contains('open')) return; // lightbox owns ESC first
+      closeHotelDetailPage();
+    }
+  });
 
-  function hotelPanelSkeletonHTML() {
+  // Direct deep-load: if the page loaded at /hotel/:id, jump straight to the
+  // detail page (instead of the discovery flow).
+  document.addEventListener('DOMContentLoaded', () => {
+    const id = _detailHotelIdFromPath();
+    if (id) openHotelDetailPage(id);
+  });
+
+  function hotelDetailPageSkeletonHTML() {
     return `
-      <div class="hp-hero-placeholder hp-skeleton"></div>
-      <div class="hp-meta">
-        <div class="hp-skeleton" style="height:22px;width:70%;margin-bottom:8px;border-radius:6px"></div>
-        <div class="hp-skeleton" style="height:14px;width:45%;margin-bottom:16px;border-radius:6px"></div>
+      <div class="hpage-topbar">
+        <button class="hpage-back" onclick="closeHotelDetailPage()" aria-label="Back">‹ Back</button>
       </div>
-      <div class="hp-section">
-        <div class="hp-skeleton" style="height:12px;width:30%;margin-bottom:10px;border-radius:4px"></div>
-        <div class="hp-skeleton" style="height:60px;border-radius:8px"></div>
-      </div>
-      <div class="hp-section">
-        <div class="hp-skeleton" style="height:12px;width:30%;margin-bottom:10px;border-radius:4px"></div>
-        <div style="display:flex;gap:8px;flex-wrap:wrap">${Array(6).fill('<div class="hp-skeleton" style="height:28px;width:80px;border-radius:100px"></div>').join('')}</div>
+      <div class="hpage-hero hp-skeleton"></div>
+      <div class="hpage-grid">
+        <div class="hpage-content">
+          <div class="hp-meta">
+            <div class="hp-skeleton" style="height:24px;width:60%;margin-bottom:8px;border-radius:6px"></div>
+            <div class="hp-skeleton" style="height:14px;width:40%;border-radius:6px"></div>
+          </div>
+          <div class="hp-section">
+            <div class="hp-skeleton" style="height:12px;width:30%;margin-bottom:10px;border-radius:4px"></div>
+            <div class="hp-skeleton" style="height:60px;border-radius:8px"></div>
+          </div>
+          <div class="hp-section">
+            <div class="hp-skeleton" style="height:12px;width:30%;margin-bottom:10px;border-radius:4px"></div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap">${Array(6).fill('<div class="hp-skeleton" style="height:28px;width:80px;border-radius:100px"></div>').join('')}</div>
+          </div>
+        </div>
+        <aside class="hpage-sidebar">
+          <div class="hp-skeleton" style="height:120px;border-radius:12px"></div>
+        </aside>
       </div>`;
   }
 
-  function hotelPanelHTML(d) {
+  function hotelDetailPageHTML(d) {
     const stars   = '★'.repeat(Math.min(Math.max(Math.round(d.star_rating || 0), 0), 5));
 
     // Build full photo list: hotel_photos first, then room photos to fill gaps
@@ -5566,10 +5681,12 @@
     const propChip = d.property_type === 'apartment_rental'
       ? `<span class="hp-proptype-chip">🏠 Apartment</span>`
       : d.property_type === 'hostel' ? `<span class="hp-proptype-chip">🛏 Hostel</span>` : '';
-    const nbhdChip = d.primary_nbhd?.name
-      ? `<button class="hp-nbhd-chip" onclick="closeHotelPanel();goToStep('nbhd')" title="Explore this neighbourhood">📍 ${escHtml(d.primary_nbhd.name)}</button>` : '';
+    const nbhdName = d.primary_nbhd?.name || '';
+    const nbhdChip = nbhdName
+      ? `<button class="hp-nbhd-chip" onclick="closeHotelDetailPage();goToStep('nbhd')" title="Explore this neighbourhood">📍 ${escHtml(nbhdName)}</button>` : '';
     const ratingBadge = d.guest_rating > 0
-      ? `<span class="hp-rating">${parseFloat(d.guest_rating).toFixed(1)}</span>` : '';
+      ? `<button type="button" class="hp-rating hp-rating--btn" onclick="_hpScrollToReviews({smooth:true})" title="See guest reviews">${parseFloat(d.guest_rating).toFixed(1)}</button>`
+      : '';
     const timesHTML = (d.check_in || d.check_out)
       ? `<div class="hp-times">${d.check_in ? `<span>Check-in <strong>${escHtml(d.check_in)}</strong></span>` : ''}${d.check_out ? `<span>Check-out <strong>${escHtml(d.check_out)}</strong></span>` : ''}</div>` : '';
 
@@ -5593,24 +5710,314 @@
           ${amenRest.length > 0 ? `<button class="hp-amenities-more" onclick="toggleHpAmenities()">+ ${amenRest.length} more</button>` : ''}
          </div>` : '';
 
+    // CTAs — primary "Find & Book" goes to LiteAPI (existing buildBookUrl); secondary "Vibe tour" reuses the existing per-hotel vibe tour modal/flow.
+    const hotelIdAttr = escHtml(String(d.hotel_id));
+    const bookUrl     = buildBookUrl({ id: d.hotel_id, name: d.name }, null);
+    const ctaPrimary  = `<a class="hpage-cta hpage-cta--primary" href="${escHtml(bookUrl)}" target="_blank" rel="noopener">Find &amp; Book →</a>`;
+    const ctaVibe     = `<button type="button" class="hpage-cta hpage-cta--secondary" onclick="openVibeTourForHotel('${hotelIdAttr}')">Vibe tour</button>`;
+
+    // Sidebar (desktop) — duplicates name + key meta + CTAs in a sticky rail.
+    const sidebarPriceLine = ''; // pricing comes from search-results state; not surfaced here yet.
+    const sidebarHTML = `
+      <aside class="hpage-sidebar">
+        <div class="hpage-sidebar-card">
+          <div class="hpage-sb-name">${escHtml(d.name || d.hotel_id)}</div>
+          <div class="hpage-sb-sub">
+            ${stars ? `<span class="hp-stars">${stars}</span>` : ''}
+            ${ratingBadge}
+          </div>
+          ${nbhdChip ? `<div class="hpage-sb-row">${nbhdChip}</div>` : ''}
+          ${propChip ? `<div class="hpage-sb-row">${propChip}</div>` : ''}
+          ${timesHTML}
+          ${sidebarPriceLine}
+          <div class="hpage-sb-ctas">
+            ${ctaPrimary}
+            ${ctaVibe}
+          </div>
+          <div class="hpage-sb-share">
+            <button type="button" class="hpage-share-btn" onclick="copyHotelDetailLink(this)" title="Copy shareable link">Copy link</button>
+          </div>
+        </div>
+      </aside>`;
+
+    // Mobile sticky bottom bar — primary Find&Book + secondary Vibe tour.
+    const mobileCTAHTML = `
+      <div class="hpage-mobile-cta" role="group" aria-label="Hotel actions">
+        <a class="hpage-cta hpage-cta--primary hpage-cta--mobile" href="${escHtml(bookUrl)}" target="_blank" rel="noopener">Find &amp; Book →</a>
+        <button type="button" class="hpage-cta hpage-cta--secondary hpage-cta--mobile hpage-cta--small" onclick="openVibeTourForHotel('${hotelIdAttr}')">Vibe tour</button>
+      </div>`;
+
     return `
       ${lightboxHTML}
-      ${carouselHTML}
-      <div class="hp-meta">
-        <div class="hp-name">${escHtml(d.name || d.hotel_id)}</div>
-        <div class="hp-sub">
-          ${stars ? `<span class="hp-stars">${stars}</span>` : ''}
-          ${ratingBadge}
-          ${nbhdChip}
-          ${propChip}
-        </div>
-        ${timesHTML}
+      <div class="hpage-topbar">
+        <button class="hpage-back" onclick="closeHotelDetailPage()" aria-label="Back">‹ Back</button>
+        <div class="hpage-topbar-spacer"></div>
       </div>
-      ${descHTML}
-      ${amenHTML}
-      <div class="hp-close-footer">
-        <button class="hp-close-btn" onclick="closeHotelPanel()">Close</button>
+      <div class="hpage-hero">${carouselHTML}</div>
+      <div class="hpage-grid">
+        <div class="hpage-content">
+          <div class="hp-meta">
+            <h1 class="hp-name">${escHtml(d.name || d.hotel_id)}</h1>
+            <div class="hp-sub">
+              ${stars ? `<span class="hp-stars">${stars}</span>` : ''}
+              ${ratingBadge}
+              ${nbhdChip}
+              ${propChip}
+            </div>
+            ${timesHTML}
+          </div>
+          ${descHTML}
+          ${amenHTML}
+          ${hotelDetailReviewsSectionHTML(d)}
+        </div>
+        ${sidebarHTML}
+      </div>
+      ${mobileCTAHTML}`;
+  }
+
+  // Copy current /hotel/:id URL to clipboard (sidebar Share).
+  function copyHotelDetailLink(btn) {
+    const url = location.origin + location.pathname + location.search;
+    const done = (ok) => {
+      if (!btn) return;
+      const orig = btn.textContent;
+      btn.textContent = ok ? 'Link copied' : 'Press ⌘C';
+      setTimeout(() => { btn.textContent = orig; }, 1500);
+    };
+    if (navigator.clipboard?.writeText) {
+      navigator.clipboard.writeText(url).then(() => done(true), () => done(false));
+    } else {
+      done(false);
+    }
+  }
+
+  // ── Reviews (live-only, fetched from /api/hotel/:id/reviews) ───────────────
+  // Lazy-loads when the section scrolls into view; "Show more" paginates +10.
+  // Per LiteAPI ToS: never persist text to DB; never feed into embeddings/HyDE.
+  function hotelDetailReviewsSectionHTML(d) {
+    return `
+      <div class="hp-section hp-reviews-section" id="hp-reviews-section" data-hotel-id="${escHtml(String(d.hotel_id))}">
+        <div class="hp-section-title">Guest reviews</div>
+        <div class="hp-reviews-body" id="hp-reviews-body">
+          <div class="hp-reviews-placeholder">Loading reviews…</div>
+        </div>
+        <button type="button" class="hp-reviews-more" id="hp-reviews-more" style="display:none" onclick="loadMoreHpReviews()">Show more reviews</button>
+        <div class="hp-reviews-attr">Reviews provided via <a href="https://liteapi.travel" target="_blank" rel="noopener">LiteAPI</a></div>
       </div>`;
+  }
+
+  function _attachHpReviewsObserver(hotelId) {
+    if (_hpReviewsState.observer) {
+      try { _hpReviewsState.observer.disconnect(); } catch (_) {}
+      _hpReviewsState.observer = null;
+    }
+    _hpReviewsState.hotelId = hotelId;
+    _hpReviewsState.offset  = 0;
+    _hpReviewsState.total   = null;
+    _hpReviewsState.loading = false;
+
+    const section = document.getElementById('hp-reviews-section');
+    if (!section) return;
+    if (typeof IntersectionObserver === 'undefined') {
+      // Older browsers — just load immediately.
+      loadHpReviews(hotelId);
+      return;
+    }
+    const obs = new IntersectionObserver(entries => {
+      for (const ent of entries) {
+        if (ent.isIntersecting) {
+          obs.disconnect();
+          _hpReviewsState.observer = null;
+          loadHpReviews(hotelId);
+          break;
+        }
+      }
+    }, { rootMargin: '200px 0px' });
+    obs.observe(section);
+    _hpReviewsState.observer = obs;
+  }
+
+  function _hpScrollToReviews(opts) {
+    const section = document.getElementById('hp-reviews-section');
+    if (!section) return;
+    section.scrollIntoView({ behavior: opts && opts.smooth ? 'smooth' : 'auto', block: 'start' });
+    // Force-load immediately if user explicitly jumped here (don't wait for IO).
+    if (_hpReviewsState.hotelId && _hpReviewsState.offset === 0 && !_hpReviewsState.loading) {
+      if (_hpReviewsState.observer) {
+        try { _hpReviewsState.observer.disconnect(); } catch (_) {}
+        _hpReviewsState.observer = null;
+      }
+      loadHpReviews(_hpReviewsState.hotelId);
+    }
+  }
+
+  async function loadHpReviews(hotelId) {
+    if (_hpReviewsState.loading) return;
+    if (_hpReviewsState.hotelId !== hotelId) return;
+    _hpReviewsState.loading = true;
+
+    const body    = document.getElementById('hp-reviews-body');
+    const moreBtn = document.getElementById('hp-reviews-more');
+    if (!body) { _hpReviewsState.loading = false; return; }
+
+    if (_hpReviewsState.offset === 0) {
+      body.innerHTML = hpReviewsSkeletonHTML(3);
+    } else if (moreBtn) {
+      moreBtn.disabled    = true;
+      moreBtn.textContent = 'Loading…';
+    }
+
+    try {
+      const url = `${BACKEND}/api/hotel/${encodeURIComponent(hotelId)}/reviews?limit=${_hpReviewsState.limit}&offset=${_hpReviewsState.offset}`;
+      const r   = await fetch(url, { credentials: 'same-origin' });
+      if (_hpReviewsState.hotelId !== hotelId) return; // user navigated away
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      const data    = await r.json();
+      const reviews = Array.isArray(data?.reviews) ? data.reviews : [];
+
+      _hpReviewsState.total = (typeof data?.total === 'number') ? data.total : _hpReviewsState.total;
+
+      if (_hpReviewsState.offset === 0 && reviews.length === 0) {
+        body.innerHTML = `<div class="hp-reviews-empty">No reviews available yet for this property.</div>`;
+        if (moreBtn) moreBtn.style.display = 'none';
+      } else {
+        const newHTML = reviews.map(hpReviewItemHTML).join('');
+        let firstNewCard = null;
+        if (_hpReviewsState.offset === 0) {
+          body.innerHTML = newHTML;
+          firstNewCard = body.firstElementChild;
+        } else {
+          const existingCount = body.querySelectorAll('.hp-review-card').length;
+          body.insertAdjacentHTML('beforeend', newHTML);
+          firstNewCard = body.querySelectorAll('.hp-review-card')[existingCount] || null;
+        }
+        // Reveal "Read more" only on cards whose body actually overflows the clamp.
+        // Run on next frame so layout has settled (fonts may still be loading).
+        requestAnimationFrame(() => _maybeShowHpReviewToggles(body));
+
+        _hpReviewsState.offset += reviews.length;
+        const hasMore = data?.has_more === true && reviews.length > 0;
+        if (moreBtn) {
+          moreBtn.disabled    = false;
+          moreBtn.textContent = 'Show more reviews';
+          moreBtn.style.display = hasMore ? 'block' : 'none';
+        }
+      }
+    } catch (e) {
+      if (_hpReviewsState.hotelId !== hotelId) return;
+      if (_hpReviewsState.offset === 0) {
+        body.innerHTML = `<div class="hp-reviews-error">Couldn't load reviews. <button class="hp-reviews-retry" onclick="loadHpReviews('${escHtml(String(hotelId))}')">Try again</button></div>`;
+      } else if (moreBtn) {
+        moreBtn.disabled    = false;
+        moreBtn.textContent = 'Try again';
+      }
+    } finally {
+      _hpReviewsState.loading = false;
+    }
+  }
+
+  function loadMoreHpReviews() {
+    if (!_hpReviewsState.hotelId) return;
+    loadHpReviews(_hpReviewsState.hotelId);
+  }
+
+  function hpReviewsSkeletonHTML(n) {
+    let html = '';
+    for (let i = 0; i < n; i++) {
+      html += `
+        <div class="hp-review-card hp-review-card--sk">
+          <div class="hp-review-row">
+            <div class="hp-skeleton" style="width:42px;height:18px;border-radius:6px"></div>
+            <div class="hp-skeleton" style="flex:1;height:14px;border-radius:6px"></div>
+          </div>
+          <div class="hp-skeleton" style="height:12px;width:80%;margin-top:10px;border-radius:6px"></div>
+          <div class="hp-skeleton" style="height:12px;width:60%;margin-top:6px;border-radius:6px"></div>
+        </div>`;
+    }
+    return html;
+  }
+
+  function hpReviewItemHTML(r) {
+    const score    = (typeof r.score === 'number' && Number.isFinite(r.score)) ? r.score.toFixed(1) : null;
+    const dateStr  = formatHpReviewDate(r.date);
+    const headline = (r.headline || '').trim();
+    const pros     = (r.pros || '').trim();
+    const cons     = (r.cons || '').trim();
+    const author   = (r.name || '').trim();
+    const country  = (r.country || '').trim().toUpperCase();
+    const source   = (r.source || '').trim();
+
+    const meta = [author, country, dateStr].filter(Boolean).join(' · ');
+    const headlineHtml = headline ? `<div class="hp-review-headline">${escHtml(headline)}</div>` : '';
+    const prosHtml     = pros     ? `<div class="hp-review-line"><span class="hp-review-tag hp-review-tag--pros">+</span> ${escHtml(pros)}</div>` : '';
+    const consHtml     = cons     ? `<div class="hp-review-line"><span class="hp-review-tag hp-review-tag--cons">−</span> ${escHtml(cons)}</div>` : '';
+    const sourceHtml   = source   ? `<div class="hp-review-source">via ${escHtml(source)}</div>` : '';
+
+    // Body is clamped to ~4 lines by default; toggle is shown only if content overflows
+    // (measured after mount in _maybeShowHpReviewToggles).
+    return `
+      <div class="hp-review-card">
+        <div class="hp-review-row">
+          ${score ? `<span class="hp-review-score" aria-label="Score ${score} out of 10">${score}</span>` : ''}
+          <span class="hp-review-meta">${escHtml(meta)}</span>
+        </div>
+        <div class="hp-review-content clamped">
+          ${headlineHtml}
+          ${prosHtml}
+          ${consHtml}
+        </div>
+        <button type="button" class="hp-review-toggle" hidden onclick="toggleHpReviewExpand(this)">Read more</button>
+        ${sourceHtml}
+      </div>`;
+  }
+
+  // After review HTML is inserted into the DOM, measure each .hp-review-content
+  // and reveal the "Read more" button only if the content actually overflows
+  // its 4-line clamp. Cheap to run; called once per fetched batch.
+  function _maybeShowHpReviewToggles(scope) {
+    const root = scope || document.getElementById('hp-reviews-body');
+    if (!root) return;
+    const cards = root.querySelectorAll('.hp-review-card');
+    cards.forEach(card => {
+      const content = card.querySelector('.hp-review-content');
+      const btn     = card.querySelector('.hp-review-toggle');
+      if (!content || !btn) return;
+      // Reset to clamped before measuring (in case user already expanded)
+      const wasExpanded = !content.classList.contains('clamped');
+      if (wasExpanded) content.classList.add('clamped');
+      const overflows = content.scrollHeight - content.clientHeight > 1;
+      if (overflows) {
+        btn.hidden = false;
+      } else {
+        btn.hidden = true;
+        btn.textContent = 'Read more';
+      }
+      if (wasExpanded) {
+        // restore prior expanded state
+        content.classList.remove('clamped');
+        if (overflows) btn.textContent = 'Show less';
+      }
+    });
+  }
+
+  function toggleHpReviewExpand(btn) {
+    const card = btn.closest('.hp-review-card');
+    const content = card && card.querySelector('.hp-review-content');
+    if (!content) return;
+    const clamped = content.classList.toggle('clamped');
+    btn.textContent = clamped ? 'Read more' : 'Show less';
+  }
+
+  function formatHpReviewDate(s) {
+    if (!s) return '';
+    const t = Date.parse(String(s).replace(' ', 'T') + 'Z');
+    if (!Number.isFinite(t)) return String(s).slice(0, 10);
+    const d = new Date(t);
+    try {
+      return d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+    } catch (_) {
+      return String(s).slice(0, 10);
+    }
   }
 
   function toggleHpDesc() {
@@ -5694,7 +6101,7 @@
     if (!lb) return;
     lb.classList.remove('open');
     // Only restore overflow if panel is also not needing it locked
-    if (_panelHotelId) document.body.style.overflow = 'hidden';
+    if (_detailHotelId) document.body.style.overflow = 'hidden';
     else document.body.style.overflow = '';
   }
 
@@ -5717,12 +6124,14 @@
     else if (e.key === 'Escape') closeHpLightbox();
   });
 
-  // ── End Hotel Details Panel ────────────────────────────────────────────────
+  // ── End Hotel Details Page ─────────────────────────────────────────────────
 
   function hotelHTML(h) {
     const stars    = '★'.repeat(Math.min(Math.max(Math.round(h.starRating || 0), 0), 5));
     const location = [h.address, h.city, h.country].filter(Boolean).join(', ');
-    const rating   = h.rating > 0 ? `<span class="hotel-guest-score"><strong>${parseFloat(h.rating).toFixed(1)}</strong> guest score</span>` : '';
+    const rating   = h.rating > 0
+      ? `<button type="button" class="hotel-guest-score" data-hotel-id="${escHtml(String(h.id))}" onclick="event.stopPropagation();openHotelDetailPage(this.dataset.hotelId, { scrollTo: 'reviews' })" title="See guest reviews"><strong>${parseFloat(h.rating).toFixed(1)}</strong> guest score</button>`
+      : '';
     const bookUrl  = buildBookUrl(h, null);
     const clipBadge = h.clipScore > 0 ? `<span class="clip-score-badge">&#9889; ${h.clipScore}% CLIP</span>` : '';
     const hotelIdAttr = escHtml(String(h.id));
@@ -5743,7 +6152,7 @@
     const nbhd     = h.primary_nbhd;
     const nbhdPill = nbhd?.name
       ? `<button class="hotel-nbhd-pill" type="button"
-                 onclick="goToStep('nbhd')"
+                 onclick="event.stopPropagation();goToStep('nbhd')"
                  title="${escHtml(nbhd.vibe_short || '')}">
            <span class="hotel-nbhd-pill-icon">📍</span>
            <span class="hotel-nbhd-pill-text"><span class="hotel-nbhd-pill-name">${escHtml(nbhd.name)}</span><span class="hotel-nbhd-pill-suffix hotel-nbhd-pill-suffix--full"> · neighborhood vibe · ${nbhdVibe}% match</span><span class="hotel-nbhd-pill-suffix hotel-nbhd-pill-suffix--short"> · vibe · ${nbhdVibe}% match</span></span>
@@ -5788,9 +6197,11 @@
     const heroImgs  = heroPhotos.map(url =>
       `<img class="hotel-hero-img" src="${url}" alt="" loading="lazy" onerror="this.classList.add('hotel-hero-blank');this.style.visibility='hidden'">`
     ).join('');
+    // Hero is clickable → opens dedicated /hotel/:id page. Inner pills/badges stop propagation so they keep their own actions.
+    const heroOnClick = `onclick="openHotelDetailPage('${hotelIdAttr}')" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openHotelDetailPage('${hotelIdAttr}');}"`;
     const heroInner = heroCount > 0
-      ? `<div class="hotel-hero ${heroClass}">${heroImgs}</div>`
-      : `<div class="hotel-hero hero-1"><div class="hotel-hero-img hotel-hero-blank"></div></div>`;
+      ? `<div class="hotel-hero hotel-hero--clickable ${heroClass}" ${heroOnClick}>${heroImgs}</div>`
+      : `<div class="hotel-hero hotel-hero--clickable hero-1" ${heroOnClick}><div class="hotel-hero-img hotel-hero-blank"></div></div>`;
     const heroStrip = `<div class="hotel-hero-wrap">${nbhdPill}${matchBadgeWrap}${heroInner}</div>`;
 
     // ── Price display ────────────────────────────────────────────────────────
@@ -5825,7 +6236,7 @@
                 <span class="price-note" id="hotel-price-note-${h.id}">${priceNote}</span>
               </div>
               <button type="button" class="hotel-tour-link" data-hotel-id="${hotelIdAttr}" onclick="openVibeTourForHotel(this.dataset.hotelId)">Vibe tour</button>
-              <button type="button" class="hotel-details-btn" data-hotel-id="${hotelIdAttr}" onclick="openHotelPanel(this.dataset.hotelId)">Details</button>
+              <button type="button" class="hotel-details-btn" data-hotel-id="${hotelIdAttr}" onclick="openHotelDetailPage(this.dataset.hotelId)">Details</button>
               <a class="book-btn" href="${bookUrl}" target="_blank" rel="noopener">Find &amp; Book →</a>
             </div>
           </div>
