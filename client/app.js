@@ -2813,6 +2813,15 @@
     const canvas = document.getElementById('nbhd-map-canvas');
     if (!canvas) return;
 
+    // Wait one paint frame so the container has measured dimensions before
+    // MapLibre creates its WebGL canvas (otherwise it bakes in 0×0 forever).
+    await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+
+    const cw = canvas.clientWidth, ch = canvas.clientHeight;
+    if (cw < 50 || ch < 50) {
+      console.warn('[nbhd-map] container too small at init:', cw, 'x', ch);
+    }
+
     let map;
     try {
       map = new maplibregl.Map({
@@ -2821,7 +2830,6 @@
         bounds,
         fitBoundsOptions: { padding: 50, maxZoom: 14 },
         attributionControl: { compact: true },
-        cooperativeGestures: false,
       });
     } catch (e) {
       console.warn('[nbhd-map] init failed', e.message);
@@ -2831,7 +2839,24 @@
     _nbhdMap = map;
     map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'bottom-right');
 
+    // Defensive: re-fit + resize on container size changes (orientation change,
+    // dev-tools open, parent reflow). Stops the WebGL canvas from getting stuck
+    // at the size it had at init time.
+    if (window.ResizeObserver) {
+      const ro = new ResizeObserver(() => {
+        try { map.resize(); } catch (_) {}
+      });
+      ro.observe(canvas);
+      map.on('remove', () => ro.disconnect());
+    }
+
     map.on('load', () => {
+      // Force a resize on the same frame the load fires; some browsers measure
+      // the container as 0×0 at construction even after rAF, then settle.
+      try { map.resize(); } catch (_) {}
+      // And once more after a short delay in case the parent flow was still
+      // animating in (e.g. step transition).
+      setTimeout(() => { try { map.resize(); } catch (_) {} }, 250);
       // Polygon overlay layer (one source with all neighbourhood features).
       const features = [];
       for (const { cardId, h } of plottable) {
