@@ -2695,24 +2695,44 @@
   }
 
   function _ensureMapLibre() {
-    if (window.maplibregl) return Promise.resolve(window.maplibregl);
+    if (window.maplibregl && document.querySelector('link[data-maplibre]')?.dataset?.loaded === '1') {
+      return Promise.resolve(window.maplibregl);
+    }
     if (_nbhdMapLibPromise) return _nbhdMapLibPromise;
     _nbhdMapLibPromise = new Promise((resolve, reject) => {
-      // CSS first
-      if (!document.querySelector('link[data-maplibre]')) {
-        const link = document.createElement('link');
+      // CSS MUST be parsed before the map initializes — otherwise MapLibre's
+      // controls render at the document origin (top:0,left:0) and the canvas
+      // sizing rules (.maplibregl-canvas-container) don't apply, leaving the
+      // gl canvas effectively invisible / mispositioned.
+      const cssReady = new Promise((res, rej) => {
+        let link = document.querySelector('link[data-maplibre]');
+        if (link) {
+          if (link.dataset.loaded === '1') return res();
+          link.addEventListener('load',  () => { link.dataset.loaded = '1'; res(); }, { once: true });
+          link.addEventListener('error', () => rej(new Error('MapLibre CSS failed to load')), { once: true });
+          return;
+        }
+        link = document.createElement('link');
         link.rel = 'stylesheet';
         link.href = NBHD_MAP_CSS_URL;
         link.dataset.maplibre = '1';
+        link.addEventListener('load',  () => { link.dataset.loaded = '1'; res(); }, { once: true });
+        link.addEventListener('error', () => rej(new Error('MapLibre CSS failed to load')), { once: true });
         document.head.appendChild(link);
-      }
-      const s = document.createElement('script');
-      s.src = NBHD_MAP_LIB_URL;
-      s.async = true;
-      s.crossOrigin = 'anonymous';
-      s.onload  = () => window.maplibregl ? resolve(window.maplibregl) : reject(new Error('maplibregl missing after load'));
-      s.onerror = () => reject(new Error('Failed to load MapLibre GL from CDN'));
-      document.head.appendChild(s);
+      });
+      const jsReady = new Promise((res, rej) => {
+        if (window.maplibregl) return res(window.maplibregl);
+        const s = document.createElement('script');
+        s.src = NBHD_MAP_LIB_URL;
+        s.async = true;
+        s.crossOrigin = 'anonymous';
+        s.onload  = () => window.maplibregl ? res(window.maplibregl) : rej(new Error('maplibregl missing after load'));
+        s.onerror = () => rej(new Error('Failed to load MapLibre GL from CDN'));
+        document.head.appendChild(s);
+      });
+      Promise.all([cssReady, jsReady])
+        .then(([, ml]) => resolve(ml || window.maplibregl))
+        .catch(reject);
     });
     return _nbhdMapLibPromise;
   }
