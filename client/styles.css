@@ -3847,7 +3847,7 @@
     }
     .nbhd-map-canvas {
       position: absolute; inset: 0;
-      background: linear-gradient(160deg,#1a1812 0%,#0c0a07 100%);
+      background: #ff00aa; /* DEBUG: bright pink so we can tell if WebGL canvas paints over it */
     }
     /* Force the MapLibre attribution to a discreet footer */
     .nbhd-map-canvas .maplibregl-ctrl-bottom-right,
