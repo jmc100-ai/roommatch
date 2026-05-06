@@ -2877,18 +2877,6 @@
       // And once more after a short delay in case the parent flow was still
       // animating in (e.g. step transition).
       setTimeout(() => { try { map.resize(); } catch (_) {} }, 250);
-      // Diagnostic — dump container & canvas dims so we can tell from prod
-      // logs whether the WebGL canvas actually has pixels to draw into.
-      try {
-        const cont = canvas;
-        const glcv = canvas.querySelector('canvas.maplibregl-canvas') || canvas.querySelector('canvas');
-        const r1 = cont.getBoundingClientRect();
-        const r2 = glcv && glcv.getBoundingClientRect();
-        console.warn('[nbhd-map] LOAD container=', Math.round(r1.width)+'x'+Math.round(r1.height),
-          ' gl-canvas=', glcv ? (Math.round(r2.width)+'x'+Math.round(r2.height) + ' attr=' + glcv.width+'x'+glcv.height) : 'NONE',
-          ' container.zIndex=', getComputedStyle(cont).zIndex,
-          ' container.opacity=', getComputedStyle(cont).opacity);
-      } catch (e) { console.warn('[nbhd-map] diag fail', e.message); }
       // Polygon overlay layer (one source with all neighbourhood features).
       const features = [];
       for (const { cardId, h } of plottable) {
