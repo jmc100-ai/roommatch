@@ -2942,12 +2942,11 @@
         el.style.setProperty('--marker-bg', bg);
         el.dataset.cardId = cardId;
         el.innerHTML = `
-          <div class="nbhd-marker-badge">
+          <div class="nbhd-marker-pill">
             <span class="nbhd-marker-pct">${pct > 0 ? pct + '%' : '—'}</span>
-            ${pct > 0 ? '<span class="nbhd-marker-pct-suffix">vibe</span>' : ''}
+            <span class="nbhd-marker-name">${escHtml(h.name || '')}</span>
           </div>
-          <div class="nbhd-marker-stem"></div>
-          <div class="nbhd-marker-label">${escHtml(h.name || '')}</div>
+          <div class="nbhd-marker-pointer"></div>
         `;
         // Hover on marker → highlight card
         el.addEventListener('mouseenter', () => _setNbhdCardHover(cardId, true));
@@ -2958,7 +2957,7 @@
           _scrollAndFlashCard(cardId);
         });
 
-        const marker = new maplibregl.Marker({ element: el, anchor: 'bottom' })
+        const marker = new maplibregl.Marker({ element: el, anchor: 'bottom', offset: [0, -5] })
           .setLngLat([c.lng, c.lat])
           .addTo(map);
         _nbhdMapMarkers.push({ cardId, marker, markerEl: el });

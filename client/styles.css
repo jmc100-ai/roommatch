@@ -3918,64 +3918,62 @@
     .nbhd-map-reset:hover { background: rgba(20,20,22,0.95); border-color: rgba(255,255,255,0.24); }
     .nbhd-map-reset:active { transform: scale(0.97); }
 
-    /* Custom HTML markers (placed by JS as MapLibre Marker elements). */
+    /* Custom HTML markers (compact rectangular pills). Anchored at 'bottom'
+       in JS, so the visual anchor is the tip of the .nbhd-marker-pointer. */
     .nbhd-marker {
       position: relative;
-      width: 56px;
-      transform: translate(-50%, -100%);
       cursor: pointer;
       will-change: transform;
       pointer-events: auto;
+      /* Re-center horizontally over the anchor point (MapLibre 'bottom' anchor
+         already centers X for translate(-50%,-100%) elements, but our pointer
+         is bottom-center too). */
     }
-    .nbhd-marker-badge {
-      display: flex; flex-direction: column; align-items: center; justify-content: center;
-      width: 56px; height: 56px;
-      border-radius: 50%;
-      background: var(--marker-bg, #6f6a64);
-      color: #1a1410;
-      font: 600 14px/1 'DM Sans', sans-serif;
-      box-shadow: 0 6px 14px rgba(0,0,0,0.45), 0 0 0 2px rgba(0,0,0,0.35);
-      border: 2px solid rgba(255,255,255,0.7);
-      transition: transform 0.18s, box-shadow 0.18s, border-color 0.18s;
-    }
-    .nbhd-marker-badge .nbhd-marker-pct { font-size: 14px; }
-    .nbhd-marker-badge .nbhd-marker-pct-suffix { font-size: 9px; opacity: 0.75; margin-top: 1px; letter-spacing: 0.04em; text-transform: uppercase; }
-    .nbhd-marker-stem {
-      position: absolute;
-      left: 50%; bottom: -8px;
-      width: 12px; height: 12px;
-      transform: translateX(-50%) rotate(45deg);
-      background: var(--marker-bg, #6f6a64);
-      border-right: 2px solid rgba(255,255,255,0.7);
-      border-bottom: 2px solid rgba(255,255,255,0.7);
-      z-index: -1;
-    }
-    .nbhd-marker-label {
-      position: absolute;
-      left: 50%; top: calc(100% + 8px);
-      transform: translateX(-50%);
-      white-space: nowrap;
-      max-width: 200px; overflow: hidden; text-overflow: ellipsis;
-      font: 600 11px/1.2 'DM Sans', sans-serif;
-      color: rgba(232,228,220,0.95);
-      background: rgba(10,10,12,0.78);
+    .nbhd-marker-pill {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 3px 8px 3px 4px;
+      background: rgba(14,14,16,0.86);
+      border: 1px solid rgba(255,255,255,0.10);
+      border-radius: 6px;
+      box-shadow: 0 4px 10px rgba(0,0,0,0.45);
       backdrop-filter: blur(6px);
       -webkit-backdrop-filter: blur(6px);
-      padding: 3px 8px;
-      border-radius: 6px;
-      border: 1px solid rgba(255,255,255,0.08);
-      pointer-events: none;
-      opacity: 0.92;
+      font: 600 11px/1.15 'DM Sans', sans-serif;
+      color: rgba(232,228,220,0.96);
+      white-space: nowrap;
+      transition: transform 0.18s, border-color 0.18s, box-shadow 0.18s;
+      transform-origin: 50% calc(100% + 6px);
     }
-    .nbhd-marker:hover .nbhd-marker-badge,
-    .nbhd-marker.is-hover .nbhd-marker-badge {
-      transform: scale(1.12);
-      border-color: #fff;
-      box-shadow: 0 10px 22px rgba(0,0,0,0.55), 0 0 0 2px rgba(0,0,0,0.4);
+    .nbhd-marker-pct {
+      display: inline-flex; align-items: center; justify-content: center;
+      min-width: 26px; height: 16px;
+      padding: 0 4px;
+      border-radius: 3px;
+      background: var(--marker-bg, #6f6a64);
+      color: #1a1410;
+      font-weight: 700;
+      font-size: 10px;
+      letter-spacing: 0.02em;
     }
-    .nbhd-marker:hover .nbhd-marker-stem,
-    .nbhd-marker.is-hover .nbhd-marker-stem {
-      border-right-color: #fff; border-bottom-color: #fff;
+    .nbhd-marker-name {
+      max-width: 140px;
+      overflow: hidden; text-overflow: ellipsis;
+    }
+    .nbhd-marker-pointer {
+      position: absolute;
+      left: 50%; bottom: -5px;
+      width: 8px; height: 8px;
+      transform: translateX(-50%) rotate(45deg);
+      background: rgba(14,14,16,0.86);
+      border-right: 1px solid rgba(255,255,255,0.10);
+      border-bottom: 1px solid rgba(255,255,255,0.10);
+      z-index: -1;
+    }
+    .nbhd-marker:hover .nbhd-marker-pill,
+    .nbhd-marker.is-hover .nbhd-marker-pill {
+      transform: scale(1.06);
+      border-color: rgba(255,255,255,0.35);
+      box-shadow: 0 8px 18px rgba(0,0,0,0.55);
     }
     /* Vibe-tier ramp (set on .nbhd-marker as inline --marker-bg by JS, but
        these classes provide a fallback if a marker forgot the variable). */
@@ -4006,10 +4004,9 @@
       .nbhd-map-module { height: clamp(187px, 30vh, 238px); margin: 4px 0 18px; border-radius: 12px; }
       .nbhd-map-legend { top: 8px; right: 8px; padding: 6px 8px; font-size: 10px; }
       .nbhd-map-reset  { bottom: 10px; left: 10px; padding: 6px 10px; font-size: 11px; }
-      .nbhd-marker     { width: 48px; }
-      .nbhd-marker-badge { width: 48px; height: 48px; }
-      .nbhd-marker-badge .nbhd-marker-pct { font-size: 13px; }
-      .nbhd-marker-label { font-size: 10.5px; max-width: 140px; }
+      .nbhd-marker-pill { font-size: 10.5px; padding: 2px 7px 2px 3px; gap: 5px; }
+      .nbhd-marker-pct  { min-width: 24px; height: 15px; font-size: 9.5px; }
+      .nbhd-marker-name { max-width: 110px; }
     }
 
     /* ── Neighbourhood cards (full large-card drilldown) */
