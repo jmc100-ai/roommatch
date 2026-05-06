@@ -7,6 +7,8 @@
   <title>TravelBoop — Find your vibe</title>
   <meta name="description" content="TravelBoop: neighbourhood picks, AI visual search on real hotel rooms — your Boop when vibe and space line up." />
   <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  <!-- Server-injected client config (WL base URL, etc.) — must run BEFORE app.js so buildBookUrl() has it on first render. -->
+  <script>window._WL_BASE_URL = "__WL_BASE_URL__";</script>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet" />
@@ -487,13 +489,9 @@
   </div>
 </div>
 
-<!-- Hotel details slide-in panel -->
-<div id="hotel-panel-backdrop" class="hotel-panel-backdrop" onclick="closeHotelPanel()"></div>
-<div id="hotel-panel" class="hotel-panel" role="dialog" aria-modal="true" aria-label="Hotel details">
-  <button class="hotel-panel-close" onclick="closeHotelPanel()" aria-label="Close">✕</button>
-  <div id="hotel-panel-body" class="hotel-panel-body">
-    <!-- filled by JS -->
-  </div>
+<!-- Hotel details — full page (replaces the legacy slide-out panel) -->
+<div id="st-hotel-detail" class="hpage" style="display:none" role="main" aria-label="Hotel details">
+  <!-- filled by JS (hotelDetailPageHTML) -->
 </div>
 
 <!-- Momentum toast -->

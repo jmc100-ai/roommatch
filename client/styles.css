@@ -1710,6 +1710,17 @@
       border-top-left-radius: calc(18px - 7px);
       border-top-right-radius: calc(18px - 7px);
     }
+    .hotel-hero--clickable { cursor: pointer; }
+    .hotel-hero--clickable:focus-visible {
+      outline: 2px solid var(--accent2, #c9a96e);
+      outline-offset: 2px;
+    }
+    .hotel-hero--clickable .hotel-hero-img {
+      transition: transform 0.4s ease, opacity 0.2s;
+    }
+    @media (hover: hover) {
+      .hotel-hero--clickable:hover .hotel-hero-img:first-child { transform: scale(1.015); }
+    }
     .hotel-hero-img {
       width: 100%; height: 100%;
       object-fit: cover; display: block;
@@ -1781,7 +1792,25 @@
     .hotel-meta { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
     .stars { color: var(--accent); font-size: 11px; letter-spacing: 2px; }
     .hotel-location { font-size: 12px; color: var(--muted); font-weight: 300; }
-    .hotel-guest-score { font-size: 11px; color: var(--muted); padding: 2px 8px; border-radius: 100px; border: 1px solid var(--border); }
+    .hotel-guest-score {
+      font-size: 11px; color: var(--muted);
+      padding: 2px 8px; border-radius: 100px;
+      border: 1px solid var(--border);
+      background: transparent;
+      font-family: inherit;
+      cursor: pointer;
+      display: inline-flex; align-items: center; gap: 4px;
+      transition: border-color .15s, color .15s, background .15s;
+    }
+    .hotel-guest-score:hover {
+      color: var(--text);
+      border-color: rgba(201,169,110,0.45);
+      background: rgba(201,169,110,0.06);
+    }
+    .hotel-guest-score:focus-visible {
+      outline: 2px solid rgba(201,169,110,0.55);
+      outline-offset: 2px;
+    }
     .hotel-guest-score strong { color: var(--text); font-weight: 500; }
     .hotel-match-badge {
       font-size: 11px; font-weight: 600; letter-spacing: 0.05em; white-space: nowrap;
@@ -4670,54 +4699,174 @@
       border-color: rgba(201,169,110,0.6);
     }
 
-    /* ── Hotel details panel ──────────────────────────────────────────── */
-    .hotel-panel-backdrop {
+    /* ── Hotel details — full page (#st-hotel-detail) ─────────────────── */
+    /* Replaces the legacy slide-out panel. Two-column grid on desktop with
+       sticky right-rail; single column + sticky bottom CTA bar on mobile.
+       The hp-* element styles below (carousel/lightbox/sections/reviews/
+       amenities) are reused unchanged inside this page. */
+    body.has-hotel-detail #topnav,
+    body.has-hotel-detail #discovery-flow,
+    body.has-hotel-detail #st-results,
+    body.has-hotel-detail .static-overlay,
+    body.has-hotel-detail .landing-sections,
+    body.has-hotel-detail .trust-bar { display: none !important; }
+    body.has-hotel-detail { padding-top: 0 !important; }
+
+    .hpage {
+      max-width: 1180px;
+      margin: 0 auto;
+      padding: 0 0 96px;
+      color: var(--text);
+    }
+    @media (max-width: 760px) {
+      .hpage { padding-bottom: 88px; } /* room for mobile sticky CTA */
+    }
+
+    .hpage-topbar {
+      position: sticky; top: 0; z-index: 40;
+      display: flex; align-items: center;
+      gap: 12px;
+      padding: 10px 16px;
+      background: rgba(10,10,12,0.85);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      border-bottom: 1px solid rgba(255,255,255,0.06);
+    }
+    .hpage-back {
+      background: transparent;
+      border: 1px solid rgba(255,255,255,0.18);
+      color: var(--text);
+      padding: 7px 12px;
+      border-radius: 100px;
+      font: inherit; font-size: 13px;
+      cursor: pointer;
+      transition: background 0.15s, border-color 0.15s;
+    }
+    .hpage-back:hover { background: rgba(255,255,255,0.06); border-color: rgba(255,255,255,0.3); }
+    .hpage-topbar-spacer { flex: 1; }
+
+    .hpage-hero {
+      width: 100%;
+      background: #000;
+    }
+    .hpage-hero .hp-carousel,
+    .hpage-hero .hp-hero-placeholder {
+      height: clamp(280px, 42vw, 480px);
+    }
+
+    .hpage-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 360px;
+      gap: 32px;
+      padding: 24px 24px 0;
+    }
+    .hpage-content {
+      min-width: 0;
+    }
+    /* Account for sticky topbar so scrollIntoView lands sections fully visible. */
+    .hpage .hp-section { scroll-margin-top: 80px; }
+    /* Page-context overrides for hp- element styles (originally sized for the drawer). */
+    .hpage .hp-meta { padding: 20px 0 0; }
+    .hpage .hp-name {
+      font-family: 'Cormorant Garamond', serif;
+      font-size: clamp(26px, 3.4vw, 36px);
+      font-weight: 600;
+      line-height: 1.15;
+      letter-spacing: -0.01em;
+      margin: 0 0 10px;
+    }
+    .hpage .hp-section { padding: 20px 0; }
+    .hpage-sidebar {
+      align-self: start;
+      position: sticky;
+      top: 72px; /* clear topbar */
+    }
+    .hpage-sidebar-card {
+      background: rgba(255,255,255,0.03);
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 14px;
+      padding: 18px;
+      display: flex; flex-direction: column;
+      gap: 12px;
+    }
+    .hpage-sb-name {
+      font-family: 'Cormorant Garamond', serif;
+      font-size: 22px; line-height: 1.2;
+      font-weight: 600;
+      color: var(--text);
+    }
+    .hpage-sb-sub {
+      display: flex; align-items: center; gap: 8px;
+      flex-wrap: wrap;
+    }
+    .hpage-sb-row { display: flex; }
+    .hpage-sb-ctas {
+      display: flex; flex-direction: column;
+      gap: 8px; margin-top: 4px;
+    }
+    .hpage-cta {
+      display: inline-flex; align-items: center; justify-content: center;
+      padding: 12px 18px;
+      border-radius: 100px;
+      font: inherit; font-size: 14px; font-weight: 600;
+      text-decoration: none;
+      cursor: pointer;
+      transition: background 0.15s, transform 0.05s, border-color 0.15s, color 0.15s;
+      border: 1px solid transparent;
+      line-height: 1;
+    }
+    .hpage-cta--primary {
+      background: var(--accent2, #c9a96e);
+      color: #1a1410;
+    }
+    .hpage-cta--primary:hover { background: #d8b87e; }
+    .hpage-cta--primary:active { transform: scale(0.98); }
+    .hpage-cta--secondary {
+      background: transparent;
+      color: rgba(255,255,255,0.78);
+      border-color: rgba(255,255,255,0.18);
+    }
+    .hpage-cta--secondary:hover {
+      color: var(--text);
+      background: rgba(255,255,255,0.04);
+      border-color: rgba(255,255,255,0.28);
+    }
+    .hpage-cta--small { padding: 10px 14px; font-size: 13px; }
+    .hpage-sb-share { margin-top: 4px; display: flex; }
+    .hpage-share-btn {
+      flex: 1;
+      background: transparent;
+      border: 1px dashed rgba(255,255,255,0.18);
+      color: var(--muted);
+      padding: 8px 12px;
+      border-radius: 8px;
+      font: inherit; font-size: 12px;
+      cursor: pointer;
+      transition: color 0.15s, border-color 0.15s;
+    }
+    .hpage-share-btn:hover { color: var(--text); border-color: rgba(255,255,255,0.3); }
+
+    /* Mobile sticky CTA bar — Find&Book primary, Vibe tour secondary (less prominent). */
+    .hpage-mobile-cta {
       display: none;
-      position: fixed; inset: 0;
-      background: rgba(0,0,0,0.55);
-      backdrop-filter: blur(4px);
-      z-index: 250;
+      position: fixed; left: 0; right: 0; bottom: 0;
+      z-index: 60;
+      padding: 10px 14px calc(10px + env(safe-area-inset-bottom, 0));
+      background: rgba(10,10,12,0.94);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border-top: 1px solid rgba(255,255,255,0.08);
+      gap: 8px;
     }
-    .hotel-panel-backdrop.open { display: block; }
+    .hpage-cta--mobile { flex: 1; }
+    .hpage-cta--mobile.hpage-cta--small { flex: 0 0 auto; }
 
-    .hotel-panel {
-      position: fixed;
-      top: 0; right: 0; bottom: 0;
-      width: min(520px, 100vw);
-      background: var(--bg2, #16161a);
-      border-left: 1px solid rgba(255,255,255,0.08);
-      z-index: 251;
-      display: flex;
-      flex-direction: column;
-      overflow: hidden;
-      transform: translateX(100%);
-      transition: transform 0.28s cubic-bezier(0.4,0,0.2,1);
-      box-shadow: -20px 0 60px rgba(0,0,0,0.6);
+    .hpage-error {
+      padding: 64px 24px;
+      text-align: center;
+      color: var(--muted);
     }
-    .hotel-panel.open { transform: translateX(0); }
-
-    .hotel-panel-close {
-      position: absolute; top: 14px; right: 14px; z-index: 50;
-      background: rgba(0,0,0,0.6);
-      border: 1px solid rgba(255,255,255,0.25);
-      color: #fff; font-size: 17px; font-weight: 600;
-      cursor: pointer; line-height: 1;
-      width: 36px; height: 36px;
-      border-radius: 50%;
-      display: flex; align-items: center; justify-content: center;
-      backdrop-filter: blur(8px);
-      -webkit-backdrop-filter: blur(8px);
-      transition: background 0.15s, transform 0.1s;
-      box-shadow: 0 2px 10px rgba(0,0,0,0.5);
-    }
-    .hotel-panel-close:hover { background: rgba(0,0,0,0.85); }
-    .hotel-panel-close:active { transform: scale(0.92); }
-
-    .hotel-panel-body {
-      flex: 1; overflow-y: auto;
-      overscroll-behavior: contain;
-      -webkit-overflow-scrolling: touch;
-    }
+    .hpage-error-msg { margin-bottom: 16px; }
 
     /* Carousel */
     .hp-hero-placeholder { position: relative; width: 100%; height: 260px; background: rgba(255,255,255,0.04); }
@@ -4849,6 +4998,126 @@
       cursor: pointer; padding: 6px 0 0; display: block;
     }
 
+    /* Hotel-panel rating becomes a button when it links to the reviews section */
+    .hp-rating--btn {
+      cursor: pointer; font-family: inherit;
+      transition: background .15s, border-color .15s;
+    }
+    .hp-rating--btn:hover {
+      background: rgba(201,169,110,0.2);
+      border-color: rgba(201,169,110,0.45);
+    }
+    .hp-rating--btn:focus-visible {
+      outline: 2px solid rgba(201,169,110,0.55);
+      outline-offset: 2px;
+    }
+
+    /* Reviews section (live LiteAPI data — never persisted) */
+    .hp-reviews-section { scroll-margin-top: 12px; }
+    .hp-reviews-body { display: flex; flex-direction: column; gap: 10px; }
+    .hp-reviews-placeholder,
+    .hp-reviews-empty {
+      font-size: 13px; color: var(--muted);
+      padding: 6px 0; line-height: 1.55;
+    }
+    .hp-reviews-error {
+      font-size: 13px; color: var(--muted); padding: 6px 0;
+    }
+    .hp-reviews-retry {
+      background: none; border: 1px solid rgba(255,255,255,0.18);
+      color: var(--accent2); font-size: 12px;
+      padding: 4px 10px; margin-left: 6px; border-radius: 6px;
+      cursor: pointer; font-family: inherit;
+    }
+    .hp-reviews-retry:hover { border-color: rgba(201,169,110,0.45); }
+    .hp-review-card {
+      padding: 10px 12px;
+      background: rgba(255,255,255,0.03);
+      border: 1px solid rgba(255,255,255,0.06);
+      border-radius: 10px;
+    }
+    .hp-review-card--sk { padding: 14px 12px; }
+    .hp-review-row {
+      display: flex; align-items: center;
+      gap: 10px; flex-wrap: wrap;
+    }
+    .hp-review-score {
+      flex-shrink: 0;
+      background: rgba(109,186,138,0.12);
+      border: 1px solid rgba(109,186,138,0.3);
+      color: var(--green);
+      font-weight: 600; font-size: 12px;
+      padding: 2px 8px; border-radius: 6px;
+      letter-spacing: 0.02em;
+    }
+    .hp-review-meta { font-size: 11px; color: var(--muted); letter-spacing: 0.02em; }
+    .hp-review-content {
+      /* Clamp body (headline + pros + cons) to ~4 lines by default.
+         Uses max-height tied to .hp-review-line line-height, since
+         -webkit-line-clamp does not handle multiple block children well. */
+      overflow: hidden;
+      transition: max-height 0.18s ease;
+    }
+    .hp-review-content.clamped {
+      /* 4 lines × 13px font × 1.55 line-height ≈ 80.6px; round up for safety */
+      max-height: 82px;
+    }
+    .hp-review-headline {
+      font-size: 13px; font-weight: 600;
+      color: var(--text); margin-top: 6px;
+      line-height: 1.35;
+    }
+    .hp-review-line {
+      font-size: 13px; line-height: 1.55;
+      color: rgba(232,228,220,0.82);
+      margin-top: 6px;
+      display: flex; gap: 6px; align-items: flex-start;
+    }
+    .hp-review-content > :first-child { margin-top: 0; }
+    .hp-review-toggle {
+      background: none; border: none;
+      color: var(--accent2); font-size: 12px;
+      font-family: 'DM Sans', sans-serif;
+      cursor: pointer; padding: 6px 0 0;
+      display: block; line-height: 1;
+    }
+    .hp-review-toggle[hidden] { display: none; }
+    .hp-review-toggle:hover { text-decoration: underline; }
+    .hp-review-tag {
+      flex-shrink: 0;
+      width: 16px; height: 16px;
+      display: inline-flex; align-items: center; justify-content: center;
+      border-radius: 4px;
+      font-size: 11px; font-weight: 700;
+      margin-top: 2px;
+    }
+    .hp-review-tag--pros { background: rgba(109,186,138,0.18); color: var(--green); }
+    .hp-review-tag--cons { background: rgba(229,143,143,0.16); color: #e58f8f; }
+    .hp-review-source {
+      margin-top: 6px; font-size: 10px;
+      color: var(--muted); letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+    .hp-reviews-more {
+      margin-top: 12px; width: 100%;
+      padding: 10px;
+      background: rgba(255,255,255,0.04);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 10px;
+      color: var(--text); font-family: 'DM Sans', sans-serif;
+      font-size: 13px; cursor: pointer;
+      transition: background .15s, border-color .15s;
+    }
+    .hp-reviews-more:hover { background: rgba(255,255,255,0.08); border-color: rgba(201,169,110,0.4); }
+    .hp-reviews-more:disabled { opacity: 0.6; cursor: progress; }
+    .hp-reviews-attr {
+      margin-top: 10px; font-size: 10px;
+      letter-spacing: 0.06em; color: var(--muted);
+      text-align: right;
+    }
+    .hp-reviews-attr a { color: var(--muted); text-decoration: underline; }
+    .hp-reviews-attr a:hover { color: var(--accent2); }
+
     /* Close footer */
     .hp-close-footer {
       padding: 16px 20px 36px;
@@ -4926,16 +5195,17 @@
     .prop-type-select:focus { outline: none; border-color: var(--accent2); }
     .prop-type-select option { background: #1a1a1e; color: var(--text); }
 
-    /* Mobile: fullscreen bottom sheet + hide arrow buttons (use swipe) */
-    @media (max-width: 640px) {
-      .hotel-panel-backdrop { display: none !important; }
-      .hotel-panel {
-        top: 0; left: 0; right: 0; bottom: 0;
-        width: 100%; border-left: none;
-        transform: translateY(100%);
-        border-radius: 0; box-shadow: none;
+    /* Hotel detail page — mobile layout */
+    @media (max-width: 760px) {
+      .hpage-grid {
+        grid-template-columns: 1fr;
+        gap: 16px;
+        padding: 16px 14px 0;
       }
-      .hotel-panel.open { transform: translateY(0); }
-      .hp-carousel-btn { display: none; }
+      .hpage-sidebar { display: none; } /* mobile uses sticky bottom CTA bar instead */
+      .hpage-mobile-cta { display: flex; }
+      .hpage-hero .hp-carousel,
+      .hpage-hero .hp-hero-placeholder { height: clamp(220px, 56vw, 320px); }
+      .hp-carousel-btn { display: none; } /* swipe instead */
       .hp-lb-prev, .hp-lb-next { display: none; }
     }

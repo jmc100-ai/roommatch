@@ -7,6 +7,7 @@ const express = require("express");
 const cors    = require("cors");
 const path    = require("path");
 const crypto  = require("crypto");
+const fs      = require("fs");
 // Load .env from the repo root (next to server.js), not process.cwd() — IDEs/tasks
 // often start Node from another folder, which breaks local env on localhost.
 require("dotenv").config({ path: path.join(__dirname, ".env") });
@@ -778,20 +779,60 @@ if (SITE_PASSWORD) {
     if (cookies.rm_gate === SITE_PASSWORD_HASH) return next();
     return res.send(loginHtml());
   });
+
+  // Gate the SPA hotel detail route the same way (it also serves index.html).
+  app.get("/hotel/:hotelId", (req, res, next) => {
+    const cookies = parseCookies(req.headers.cookie);
+    if (cookies.rm_gate === SITE_PASSWORD_HASH) return next();
+    return res.send(loginHtml());
+  });
 }
 
+// ── Inject runtime client config into served index.html ──────────────────────
+// We replace the literal `__WL_BASE_URL__` placeholder so window._WL_BASE_URL
+// is set BEFORE app.js executes. This eliminates the previous race where the
+// async /api/config fetch resolved AFTER buildBookUrl() captured an empty
+// value at module init, silently sending users to the Google fallback.
+function _wlBaseUrlFromEnv() {
+  const d = process.env.LITEAPI_WL_DOMAIN;
+  return d ? `https://${d.replace(/^https?:\/\//, "").replace(/\/$/, "")}` : "";
+}
+let _indexHtmlSrc = null;
+function _readIndexHtml() {
+  if (_indexHtmlSrc == null || process.env.NODE_ENV !== "production") {
+    _indexHtmlSrc = fs.readFileSync(path.join(__dirname, "client", "index.html"), "utf8");
+  }
+  return _indexHtmlSrc;
+}
+function serveAppHtml(res) {
+  // Re-inject per request so env changes take effect immediately on next deploy/restart.
+  // The placeholder is wrapped in JS string quotes in the HTML, so we encode any quotes.
+  const wl = _wlBaseUrlFromEnv().replace(/[\\"']/g, "");
+  const html = _readIndexHtml().replace(/__WL_BASE_URL__/g, wl);
+  res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+  res.setHeader("Pragma", "no-cache");
+  res.setHeader("Expires", "0");
+  res.setHeader("Content-Type", "text/html; charset=utf-8");
+  return res.send(html);
+}
+
+// Always serve `/` and `/hotel/:hotelId` via our injecting helper (even when
+// SITE_PASSWORD is unset and the gate handlers above don't run).
+app.get("/", (_req, res) => serveAppHtml(res));
+app.get("/hotel/:hotelId", (_req, res) => serveAppHtml(res));
+
 // ── Public client config ──────────────────────────────────────────────────────
+// Kept as a fallback (window._WL_BASE_URL is normally already injected by
+// serveAppHtml above; the client also fetches this so a missed injection
+// is recoverable).
 app.get("/api/config", (req, res) => {
-  res.json({
-    wl_base_url: process.env.LITEAPI_WL_DOMAIN
-      ? `https://${process.env.LITEAPI_WL_DOMAIN.replace(/^https?:\/\//, "")}`
-      : "",
-  });
+  res.json({ wl_base_url: _wlBaseUrlFromEnv() });
 });
 
-// Disable caching for HTML so new deploys are always picked up immediately.
-// JS/CSS/images use default caching (fine for a single-file app with no hashes).
+// Static assets — set { index: false } so Express never auto-serves
+// client/index.html (we own that via serveAppHtml so injection always happens).
 app.use(express.static(path.join(__dirname, "client"), {
+  index: false,
   setHeaders(res, filePath) {
     if (filePath.endsWith(".html")) {
       res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
@@ -3636,6 +3677,141 @@ app.get("/api/hotel/:hotelId", async (req, res) => {
   }
 });
 
+// ── GET /api/hotel/:hotelId/reviews — guest reviews proxy ───────────────────
+// LIVE-ONLY proxy to LiteAPI /data/reviews. Reviews must NOT be persisted to
+// the database, and must NOT be fed into embeddings, HyDE, or any prompt input
+// (LiteAPI ToS forbids derivative datasets / model training).
+// Short in-memory hint cache (per-process) only smooths back-button + double-fetch
+// during the same session; it is bounded and self-evicting.
+const REVIEWS_CACHE_TTL_MS  = 3 * 60 * 1000; // 3 min
+const REVIEWS_CACHE_MAX     = 200;
+const _reviewsCache         = new Map(); // key -> { data, expiresAt }
+const _reviewsInflight      = new Map(); // key -> Promise<data>
+
+function _reviewsCacheKey(hotelId, limit, offset, language) {
+  return `${hotelId}|${limit}|${offset}|${language || ""}`;
+}
+function _reviewsCachePut(key, data) {
+  _reviewsCache.set(key, { data, expiresAt: Date.now() + REVIEWS_CACHE_TTL_MS });
+  if (_reviewsCache.size > REVIEWS_CACHE_MAX) {
+    const oldest = _reviewsCache.keys().next().value;
+    if (oldest) _reviewsCache.delete(oldest);
+  }
+}
+function _reviewsCacheGet(key) {
+  const hit = _reviewsCache.get(key);
+  if (!hit) return null;
+  if (hit.expiresAt < Date.now()) {
+    _reviewsCache.delete(key);
+    return null;
+  }
+  return hit.data;
+}
+
+app.get("/api/hotel/:hotelId/reviews", async (req, res) => {
+  const t0 = Date.now();
+  const hotelId  = req.params.hotelId;
+  const rawLimit = parseInt(req.query.limit, 10);
+  const rawOff   = parseInt(req.query.offset, 10);
+  const limit    = Number.isFinite(rawLimit) ? Math.min(Math.max(rawLimit, 1), 50) : 10;
+  const offset   = Number.isFinite(rawOff)   ? Math.max(rawOff, 0)                 : 0;
+  const language = (req.query.language || "").toString().slice(0, 5).toLowerCase() || "";
+
+  if (!hotelId)        return res.status(400).json({ error: "hotelId required" });
+  if (!LITEAPI_KEY)    return res.status(500).json({ error: "LITEAPI_KEY not configured" });
+
+  // Don't let downstream caches retain reviews
+  res.setHeader("Cache-Control", "private, no-store");
+
+  const key = _reviewsCacheKey(hotelId, limit, offset, language);
+  const cached = _reviewsCacheGet(key);
+  if (cached) {
+    console.log(`[reviews] hit  ${hotelId} l=${limit} o=${offset} ${Date.now() - t0}ms (cache)`);
+    return res.json(cached);
+  }
+
+  if (_reviewsInflight.has(key)) {
+    try {
+      const data = await _reviewsInflight.get(key);
+      console.log(`[reviews] join ${hotelId} l=${limit} o=${offset} ${Date.now() - t0}ms (inflight)`);
+      return res.json(data);
+    } catch (e) {
+      return res.status(502).json({ error: "review fetch failed", message: e.message });
+    }
+  }
+
+  const params = new URLSearchParams({ hotelId, limit: String(limit), offset: String(offset) });
+  if (language) params.set("language", language);
+  const url = `https://api.liteapi.travel/v3.0/data/reviews?${params.toString()}`;
+
+  const fetchPromise = (async () => {
+    const r = await fetch(url, {
+      headers: { "X-API-Key": LITEAPI_KEY, "accept": "application/json" },
+    });
+    if (!r.ok) {
+      const status = r.status;
+      let detail   = "";
+      try { detail = await r.text(); } catch (_) {}
+      throw new Error(`LiteAPI ${status}${detail ? ": " + detail.slice(0, 160) : ""}`);
+    }
+    const json = await r.json();
+    const arr  = Array.isArray(json?.data) ? json.data : [];
+
+    // Slim DTO — only fields we render; never log review text.
+    const reviews = arr
+      .map(r => {
+        const score   = Number(r.averageScore);
+        const dateRaw = (r.date || "").toString();
+        const tsMs    = (() => {
+          const t = Date.parse(dateRaw.replace(" ", "T") + "Z");
+          return Number.isFinite(t) ? t : 0;
+        })();
+        return {
+          score:    Number.isFinite(score) ? score : null,
+          date:     dateRaw || null,
+          ts:       tsMs,
+          headline: typeof r.headline === "string" ? r.headline : "",
+          pros:     typeof r.pros     === "string" ? r.pros     : "",
+          cons:     typeof r.cons     === "string" ? r.cons     : "",
+          language: typeof r.language === "string" ? r.language : "",
+          country:  typeof r.country  === "string" ? r.country  : "",
+          name:     typeof r.name     === "string" ? r.name.slice(0, 24) : "",
+          source:   typeof r.source   === "string" ? r.source : "",
+          type:     typeof r.type     === "string" ? r.type   : "",
+        };
+      })
+      // Recency only (per UX scope) — sort descending; ties keep API order.
+      .sort((a, b) => (b.ts || 0) - (a.ts || 0));
+
+    const total = Number.isFinite(Number(json?.total)) ? Number(json.total) : null;
+    const data  = {
+      hotel_id: hotelId,
+      limit,
+      offset,
+      language: language || null,
+      total,
+      has_more: total != null
+        ? offset + reviews.length < total
+        : reviews.length === limit, // best-effort when total is missing
+      reviews,
+    };
+    _reviewsCachePut(key, data);
+    return data;
+  })();
+
+  _reviewsInflight.set(key, fetchPromise);
+  fetchPromise.finally(() => _reviewsInflight.delete(key));
+
+  try {
+    const data = await fetchPromise;
+    console.log(`[reviews] miss ${hotelId} l=${limit} o=${offset} ${Date.now() - t0}ms count=${data.reviews.length}`);
+    res.json(data);
+  } catch (e) {
+    console.warn(`[reviews] err  ${hotelId} l=${limit} o=${offset} ${Date.now() - t0}ms ${e.message}`);
+    res.status(502).json({ error: "review fetch failed", message: e.message });
+  }
+});
+
 // ── POST /api/backfill-property-types — re-classify property_type for a city ──
 app.post("/api/backfill-property-types", async (req, res) => {
   const { city, secret } = req.body || {};
@@ -3687,9 +3863,7 @@ app.post("/api/backfill-property-types", async (req, res) => {
   }
 });
 
-app.get("*", (req, res) => {
-  res.sendFile(path.join(__dirname, "client", "index.html"));
-});
+app.get("*", (_req, res) => serveAppHtml(res));
 
 // ── Graceful shutdown: fix any cities stuck at "indexing" when Render deploys ──
 async function gracefulShutdown(signal) {

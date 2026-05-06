@@ -81,7 +81,16 @@ SOFT_FLAG_MISS_PENALTY — multiply raw by (1 − pen × (1 − coverage)) so lo
 SOFT_FLAG_HOTEL_CAP    — max hotels scanned for coverage in soft mode (default 1500)
 UNSPLASH_KEY           — (not yet set) free key from unsplash.com/developers — needed for neighborhood card photos
 SITE_PASSWORD          — (not yet set) simple password gate for the frontend; omit to disable gate (API routes never gated)
+LITEAPI_WL_DOMAIN      — LiteAPI white-label domain WITHOUT scheme, e.g. `travelboop.nuitee.link`. Server prefixes `https://` and serves via `/api/config` AND injects into `window._WL_BASE_URL` in served HTML so `buildBookUrl()` in client/app.js has it on first render. Empty/unset → "Find & Book" buttons fall back to a Google search.
 ```
+
+### White-label booking links (Find & Book buttons)
+- All "Find & Book" CTAs (search results card, room rows, hotel detail page sidebar + mobile sticky bar) call `buildBookUrl(hotel, roomTypeId)` in `client/app.js`.
+- URL formats sent to the WL:
+  - **Hotel page (no specific room)**: `https://<wl>/hotels/<hotelId>?checkin=YYYY-MM-DD&checkout=YYYY-MM-DD&occupancies=base64(JSON)` — guest picks a room on the WL.
+  - **Direct offer (we have an offerId from `/api/rates`)**: `https://<wl>/booking?offerId=<id>` — straight to checkout for a specific room rate.
+- `offerId` is captured per `(hotel_id, room_type_id)` inside `/api/rates` from `rates[0].offerId` (or `offer_id`) and sent to the client as `roomPrices.offerIds`. The client then exposes them as `hotel.offerIds[roomTypeId]` so room-row buttons get a deep link, while hotel-level buttons fall back to the hotel page URL.
+- **Robustness:** the WL URL is read at *call time* (not module init) AND server-injected into HTML before app.js runs. Earlier code captured it at module init, before the `/api/config` fetch resolved → silently fell back to Google. Do not regress this — keep `_wlBaseUrl()` reading `window._WL_BASE_URL` on every call.
 
 ---
 
@@ -209,7 +218,10 @@ NOTIFY pgrst, 'reload config';
 | GET /api/debug-city?city | LiteAPI coverage analysis |
 | GET /api/debug-gemini | Test available Gemini model names |
 | GET /api/debug-photos?hotelId | Show raw LiteAPI photo fields |
+| GET /api/hotel/:hotelId | Hotel details data (live-fetch metadata + DB rooms) — consumed by the dedicated `/hotel/:hotelId` page (was: slide-out panel, now removed) |
+| GET /api/hotel/:hotelId/reviews?limit&offset&language | **Live LiteAPI guest reviews proxy** — no DB write, in-memory hint cache only (3 min TTL, 200-entry LRU). Slim DTO + `Cache-Control: private, no-store`. **Never feed review text into embeddings, HyDE, or any prompt.** |
 | GET /api/health | Health check |
+| GET /hotel/:hotelId | **SPA route** — serves `client/index.html` (no-cache, gate-aware). Client JS reads `location.pathname` and renders the dedicated hotel detail page (`#st-hotel-detail`). |
 
 ---
 
@@ -373,11 +385,15 @@ LiteAPI's terms restrict creating databases from their data. We have not receive
 | Gemini captions / `feature_summary` in `v2_room_inventory` | Medium — our text but derived from their photos | ⚠️ Candidate for removal |
 | Hotel name, star rating, address persisted to DB | Higher — LiteAPI metadata | ❌ Never persist — always live-fetch |
 | Hotel description, amenities persisted to DB | High — LiteAPI content | ❌ Never persist — always live-fetch |
+| Guest reviews (text, score, author) persisted to DB | High — LiteAPI / partner UGC | ❌ Never persist — always live-fetch via `/data/reviews` proxy |
+| Guest reviews used as embedding / HyDE / prompt input | Highest — LiteAPI ToS forbids derivative datasets / model training | ❌ Forbidden under any circumstance |
 | Neighborhood vibes (pure Gemini, no LiteAPI data) | None | ✅ Clean |
 
 **Key rules for all agents:**
 - **Never add hotel metadata columns** (name, description, amenities, address, star_rating, guest_rating) to `v2_hotels_cache` as persistent fields. Always fetch live via LiteAPI at query/display time, cache in memory only (30–60 min TTL).
 - Hotel details page (when built): live-fetch from LiteAPI `/data/hotel`, short in-memory cache, no DB write.
+- **Guest reviews are live-only.** Always proxied via `GET /api/hotel/:hotelId/reviews` → LiteAPI `/data/reviews`. Bounded in-memory hint cache only (3 min TTL, 200-entry LRU; see server.js `_reviewsCache`). **Never persist review text, score, or author to any DB column. Never use review text as input to embeddings, HyDE, captioning prompts, vibe extraction, or any model.** LiteAPI ToS explicitly forbids derivative datasets / ML training.
+- Display reviews only on the hotel details panel (`#hp-reviews-section`). Show LiteAPI attribution under the section: *“Reviews provided via LiteAPI”* with a link to `https://liteapi.travel`.
 - The `v2_room_types_index` (our primary search index) contains zero LiteAPI data — only boolean facts we derived. This is the cleanest part of the architecture.
 - `v2_room_inventory` captions/feature_summary are the next candidate to remove to further reduce risk. Not urgent, but do not expand what we store there.
 
@@ -498,12 +514,51 @@ These are intentionally out of scope. Do not build these without explicit user i
 
 ---
 
-## HOTEL DETAILS PLAN
+## HOTEL DETAILS PAGE (as-built — May 2026)
 
-**TRIGGER PHRASE:** When user says "go build hotel details", read this section first.
+**STATUS:** Built as a dedicated full page (not a slide-out panel). The legacy `#hotel-panel` slide-out drawer has been **deleted entirely** — do not reintroduce it.
 
-### Goal
-Slide-in hotel details panel on search results. Users tap "Details →" on any hotel card to see full metadata, amenities, all room type photos, and a "See rates →" CTA. Also classifies apartment rentals vs. hotels with a property type badge.
+### Architecture
+- **Route:** `GET /hotel/:hotelId` (Express route in `server.js` serves `client/index.html` with no-cache HTML headers; same `SITE_PASSWORD` gate as `/`).
+- **SPA container:** `<div id="st-hotel-detail" class="hpage">` in `client/index.html`, parallel to `#discovery-flow` and `#st-results`.
+- **Body class toggle:** adding `body.has-hotel-detail` hides `#topnav`, `#discovery-flow`, `#st-results`, `.landing-sections`, `.trust-bar`, `.static-overlay` via CSS. Removing it restores the prior view (CSS rule based on `body.has-results` already drives results vs. discovery visibility).
+- **No SSR:** still consistent with the scope exclusion of "SEO-optimised static hotel pages" — this is a client-rendered SPA route, just with a real URL.
+
+### Entry points (all in `client/app.js`)
+| From | Behavior |
+|---|---|
+| Hotel card hero image | `onclick="openHotelDetailPage(id)"` on `.hotel-hero--clickable`. Inner pills (`hotel-nbhd-pill`, badge wraps) `event.stopPropagation()` to keep their own actions. |
+| `Details` button on card | `openHotelDetailPage(id)` |
+| Guest-score badge on card | `openHotelDetailPage(id, { scrollTo: 'reviews' })` |
+| Direct URL load (`/hotel/:id`) | `DOMContentLoaded` handler in app.js parses `location.pathname` and calls `openHotelDetailPage(id)`. |
+| `Reviews` rating chip inside the page | `_hpScrollToReviews({ smooth: true })` |
+
+### Page layout (`hotelDetailPageHTML(d)`)
+Top → bottom:
+1. **Sticky topbar** (`.hpage-topbar`) — Back button (calls `closeHotelDetailPage()`).
+2. **Hero** (`.hpage-hero` wrapping `.hp-carousel`) — full-width carousel; height clamps to `42vw` desktop / `56vw` mobile; tap on image opens lightbox on desktop only (touch devices skip lightbox).
+3. **Two-column grid** (`.hpage-grid`):
+    - **`.hpage-content`** (left, full width on mobile): hp-meta (h1 name, stars, rating chip, neighbourhood chip, property-type chip, check-in/out times) → About (description, 4-line clamp + Read more) → Amenities (first 8 + "+N more" expander) → **Guest reviews** section.
+    - **`.hpage-sidebar`** (right, 360px desktop only, sticky at `top:72px`): duplicates name, stars, rating, neighbourhood/property chips, times, **primary CTA "Find & Book →"** and **secondary CTA "Vibe tour"**, plus a "Copy link" share button.
+4. **Mobile sticky bottom bar** (`.hpage-mobile-cta`, `display:none` on desktop): primary "Find & Book →" + secondary smaller "Vibe tour" — Vibe tour is intentionally less prominent (smaller, ghost style).
+
+### State (in `client/app.js`)
+- `_detailHotelId` — currently displayed hotel id (null when not on detail page)
+- `_detailHotelData` — last loaded payload
+- `_detailInflight` — `Map<hotelId, Promise>` for de-duplicating concurrent fetches
+- `_detailReturnState` — `{results, scrollY}` captured on enter so `closeHotelDetailPage()` restores prior view + scroll position
+- Reviews state (`_hpReviewsState`) is shared with the page (was originally built for the panel)
+
+### URL/history rules
+- `openHotelDetailPage(id)` — `history.pushState({hotelDetail:id}, '', '/hotel/:id?city=…&q=…')` (preserves `S.city` and `S.q` so the page is shareable AND back-context survives reload).
+- `closeHotelDetailPage()` — `history.pushState({}, '', '/')` (back stays in app, doesn't navigate away).
+- `popstate` listener: if URL becomes `/hotel/:id` → opens that hotel (forward nav); if URL leaves `/hotel/:id` while detail page is showing → close (back nav).
+- ESC closes the page (defers to lightbox if it's open).
+
+### Reusable element styles (`.hp-*`)
+The following styles are reused inside the new page unchanged: `hp-carousel`, `hp-lightbox`, `hp-meta`, `hp-name` (overridden in page scope to be larger via `.hpage .hp-name`), `hp-stars`, `hp-rating`/`hp-rating--btn`, `hp-nbhd-chip`, `hp-proptype-chip`, `hp-times`, `hp-section` (padding overridden), `hp-desc(.clamped)`, `hp-amenities`, `hp-amenity`, `hp-reviews-*`, `hp-skeleton`. Page chrome lives in `.hpage*` rules.
+
+### Future work (NOT yet built — plan reference)
 
 ### Option B — Licensing risk reduction (do first, independent of UI)
 1. **NULL captions + feature_summary in `v2_room_inventory`** — these are indexing pipeline artifacts, not needed after facts are extracted. The indexer generates captions live; it never re-reads them from DB. Safe to null existing rows and stop writing them going forward. Zero search/display impact.
@@ -544,56 +599,16 @@ Returns everything the details panel needs. Logic:
 - Null-check `hotel_photos` — some rows have `[]`. Hero image falls back to first `v2_room_inventory` photo.
 - LiteAPI descriptions may contain HTML — sanitise before sending to client.
 
-### Phase 3 — Slide-in panel UI
-**Desktop:** right-side drawer (~45% width), slides in over results. Results stay scrollable behind.
-**Mobile:** fullscreen bottom sheet, back button or swipe-down-from-top-60px closes it.
+### Phase 3 — UI ✅ SUPERSEDED — built as full page (`/hotel/:hotelId`), not a slide-out panel.
+See "HOTEL DETAILS PAGE (as-built — May 2026)" section above for the actual layout, entry points, URL/history rules, and reusable styles. The slide-out panel (`#hotel-panel`, `openHotelPanel`, `hotelPanelHTML`, `.hotel-panel-*` CSS) has been deleted.
 
-**Panel sections (top → bottom):**
-- Hero photo + close button (×)
-- Hotel name, star pills, guest rating badge, neighbourhood chip
-- Property type chip: `🏠 Apartment` for non-hotels (neutral language, not penalising)
-- Check-in / check-out times
-- About — description, 3-line clamp + "Read more" expand. Strip HTML first.
-- Amenities grid — first 8 icons + labels, "+ N more" expands inline
-- Room types — each room: horizontal photo scroll strip + facts chips + room name
-- "See rates →" CTA — triggers existing dates tray (do not build a separate booking flow)
+### Phase 4 — Search results card integration ✅ DONE
+- `Details` ghost button exists in `.hotel-actions` (between "Vibe tour" and "Find & Book →") and now calls `openHotelDetailPage(id)`.
+- Hero image (`.hotel-hero--clickable`) is now the primary entry point — clicking the hero opens `/hotel/:hotelId`. Inner pills `event.stopPropagation()` to keep their own actions.
+- Guest-score badge calls `openHotelDetailPage(id, { scrollTo: 'reviews' })`.
+- Property-type chip (`🏠 Apartment` / `🛏 Hostel`) is rendered in `.hotel-meta` for non-hotels.
 
-**URL / history:**
-- On panel open: `history.pushState({panel: hotelId}, '', currentURL + '&hotel=hotelId')`
-- On panel close: `history.back()` or `history.replaceState` to strip `?hotel=`
-- `popstate` listener closes panel on browser back
-- On page load: if `?hotel=` param present AND `?city=` also present, auto-run search then open panel
-
-**Gotchas:**
-- Z-index: hotel panel = `z-index: 150`; wizard overlay (`boop-overlay-mode`) = `z-index: 200`. Wizard always wins.
-- Mobile swipe: only close on swipe-down from top 60px of sheet header, not from within scrollable content.
-- Panel is an overlay — never `display:none` `#st-results` when panel is open.
-- LiteAPI description HTML → sanitise. XSS risk if set via `innerHTML` unsanitised.
-
-### Phase 4 — Search results card integration
-
-**"Details" entry point — exact location in `hotelHTML()`:**
-The `.hotel-actions` div (inside `.hotel-header-right`) already contains:
-`[price display]` · `[Vibe tour button]` · `[Find & Book → link]`
-
-Add **"Details"** as a small ghost button between "Vibe tour" and "Find & Book →":
-```html
-<button type="button" class="hotel-details-btn"
-        data-hotel-id="${hotelIdAttr}"
-        onclick="openHotelDetails(this.dataset.hotelId)">Details</button>
-```
-- Style: no fill, subtle border, same height as "Vibe tour" button, 12–13px text
-- Works for both photo-rich and stub (no-photo) cards — panel shows metadata + amenities even without room photos
-
-**Property type chip — exact location:**
-In `.hotel-meta` row (below hotel name, alongside stars and location), add a chip for non-hotel property types only:
-```html
-${h.propertyType === 'apartment_rental' ? '<span class="property-type-chip">🏠 Apartment</span>' : ''}
-${h.propertyType === 'hostel' ? '<span class="property-type-chip">🛏 Hostel</span>' : ''}
-```
-Neutral language — not penalising. Some users want apartments.
-
-### Phase 5 — "Hotels only" filter toggle
+### Phase 5 — "Hotels only" filter toggle (NOT yet built)
 - **Default: "All properties"** (opt-in filter, not opt-out). Avoids silent result count drops for existing users.
 - Toggle label: "Hotels only" — hides `apartment_rental`, `hostel`. Apartments remain accessible.
 - State: `sessionStorage` (not `localStorage`) — per-tab, not permanent.
@@ -601,16 +616,16 @@ Neutral language — not penalising. Some users want apartments.
 - Only show toggle for V2 cities (Mexico City). Hide or grey out for Paris/KL (V1, no property_type).
 - Requires DB index on `(city, property_type)` — add in Phase 1 migration.
 
-### Build order
-| Phase | Effort | Blocker |
-|---|---|---|
-| Option B: null captions in v2_room_inventory | 1 hr | none |
-| Phase 0: verify LiteAPI response fields | 30 min | none |
-| Phase 1: property_type column + backfill | 2 hrs | Phase 0 |
-| Phase 2: /api/hotel/:hotelId | 2 hrs | Phase 1 |
-| Phase 3: slide-in panel UI | 5–7 hrs | Phase 2 |
-| Phase 4: Details link + property badge on cards | 1 hr | Phase 3 |
-| Phase 5: Hotels only toggle | 1 hr | Phase 1 |
+### Build status
+| Phase | Status |
+|---|---|
+| Option B: null captions in v2_room_inventory | not started |
+| Phase 0: verify LiteAPI response fields | done |
+| Phase 1: property_type column + backfill | done |
+| Phase 2: /api/hotel/:hotelId | done (+ /api/hotel/:id/reviews) |
+| Phase 3: details UI | done (full page, not panel) |
+| Phase 4: card entry points (Details + hero click + guest-score → reviews) | done |
+| Phase 5: Hotels only toggle | not started |
 
 ---
 
