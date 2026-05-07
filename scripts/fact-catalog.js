@@ -218,6 +218,11 @@ async function buildFactIntentLLM(query, opts = {}, geminiKey = "") {
   ].join("\n");
 
   try {
+    // Tight timeout: typical Gemini-flash-lite response is 300-1500ms. When
+    // Gemini is degraded, we'd rather fall back to the deterministic regex
+    // router (good-enough for most queries) than block the user 10s. Override
+    // via NLP_INTENT_TIMEOUT_MS env if needed.
+    const timeoutMs = parseInt(process.env.NLP_INTENT_TIMEOUT_MS || "3000", 10);
     const r = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=${geminiKey}`,
       {
@@ -227,7 +232,7 @@ async function buildFactIntentLLM(query, opts = {}, geminiKey = "") {
           contents: [{ parts: [{ text: prompt }] }],
           generationConfig: { maxOutputTokens: 500, temperature: 0 },
         }),
-        signal: AbortSignal.timeout(10000),
+        signal: AbortSignal.timeout(timeoutMs),
       }
     );
     if (!r.ok) throw new Error(`Gemini ${r.status}`);

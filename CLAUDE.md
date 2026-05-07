@@ -86,6 +86,7 @@ SITE_PASSWORD          — (not yet set) simple password gate for the frontend; 
 LITEAPI_WL_DOMAIN      — LiteAPI white-label domain WITHOUT scheme, e.g. `travelboop.nuitee.link`. Server prefixes `https://` and serves via `/api/config` AND injects into `window._WL_BASE_URL` in served HTML so `buildBookUrl()` in client/app.js has it on first render. Empty/unset → "Find & Book" buttons fall back to a Google search.
 MAPTILER_KEY           — Maptiler API key (free tier: 100k tile loads/month at maptiler.com). Powers the neighbourhood-vibe-page map module (MapLibre GL). Server exposes via `/api/config` AND injects into `window._MAPTILER_KEY` in served HTML so the map can boot before any /api/config fetch. **Must be restricted by HTTP referrer in the Maptiler dashboard** (Allowed origins: `travelboop.com`, `www.travelboop.com`, `roommatch-1fg5.onrender.com`, `localhost:*`). Unset → map falls back to OSM raster tiles (works but lower quality + against OSM tile usage policy at scale).
 META_SYNC_LIMIT        — top-N hotels for which `/api/vsearch` (V2 path) fetches LiteAPI metadata synchronously before sending the response. Default `30`. Lower = faster TTFB, more cards initially show with placeholder name until lazy-load arrives. The remainder are listed in `data.deferred_meta_ids` and lazy-fetched by the client via `/api/hotels-meta`. See "V2 Search Latency" section below.
+NLP_INTENT_TIMEOUT_MS  — `buildFactIntentLLM` (Gemini 2.5 flash-lite) call timeout in ms. Default `3000`. On timeout we fall back to the deterministic regex router (`v2-facts-1`); fine for most queries. Raise only if you see frequent `(router=v2-facts-1)` in logs and the regex is missing important facts.
 ```
 
 ### White-label booking links (Find & Book buttons)
@@ -500,6 +501,7 @@ Render rotates instances every ~1–3 hours, so most users hit a cold-cache inst
 
 **Knobs:**
 - `META_SYNC_LIMIT` — top-N hotels to fetch metadata for synchronously (default `30`). Lower = faster TTFB but more cards render with placeholder name briefly.
+- `NLP_INTENT_TIMEOUT_MS` — Gemini intent call timeout (default `3000`). On timeout we fall back to the regex router. Was previously hardcoded to `10000` which dominated tail latency when Gemini was degraded (observed cold path: `nlp intent: 10002ms (router=v2-facts-1)` blocking the whole search).
 - TTL constant `HOTEL_META_TTL_MS` (24 h) and chunk size `200` are hardcoded in `server.js` → `fetchHotelMetaBatch`.
 
 **Where to look in logs:**
