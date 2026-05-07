@@ -2815,7 +2815,8 @@
     const styleUrl = _styleUrlForMaptiler(key);
     const initialStyle = styleUrl || _fallbackRasterStyle();
 
-    // Compute bounds union from all plottable bboxes.
+    // Compute the union of every plottable bbox — used by the "Show all"
+    // reset button so users can zoom back out to the full city view.
     let minLat =  90, maxLat = -90, minLng =  180, maxLng = -180;
     for (const { h } of plottable) {
       const b = h.bbox;
@@ -2826,6 +2827,25 @@
     }
     const bounds = new maplibregl.LngLatBounds([minLng, minLat], [maxLng, maxLat]);
     _nbhdMapBounds = bounds;
+
+    // Pick the top-match neighbourhood (highest BOOP vibe %) and use ITS bbox
+    // as the initial camera target. Falls back to the full city bounds when
+    // no neighbourhood has a meaningful score (e.g. profile not yet loaded).
+    let topEntry = null;
+    let topPct   = -1;
+    for (const entry of plottable) {
+      const pct = nbhdBoopVibeScore(entry.h);
+      if (pct > topPct) { topPct = pct; topEntry = entry; }
+    }
+    let initialBounds = bounds;
+    if (topEntry && topPct > 0) {
+      const tb = topEntry.h.bbox;
+      initialBounds = new maplibregl.LngLatBounds(
+        [+tb.lon_min, +tb.lat_min],
+        [+tb.lon_max, +tb.lat_max]
+      );
+      console.log(`[nbhd-map] initial focus: ${topEntry.h.name} (${topPct}% match)`);
+    }
 
     // Tear down previous map (city change, profile re-rank).
     if (_nbhdMap) {
@@ -2851,11 +2871,13 @@
       map = new maplibregl.Map({
         container: canvas,
         style: initialStyle,
-        bounds,
-        // Tighter padding = more zoom. Asymmetric to leave room for the
-        // marker label that hangs below each centroid (~24-30px) and for the
-        // badge that sits above (~32px), without cropping at any edge.
-        fitBoundsOptions: { padding: { top: 38, bottom: 50, left: 36, right: 36 }, maxZoom: 15 },
+        bounds: initialBounds,
+        // Padding leaves room for the marker label below each centroid and the
+        // badge above it. maxZoom 14 is a good "neighbourhood + a couple of
+        // surrounding blocks" zoom level — tight enough to feel focused on the
+        // top match but loose enough to show context. The "Show all" button
+        // re-fits to the full city bounds (`_nbhdMapBounds`).
+        fitBoundsOptions: { padding: { top: 38, bottom: 50, left: 36, right: 36 }, maxZoom: 14 },
         attributionControl: { compact: true },
       });
     } catch (e) {
