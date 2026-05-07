@@ -354,7 +354,7 @@
       sub:'Bias toward iconic corners or deeper local finds.',
       type:'cards',
       options:[
-        { id:'first',  emoji:'🗺️', title:'First time',        note:'Central, iconic, easy to navigate.', image:'https://images.unsplash.com/photo-1502602898657-3e91760cbb34?auto=format&fit=crop&w=1200&q=80', weights:{ central:20, iconic:18, calm:8, local:-6 } },
+        { id:'first',  emoji:'🗺️', title:'First time',        note:'Central, iconic, easy to navigate.', image:'https://images.unsplash.com/photo-1521216774850-01bc1c5fe0da?auto=format&fit=crop&w=1200&q=80', weights:{ central:20, iconic:18, calm:8, local:-6 } },
         { id:'repeat', emoji:'🔍', title:'Been before',       note:'Something new each visit.',         image:'https://images.unsplash.com/photo-1539037116277-4db20889f2d4?auto=format&fit=crop&w=1200&q=80', weights:{ local:18, culture:8, central:-3 } },
         { id:'expert', emoji:'🧭', title:'I know it well',    note:'Neighbourhood streets, cafés, trees.', image:'https://images.unsplash.com/photo-1449824913935-59a10b8d2000?auto=format&fit=crop&w=1200&q=80', weights:{ local:20, calm:6, central:-8, iconic:-5 } },
       ]
@@ -1632,23 +1632,22 @@
   function updateFreeCancelHint() {
     const el = document.getElementById('freeCancelHint');
     if (!el) return;
+    el.classList.remove('is-on');
     if (!_requireFreeCancel) {
-      el.style.display = 'none';
       el.textContent = '';
       return;
     }
     const hasDates = !!(S.checkin && S.checkout && S.checkin < S.checkout);
     if (!hasDates) {
-      el.style.display = '';
       el.textContent = 'Free cancellation: add travel dates to filter.';
+      el.classList.add('is-on');
       return;
     }
     if (!_pricesLoaded) {
-      el.style.display = '';
       el.textContent = 'Free cancellation: checking live rate policies…';
+      el.classList.add('is-on');
       return;
     }
-    el.style.display = 'none';
     el.textContent = '';
   }
 

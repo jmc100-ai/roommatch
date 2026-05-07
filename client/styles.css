@@ -617,8 +617,14 @@
     .rates-status.done { color: var(--green); opacity: 1; transition: opacity 0.5s; }
     .rates-status.done.fade { opacity: 0; }
     .free-cancel-hint {
+      display: none;
       font-size: 11px; color: rgba(232, 213, 176, 0.88); letter-spacing: 0.03em;
       max-width: 220px; line-height: 1.35; flex-shrink: 1;
+      word-wrap: break-word;
+      overflow-wrap: anywhere;
+    }
+    .free-cancel-hint.is-on {
+      display: block;
     }
     .room-fc-badge {
       display: inline-block; margin-left: 8px; font-size: 10px; font-weight: 600;
@@ -2471,6 +2477,24 @@
       }
       #st-results .sort-bar .rates-status:empty {
         display: none;
+      }
+      /* Free-cancel hint was default flex order 0 → same row as sort pills + overlap; full-width row after rates */
+      #st-results .sort-bar .free-cancel-hint.is-on {
+        display: block;
+        order: 2;
+        flex: 0 0 100%;
+        width: 100%;
+        max-width: none;
+        margin-left: 0;
+        margin-right: 0;
+        box-sizing: border-box;
+        padding: 2px 10px 6px;
+        text-align: center;
+        font-size: 10px;
+        line-height: 1.4;
+      }
+      #st-results .sort-bar .free-cancel-hint:not(.is-on) {
+        display: none !important;
       }
       /* Second row: rates line; third: “Showing…” + grid/list (availability lives in nbhd strip on mobile) */
       #st-results .sort-bar-trailer {
