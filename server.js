@@ -777,7 +777,25 @@ async function liteGet(path) {
 
 app.use(cors({ origin: "*" }));
 app.use(express.json());
-app.use((_, res, next) => { res.setHeader("X-Robots-Tag", "noindex, nofollow"); next(); });
+
+/** Indexable marketing pages + crawler helpers — do not send global noindex. */
+const MARKETING_HTML = {
+  "/mexico-city-hotels": "mexico-city-hotels.html",
+  "/cdmx-neighborhood-stays": "cdmx-neighborhood-stays.html",
+  "/mexico-city-visual-search": "mexico-city-visual-search.html",
+};
+function isIndexablePublicPath(p) {
+  if (!p) return false;
+  if (p === "/sitemap.xml" || p === "/robots.txt") return true;
+  if (MARKETING_HTML[p]) return true;
+  if (p.endsWith("/") && MARKETING_HTML[p.slice(0, -1)]) return true;
+  return false;
+}
+app.use((req, res, next) => {
+  if (isIndexablePublicPath(req.path || "")) return next();
+  res.setHeader("X-Robots-Tag", "noindex, nofollow");
+  next();
+});
 
 // ── Password gate (only active when SITE_PASSWORD env var is set) ─────────────
 if (SITE_PASSWORD) {
@@ -847,10 +865,57 @@ function serveAppHtml(res) {
   return res.send(html);
 }
 
+function marketingOrigin(req) {
+  let proto = (req.headers["x-forwarded-proto"] || "https").split(",")[0].trim();
+  if (proto !== "http" && proto !== "https") proto = "https";
+  const host = (req.headers["x-forwarded-host"] || req.headers.host || "")
+    .split(",")[0]
+    .trim()
+    .replace(/:\d+$/, "");
+  if (host) return `${proto}://${host}`;
+  const base = (process.env.RENDER_EXTERNAL_URL || "https://www.travelboop.com").replace(/\/$/, "");
+  return /^https?:\/\//i.test(base) ? base : `https://${base}`;
+}
+
+function serveMarketingHtml(req, res, filename) {
+  const fp = path.join(__dirname, "client", "marketing", filename);
+  try {
+    let html = fs.readFileSync(fp, "utf8");
+    const origin = marketingOrigin(req);
+    html = html.replace(/__ORIGIN__/g, origin);
+    res.setHeader("Content-Type", "text/html; charset=utf-8");
+    res.setHeader("Cache-Control", "public, max-age=120, s-maxage=600");
+    return res.send(html);
+  } catch (e) {
+    console.error("[marketing]", filename, e.message);
+    return res.status(404).send("Not found");
+  }
+}
+
 // Always serve `/` and `/hotel/:hotelId` via our injecting helper (even when
 // SITE_PASSWORD is unset and the gate handlers above don't run).
 app.get("/", (_req, res) => serveAppHtml(res));
 app.get("/hotel/:hotelId", (_req, res) => serveAppHtml(res));
+
+// SEO marketing landings (Mexico City launch) — before static so paths are not shadowed
+Object.entries(MARKETING_HTML).forEach(([route, file]) => {
+  app.get(route, (req, res) => serveMarketingHtml(req, res, file));
+  app.get(`${route}/`, (req, res) => res.redirect(301, route));
+});
+
+app.get("/sitemap.xml", (req, res) => {
+  const o = marketingOrigin(req);
+  const urls = Object.keys(MARKETING_HTML).map(
+    (p) => `  <url><loc>${o}${p}</loc><changefreq>weekly</changefreq><priority>0.85</priority></url>`
+  );
+  const body = `<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+${urls.join("\n")}
+</urlset>`;
+  res.setHeader("Content-Type", "application/xml; charset=utf-8");
+  res.setHeader("Cache-Control", "public, max-age=600, s-maxage=3600");
+  res.send(body);
+});
 
 // ── Public client config ──────────────────────────────────────────────────────
 // Kept as a fallback (window._WL_BASE_URL / window._MAPTILER_KEY are normally

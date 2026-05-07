@@ -1,2 +1,4 @@
 User-agent: *
-Disallow: /
+Disallow: /api/
+
+Sitemap: https://www.travelboop.com/sitemap.xml
