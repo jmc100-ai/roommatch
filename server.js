@@ -178,7 +178,9 @@ app.listen(PORT, "0.0.0.0", () => {
 // Stores name, main photo, ratings fetched live from LiteAPI; NOT persisted to DB.
 // TTL: 4 hours. Only top-N hotels per search are fetched (those with photo data).
 const _hotelMetaCache = new Map(); // hotelId → { name, mainPhoto, starRating, guestRating, address, expiresAt }
-const HOTEL_META_TTL_MS = 4 * 60 * 60 * 1000;
+// 24h: hotel name/photo/star/rating barely change. Reduces LiteAPI re-fetch frequency
+// across the day; instance restarts still cause a one-time cold load (see prefetchHotelMetaBackground).
+const HOTEL_META_TTL_MS = 24 * 60 * 60 * 1000;
 
 async function fetchHotelMetaBatch(hotelIds) {
   const needed = hotelIds.filter(id => {
@@ -187,7 +189,10 @@ async function fetchHotelMetaBatch(hotelIds) {
   });
   if (needed.length) {
     console.log(`[hotel-meta] fetching ${needed.length} hotels from LiteAPI`);
-    const CHUNK = 50;
+    // CHUNK=200: prefer a single parallel wave to LiteAPI over multiple sequential
+    // batches. LiteAPI handles parallel requests fine on a paid key; the prior
+    // CHUNK=50 caused ~3s sequential blocking on cold caches when fetching 250.
+    const CHUNK = 200;
     for (let i = 0; i < needed.length; i += CHUNK) {
       const results = await Promise.allSettled(needed.slice(i, i + CHUNK).map(async (hotelId) => {
         const r = await fetch(
@@ -228,6 +233,22 @@ async function fetchHotelMetaBatch(hotelIds) {
   const out = {};
   for (const id of hotelIds) out[id] = _hotelMetaCache.get(id) || null;
   return out;
+}
+
+// Fire-and-forget warming. Used after vsearch sends its response so the next
+// user (and the client's lazy-load follow-up call) finds these IDs already in
+// _hotelMetaCache. Errors are swallowed — the worst case is a cache miss.
+function prefetchHotelMetaBackground(hotelIds) {
+  if (!Array.isArray(hotelIds) || !hotelIds.length) return;
+  const needed = hotelIds.filter(id => {
+    const c = _hotelMetaCache.get(id);
+    return !c || c.expiresAt < Date.now();
+  });
+  if (!needed.length) return;
+  const t0 = Date.now();
+  fetchHotelMetaBatch(needed)
+    .then(() => console.log(`[hotel-meta] background warm: ${needed.length} hotels in ${Date.now()-t0}ms`))
+    .catch(e => console.warn(`[hotel-meta] background warm failed: ${e.message}`));
 }
 
 const CITY_COORDS = {
@@ -1656,14 +1677,20 @@ app.get("/api/vsearch", async (req, res) => {
       resolveCityName,
     });
     if (v2.status === 200 && v2.body?.hotels?.length) {
-      // Only fetch LiteAPI metadata for hotels that have photos (top GALLERY_LIMIT).
-      // Stub hotels beyond GALLERY_LIMIT have no photos and don't need name/photo/ratings
-      // from LiteAPI — they show as minimal cards the user rarely scrolls to.
-      const metaIds = v2.body.hotels.filter(h => h.roomTypes?.length > 0).map(h => h.id);
+      // Only fetch LiteAPI metadata for the TOP META_SYNC_LIMIT photo-having hotels —
+      // those are the cards the user actually sees on first paint. Background-fetch the
+      // rest so they're warm in _hotelMetaCache by the time the client lazy-loads them
+      // via /api/hotels-meta as the user scrolls. This trades a tiny ranking edge case
+      // (star-penalty re-sort below uses starRating; tail hotels won't be penalised
+      // until the lazy-fetch fills their meta) for a 2–3s reduction in cold TTFB.
+      const META_SYNC_LIMIT = parseInt(process.env.META_SYNC_LIMIT || "30", 10);
+      const photoHotels  = v2.body.hotels.filter(h => h.roomTypes?.length > 0);
+      const syncIds      = photoHotels.slice(0, META_SYNC_LIMIT).map(h => h.id);
+      const deferredIds  = photoHotels.slice(META_SYNC_LIMIT).map(h => h.id);
       const t0meta = Date.now();
-      const liveMeta = await fetchHotelMetaBatch(metaIds);
+      const liveMeta = await fetchHotelMetaBatch(syncIds);
       const filled = Object.values(liveMeta).filter(Boolean).length;
-      console.log(`[v2-meta] fetched ${filled}/${metaIds.length} (photo hotels only, skipped ${v2.body.hotels.length - metaIds.length} stubs) in ${Date.now()-t0meta}ms`);
+      console.log(`[v2-meta] sync fetched ${filled}/${syncIds.length} hotels in ${Date.now()-t0meta}ms (deferred ${deferredIds.length}, stubs ${v2.body.hotels.length - photoHotels.length})`);
       for (const h of v2.body.hotels) {
         const m = liveMeta[h.id];
         if (m) {
@@ -1674,6 +1701,10 @@ app.get("/api/vsearch", async (req, res) => {
           h.address     = m.address     || "";
         }
       }
+      // Tell the client which IDs still need a meta fetch so it can lazy-batch them.
+      v2.body.deferred_meta_ids = deferredIds;
+      // Warm cache in the background — finishes ~1–3s after response is sent.
+      prefetchHotelMetaBackground(deferredIds);
 
       // ── Star-rating penalty for value-seeking boop profiles ────────────────
       // hotel_profile_index embeddings don't reliably discriminate luxury vs
@@ -3580,6 +3611,41 @@ app.get("/api/street-view", async (req, res) => {
   }
   _svCache.set(cacheKey, { ts: Date.now(), urls });
   res.json({ urls, coverage: true });
+});
+
+// ── GET /api/hotels-meta — batch lazy metadata fetch ────────────────────────
+// Used by the client to fill in name / mainPhoto / starRating / rating / address
+// for hotel cards beyond the synchronous fetch limit (META_SYNC_LIMIT, default 30)
+// returned by /api/vsearch. Reads from _hotelMetaCache; missing IDs are fetched
+// from LiteAPI on demand. Returns { hotels: { [id]: { name, mainPhoto, ... } } }.
+app.get("/api/hotels-meta", async (req, res) => {
+  const idsRaw = String(req.query.ids || "").trim();
+  if (!idsRaw) return res.status(400).json({ error: "ids required (comma-separated)" });
+  const ids = idsRaw.split(",").map(s => s.trim()).filter(Boolean).slice(0, 200);
+  if (!ids.length) return res.status(400).json({ error: "no valid ids" });
+  try {
+    const t0 = Date.now();
+    const meta = await fetchHotelMetaBatch(ids);
+    const out = {};
+    for (const id of ids) {
+      const m = meta[id];
+      if (m) {
+        out[id] = {
+          name:        m.name        || null,
+          mainPhoto:   m.mainPhoto   || null,
+          starRating:  m.starRating  || 0,
+          guestRating: m.guestRating || 0,
+          address:     m.address     || "",
+        };
+      }
+    }
+    const filled = Object.keys(out).length;
+    console.log(`[hotels-meta] returned ${filled}/${ids.length} in ${Date.now()-t0}ms`);
+    res.json({ hotels: out });
+  } catch (e) {
+    console.error("[hotels-meta]", e);
+    res.status(500).json({ error: e.message });
+  }
 });
 
 // ── GET /api/hotel/:hotelId — hotel details panel data ──────────────────────

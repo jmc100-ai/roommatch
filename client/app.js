@@ -4161,6 +4161,13 @@
         setStatus('');
         console.log(`[perf] render called: ${Date.now() - _t0search}ms`);
         render(hotels, hasDates);  // resets _pricesLoaded = false, sets _fetchingPrices
+        // Lazy-fetch metadata for hotels beyond META_SYNC_LIMIT (server returns
+        // their IDs in data.deferred_meta_ids). Server has already kicked off a
+        // background warm of these IDs so the cache is usually hot by the time
+        // we ask. Patches name / stars / location / rating in place per card.
+        if (Array.isArray(data.deferred_meta_ids) && data.deferred_meta_ids.length) {
+          lazyFetchHotelMeta(data.deferred_meta_ids, reqId);
+        }
         if (hasDates) {
           fetchPrices(city, checkin, checkout, reqId);
         } else {
@@ -4408,6 +4415,69 @@
       }
     }
 
+  }
+
+  // ── Lazy hotel-meta fetch ──────────────────────────────────────────────────
+  // Server caps synchronous LiteAPI metadata to top META_SYNC_LIMIT (~30) hotels
+  // and returns the rest in data.deferred_meta_ids. We chunk-fetch the rest
+  // here so cards beyond #30 fill in their name / stars / location / rating
+  // shortly after first paint without blocking TTFB.
+  let _metaLazyReqId = 0;
+  async function lazyFetchHotelMeta(deferredIds, searchReqId) {
+    if (!Array.isArray(deferredIds) || !deferredIds.length) return;
+    const ourReqId = ++_metaLazyReqId;
+    const t0 = Date.now();
+    const CHUNK = 100;
+    for (let i = 0; i < deferredIds.length; i += CHUNK) {
+      // Bail if a newer search started — those hotels aren't on screen anymore.
+      if (ourReqId !== _metaLazyReqId) return;
+      const slice = deferredIds.slice(i, i + CHUNK);
+      try {
+        const r = await fetch(`${BACKEND}/api/hotels-meta?ids=${encodeURIComponent(slice.join(','))}`);
+        if (!r.ok) continue;
+        const d = await r.json();
+        if (ourReqId !== _metaLazyReqId) return;
+        if (d?.hotels) applyMetaInPlace(d.hotels);
+      } catch (_) { /* non-fatal */ }
+    }
+    console.log(`[perf] lazy meta: ${deferredIds.length} hotels in ${Date.now() - t0}ms`);
+  }
+
+  // Patches DOM elements per hotel ID: hotel-name, hotel-meta (stars + location
+  // + guest score). Mirrors applyPricesInPlace pattern. Mutates _lastHotels so
+  // subsequent re-renders (sort, filter) keep the metadata.
+  function applyMetaInPlace(metaMap) {
+    if (!metaMap || typeof metaMap !== 'object') return;
+    for (const h of _lastHotels) {
+      const m = metaMap[h.id];
+      if (!m) continue;
+      // Mutate hotel object so future renders persist these values.
+      if (m.name)        h.name        = m.name;
+      if (m.mainPhoto)   h.mainPhoto   = m.mainPhoto;
+      if (m.starRating)  h.starRating  = m.starRating;
+      if (m.guestRating) h.rating      = m.guestRating;
+      if (m.address)     h.address     = m.address;
+
+      // Patch the visible card without a full re-render.
+      const nameEl = document.getElementById(`hotel-name-${h.id}`);
+      if (nameEl && m.name) nameEl.textContent = m.name;
+
+      const metaEl = document.getElementById(`hotel-meta-${h.id}`);
+      if (metaEl) {
+        const stars    = '★'.repeat(Math.min(Math.max(Math.round(h.starRating || 0), 0), 5));
+        const location = [h.address, h.city, h.country].filter(Boolean).join(', ');
+        const rating   = h.rating > 0
+          ? `<button type="button" class="hotel-guest-score" data-hotel-id="${escHtml(String(h.id))}" onclick="event.stopPropagation();openHotelDetailPage(this.dataset.hotelId, { scrollTo: 'reviews' })" title="See guest reviews"><strong>${parseFloat(h.rating).toFixed(1)}</strong> guest score</button>`
+          : '';
+        const propChip =
+          h.property_type === 'apartment_rental' ? '<span class="property-type-chip">🏠 Apartment</span>' :
+          h.property_type === 'hostel'           ? '<span class="property-type-chip">🛏 Hostel</span>'   : '';
+        metaEl.innerHTML =
+          (stars ? `<span class="stars">${stars}</span>` : '') +
+          (location ? `<span class="hotel-location">${location}</span>` : '') +
+          rating + propChip;
+      }
+    }
   }
 
   function applyPrices(priceMap, roomPriceMap, currency, pricedCount, ratesData = {}) {
@@ -6597,12 +6667,12 @@
       :                   'Add dates for rates';
 
     return `
-      <div class="hotel-card">
+      <div class="hotel-card" id="hotel-card-${h.id}">
         ${heroStrip}
         <div class="hotel-header">
           <div class="hotel-header-left">
-            <div class="hotel-name">${h.name}</div>
-            <div class="hotel-meta">
+            <div class="hotel-name" id="hotel-name-${h.id}">${h.name}</div>
+            <div class="hotel-meta" id="hotel-meta-${h.id}">
               ${stars ? `<span class="stars">${stars}</span>` : ''}
               ${location ? `<span class="hotel-location">${location}</span>` : ''}
               ${rating}${clipBadge}

@@ -129,10 +129,21 @@ async function runV2Search({ req, supabase, supabaseAdmin, resolveCityName }) {
   if (!fetchClient)
     return { status: 500, body: { error: "Supabase not configured" } };
 
+  const _t0Total = Date.now();
   const city      = await resolveCityName(cityInput, fetchClient, ["indexed_cities", "hotels_cache"]);
   const mustHaves = parseMustHaves(req.query.must_haves || "");
-  // Use LLM-based NLP router (Gemini) to map query → weighted facts; falls back to regex
-  const intent    = await buildFactIntentLLM(query, { mustHaves }, process.env.GEMINI_KEY || "");
+
+  // Kick off the NLP intent call IMMEDIATELY so it runs in parallel with the
+  // geo prefilter + Phase-A DB load below. We await it just before scoring,
+  // which is the first step that actually depends on `intent`. Cache hits return
+  // synchronously (in-memory _nlpCache) so this is a no-op when warm.
+  const _t0Intent  = Date.now();
+  const intentPromise = buildFactIntentLLM(query, { mustHaves }, process.env.GEMINI_KEY || "")
+    .then((i) => {
+      const dt = Date.now() - _t0Intent;
+      if (dt > 50) console.log(`[v2 perf] nlp intent: ${dt}ms (router=${i.router_version || "regex"})`);
+      return i;
+    });
   const hotelQuery = String(req.query.hotel_query || query).trim();
   const tokens    = tokenize(query);
 
@@ -199,18 +210,6 @@ async function runV2Search({ req, supabase, supabaseAdmin, resolveCityName }) {
   const rawNbhdW = parseFloat(process.env.VSEARCH_NBHD_RANK_WEIGHT || "0");
   const nbhdRankWeight = Number.isFinite(rawNbhdW) && rawNbhdW > 0 ? rawNbhdW : 0;
 
-  // Detected fact keys (hard + soft from intent) — mirrors detectedFlagKeys in V1
-  const detectedFactKeys = [
-    ...(intent.hard_filters    || []).map((x) => x.fact_key),
-    ...(intent.soft_preferences || []).map((x) => x.fact_key),
-  ].filter(Boolean);
-  const hasFlags = detectedFactKeys.length > 0;
-
-  // intentType: "bathroom" when bathroom facts are in query (mirrors V1 extractIntentType)
-  const intentType = detectedFactKeys.some((k) => BATHROOM_FACT_KEYS.has(k))
-    ? "bathroom"
-    : null;
-
   // ── Geo pre-filter (polygon preferred, then bbox) ─────────────────────────
   let hotelIdsByGeo = null;
   const polygonRing = parsePolygon(req.query.polygon || "");
@@ -272,6 +271,24 @@ async function runV2Search({ req, supabase, supabaseAdmin, resolveCityName }) {
     setPhaseACache(city, hotelRows, indexRows);
     console.log(`[v2 perf] phase-A db: ${Date.now()-_t0}ms  hotels=${hotelRows.length} index_rows=${indexRows.length}`);
   }
+
+  // Resolve the NLP intent now — it has been running in parallel since the top
+  // of this function. Cache hits are synchronous; uncached Gemini calls have
+  // typically completed by the time we reach this point (overlapped with
+  // resolveCityName + geo prefilter + phase-A DB).
+  const intent = await intentPromise;
+
+  // Detected fact keys (hard + soft from intent) — mirrors detectedFlagKeys in V1
+  const detectedFactKeys = [
+    ...(intent.hard_filters    || []).map((x) => x.fact_key),
+    ...(intent.soft_preferences || []).map((x) => x.fact_key),
+  ].filter(Boolean);
+  const hasFlags = detectedFactKeys.length > 0;
+
+  // intentType: "bathroom" when bathroom facts are in query (mirrors V1 extractIntentType)
+  const intentType = detectedFactKeys.some((k) => BATHROOM_FACT_KEYS.has(k))
+    ? "bathroom"
+    : null;
 
   const hotelMeta = new Map((hotelRows).map((r) => [r.hotel_id, { property_type: r.property_type || "hotel" }]));
   const cityHotelIds   = [...hotelMeta.keys()];
@@ -778,7 +795,7 @@ async function runV2Search({ req, supabase, supabaseAdmin, resolveCityName }) {
     `[v2] ranked: ${hotels.length} hotels | SIM_MAX=${SIM_MAX.toFixed(4)} SIM_MIN=${SIM_MIN.toFixed(4)} ` +
     `maxRaw=${maxRawSim.toFixed(4)} hotel_vibe=${hotelVibeModel}`
   );
-  console.log(`[v2 perf] TOTAL: ${Date.now()-_t0}ms`);
+  console.log(`[v2 perf] TOTAL: ${Date.now()-_t0}ms (since phase-A) | wall: ${Date.now()-_t0Total}ms (since handler entry)`);
 
   return {
     status: 200,

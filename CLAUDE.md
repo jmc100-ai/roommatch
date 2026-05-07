@@ -8,6 +8,8 @@ GitHub: **https://github.com/jmc100-ai/roommatch**
 Render service: **https://roommatch-1fg5.onrender.com** (service ID: srv-d6s27b75r7bs738737fg)
 Supabase project ID: **dmgxrcmdihgsffvqllms**
 
+**Launch city: Mexico City.** All manual testing, perf benchmarking, and search-quality QA must use `?city=Mexico City` (V2 catalog, ~3 600 hotels). Paris and Kuala Lumpur are V1-only and will be migrated/retired post-launch — do **not** use them as the primary test target.
+
 ---
 
 ## Architecture
@@ -83,6 +85,7 @@ UNSPLASH_KEY           — (not yet set) free key from unsplash.com/developers �
 SITE_PASSWORD          — (not yet set) simple password gate for the frontend; omit to disable gate (API routes never gated)
 LITEAPI_WL_DOMAIN      — LiteAPI white-label domain WITHOUT scheme, e.g. `travelboop.nuitee.link`. Server prefixes `https://` and serves via `/api/config` AND injects into `window._WL_BASE_URL` in served HTML so `buildBookUrl()` in client/app.js has it on first render. Empty/unset → "Find & Book" buttons fall back to a Google search.
 MAPTILER_KEY           — Maptiler API key (free tier: 100k tile loads/month at maptiler.com). Powers the neighbourhood-vibe-page map module (MapLibre GL). Server exposes via `/api/config` AND injects into `window._MAPTILER_KEY` in served HTML so the map can boot before any /api/config fetch. **Must be restricted by HTTP referrer in the Maptiler dashboard** (Allowed origins: `travelboop.com`, `www.travelboop.com`, `roommatch-1fg5.onrender.com`, `localhost:*`). Unset → map falls back to OSM raster tiles (works but lower quality + against OSM tile usage policy at scale).
+META_SYNC_LIMIT        — top-N hotels for which `/api/vsearch` (V2 path) fetches LiteAPI metadata synchronously before sending the response. Default `30`. Lower = faster TTFB, more cards initially show with placeholder name until lazy-load arrives. The remainder are listed in `data.deferred_meta_ids` and lazy-fetched by the client via `/api/hotels-meta`. See "V2 Search Latency" section below.
 ```
 
 ### White-label booking links (Find & Book buttons)
@@ -210,7 +213,8 @@ NOTIFY pgrst, 'reload config';
 
 | Endpoint | Description |
 |---|---|
-| GET /api/vsearch?query&city | Vector search (main mode) |
+| GET /api/vsearch?query&city | Vector search (main mode). V2 path returns `deferred_meta_ids` (hotels beyond `META_SYNC_LIMIT`) for client lazy-fetch. |
+| GET /api/hotels-meta?ids=h1,h2,… | Batch lazy fetch of LiteAPI metadata (name/mainPhoto/starRating/guestRating/address) for cards beyond the synchronous fetch limit. Up to 200 IDs/call. Returns `{ hotels: { [id]: {...} } }`. |
 | GET /api/rates?city&checkin&checkout | Batch hotel+room pricing from LiteAPI |
 | GET /api/index-status?city | Check indexing status |
 | POST /api/index-city | Trigger indexing (requires INDEX_SECRET in body) |
@@ -472,6 +476,40 @@ SELECT
 - **Gemini captioning used file_uri** — fixed Apr 28 (switched to inline image-bytes)
 - **Rate limits on Gemini 2.5 Flash Lite** — handled via CAPTION_RATE_PER_MIN=500 + exponential backoff (5 retries: 3s, 12s, 27s, 48s, 60s cap)
 - **LiteAPI paginates at 1000/page** — indexer loops until `limit` reached
+
+### V2 Search Latency — Cold-Instance Tuning (May 7 2026)
+
+Render rotates instances every ~1–3 hours, so most users hit a cold-cache instance. Pre-fix, cold V2 search took 7–10 s server-side (TTFB). Profiled bottlenecks were:
+
+| Stage | Cold | After fix |
+|---|---|---|
+| `buildFactIntentLLM` (Gemini NLP intent) | ~1–2 s, sequential before phase-A | parallel with phase-A; net ~0 ms when phase-A is the slower of the two |
+| Phase-A DB load (3 500 hotels + 9 700 index rows) | ~1.1 s | unchanged (already minimal) |
+| Phase-B parallel (photos + embed + score_hotels + nbhd RPC) | ~1–2 s | unchanged |
+| **`fetchHotelMetaBatch` for 250 hotels** | **~2.7–3.4 s** in 5 sequential chunks of 50 | **~0.6–1 s** for top 30 sync; rest deferred + warmed in background |
+
+**Code-level changes shipped in the same commit:**
+1. `META_SYNC_LIMIT` (env, default `30`) caps the synchronous LiteAPI metadata fetch in `/api/vsearch` (V2 path) to the top N photo-having hotels. `v2.body.deferred_meta_ids` lists the rest.
+2. `prefetchHotelMetaBackground(deferredIds)` runs fire-and-forget after the response is sent so `_hotelMetaCache` is warm by the time the client lazy-loads.
+3. New endpoint **`GET /api/hotels-meta?ids=h1,h2,…`** (max 200 per call) returns `{ hotels: { id: {name, mainPhoto, starRating, guestRating, address} } }`. Reads from `_hotelMetaCache` first; misses hit LiteAPI.
+4. Client `lazyFetchHotelMeta(deferredIds, reqId)` (in `client/app.js`) batches the deferred IDs in chunks of 100 and calls `applyMetaInPlace(metaMap)` to patch each card's `#hotel-name-{id}` and `#hotel-meta-{id}` without a full re-render. Bails when `_metaLazyReqId` is bumped by a newer search.
+5. `fetchHotelMetaBatch` chunk size `50 → 200` so a single parallel LiteAPI wave is the norm; `_hotelMetaCache` TTL `4h → 24h` (hotel name/star/photo barely change intra-day).
+6. `runV2Search` now kicks off `buildFactIntentLLM` immediately and awaits it just before scoring, so it overlaps with the geo prefilter + Phase-A DB load. Adds `[v2 perf] nlp intent: …` log when intent takes >50 ms (cache misses); `[v2 perf] TOTAL` now reports both `since phase-A` and `wall: since handler entry`.
+
+**Expected end-to-end on a cold instance:** ~3 s server TTFB + ~1 s client lazy fetch (non-blocking, fills bottom cards). Warm instance: ~1 s.
+
+**Knobs:**
+- `META_SYNC_LIMIT` — top-N hotels to fetch metadata for synchronously (default `30`). Lower = faster TTFB but more cards render with placeholder name briefly.
+- TTL constant `HOTEL_META_TTL_MS` (24 h) and chunk size `200` are hardcoded in `server.js` → `fetchHotelMetaBatch`.
+
+**Where to look in logs:**
+- `[v2 perf] nlp intent: …`        — Gemini NLP intent latency (only logged when >50 ms)
+- `[v2 perf] phase-A db: …`        — DB load
+- `[v2 perf] TOTAL: X (since phase-A) | wall: Y (since handler entry)` — `Y` is the real server-side total
+- `[v2-meta] sync fetched 30/30 in Xms (deferred 220, stubs N)` — confirms META_SYNC_LIMIT
+- `[hotel-meta] background warm: 220 hotels in Xms` — confirms warm prefetch ran
+- `[hotels-meta] returned 100/100 in Xms` — client lazy-fetch endpoint
+- `[perf] lazy meta: 220 hotels in Xms`   — client-side lazy-fetch wall time
 
 ---
 
