@@ -1,0 +1,78 @@
+name: CI
+
+# Runs on every PR and on pushes to main. Catches broken JS, dependency
+# regressions, and search-quality regressions before they ship to Render.
+#
+# Required repo secrets (set under Settings → Secrets and variables → Actions):
+#   SUPABASE_URL          — same as Render env
+#   SUPABASE_SERVICE_KEY  — needed so the search-quality test can read expected
+#                           hotel counts from v2_room_types_index. Use the
+#                           service key (read-only would also work, but service
+#                           is what the rest of the codebase already uses).
+#
+# Optional secret:
+#   BETA_BASE_URL         — override default https://roommatch-1fg5.onrender.com
+#                           (e.g. point at a staging Render service)
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint-and-syntax:
+    name: Syntax + audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      - name: Install deps
+        run: npm ci
+
+      - name: Syntax check core JS
+        run: |
+          node -c server.js
+          node -c client/app.js
+          for f in scripts/*.js scripts/email/*.js scripts/load-test/*.js; do
+            if [ -f "$f" ]; then echo "checking $f"; node -c "$f"; fi
+          done
+
+      - name: npm audit (high+)
+        # Don't fail the build on moderate/low; do fail on high & critical.
+        run: npm audit --omit=dev --audit-level=high
+
+  search-quality:
+    name: Search quality (read-only against prod)
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    needs: lint-and-syntax
+    # Only PRs from this repo (not forks) get DB credentials. Forks still get
+    # the lint job; full tests run after maintainer review.
+    if: github.event.pull_request.head.repo.full_name == github.repository || github.event_name == 'push'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      - run: npm ci
+      - name: Run search quality suite
+        env:
+          SUPABASE_URL:         ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        run: |
+          BASE_URL="${{ secrets.BETA_BASE_URL || 'https://roommatch-1fg5.onrender.com' }}"
+          echo "Targeting: $BASE_URL"
+          node scripts/test-search-quality.js --base-url="$BASE_URL"
