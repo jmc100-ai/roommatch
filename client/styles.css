@@ -2373,6 +2373,58 @@
       .hero-photos { display: none; }
       .example-cards { grid-template-columns: 1fr; }
       .features-grid { grid-template-columns: 1fr; gap: 24px; }
+
+      /* Results sort bar: always stack (portrait + landscape phones are often >640px wide).
+         Row + wrap + order caused free-cancel hint to sit on the same line as sort pills. */
+      #st-results .sort-bar {
+        flex-direction: column;
+        align-items: stretch;
+        flex-wrap: nowrap;
+        gap: 8px;
+      }
+      #st-results .sort-group--mobile {
+        width: 100%;
+        justify-content: center;
+        flex-wrap: wrap;
+      }
+      #st-results .sort-bar .rates-status:not(:empty) {
+        width: 100%;
+        max-width: none;
+        margin-left: 0;
+        margin-right: 0;
+        flex: none;
+        order: 0;
+      }
+      #st-results .sort-bar .free-cancel-hint.is-on {
+        display: block;
+        width: 100%;
+        max-width: none;
+        margin-left: 0;
+        margin-right: 0;
+        flex: none;
+        order: 0;
+        box-sizing: border-box;
+        padding: 2px 4px 6px;
+        text-align: center;
+        font-size: 10px;
+        line-height: 1.4;
+      }
+      #st-results .sort-bar-trailer {
+        display: flex;
+        width: 100%;
+        max-width: none;
+        margin-left: 0;
+        flex: none;
+        order: 0;
+        justify-content: center;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 5px 10px;
+        padding-top: 4px;
+        padding-bottom: 2px;
+        border-top: 1px solid rgba(255,255,255,0.06);
+        box-sizing: border-box;
+      }
     }
     @media (max-width: 640px) {
       header, .hero { padding-left: 20px; padding-right: 20px; }
@@ -2454,22 +2506,13 @@
       /* Sort: two pills + “All” menu (full list in popover) */
       #st-results .sort-group--desktop { display: none !important; }
       #st-results .sort-group--mobile { display: flex !important; }
+      /* Column stack for sort chrome is defined in max-width:900px; here only tweak ≤640 */
       #st-results .sort-bar {
-        flex-wrap: wrap;
-        align-items: center;
-        gap: 8px;
         overflow: visible;
       }
-      /* “Checking live rates…” was on the same flex row as sort pills → overlap; own row between sort and count/view */
-      #st-results .sort-bar .rates-status {
-        order: 2;
-        flex: 0 0 100%;
-        width: 100%;
-        max-width: 100%;
-        margin-left: 0;
-        margin-right: 0;
+      /* “Checking live rates…” — full width, centered (inherits column row from 900px rule) */
+      #st-results .sort-bar .rates-status:not(:empty) {
         justify-content: center;
-        box-sizing: border-box;
         padding: 4px 8px 2px;
         font-size: 11px;
         line-height: 1.3;
@@ -2478,30 +2521,12 @@
       #st-results .sort-bar .rates-status:empty {
         display: none;
       }
-      /* Free-cancel hint was default flex order 0 → same row as sort pills + overlap; full-width row after rates */
-      #st-results .sort-bar .free-cancel-hint.is-on {
-        display: block;
-        order: 2;
-        flex: 0 0 100%;
-        width: 100%;
-        max-width: none;
-        margin-left: 0;
-        margin-right: 0;
-        box-sizing: border-box;
-        padding: 2px 10px 6px;
-        text-align: center;
-        font-size: 10px;
-        line-height: 1.4;
-      }
       #st-results .sort-bar .free-cancel-hint:not(.is-on) {
         display: none !important;
       }
-      /* Second row: rates line; third: “Showing…” + grid/list (availability lives in nbhd strip on mobile) */
+      /* “Showing…” row below rates + free-cancel hint */
       #st-results .sort-bar-trailer {
-        order: 3;
         display: flex;
-        flex-basis: 100%;
-        width: 100%;
         justify-content: center;
         align-items: center;
         flex-wrap: wrap;
