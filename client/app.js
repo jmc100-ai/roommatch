@@ -3612,6 +3612,11 @@
     document.body.classList.add('has-results');
     const st = document.getElementById('st-results');
     if (st) st.classList.add('results-pending');
+    const slo = document.getElementById('searchLoadingOverlay');
+    if (slo) {
+      slo.setAttribute('aria-hidden', 'false');
+      slo.setAttribute('aria-busy', 'true');
+    }
     const dmRescue = document.getElementById('availFilterMountDesktop');
     const afRescue = document.getElementById('availFilter');
     if (dmRescue && afRescue) dmRescue.appendChild(afRescue);
@@ -3636,6 +3641,11 @@
   function exitResultsPendingMode() {
     const st = document.getElementById('st-results');
     if (st) st.classList.remove('results-pending');
+    const slo = document.getElementById('searchLoadingOverlay');
+    if (slo) {
+      slo.setAttribute('aria-hidden', 'true');
+      slo.setAttribute('aria-busy', 'false');
+    }
   }
 
   function startSearch() {

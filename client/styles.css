@@ -702,6 +702,93 @@
       pointer-events: none;
     }
 
+    /* Option B — glass overlay on skeleton / in-flight results grid */
+    .results-stack {
+      position: relative;
+    }
+    .search-loading-overlay {
+      position: absolute;
+      inset: 0;
+      z-index: 8;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px 16px;
+      box-sizing: border-box;
+      pointer-events: none;
+      opacity: 0;
+      visibility: hidden;
+      transition: opacity 0.28s ease, visibility 0.28s ease;
+    }
+    #st-results.results-pending .search-loading-overlay {
+      opacity: 1;
+      visibility: visible;
+    }
+    .search-loading-overlay-veil {
+      position: absolute;
+      inset: 0;
+      background: rgba(10, 9, 12, 0.42);
+      backdrop-filter: blur(5px);
+      -webkit-backdrop-filter: blur(5px);
+      border-radius: 12px;
+    }
+    .search-loading-card {
+      position: relative;
+      z-index: 1;
+      max-width: 340px;
+      width: 100%;
+      padding: 22px 26px 24px;
+      text-align: center;
+      background: rgba(28, 28, 34, 0.82);
+      border: 1px solid rgba(201, 169, 110, 0.35);
+      border-radius: 16px;
+      box-shadow: 0 16px 48px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(255, 255, 255, 0.04) inset;
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      animation: searchLoadingCardIn 0.35s ease both;
+    }
+    @keyframes searchLoadingCardIn {
+      from { opacity: 0; transform: scale(0.97); }
+      to { opacity: 1; transform: scale(1); }
+    }
+    .search-loading-spinner {
+      width: 36px;
+      height: 36px;
+      margin: 0 auto 14px;
+      border-radius: 50%;
+      border: 2px solid rgba(201, 169, 110, 0.22);
+      border-top-color: #c9a96e;
+      animation: searchLoadingSpin 0.75s linear infinite;
+    }
+    @keyframes searchLoadingSpin {
+      to { transform: rotate(360deg); }
+    }
+    .search-loading-title {
+      margin: 0 0 8px;
+      font-size: 1.05rem;
+      font-weight: 600;
+      letter-spacing: 0.02em;
+      color: rgba(244, 240, 232, 0.96);
+      animation: searchLoadingTitlePulse 2.2s ease-in-out infinite;
+    }
+    @keyframes searchLoadingTitlePulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.72; }
+    }
+    .search-loading-sub {
+      margin: 0;
+      font-size: 0.875rem;
+      line-height: 1.45;
+      color: rgba(244, 240, 232, 0.62);
+    }
+    @media (max-width: 640px) {
+      .search-loading-card {
+        padding: 18px 20px 20px;
+        max-width: 300px;
+      }
+      .search-loading-title { font-size: 0.98rem; }
+    }
+
     /* Placeholder hotel cards (wizard → results handoff) */
     .hotel-card--skeleton {
       pointer-events: none;

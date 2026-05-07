@@ -474,7 +474,17 @@
 <!-- BOOP v4 — top-neighbourhood refine strip -->
 <div id="nbhd-refine-strip" class="nbhd-refine-strip" style="display:none"></div>
 
-<div id="results"></div>
+<div class="results-stack" id="resultsStack">
+  <div id="results"></div>
+  <div id="searchLoadingOverlay" class="search-loading-overlay" aria-hidden="true" aria-busy="false" aria-live="polite">
+    <div class="search-loading-overlay-veil" aria-hidden="true"></div>
+    <div class="search-loading-card">
+      <div class="search-loading-spinner" aria-hidden="true"></div>
+      <p class="search-loading-title">Finding matching hotels…</p>
+      <p class="search-loading-sub">This usually takes a few seconds.</p>
+    </div>
+  </div>
+</div>
 
 <footer>
   <span class="footer-text"><strong style="color:var(--text);font-weight:500">TravelBoop</strong> · Find your vibe, then your stay — powered by <a href="https://liteapi.travel" target="_blank">LiteAPI</a></span>
