@@ -102,7 +102,7 @@
         <div class="city-box">
           <span class="city-box-icon">⌕</span>
           <!-- Geoapify + recent popover paused (clashed with chips) — restore oninput/onblur + onCityInput -->
-          <input type="text" id="cityInput" placeholder="Where are you going?"
+          <input type="text" id="cityInput" value="Mexico City" placeholder="Where are you going?"
                  autocomplete="off"
                  onkeydown="onCityKeydown(event)"/>
           <button class="city-go-btn" id="cityGoBtn" onclick="onCityGo()" aria-label="Go">Go →</button>
@@ -454,6 +454,7 @@
     </div>
   </div>
   <span id="ratesStatus" class="rates-status"></span>
+  <span id="freeCancelHint" class="free-cancel-hint" style="display:none" role="status"></span>
   <div class="sort-bar-trailer">
     <span id="resultCount" class="result-count"></span>
     <button type="button" id="debugCopyBtn" onclick="copyDebugSnapshot()" title="Copy debug snapshot for sharing" style="display:none;background:rgba(255,255,255,0.10);border:1px solid rgba(255,255,255,0.25);color:rgba(255,255,255,0.75);font-size:11px;padding:3px 8px;border-radius:5px;cursor:pointer;letter-spacing:0.03em;flex-shrink:0;">⎘ debug</button>

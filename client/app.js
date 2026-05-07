@@ -156,6 +156,7 @@
   let _fetchingPrices = false;  // true while /api/rates is in flight (shows skeleton)
   let _hasDateSearch  = false;  // true after prices fetched with specific dates
   let _showAvailOnly  = true;   // toggle: only show available rooms (default on when dates entered)
+  let _requireFreeCancel = false; // Boop "Free cancellation" must-have: filter using /api/rates policies
   let _propTypeFilter = 'all'; // dropdown: all | hotel | apartment | vacation_home | villa | hostel
   let _priceCurrency  = 'EUR';  // currency returned by rates API
   // Debug-only search version controls (set in console):
@@ -174,6 +175,8 @@
   const CITY_HISTORY_KEY  = 'roomsearch.recentCities';
   const BOOP_PROFILE_KEY  = 'roomsearch.boopProfileByCity.v1';
   const HISTORY_LIMIT     = 6;
+  /** Default city field + initial `S.city` — launch market (V2 catalog). */
+  const DEFAULT_HOME_CITY = 'Mexico City';
 
   // ════════════════════════════════════════════════════════
   //  DISCOVERY FLOW — 4-step state machine
@@ -314,7 +317,7 @@
   ];
 
   // App state
-  const S = { city:null, nbhd:null, nbhdBbox:null, style:null, q:null, checkin:null, checkout:null, hotelQ:null, mustHaves:null, boopReentryFromChip:false };
+  const S = { city: DEFAULT_HOME_CITY, nbhd:null, nbhdBbox:null, style:null, q:null, checkin:null, checkout:null, hotelQ:null, mustHaves:null, boopReentryFromChip:false };
   let _flowFeatIdx = 0;
 
   // Boop intro profile (persisted per city).
@@ -399,6 +402,7 @@
       title:'Pick what matters most',
       type:'chips',
       options:[
+        { id:'free_cancellation', flag:null, label:'Free cancellation', hint:'We filter using live rates for your dates (refundable / zero-penalty tier).', image:'https://images.unsplash.com/photo-1526778548025-fa2f459cd5c1?auto=format&fit=crop&w=1200&q=80', meta:'Requires check-in & check-out' },
         { id:'balcony',      flag:'balcony',   label:'Balcony or view',    hint:'Outdoor space or a real view from the room.',                         image:'images/wizard/musthave-balcony.png' },
         { id:'spa_bathroom', flag:null,        label:'Spa-style bathroom', hint:'Soaking tub or rain shower plus larger counter / double vanity.',     image:'images/wizard/musthave-spa-bathroom.png', seed:'spa-like bathroom, soaking tub, rainfall shower, marble vanity, generous counter space, double sinks' },
         { id:'spacious',     flag:null,        label:'Spacious room',      hint:'Room to spread out, not a closet.',                                    image:'images/wizard/musthave-spacious.png', seed:'spacious hotel room, generous layout, open feel' },
@@ -1611,6 +1615,7 @@
 
   // Icon for the must-have chip. Mirrors the labels in BOOP_QUESTIONS musthaves.
   const MUSTHAVE_ICONS = {
+    free_cancellation: '✓',
     balcony: '🌅',
     spa_bathroom: '🛁',
     spacious: '🏠',
@@ -1618,6 +1623,34 @@
   };
   const GROUP_ICONS = { solo: '👤', couple: '👥', group: '👥' };
   const GROUP_LABELS = { solo: 'Solo', couple: 'Couple', group: 'Group' };
+
+  function syncRequireFreeCancelFlag() {
+    const db = S.boopProfile?.dealbreakers;
+    _requireFreeCancel = Array.isArray(db) && db.includes('free_cancellation');
+  }
+
+  function updateFreeCancelHint() {
+    const el = document.getElementById('freeCancelHint');
+    if (!el) return;
+    if (!_requireFreeCancel) {
+      el.style.display = 'none';
+      el.textContent = '';
+      return;
+    }
+    const hasDates = !!(S.checkin && S.checkout && S.checkin < S.checkout);
+    if (!hasDates) {
+      el.style.display = '';
+      el.textContent = 'Free cancellation: add travel dates to filter.';
+      return;
+    }
+    if (!_pricesLoaded) {
+      el.style.display = '';
+      el.textContent = 'Free cancellation: checking live rate policies…';
+      return;
+    }
+    el.style.display = 'none';
+    el.textContent = '';
+  }
 
   function _activeBoopProfileForChips() {
     if (boopProfileHasAnySignal(S.boopProfile)) return S.boopProfile;
@@ -4113,6 +4146,7 @@
     const statusSuffix = nbhdLabel ? ` in ${nbhdLabel}, ${city}` : ` in ${city}`;
     if (typeof city === 'string' && city.trim()) S.city = normalizeCityName(city.trim());
     if (typeof query === 'string' && query.trim()) S.q = query.trim();
+    syncRequireFreeCancelFlag();
     hideBanner();
     enterResultsLoadingMode();
     setStatus('');
@@ -4323,6 +4357,7 @@
       if (resPre) resPre.classList.add('no-anim');
       const sortedHotels = getSortedHotelsForDisplay();
       const topForTour = sortedHotels[0] || hotels[0];
+      updateFreeCancelHint();
       setTimeout(() => openVibeTourWithStreetView(topForTour ? [topForTour] : hotels), 120);
       return;
     }
@@ -4370,6 +4405,7 @@
         _fetchingPrices = false;
         _setPriceBtnsState(true);
         _setRatesStatus('', '');
+        updateFreeCancelHint();
       }
     }
   }
@@ -4516,6 +4552,10 @@
       }
       // Store offerIds for white-label checkout deep links
       if (ratesData.offerIds?.[hotel.id]) hotel.offerIds = ratesData.offerIds[hotel.id];
+      if (ratesData.roomFreeCancel?.[hotel.id]) hotel.roomFreeCancel = ratesData.roomFreeCancel[hotel.id];
+      if (ratesData.hotelFreeCancel && Object.prototype.hasOwnProperty.call(ratesData.hotelFreeCancel, hotel.id)) {
+        hotel.hotelFreeCancel = !!ratesData.hotelFreeCancel[hotel.id];
+      }
     }
     console.log(`[prices] hotel prices: ${Object.keys(priceMap).length}, room prices: ${roomPricedRooms} rooms across ${Object.keys(roomPriceMap).length} hotels`);
     _pricesLoaded  = true;
@@ -4538,11 +4578,12 @@
     //    no re-render, no flash, list stays stable.
     //  - match+price / price: user expects re-ranking by price → full re-sort.
     const priceDependentSort = _currentSort === 'match+price' || _currentSort === 'match+price+rating' || _currentSort === 'price';
-    if (priceDependentSort) {
+    if (priceDependentSort || _requireFreeCancel) {
       renderSortedSmooth();
     } else {
       applyPricesInPlace(sym, pricedCount);
     }
+    updateFreeCancelHint();
 
     // Show "Live rates" confirmation then fade out
     _setRatesStatus('done', '✓ Live rates');
@@ -5496,8 +5537,22 @@
     return availRooms.length > 0;
   }
 
+  function hotelPassesFreeCancelFilter(h) {
+    if (!_requireFreeCancel) return true;
+    if (!_hasDateSearch || !_pricesLoaded) return true;
+    if (h.hotelFreeCancel === true) return true;
+    const rfc = h.roomFreeCancel;
+    if (!rfc || typeof rfc !== 'object') return false;
+    for (const rt of (h.roomTypes || [])) {
+      const id = rt.roomTypeId;
+      if (id == null || h.roomPrices?.[id] == null) continue;
+      if (rfc[id] === true || rfc[String(id)] === true) return true;
+    }
+    return false;
+  }
+
   function getSortedHotelsForDisplay() {
-    let hotels = [..._lastHotels].filter(hotelPassesAvailFilter);
+    let hotels = [..._lastHotels].filter(hotelPassesAvailFilter).filter(hotelPassesFreeCancelFilter);
     if (_nbhdFilter) {
       hotels = hotels.filter(h => h?.primary_nbhd?.name === _nbhdFilter);
     }
@@ -5616,6 +5671,7 @@
       }, { rootMargin: '300px' });
       obs.observe(sentinel);
     }
+    updateFreeCancelHint();
   }
 
   // ── showMoreRooms ─────────────────────────────────────────────────────────
@@ -6726,13 +6782,17 @@
 
     const hasPrice  = rt.roomTypeId != null && hotelRoomPrices?.[rt.roomTypeId] != null;
     const isUnavail = hasDateSearch && hotelRoomPrices != null && rt.roomTypeId != null && !hasPrice;
+    const rid = rt.roomTypeId;
+    const fcMap = hotel?.roomFreeCancel;
+    const showFc = hasPrice && fcMap && (fcMap[rid] === true || fcMap[String(rid)] === true);
+    const fcBadge = showFc ? '<span class="room-fc-badge">Free cancel</span>' : '';
 
     const photos  = rt.photos || [];
     const regKey  = _lbRegistry.length;
     _lbRegistry.push({ photos, name: rt.name, score: rt.score });
 
     const priceHTML = hasPrice
-      ? `<span class="room-rate">€${hotelRoomPrices[rt.roomTypeId].toLocaleString()}<span class="room-rate-per">/night</span></span>`
+      ? `<span class="room-rate">€${hotelRoomPrices[rt.roomTypeId].toLocaleString()}<span class="room-rate-per">/night</span></span>${fcBadge}`
       : isUnavail
         ? `<span class="room-unavail-badge">not available</span>`
         : '';
@@ -7007,8 +7067,12 @@
   }
 
   function clearCitySelection() {
-    document.getElementById('cityInput').value = '';
-    document.getElementById('cityInput').focus();
+    const el = document.getElementById('cityInput');
+    if (el) {
+      el.value = DEFAULT_HOME_CITY;
+      el.focus();
+    }
+    S.city = normalizeCityName(DEFAULT_HOME_CITY);
     selectedCityData = null;
     hideNeighborhoodSection();
     clearNeighborhood();
@@ -7239,6 +7303,8 @@
     // City input: keyboard nav + history dropdown
     const cityInput = document.getElementById('cityInput');
     if (!cityInput) return;
+    if (!cityInput.value.trim()) cityInput.value = DEFAULT_HOME_CITY;
+    S.city = normalizeCityName(cityInput.value.trim()) || DEFAULT_HOME_CITY;
 
     /* Recent popover on focus + duplicate arrow-key nav — paused with Geo autocomplete (use onCityKeydown on input)
     cityInput.addEventListener('focus', () => {

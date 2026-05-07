@@ -616,6 +616,16 @@
     .rates-status.loading::before { content: ''; display: inline-block; width: 8px; height: 8px; border: 1.5px solid rgba(201,169,110,0.3); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.7s linear infinite; flex-shrink: 0; }
     .rates-status.done { color: var(--green); opacity: 1; transition: opacity 0.5s; }
     .rates-status.done.fade { opacity: 0; }
+    .free-cancel-hint {
+      font-size: 11px; color: rgba(232, 213, 176, 0.88); letter-spacing: 0.03em;
+      max-width: 220px; line-height: 1.35; flex-shrink: 1;
+    }
+    .room-fc-badge {
+      display: inline-block; margin-left: 8px; font-size: 10px; font-weight: 600;
+      letter-spacing: 0.06em; text-transform: uppercase; color: #8fd4a8;
+      border: 1px solid rgba(143, 212, 168, 0.35); border-radius: 4px; padding: 2px 6px;
+      vertical-align: middle;
+    }
     @keyframes spin { to { transform: rotate(360deg); } }
 
     /* ── Availability filter toggle ── */

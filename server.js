@@ -2491,6 +2491,19 @@ app.post("/api/index-cancel", async (req, res) => {
   res.json({ message: `Cancel requested for ${city} — will stop after current batch` });
 });
 
+// LiteAPI rate.cancellationPolicies — true when refundable with a zero-penalty tier
+// (typical "free cancellation until …") or explicitly RFN with no policy rows.
+function liteRateHasFreeCancellation(rate) {
+  const pol = rate?.cancellationPolicies;
+  if (!pol || typeof pol !== "object") return false;
+  if (pol.refundableTag === "NRFN") return false;
+  const infos = pol.cancelPolicyInfos;
+  if (Array.isArray(infos) && infos.length) {
+    if (infos.some((i) => Number(i?.amount) === 0)) return true;
+  }
+  return pol.refundableTag === "RFN";
+}
+
 // ── Live pricing endpoint ──────────────────────────────────────────────────────
 // Fetches cheapest available rate per hotel for a given city + date range.
 // Fires a single batched POST to LiteAPI /hotels/rates with all hotel IDs.
@@ -2528,7 +2541,7 @@ app.get("/api/rates", async (req, res) => {
       const { data: hotelRows, error: dbErr } = await fc
         .from(hotelsCacheFor(city)).select("hotel_id").eq("city", city);
       if (dbErr) throw new Error("DB: " + dbErr.message);
-      if (!hotelRows?.length) return res.json({ prices: {}, currency: "EUR", nights, pricedCount: 0 });
+      if (!hotelRows?.length) return res.json({ prices: {}, roomPrices: {}, roomFreeCancel: {}, hotelFreeCancel: {}, currency: "EUR", nights, pricedCount: 0 });
       hotelIds = hotelRows.map(h => h.hotel_id);
       console.log(`[rates] ${city}: fetching rates for ${hotelIds.length} hotels from DB, ${checkin}→${checkout}`);
     }
@@ -2551,19 +2564,21 @@ app.get("/api/rates", async (req, res) => {
 
     if (liteRes.status === 429) {
       console.warn("[rates] LiteAPI rate limited");
-      return res.json({ prices: {}, roomPrices: {}, currency: "EUR", nights, pricedCount: 0, rateLimited: true });
+      return res.json({ prices: {}, roomPrices: {}, roomFreeCancel: {}, hotelFreeCancel: {}, currency: "EUR", nights, pricedCount: 0, rateLimited: true });
     }
     if (!liteRes.ok) {
       console.error("[rates] LiteAPI error", liteRes.status);
-      return res.json({ prices: {}, roomPrices: {}, currency: "EUR", nights, pricedCount: 0 });
+      return res.json({ prices: {}, roomPrices: {}, roomFreeCancel: {}, hotelFreeCancel: {}, currency: "EUR", nights, pricedCount: 0 });
     }
 
     const json = await liteRes.json();
     // LiteAPI v3 wraps in { data: { rates: [...] } } or { data: [...] } — handle both
     const ratesList = json?.data?.rates ?? json?.data ?? json?.rates ?? [];
-    const prices     = {};  // hotel_id → cheapest $/night (hotel-level display)
-    const roomPrices = {};  // hotel_id → { room_type_id → $/night }
-    const offerIds   = {};  // hotel_id → { room_type_id → offerId } for white-label deep links
+    const prices        = {};  // hotel_id → cheapest $/night (hotel-level display)
+    const roomPrices    = {};  // hotel_id → { room_type_id → $/night }
+    const offerIds      = {};  // hotel_id → { room_type_id → offerId } for white-label deep links
+    const roomFreeCancel = {}; // hotel_id → { room_type_id → bool } — cheapest shown rate per room
+    const hotelFreeCancel = {}; // hotel_id → true if any returned rate with a price is free-cancel
 
     // Normalize room name for matching: lowercase, trim, collapse whitespace
     const normName = s => (s || "").toLowerCase().trim().replace(/\s+/g, " ");
@@ -2591,13 +2606,16 @@ app.get("/api/rates", async (req, res) => {
         if (!total || total <= 0) continue;
         const perNight = Math.round(total / nights);
 
+        const firstRate = rt.rates?.[0];
+        const fcThis    = liteRateHasFreeCancellation(firstRate);
+        if (fcThis) hotelFreeCancel[hotelId] = true;
+
         // Hotel-level cheapest — always update regardless of room name
         if (!prices[hotelId] || perNight < prices[hotelId]) {
           prices[hotelId] = perNight;
         }
 
         // mappedRoomId links back to /data/hotel integer room IDs (stored as room_type_id in DB)
-        const firstRate    = rt.rates?.[0];
         const mappedRoomId = firstRate?.mappedRoomId;
         if (mappedRoomId) {
           withMappedId++;
@@ -2611,6 +2629,8 @@ app.get("/api/rates", async (req, res) => {
               if (!offerIds[hotelId]) offerIds[hotelId] = {};
               offerIds[hotelId][key] = offerId;
             }
+            if (!roomFreeCancel[hotelId]) roomFreeCancel[hotelId] = {};
+            roomFreeCancel[hotelId][key] = fcThis;
           }
         }
       }
@@ -2620,11 +2640,11 @@ app.get("/api/rates", async (req, res) => {
     const pricedCount = Object.keys(prices).length;
     const roomPricedCount = Object.values(roomPrices).reduce((s, rm) => s + Object.keys(rm).length, 0);
     console.log(`[rates] ${city}: ${pricedCount}/${hotelIds.length} hotels priced, ${roomPricedCount} room type rates`);
-    res.json({ prices, roomPrices, offerIds, currency: "EUR", nights, pricedCount });
+    res.json({ prices, roomPrices, offerIds, roomFreeCancel, hotelFreeCancel, currency: "EUR", nights, pricedCount });
 
   } catch (err) {
     console.error("[rates]", err.message);
-    res.json({ prices: {}, currency: "EUR", nights: nights || 1, pricedCount: 0 });
+    res.json({ prices: {}, roomPrices: {}, roomFreeCancel: {}, hotelFreeCancel: {}, currency: "EUR", nights: nights || 1, pricedCount: 0 });
   }
 });
 
