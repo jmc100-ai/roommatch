@@ -261,6 +261,7 @@ Walk one full search end-to-end on each:
 | Per-user invite codes              | Shared password is fine for 50 trusted users                           | If/when graduating to 200+ open beta          |
 | Magic-link auth                    | Same reasoning                                                         | Public launch + user accounts                 |
 | `npm audit fix` for moderate vulns | The 3 vulns are in dev-only deps                                       | Roll into a chore PR post-launch              |
+| Search-quality tests redesigned for V2 | Suite was authored for V1 strict feature-flag counts (e.g. "double sinks → exactly 33 hotels"). V2 returns all city hotels ranked by similarity, so exact-count assertions always fail. CI job runs but is marked `continue-on-error: true` so the workflow stays green. Search itself is verified healthy via prod smoke tests. | Post-launch chore — redesign to score top-N relevance (e.g. top-3 result names match a fixture set, or top result has score > 80) instead of row count |
 
 
 ---
