@@ -9,6 +9,10 @@ name: CI
 #                           hotel counts from v2_room_types_index. Use the
 #                           service key (read-only would also work, but service
 #                           is what the rest of the codebase already uses).
+#   INDEX_SECRET          — same as Render env. Lets the search-quality job pass
+#                           through the closed-beta SITE_PASSWORD gate via the
+#                           `x-index-secret` header (production /api/vsearch
+#                           requires either rm_gate cookie or INDEX_SECRET).
 #
 # Optional secret:
 #   BETA_BASE_URL         — override default https://roommatch-1fg5.onrender.com
@@ -76,6 +80,7 @@ jobs:
         env:
           SUPABASE_URL:         ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          INDEX_SECRET:         ${{ secrets.INDEX_SECRET }}
         run: |
           BASE_URL="${{ secrets.BETA_BASE_URL || 'https://roommatch-1fg5.onrender.com' }}"
           echo "Targeting: $BASE_URL"

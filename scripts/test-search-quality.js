@@ -29,8 +29,11 @@ function bold(s)  { return `\x1b[1m${s}\x1b[0m`; }
 
 async function callVsearch(query, city) {
   const url = `${BASE_URL}/api/vsearch?query=${encodeURIComponent(query)}&city=${encodeURIComponent(city)}&flag_mode=strict`;
+  // Bypass the beta gate (closed-beta SITE_PASSWORD cookie wall) when INDEX_SECRET
+  // is set in the environment. Required for CI runs against production.
+  const headers = process.env.INDEX_SECRET ? { "x-index-secret": process.env.INDEX_SECRET } : {};
   const start = Date.now();
-  const res = await fetch(url);
+  const res = await fetch(url, { headers });
   const elapsed = Date.now() - start;
   if (!res.ok) throw new Error(`HTTP ${res.status}: ${await res.text()}`);
   const data = await res.json();
