@@ -3936,14 +3936,13 @@
       about: {
         title: 'About TravelBoop',
         html: `
-          <p><strong>TravelBoop</strong> helps you find a hotel that actually fits your trip — not just a place to sleep.</p>
-          <p>Once you've chosen a city, the hard part is often figuring out where to stay and whether a hotel really matches the vibe you want. TravelBoop focuses on neighborhood personality and real room photos, so you can get a better feel for the experience before you book.</p>
-          <p>Answer a few quick questions about how you like to travel, and we'll help surface hotels and areas that fit your style — whether you want walkable cafés, quiet streets, nightlife, local character, or something else entirely.</p>
-          <p>The goal: fewer booking surprises and more "this is exactly what I hoped for."</p>
+          <p><strong>TravelBoop</strong> helps you find a hotel that fits your trip — not just a place to sleep.</p>
+          <p>We focus on neighborhood vibe and real room photos, so you can better understand what a stay will actually feel like before you book.</p>
+          <p>Answer a few quick questions about your travel style, and we'll recommend hotels and areas that match — from walkable cafés and local character to quiet streets or nightlife.</p>
+          <p>The goal: fewer booking surprises and more \u201Cthis is exactly what I wanted.\u201D</p>
           <h2>Currently in Beta</h2>
-          <p>TravelBoop is still growing — we're adding more cities, improving recommendations, and refining the experience every week. If you spot something confusing or have ideas, use the purple <strong>Feedback</strong> button anytime. Your feedback directly shapes what we build next.</p>
-          <p>TravelBoop is currently in beta, so features and information may change as the product evolves.</p>
-          ${commonFoot}`,
+          <p>TravelBoop is still growing, with more cities, smarter recommendations, and ongoing improvements added regularly. Use the purple <strong>Feedback</strong> button anytime — your feedback directly shapes what we build next.</p>
+          <p class="static-muted">TravelBoop is in beta, so features and information may change as the product evolves. Information here is for orientation only and is not legal or professional advice.</p>`,
       },
       privacy: {
         title: 'Privacy',
