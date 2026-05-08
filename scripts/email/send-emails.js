@@ -111,9 +111,9 @@ function wrap(html) {
       ${html}
       <hr style="margin:28px 0 14px;border:0;border-top:1px solid #eee"/>
       <p style="font-size:11px;color:#888;margin:0;">
-        You're receiving this because you signed up for the TravelBoop closed beta.
-        Hit reply to talk to a human, or
-        <a href="${BETA_BASE_URL}/privacy" style="color:#888">read our privacy policy</a>.
+        You are receiving this because you joined the TravelBoop beta waitlist or invite list.
+        Reply to this email to reach a real person, or
+        <a href="${BETA_BASE_URL}/privacy" style="color:#888">read our privacy note</a>.
       </p>
     </div>
   </body></html>`;
@@ -122,63 +122,59 @@ function wrap(html) {
 function templates(name = "there") {
   const greet = name && name.length ? `Hi ${name},` : "Hi there,";
   const calendarLine = BETA_CALENDAR
-    ? `<p>Want to chat? Grab 15 minutes here: <a href="${BETA_CALENDAR}">${BETA_CALENDAR}</a></p>`
+    ? `<p>Want to chat live? <a href="${BETA_CALENDAR}">Grab a 15-minute slot here</a>.</p>`
     : "";
   return {
     invite: {
-      subject: "You're in — TravelBoop closed beta",
+      subject: "You're in — welcome to the TravelBoop beta",
       html: wrap(`
         <p>${greet}</p>
-        <p>Welcome to the TravelBoop closed beta. We rebuilt hotel search around
-        <strong>vibe</strong>: describe the room you actually want and we'll find it
-        in real photos across Mexico City.</p>
-        <p><strong>Beta password:</strong> <code style="background:#f0ece4;padding:3px 8px;border-radius:4px;font-size:14px;">${BETA_PASSWORD}</code></p>
-        <p>Try this query first to see the magic:</p>
+        <p>Welcome to the TravelBoop beta for Mexico City. Tell us the room you have in mind — rain shower, sunny balcony, moody suite — and we will line up
+        <strong>real hotel photos</strong> so you can judge with your eyes, not just a star count.</p>
+        <p><strong>Your beta code:</strong> <code style="background:#f0ece4;padding:3px 8px;border-radius:4px;font-size:14px;">${BETA_PASSWORD}</code></p>
+        <p>Try a first search like this:</p>
         <p style="background:#f7f4ec;padding:10px 14px;border-radius:6px;font-style:italic;color:#555;">
           "modern bathroom with double sinks in Roma Norte"
         </p>
         <p style="margin:24px 0;">
           <a href="${BETA_BASE_URL}/" style="${BTN_STYLE}">Open TravelBoop →</a>
         </p>
-        <p><strong>One ask:</strong> hit the round Feedback button (bottom-right) when
-        anything feels off — bugs, slow searches, weird ranking, anything. We read
-        every word.</p>
-        <p>Heads-up: this is beta software. Things will break. We'll fix fast.</p>
+        <p><strong>Small favour:</strong> tap the purple <strong>Feedback</strong> bubble anytime something feels confusing, slow, or surprisingly great. We read every note.</p>
+        <p>We are still polishing — if something looks off, tell us and we will jump on it.</p>
         ${calendarLine}
         <p>— The TravelBoop team</p>
       `),
       text:
 `${greet}
 
-Welcome to the TravelBoop closed beta. We rebuilt hotel search around vibe:
-describe the room you actually want and we'll find it in real photos across
-Mexico City.
+Welcome to the TravelBoop beta for Mexico City. Describe the room you want and
+we will match it to real hotel photos so you can see what you are booking toward.
 
-Beta password: ${BETA_PASSWORD}
+Your beta code: ${BETA_PASSWORD}
 
-Try this query first:
+Try a first search like:
   "modern bathroom with double sinks in Roma Norte"
 
 Open: ${BETA_BASE_URL}/
 
-One ask: hit the round Feedback button (bottom-right) when anything feels off.
-We read every word.
+Small favour: tap the purple Feedback bubble when anything feels off — we read
+every note.
 
-Heads-up: this is beta software. Things will break. We'll fix fast.
-${BETA_CALENDAR ? `\nWant to chat? Grab 15 min: ${BETA_CALENDAR}\n` : ""}
+We are still polishing; if something breaks, tell us and we will fix it fast.
+${BETA_CALENDAR ? `\nWant to chat live? ${BETA_CALENDAR}\n` : ""}
 
 — The TravelBoop team`,
     },
     welcome: {
-      subject: "You're in — here's how to get the most out of it",
+      subject: "Quick tips for your TravelBoop beta",
       html: wrap(`
         <p>${greet}</p>
-        <p>Glad you made it in. Two minutes to get the most from your beta access:</p>
+        <p>Glad you are here. Four tiny habits that make the beta feel great:</p>
         <ol>
-          <li><strong>Be specific.</strong> "modern bathroom with rainfall shower" beats "nice bathroom".</li>
-          <li><strong>Use the Boop wizard once.</strong> It captures your vibe (5 quick questions) and personalises ranking.</li>
-          <li><strong>Try the neighbourhood map.</strong> Each pin is a vibe %. Click one to filter results to that area.</li>
-          <li><strong>Tell us what's off.</strong> Hit the Feedback button — even a 1-line "this is weird" helps.</li>
+          <li><strong>Say it like you mean it.</strong> “Rain shower, double vanity, lots of light” beats “nice bathroom”.</li>
+          <li><strong>Run the five-tap wizard once.</strong> It captures how you travel so rankings feel personal.</li>
+          <li><strong>Open the neighbourhood map on desktop.</strong> Tap a pin to focus the hotel list on that area.</li>
+          <li><strong>Send a one-line note.</strong> Purple Feedback bubble — even “this felt weird” moves the roadmap.</li>
         </ol>
         <p style="margin:24px 0;">
           <a href="${BETA_BASE_URL}/" style="${BTN_STYLE}">Jump back in →</a>
@@ -189,82 +185,78 @@ ${BETA_CALENDAR ? `\nWant to chat? Grab 15 min: ${BETA_CALENDAR}\n` : ""}
       text:
 `${greet}
 
-Glad you made it in. Two minutes to get the most from your beta access:
+Glad you are here. Four tiny habits that make the beta feel great:
 
-1. Be specific. "modern bathroom with rainfall shower" beats "nice bathroom".
-2. Use the Boop wizard once. It captures your vibe (5 questions) and personalises ranking.
-3. Try the neighbourhood map. Each pin is a vibe %. Click one to filter to that area.
-4. Tell us what's off. Hit the Feedback button — even a 1-line "this is weird" helps.
+1. Say it like you mean it — specific beats vague.
+2. Run the five-tap wizard once so rankings feel personal.
+3. On desktop, try the neighbourhood map and tap a pin to focus the list.
+4. Hit Feedback with even one sentence — it all helps.
 
 Jump back in: ${BETA_BASE_URL}/
-${BETA_CALENDAR ? `\nWant to chat? ${BETA_CALENDAR}\n` : ""}
+${BETA_CALENDAR ? `\nWant to chat live? ${BETA_CALENDAR}\n` : ""}
 
 — The TravelBoop team`,
     },
     nudge: {
-      subject: "How's TravelBoop going? (30 sec to share)",
+      subject: "How is TravelBoop feeling for you?",
       html: wrap(`
         <p>${greet}</p>
-        <p>You're a few days into the TravelBoop beta — what stuck and what didn't?</p>
-        <p>Honest takes only. We're optimising for "would actually use this on my next trip".</p>
-        <p>Three quick questions:</p>
+        <p>You have been in the TravelBoop beta for a few days — we would love a gut check.</p>
+        <p>What felt instantly useful? What felt confusing? There are no wrong answers.</p>
+        <p>Three quick prompts:</p>
         <ol>
-          <li>What's the first thing that surprised you (good or bad)?</li>
-          <li>Did the search results feel like they matched your vibe?</li>
-          <li>Anything you wish existed?</li>
+          <li>What surprised you first — in a good or bad way?</li>
+          <li>Did the hotel picks feel close to the vibe you described?</li>
+          <li>What is one thing you wish the product did tomorrow?</li>
         </ol>
         <p style="margin:24px 0;">
           <a href="${BETA_BASE_URL}/" style="${BTN_STYLE}">Open TravelBoop →</a>
         </p>
-        <p>Hit reply to send the answers, or use the in-app Feedback button. Every reply
-        moves the roadmap.</p>
+        <p>Reply to this email with a sentence or two, or tap the purple Feedback bubble in the app — both land with us.</p>
         ${calendarLine}
         <p>— The TravelBoop team</p>
       `),
       text:
 `${greet}
 
-You're a few days into the TravelBoop beta — what stuck and what didn't?
+You have been in the TravelBoop beta for a few days — we would love a gut check.
 
-Three quick questions:
-1. What's the first thing that surprised you (good or bad)?
-2. Did the search results feel like they matched your vibe?
-3. Anything you wish existed?
+Three quick prompts:
+1. What surprised you first — good or bad?
+2. Did the hotel picks feel close to the vibe you described?
+3. What is one thing you wish existed tomorrow?
 
-Hit reply, or use the in-app Feedback button.
+Reply here or use the in-app Feedback bubble.
 
 Open: ${BETA_BASE_URL}/
-${BETA_CALENDAR ? `\nWant to chat? ${BETA_CALENDAR}\n` : ""}
+${BETA_CALENDAR ? `\nWant to chat live? ${BETA_CALENDAR}\n` : ""}
 
 — The TravelBoop team`,
     },
     call: {
-      subject: "15 min to make TravelBoop better?",
+      subject: "Could we borrow 15 minutes of your time?",
       html: wrap(`
         <p>${greet}</p>
-        <p>Thanks for spending time in TravelBoop these past two weeks. Now we'd love
-        15 minutes of your brain.</p>
-        <p>One quick call: we screen-share, you walk through how you'd use it for a
-        real trip, we listen. No pitch, no slides.</p>
+        <p>Thank you for living in TravelBoop lately — you have already taught us a ton.</p>
+        <p>If you are up for it, we would love a relaxed 15-minute video chat: you share your screen, walk us through a real trip you would plan, and we mostly listen. No sales deck, we promise.</p>
         ${BETA_CALENDAR
           ? `<p style="margin:24px 0;">
-              <a href="${BETA_CALENDAR}" style="${BTN_STYLE}">Pick a slot →</a>
+              <a href="${BETA_CALENDAR}" style="${BTN_STYLE}">Pick a time that works →</a>
             </p>`
-          : `<p>Reply with three windows that work for you and we'll send a calendar invite.</p>`
+          : `<p>Reply with a few times that work and we will send a calendar invite.</p>`
         }
-        <p>Either way — thanks for being early. It really matters.</p>
+        <p>Either way, thank you for being early — it genuinely helps.</p>
         <p>— The TravelBoop team</p>
       `),
       text:
 `${greet}
 
-Thanks for spending time in TravelBoop these past two weeks. Now we'd love
-15 minutes of your brain.
+Thank you for using TravelBoop lately — you have already taught us a ton.
 
-One quick call: we screen-share, you walk through how you'd use it for a
-real trip, we listen. No pitch, no slides.
+If you are up for it, we would love a relaxed 15-minute video chat: you share
+your screen, walk us through a real trip, we listen. No sales deck.
 
-${BETA_CALENDAR ? `Pick a slot: ${BETA_CALENDAR}` : "Reply with three windows that work for you."}
+${BETA_CALENDAR ? `Pick a time: ${BETA_CALENDAR}` : "Reply with a few windows that work for you."}
 
 — The TravelBoop team`,
     },

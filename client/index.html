@@ -5,19 +5,19 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <meta name="robots" content="noindex, nofollow" />
   <title>TravelBoop — Find your vibe</title>
-  <meta name="description" content="TravelBoop: neighbourhood picks, AI visual search on real hotel rooms — your Boop when vibe and space line up." />
+  <meta name="description" content="TravelBoop helps you pick a neighbourhood and a hotel room that actually looks like your trip — real photos, plain language, Mexico City first." />
   <!-- Open Graph / link unfurls (Twitter, Slack, iMessage, Discord, FB, LinkedIn). -->
   <meta property="og:type" content="website" />
   <meta property="og:site_name" content="TravelBoop" />
   <meta property="og:title" content="TravelBoop — Find your vibe" />
-  <meta property="og:description" content="Neighbourhood picks + AI visual search on real hotel rooms. Find your travel Boop." />
+  <meta property="og:description" content="Describe the stay you want — we match real hotel photos and neighbourhood vibes so nothing feels like a surprise at check-in." />
   <meta property="og:url" content="https://www.travelboop.com" />
   <meta property="og:image" content="https://www.travelboop.com/og-image.png" />
   <meta property="og:image:width" content="1200" />
   <meta property="og:image:height" content="630" />
   <meta name="twitter:card" content="summary_large_image" />
   <meta name="twitter:title" content="TravelBoop — Find your vibe" />
-  <meta name="twitter:description" content="Neighbourhood picks + AI visual search on real hotel rooms." />
+  <meta name="twitter:description" content="Pick your area and your room vibe with real hotel photos — friendly, fast, built for travellers." />
   <meta name="twitter:image" content="https://www.travelboop.com/og-image.png" />
   <meta name="theme-color" content="#0c0c0e" />
   <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
@@ -135,16 +135,16 @@
 <div id="beta-consent-modal" class="beta-modal" role="dialog" aria-modal="true" aria-labelledby="bc-title" hidden>
   <div class="beta-modal-veil"></div>
   <div class="beta-modal-card">
-    <h2 id="bc-title" class="beta-modal-title">Welcome to TravelBoop beta</h2>
-    <p class="beta-modal-sub">A quick heads-up before you explore:</p>
+    <h2 id="bc-title" class="beta-modal-title">Welcome to the TravelBoop beta</h2>
+    <p class="beta-modal-sub">Three quick things before you dive in:</p>
     <ul class="beta-consent-list">
-      <li>This is a closed beta — features, data, and design will change.</li>
-      <li>We collect pseudonymous usage events (PostHog) and error reports (Sentry) so we can improve the product. Search queries are stripped from URLs before they leave your browser.</li>
-      <li>Hotel data and booking links are powered by LiteAPI; bookings happen on their checkout.</li>
-      <li>Read the full <a href="/privacy" target="_blank" rel="noopener">Privacy</a> and <a href="/terms" target="_blank" rel="noopener">Terms</a>.</li>
+      <li>We are still polishing — you may see rough edges, tweaks, and new ideas as we go.</li>
+      <li>We use anonymous usage stats and crash reports to make the product better. Your search words are not sent in tracking links.</li>
+      <li>Hotel listings and “book” buttons come from our travel partner; when you book, you finish on their secure checkout.</li>
+      <li>Read the short <a href="/privacy" target="_blank" rel="noopener">Privacy</a> and <a href="/terms" target="_blank" rel="noopener">Terms</a> pages anytime.</li>
     </ul>
     <div class="beta-modal-actions">
-      <button type="button" class="btn-pri" onclick="acceptBetaConsent()">I understand — let's go →</button>
+      <button type="button" class="btn-pri" onclick="acceptBetaConsent()">Sounds good — let's explore →</button>
     </div>
   </div>
 </div>
@@ -228,7 +228,7 @@
       <div class="city-chapter-inner">
         <div class="eyebrow"><div class="eyebrow-dot"></div>TravelBoop · Find your Travel Vibe</div>
         <h1 class="city-heading">Where are you <em>headed?</em></h1>
-        <p class="chapter-sub">Pick a city and discover neighborhoods that actually match your Vibe — not just the usual tourist blurbs. Then we'll scan real neighborhood and hotel room photos with AI to find places that feel right to you!</p>
+        <p class="chapter-sub">Choose a city, tell us the pace and style you like, and we will line up neighbourhoods and real hotel-room photos so what you see is closer to what you get.</p>
         <div class="city-box">
           <span class="city-box-icon">⌕</span>
           <!-- Geoapify + recent popover paused (clashed with chips) — restore oninput/onblur + onCityInput -->
@@ -315,7 +315,7 @@
           <button class="back-btn boop-back-original" onclick="goToStep('city')"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 3L5 8l5 5"/></svg> Back to City</button>
           <button class="back-btn boop-back-overlay" onclick="closeBoopOverlay()" type="button">← Back to results</button>
           <h1 class="chapter-h1">Let's shape your <em>vibe</em></h1>
-          <p class="chapter-sub">A quick visual check to find your right vibe. You can skip to room search results any time.</p>
+          <p class="chapter-sub">Five quick taps to capture how you like to travel. You can skip straight to results whenever you want.</p>
         </div>
         <div class="chapter-body">
           <div class="boop-wrap" id="boop-wrap"></div>
@@ -333,7 +333,7 @@
             <button type="button" class="back-btn" onclick="nbhdBackClick()"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 3L5 8l5 5"/></svg> <span id="nbhd-back-text">Back to City</span></button>
             <div class="eyebrow"><div class="eyebrow-dot"></div><span id="nbhd-eyebrow-line">Paris · Step 3 of 5</span></div>
             <h1 class="chapter-h1">Find your <em>neighbourhood vibe</em></h1>
-            <p class="chapter-sub" id="nbhd-chapter-sub">Every card is a neighbourhood vibe — the feel of where you'll stay. Pick an area to focus your search, or open the whole city.</p>
+            <p class="chapter-sub" id="nbhd-chapter-sub">Each card is a slice of the city — pick the mood that fits your trip, or search everywhere at once.</p>
           </div>
         </div>
         <!-- Map module (lazy-renders MapLibre GL on first show; populated by initNbhdMap()) -->
@@ -362,9 +362,9 @@
       <div class="chapter-inner">
         <div class="chapter-top">
           <button class="back-btn" onclick="goToStep('nbhd')"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 3L5 8l5 5"/></svg> Back to Neighbourhood</button>
-          <div class="eyebrow"><div class="eyebrow-dot"></div>Step 4 of 5 · <span style="color:var(--accent2)">Find your room Boop</span> <span style="color:var(--muted);letter-spacing:.04em;text-transform:none">(your vibe)</span></div>
+            <div class="eyebrow"><div class="eyebrow-dot"></div>Step 4 of 5 · <span style="color:var(--accent2)">Your room style</span></div>
           <h1 class="chapter-h1">Choose your <em>room vibe</em></h1>
-          <p class="chapter-sub">Describe the look or tap a preset — we match your vibe with real room photos. Think of it as locking in the room half of your <em style="color:var(--accent2);font-style:italic">Boop</em>.</p>
+          <p class="chapter-sub">Describe the look you want or tap a preset — we line up real room photos that feel like a fit.</p>
         </div>
         <div class="chapter-body">
           <!-- Mobile: full-size vibe cards stacked (scroll to pick) -->
@@ -431,7 +431,7 @@
               <button class="btn-sec" onclick="skipDates()">Just browsing for now</button>
             </div>
             <div class="dates-softgate">
-              <strong>No dates?</strong> You'll still see all rooms ranked by vibe — just without live pricing or availability filtering.
+              <strong>Skipping dates?</strong> You can still browse every match by vibe — add dates later when you want live prices and “available only” filters.
             </div>
           </div>
         </div>
@@ -575,7 +575,7 @@
         <option value="hostel">Hostels</option>
       </select>
     </div>
-    <div class="avail-filter" id="availFilter" style="display:none" title="Only show room types with availability for your dates">
+    <div class="avail-filter" id="availFilter" style="display:none" title="Hide hotels that have no price for your dates">
       <label class="avail-filter-label" for="availOnlyCheck">Available only</label>
       <label class="toggle-switch">
         <input type="checkbox" id="availOnlyCheck" onchange="setAvailFilter(this.checked)">
@@ -617,8 +617,8 @@
 </div>
 
 <footer>
-  <span class="footer-text"><strong style="color:var(--text);font-weight:500">TravelBoop</strong> · Find your vibe, then your stay — powered by <a href="https://liteapi.travel" target="_blank" rel="noopener">LiteAPI</a></span>
-  <span class="footer-text">Best-match room type highlighted in green</span>
+  <span class="footer-text"><strong style="color:var(--text);font-weight:500">TravelBoop</strong> · Find your vibe, then your stay — hotel data from <a href="https://liteapi.travel" target="_blank" rel="noopener">LiteAPI</a></span>
+  <span class="footer-text">The room that matches your search best is highlighted in green</span>
   <span class="footer-links">
     <a href="/privacy">Privacy</a>
     <span class="footer-sep">·</span>

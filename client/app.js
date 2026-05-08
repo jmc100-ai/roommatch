@@ -438,9 +438,9 @@
   const BOOP_QUESTIONS = [
     {
       id:'trip',
-      label:'Trip context',
+      label:'Your trip',
       title:'Have you been to this city before?',
-      sub:'Bias toward iconic corners or deeper local finds.',
+      sub:'We will lean your picks toward classic highlights or quieter local pockets based on what you choose.',
       type:'cards',
       options:[
         { id:'first',  emoji:'🗺️', title:'First time',        note:'Central, iconic, easy to navigate.', image:'https://images.unsplash.com/photo-1521216774850-01bc1c5fe0da?auto=format&fit=crop&w=1200&q=80', weights:{ central:20, iconic:18, calm:8, local:-6 } },
@@ -452,9 +452,9 @@
     // so room photo search and hotel-profile search keep their separate signals.
     {
       id:'stayVibe',
-      label:'Stay vibe',
+      label:'Stay style',
       title:'What kind of stay feels right?',
-      sub:'This shapes both the room style and hotel vibe we search for.',
+      sub:'This steers both the room look and the hotel personality we search for.',
       type:'cards',
       options:[
         { id:'sleek_polished', emoji:'✨', title:'Sleek & polished', note:'Clean modern rooms, refined service, calm luxury.', image:'images/wizard/sleek-polished.png', weights:{ luxury:14, central:4, calm:8 } },
@@ -469,9 +469,9 @@
     // Screen 3 — neighbourhood pace + location in one pick (maps to legacy pace + location for seeds).
     {
       id:'nbhdScene',
-      label:'Neighbourhood',
+      label:'Area',
       title:'What kind of area should wrap your hotel?',
-      sub:'Street energy and where you sit on the map — one gut choice.',
+      sub:'Pick the street energy and location that feel right — one gut choice.',
       type:'cards',
       options:[
         { id:'buzz_central', emoji:'🌆', label:'Icons & energy', title:'Icons & energy', note:'Sights, crowds, movement — stay in the thick of it.', image:'images/wizard/vibrant-busy.png', weights:{ nightlife:14, central:22, iconic:10, walkability:12, calm:-8, local:-4 } },
@@ -488,10 +488,10 @@
     {
       id:'musthaves',
       label:'Must-haves',
-      title:'Pick what matters most',
+      title:'What matters most?',
       type:'chips',
       options:[
-        { id:'free_cancellation', flag:null, label:'Free cancellation', hint:'We filter using live rates for your dates (refundable / zero-penalty tier).', image:'https://images.unsplash.com/photo-1526778548025-fa2f459cd5c1?auto=format&fit=crop&w=1200&q=80', meta:'Requires check-in & check-out' },
+        { id:'free_cancellation', flag:null, label:'Free cancellation', hint:'When your dates are set, we favour rates you can cancel without a fee.', image:'https://images.unsplash.com/photo-1526778548025-fa2f459cd5c1?auto=format&fit=crop&w=1200&q=80', meta:'Add check-in and check-out first' },
         { id:'balcony',      flag:'balcony',   label:'Balcony or view',    hint:'Outdoor space or a real view from the room.',                         image:'images/wizard/musthave-balcony.png' },
         { id:'spa_bathroom', flag:null,        label:'Spa-style bathroom', hint:'Soaking tub or rain shower plus larger counter / double vanity.',     image:'images/wizard/musthave-spa-bathroom.png', seed:'spa-like bathroom, soaking tub, rainfall shower, marble vanity, generous counter space, double sinks' },
         { id:'spacious',     flag:null,        label:'Spacious room',      hint:'Room to spread out, not a closet.',                                    image:'images/wizard/musthave-spacious.png', seed:'spacious hotel room, generous layout, open feel' },
@@ -2039,13 +2039,13 @@
         </div>
         <details class="boop-keywords-details">
           <summary class="boop-keywords-summary">
-            <span class="boop-keywords-summary-label">Search keywords — Advanced</span>
+            <span class="boop-keywords-summary-label">Fine-tune room search text</span>
             <span class="boop-keywords-summary-arr" aria-hidden="true">▸</span>
           </summary>
           <div class="boop-keywords-block">
-            <div class="boop-keywords-help">The text we match rooms against. Auto-built from your answers — edit only if you want fine control.</div>
+            <div class="boop-keywords-help">We build this line from your answers so room results stay on-theme — tweak it only if you want to nudge the wording.</div>
             <textarea id="boop-keywords-input" class="boop-keywords-input"
-                      placeholder="Auto-generated from your wizard answers"
+                      placeholder="Filled in from your answers"
                       oninput="BOOP.advancedKeywords=this.value">${escHtml(kwValue)}</textarea>
           </div>
         </details>
@@ -2131,8 +2131,8 @@
     const sub = document.getElementById('nbhd-chapter-sub');
     if (sub) {
       sub.textContent = _nbhdBrowseFromResults
-        ? 'Compare areas below. Tap Choose on a card to filter your hotel list to that neighbourhood, or pick the whole city.'
-        : 'Every card is a neighbourhood vibe — the feel of where you\'ll stay. Pick an area to focus your search, or open the whole city.';
+        ? 'Browse the areas below. Tap Choose on a card to narrow your hotel list, or stay on the whole city.'
+        : 'Each card is a slice of the city — pick the mood that fits your trip, or search everywhere at once.';
     }
     fetchAndShowNeighborhoodsNew(S.city);
     refreshStory('nbhd');
@@ -3917,75 +3917,75 @@
   }
 
   function getStaticPageContent(id) {
-    const commonFoot = `<p class="static-muted">This is a public beta. Information here is for orientation only and is not legal or professional advice. Features and policies may change without notice.</p>`;
+    const commonFoot = `<p class="static-muted">TravelBoop is in beta — this page is a friendly overview, not legal advice, and we may refresh it as the product changes.</p>`;
     const pages = {
       how: {
         title: 'How it works',
         html: `
-          <p>TravelBoop helps you narrow hotels in three beats: <strong>city</strong>, <strong>neighbourhood vibe</strong>, and <strong>room visuals</strong> matched to how you like to stay.</p>
-          <h2>1 · City & dates</h2>
-          <p>Pick where you are going (and optional dates). We use that to load live inventory and pricing context where available.</p>
-          <h2>2 · Vibe wizard & areas</h2>
-          <p>A short wizard captures trip style and neighbourhood preferences. AI-generated area cards describe the feel of each part of town so you can choose a base that fits you—not just a pin on a map.</p>
-          <h2>3 · Visual room search</h2>
-          <p>Describe the room you want in plain language. We rank real hotel room photos with embeddings so results reflect what spaces actually look like, not marketing copy alone.</p>
-          <h2>Beta note</h2>
-          <p>Results depend on indexed cities and partner data coverage. Always confirm details on the hotel or booking provider before you pay.</p>
+          <p>TravelBoop walks you through three simple layers: <strong>where you are going</strong>, <strong>what the neighbourhood should feel like</strong>, and <strong>what the room should look like</strong>.</p>
+          <h2>1 · City &amp; dates</h2>
+          <p>Pick your destination and, if you like, your stay dates. Dates unlock live prices when our partners have them.</p>
+          <h2>2 · Your vibe &amp; the map</h2>
+          <p>A short wizard captures how you like to travel. Neighbourhood cards (and the map on larger screens) describe the rhythm of each area so you pick a base that fits your trip — not just a dot on a map.</p>
+          <h2>3 · Room search in your own words</h2>
+          <p>Describe the bathroom, bed, light, or layout you want. We rank hotels using real room photos so you are judging spaces, not brochure copy alone.</p>
+          <h2>While we are in beta</h2>
+          <p>Coverage and polish will keep improving. Always confirm anything important — price, policy, accessibility — on the hotel or booking site before you pay.</p>
           ${commonFoot}`,
       },
       about: {
         title: 'About TravelBoop',
         html: `
-          <p><strong>TravelBoop</strong> is an experimental product for discovering hotels by <em>neighbourhood character</em> and <em>room aesthetics</em>—built for travellers who care where they land and what their room feels like.</p>
-          <p>We combine structured neighbourhood signals, a guided “vibe” flow, and visual search over indexed room imagery. The goal is fewer mismatches between what you imagined and what you check into.</p>
-          <h2>Public beta</h2>
-          <p>During beta, cities, models, and ranking logic may shift. We appreciate feedback as we harden quality and expand coverage.</p>
-          <p>Source &amp; issues: <a href="https://github.com/jmc100-ai/roommatch" target="_blank" rel="noopener noreferrer">GitHub — roommatch</a></p>
+          <p><strong>TravelBoop</strong> is a small, opinionated tool for travellers who care about <em>neighbourhood feel</em> and <em>how a room actually looks</em> — not only stars and lobby photos.</p>
+          <p>We blend a guided vibe flow, neighbourhood storytelling, and photo-first hotel cards so what you imagine before you book is closer to what you walk into.</p>
+          <h2>Beta honesty</h2>
+          <p>We are still tuning cities, data, and ranking. Your feedback in the purple chat button genuinely shapes what we build next.</p>
+          <p>Engineering friends can peek at the open repo: <a href="https://github.com/jmc100-ai/roommatch" target="_blank" rel="noopener noreferrer">GitHub — roommatch</a></p>
           ${commonFoot}`,
       },
       privacy: {
         title: 'Privacy',
         html: `
-          <p>We take privacy seriously and keep this policy short and concrete for beta users.</p>
-          <h2>What we process</h2>
+          <p>Here is the plain-language version — the standalone <a href="/privacy" target="_blank" rel="noopener">/privacy</a> page has the same story with a little more room to breathe.</p>
+          <h2>What we collect</h2>
           <ul>
-            <li><strong>Search &amp; wizard inputs</strong> — city, queries, and preferences you enter to run searches and personalize neighbourhood scoring.</li>
-            <li><strong>Technical data</strong> — standard server logs (e.g. IP, user agent, timestamps) for security and reliability.</li>
-            <li><strong>Optional access gate</strong> — if the site password feature is enabled, an HttpOnly cookie is used only to remember that you passed the gate.</li>
+            <li><strong>What you type</strong> — city, searches, wizard answers, and optional feedback.</li>
+            <li><strong>Basic technical info</strong> — things like IP address and browser type to keep the site safe.</li>
+            <li><strong>A sign-in cookie</strong> — only when we use a beta code, so you do not have to re-enter it on every click.</li>
           </ul>
-          <h2>Third parties</h2>
-          <p>Hotel listings, photos, and rates may come from travel data and booking partners (e.g. LiteAPI). AI features may call Google (Gemini) for captions, embeddings, and neighbourhood text. Infrastructure may use Supabase and hosting providers. Those services process data under their own terms.</p>
-          <h2>Retention &amp; rights</h2>
-          <p>Beta retention policies may evolve. For data questions or removal requests, use the contact page. We will respond as promptly as we can for a small team.</p>
+          <h2>Partners</h2>
+          <p>Hotels, photos, and prices come from travel partners. Some smart features use Google’s AI. Hosting, maps, email, and anonymous analytics each run through vendors with their own policies.</p>
+          <h2>Questions or removals</h2>
+          <p>Email <a href="mailto:beta@travelboop.com">beta@travelboop.com</a> — we are a small team and will help as quickly as we can.</p>
           ${commonFoot}`,
       },
       terms: {
         title: 'Terms of service',
         html: `
-          <p>By using TravelBoop during the public beta, you agree to these terms. If you do not agree, please stop using the service.</p>
-          <h2>Not advice</h2>
-          <p>TravelBoop does not provide legal, financial, or travel advice. Neighbourhood descriptions and match scores are generated or derived for discovery only—they can be incomplete or wrong.</p>
-          <h2>No guarantee</h2>
-          <p>The service is provided “as is” without warranties of any kind. We do not guarantee availability, accuracy of prices, or suitability of any hotel for your trip.</p>
+          <p>By using TravelBoop during beta you agree to these terms. If you disagree, please stop using the site.</p>
+          <h2>Not professional advice</h2>
+          <p>TravelBoop is not legal, financial, or travel-agent advice. Neighbourhood notes and match hints are for discovery — they can be incomplete or wrong.</p>
+          <h2>No guarantees</h2>
+          <p>The service is provided “as is.” We do not promise availability, perfect prices, or that any hotel suits your trip.</p>
           <h2>Bookings</h2>
-          <p>When you leave TravelBoop to book with a third party, their terms apply. We are not a party to your reservation.</p>
-          <h2>Acceptable use</h2>
-          <p>Do not misuse the product (including scraping, probing, or attempting to overload systems). We may suspend access that harms the beta or other users.</p>
-          <h2>Limitation of liability</h2>
-          <p>To the maximum extent permitted by law, TravelBoop and its operators are not liable for indirect or consequential damages arising from use of the beta.</p>
+          <p>When you leave us to book elsewhere, their rules apply. We are not part of your reservation.</p>
+          <h2>Play fair</h2>
+          <p>Please do not abuse or overload the product. We may pause access that hurts other beta users.</p>
+          <h2>Liability</h2>
+          <p>To the fullest extent the law allows, TravelBoop and its operators are not liable for indirect or consequential damages from using the beta.</p>
           <h2>Changes</h2>
-          <p>We may update these terms as the product matures. Continued use after changes means you accept the updated terms.</p>
+          <p>We may update these terms. Continuing to use the site means you accept the latest version.</p>
           ${commonFoot}`,
       },
       contact: {
         title: 'Contact',
         html: `
-          <p>We read every message we can during beta—feature ideas, bad matches, and bug reports all help.</p>
+          <p>We read every note we can — weird matches, slow searches, wild ideas, all of it helps.</p>
           <h2>Email</h2>
-          <p><a href="mailto:hello@travelboop.com">hello@travelboop.com</a></p>
-          <p class="static-muted" style="margin-top:12px;border:none;padding:0;">Replace this address with your production inbox before wide launch, or forward the domain mailbox to your team.</p>
-          <h2>GitHub</h2>
-          <p>For technical issues or contributions: <a href="https://github.com/jmc100-ai/roommatch/issues" target="_blank" rel="noopener noreferrer">github.com/jmc100-ai/roommatch/issues</a></p>
+          <p><a href="mailto:hello@travelboop.com">hello@travelboop.com</a> — general hellos and product thoughts.</p>
+          <p><a href="mailto:beta@travelboop.com">beta@travelboop.com</a> — beta access, privacy, or data questions.</p>
+          <h2>Developers</h2>
+          <p>Found a bug in the open-source pieces? <a href="https://github.com/jmc100-ai/roommatch/issues" target="_blank" rel="noopener noreferrer">Open an issue on GitHub</a>.</p>
           ${commonFoot}`,
       },
     };
@@ -4213,7 +4213,7 @@
     if (currentMode === 'vector') startVectorSearch(query, city, btn);
     else if (currentMode === 'clip' && PUBLIC_CLIP_SEARCH_ENABLED) startClip(query, city, btn);
     else if (currentMode === 'clip') {
-      setStatus('Visual match (CLIP) is off for this deployment — using vector search.', true);
+      setStatus('Extra photo mode is off here — running the standard photo match instead.', true);
       startVectorSearch(query, city, btn);
     }
     else startLiteApi(query, city, btn);
@@ -4230,7 +4230,7 @@
       if (!hotels.length) { setStatus(''); renderEmpty(query, city); }
       else {
         const totalTypes = hotels.reduce((n, h) => n + (h.roomTypes?.length || 0), 0);
-        setStatus(`${hotels.length} hotels · ${totalTypes} room types in ${city}`);
+        setStatus(`${hotels.length} hotels · ${totalTypes} room types in ${city} — tap a card to explore`);
         render(hotels);
       }
     } catch (err) { setStatus(''); renderError(err.message); }
@@ -4305,7 +4305,7 @@
       const hotels = data.hotels || [];
 
       if (data.indexing && !hotels.length) {
-        showBanner(data.message || `Building visual index for ${city}…`, true);
+        showBanner(data.message || `Still loading hotels in ${city} — hang tight…`, true);
         setTimeout(() => pollIndexStatus(query, city), 15000);
       }
 
@@ -4332,7 +4332,7 @@
           _setPriceBtnsState(true);
         }
       } else if (data.indexing && data.indexStatus === 'indexing') {
-        setStatus(`Still indexing ${city} — try a different vibe or check back shortly`, false);
+        setStatus(`We are still adding hotels in ${city}. Try a broader search or check back soon.`, false);
       } else {
         setStatus(''); renderEmpty(query, city);
       }
@@ -4349,7 +4349,7 @@
         const fakeBtn = { disabled:false, textContent:'' };
         startVectorSearch(query, city, fakeBtn);
       } else if (d.status === 'indexing') {
-        showBanner(`Indexing ${city}… ${d.hotel_count || 0} hotels processed so far. Auto-refreshing…`, true);
+        showBanner(`Loading more hotels in ${city}… ${d.hotel_count || 0} ready so far. This page will refresh on its own.`, true);
         setTimeout(() => pollIndexStatus(query, city), 15000);
       }
     } catch(e) {}
@@ -4368,7 +4368,7 @@
   }
 
   function startClip(query, city, btn) {
-    setStatus(`Starting CLIP analysis for "${query}" in ${city}…`, true);
+    setStatus(`Starting a deeper photo pass for “${query}” in ${city}…`, true);
     const prog = document.getElementById('clipProgress');
     const fill = document.getElementById('clipProgressFill');
     prog.style.display = 'block'; fill.style.width = '0%';
@@ -4384,7 +4384,7 @@
         scored.push(msg.hotel);
         const sorted = [...scored].sort((a, b) => (b.clipScore||0) - (a.clipScore||0));
         document.getElementById('results').innerHTML = sorted.map(hotelHTML).join('');
-        setStatus(`Scored ${clipDone} of ${clipTotal} hotels — ranked by CLIP similarity`);
+        setStatus(`Compared photos for ${clipDone} of ${clipTotal} hotels — best visual matches on top`);
       }
       else if (msg.type === 'done') {
         clipES.close(); clipES = null;
@@ -4392,7 +4392,7 @@
         fill.style.width = '100%';
         setTimeout(() => { prog.style.display = 'none'; }, 800);
         if (!scored.length) { setStatus(''); renderEmpty(query, city); }
-        else setStatus(`${scored.length} hotels · ranked by CLIP visual similarity`);
+        else setStatus(`${scored.length} hotels · ranked by closest photo match`);
       }
       else if (msg.type === 'error') {
         clipES.close(); clipES = null;
@@ -4403,7 +4403,7 @@
     clipES.onerror = () => {
       if (clipES) { clipES.close(); clipES = null; }
       btn.disabled = false; btn.textContent = 'Search rooms';
-      prog.style.display = 'none'; setStatus(''); renderError('CLIP search failed');
+      prog.style.display = 'none'; setStatus(''); renderError('That deeper photo search could not finish. Try the standard search instead.');
     };
   }
 
@@ -6786,7 +6786,7 @@
       ? `<button type="button" class="hotel-guest-score" data-hotel-id="${escHtml(String(h.id))}" onclick="event.stopPropagation();openHotelDetailPage(this.dataset.hotelId, { scrollTo: 'reviews' })" title="See guest reviews"><strong>${parseFloat(h.rating).toFixed(1)}</strong> guest score</button>`
       : '';
     const bookUrl  = buildBookUrl(h, null);
-    const clipBadge = h.clipScore > 0 ? `<span class="clip-score-badge">&#9889; ${h.clipScore}% CLIP</span>` : '';
+    const clipBadge = h.clipScore > 0 ? `<span class="clip-score-badge">&#9889; ${h.clipScore}% photo match</span>` : '';
     const hotelIdAttr = escHtml(String(h.id));
 
     // BOOP v4 — three vibe % scores on every card:
@@ -7011,6 +7011,22 @@
       </div>`;
   }
 
+  function friendlyApiErrorMessage(raw) {
+    const s = String(raw || '').trim();
+    if (!s) return 'Please try again in a moment.';
+    const low = s.toLowerCase();
+    if (low.includes('beta_gate_required') || low === 'unauthorized') {
+      return 'Your session expired. Refresh the page and enter the beta code again.';
+    }
+    if (low.includes('rate_limited')) {
+      return 'You are tapping a little faster than our guardrails allow. Pause a few seconds and try again.';
+    }
+    if (/^search failed \(\d+\)$/i.test(s) || /^http \d+$/i.test(s)) {
+      return 'We could not finish that search. Check your connection and try again.';
+    }
+    return s;
+  }
+
   function renderEmpty(query, city) {
     exitResultsPendingMode();
     const resE = document.getElementById('results');
@@ -7021,8 +7037,8 @@
     document.getElementById('results').innerHTML = `
       <div class="empty-state">
         <div class="empty-icon">🔍</div>
-        <div class="empty-title">No rooms found</div>
-        <div class="empty-sub">No rooms matched "${query}" in ${city}.<br>Try a different description or city.</div>
+        <div class="empty-title">No matches yet</div>
+        <div class="empty-sub">We couldn’t find rooms that fit “${escHtml(query)}” in ${escHtml(city)}.<br>Try simpler words, a nearby area, or another city.</div>
       </div>`;
   }
 
@@ -7033,11 +7049,12 @@
     document.body.classList.add('has-results');
     document.getElementById('discovery-flow').style.display = 'none';
     document.getElementById('st-results').style.display     = 'block';
+    const detail = escHtml(friendlyApiErrorMessage(msg));
     document.getElementById('results').innerHTML = `
       <div class="empty-state">
         <div class="empty-icon">⚠️</div>
         <div class="empty-title">Something went wrong</div>
-        <div class="empty-sub">${msg}</div>
+        <div class="empty-sub">${detail}</div>
       </div>`;
   }
 

@@ -160,10 +160,10 @@ function loginHtml(error = "") {
 <body>
   <div class="card">
     <h1>TravelBoop</h1>
-    <p class="sub">Private access only</p>
+    <p class="sub">Enter the code from your invite email</p>
     <form method="POST" action="/auth">
-      <input type="password" name="password" placeholder="Password" autofocus/>
-      <button type="submit">Enter</button>
+      <input type="password" name="password" placeholder="Beta code" autofocus autocomplete="current-password"/>
+      <button type="submit">Continue</button>
       ${error ? `<p class="error">${error}</p>` : ""}
     </form>
   </div>
@@ -990,7 +990,7 @@ if (SITE_PASSWORD) {
       res.setHeader("Set-Cookie", cookie);
       return res.redirect("/");
     }
-    return res.send(loginHtml("Wrong password — please try again."));
+    return res.send(loginHtml("That code did not work. Double-check your invite email and try again."));
   });
 
   // Gate the frontend — intercept GET / before static middleware serves index.html
@@ -1107,7 +1107,7 @@ function _legalHtml(title, body) {
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>${title} — TravelBoop</title>
-<meta name="description" content="${title} for TravelBoop, a hotel discovery and visual room search beta."/>
+<meta name="description" content="${title} for TravelBoop — a friendly beta for discovering hotels by neighbourhood and real room photos."/>
 <link rel="icon" type="image/svg+xml" href="/favicon.svg"/>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300;400;600&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet"/>
@@ -1137,7 +1137,7 @@ function _legalHtml(title, body) {
   </div>
   <h1>${title}</h1>
   ${body}
-  <p class="muted">This is a public beta. Information here is for orientation only and is not legal or professional advice. Features and policies may change without notice.</p>
+  <p class="muted">TravelBoop is in beta — details here are a simple overview, not legal advice, and we may update them as the product evolves.</p>
   <div class="foot">
     <a href="/privacy">Privacy</a>·<a href="/terms">Terms</a>·<a href="mailto:beta@travelboop.com">Contact</a>
   </div>
@@ -1147,39 +1147,39 @@ function _legalHtml(title, body) {
 }
 app.get("/privacy", (_req, res) => {
   const body = `
-    <p>We take privacy seriously and keep this policy short and concrete for beta users.</p>
-    <h2>What we process</h2>
+    <p>We keep this short: here is what we collect, why, and who helps us run the site.</p>
+    <h2>What we collect</h2>
     <ul>
-      <li><strong>Search &amp; wizard inputs</strong> — city, queries, and preferences you enter to run searches and personalize neighbourhood scoring.</li>
-      <li><strong>Technical data</strong> — standard server logs (e.g. IP, user agent, timestamps) for security and reliability.</li>
-      <li><strong>Optional access gate</strong> — if the site password feature is enabled, an HttpOnly cookie is used only to remember that you passed the gate.</li>
-      <li><strong>Product analytics</strong> — pseudonymous usage events (search ran, hotel viewed, link clicked) via PostHog. We strip URLs of search queries before sending.</li>
-      <li><strong>Error monitoring</strong> — server and browser exceptions via Sentry, with cookies and query strings stripped.</li>
-      <li><strong>Beta feedback</strong> — when you use the in-app feedback form we store your message, optional email, the URL you were on, and your active search.</li>
+      <li><strong>What you type in the app</strong> — city, searches, wizard choices, and feedback you send us. We use this to run your search and tune neighbourhood suggestions.</li>
+      <li><strong>Basic connection info</strong> — like IP address and browser type, to keep the service secure and reliable.</li>
+      <li><strong>A simple “you’re signed in” cookie</strong> — only when we use a beta code on the site. It just remembers that you entered the code; it is not used to track you around the web.</li>
+      <li><strong>Anonymous product stats</strong> — for example that a search ran or a page opened. We never attach your exact search words to those stats.</li>
+      <li><strong>Crash and error reports</strong> — so we can fix bugs. We strip sensitive bits from those reports where we can.</li>
+      <li><strong>Feedback you choose to send</strong> — your message, optional email, the page you were on, and a summary of what you were searching (not a full transcript).</li>
     </ul>
-    <h2>Third parties</h2>
-    <p>Hotel listings, photos, and rates may come from travel data and booking partners (e.g. LiteAPI). AI features may call Google (Gemini) for captions, embeddings, and neighbourhood text. Infrastructure may use Supabase and hosting providers. Analytics and error monitoring use PostHog and Sentry. Transactional emails are sent via Resend. Map tiles are served by Maptiler. Those services process data under their own terms.</p>
-    <h2>Retention &amp; rights</h2>
-    <p>Beta retention policies may evolve. For data questions or removal requests, email <a href="mailto:beta@travelboop.com">beta@travelboop.com</a>. We will respond as promptly as we can for a small team.</p>`;
+    <h2>Partners</h2>
+    <p>Hotel listings, photos, and prices come from our travel data and booking partners. Some features use Google’s AI services. We use trusted vendors for hosting, maps, email, and the anonymous stats and error tools above — each has their own privacy terms.</p>
+    <h2>Your choices</h2>
+    <p>During beta we may adjust how long we keep certain data. To ask a question or request deletion, email <a href="mailto:beta@travelboop.com">beta@travelboop.com</a> — we are a small team and will reply as soon as we can.</p>`;
   res.setHeader("Content-Type", "text/html; charset=utf-8");
   res.setHeader("Cache-Control", "public, max-age=600, s-maxage=3600");
   res.send(_legalHtml("Privacy", body));
 });
 app.get("/terms", (_req, res) => {
   const body = `
-    <p>By using TravelBoop during the public beta, you agree to these terms. If you do not agree, please stop using the service.</p>
-    <h2>Not advice</h2>
-    <p>TravelBoop does not provide legal, financial, or travel advice. Neighbourhood descriptions and match scores are generated or derived for discovery only — they can be incomplete or wrong.</p>
-    <h2>No guarantee</h2>
-    <p>The service is provided "as is" without warranties of any kind. We do not guarantee availability, accuracy of prices, or suitability of any hotel for your trip.</p>
+    <p>By using TravelBoop while we are in beta, you agree to these terms. If you do not agree, please stop using the site.</p>
+    <h2>Not professional advice</h2>
+    <p>TravelBoop is a trip-planning helper, not a lawyer, accountant, or travel agent. Neighbourhood blurbs and match scores are for inspiration — always double-check anything important before you book.</p>
+    <h2>No guarantees</h2>
+    <p>The service is provided “as is.” We do not promise that prices, availability, or any hotel will be right for your trip.</p>
     <h2>Bookings</h2>
-    <p>When you leave TravelBoop to book with a third party, their terms apply. We are not a party to your reservation.</p>
-    <h2>Acceptable use</h2>
-    <p>Do not misuse the product (including scraping, probing, or attempting to overload systems). We may suspend access that harms the beta or other users.</p>
+    <p>When you leave our site to book elsewhere, that site’s rules apply. We are not part of your reservation.</p>
+    <h2>Please play fair</h2>
+    <p>Do not abuse the service — for example by trying to break it, scrape it at huge volume, or ruin the experience for others. We may pause access if we need to protect the beta or other users.</p>
     <h2>Limitation of liability</h2>
-    <p>To the maximum extent permitted by law, TravelBoop and its operators are not liable for indirect or consequential damages arising from use of the beta.</p>
+    <p>To the fullest extent the law allows, TravelBoop and its operators are not responsible for indirect or consequential damages from using the beta.</p>
     <h2>Changes</h2>
-    <p>We may update these terms as the product matures. Continued use after changes means you accept the updated terms.</p>`;
+    <p>We may update these terms as the product grows. If you keep using TravelBoop after an update, that means you accept the new version.</p>`;
   res.setHeader("Content-Type", "text/html; charset=utf-8");
   res.setHeader("Cache-Control", "public, max-age=600, s-maxage=3600");
   res.send(_legalHtml("Terms of service", body));
