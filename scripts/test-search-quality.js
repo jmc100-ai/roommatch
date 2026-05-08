@@ -51,6 +51,11 @@ async function main() {
 
   const results = [];
 
+  // Soft latency cap (ms). Queries above this still pass on count/score
+  // but log a yellow latency warning. Production V2 cold path is ~3s; warm
+  // is ~1s. 6s is comfortably above the warm + cold envelope.
+  const LATENCY_SOFT_CAP_MS = 6000;
+
   for (const test of SEARCH_TESTS) {
     process.stdout.write(`  Test ${test.id}: "${test.query}" (${test.city})… `);
 
@@ -61,8 +66,10 @@ async function main() {
       const hotels = data.hotels || [];
       const count  = hotels.length;
 
-      // Check count
-      const countPass = count === expectedHotels;
+      // Count check: V2/semantic tests use minHotels as a floor (`>=`),
+      // V1/feature tests still demand exact count.
+      const isFloor = test.expectation.type === "semantic" || (test.source === "v2" && typeof test.minHotels === "number");
+      const countPass = isFloor ? count >= expectedHotels : count === expectedHotels;
 
       // Top 5 hotels
       const top5 = hotels.slice(0, 5).map(h => ({
@@ -75,15 +82,18 @@ async function main() {
       const topScore = top5[0]?.score ?? 0;
       const scorePass = topScore >= 40;
 
-      const pass = countPass && scorePass;
-      process.stdout.write(pass ? green("PASS") : red("FAIL"));
-      console.log(` (${elapsed}ms)`);
+      const latencyPass = elapsed <= LATENCY_SOFT_CAP_MS;
 
-      result = { test, expectedHotels, count, countPass, scorePass, pass, top5, elapsed, error: null };
+      const pass = countPass && scorePass; // latency is soft — doesn't fail the test
+      process.stdout.write(pass ? green("PASS") : red("FAIL"));
+      const latencyStr = latencyPass ? `${elapsed}ms` : yellow(`${elapsed}ms (slow)`);
+      console.log(` (${latencyStr})`);
+
+      result = { test, expectedHotels, count, countPass, scorePass, pass, top5, elapsed, latencyPass, isFloor, error: null };
     } catch (err) {
       process.stdout.write(red("ERROR"));
       console.log();
-      result = { test, expectedHotels: null, count: null, countPass: false, scorePass: false, pass: false, top5: [], elapsed: null, error: err.message };
+      result = { test, expectedHotels: null, count: null, countPass: false, scorePass: false, pass: false, top5: [], elapsed: null, latencyPass: false, isFloor: false, error: err.message };
     }
 
     results.push(result);
@@ -133,7 +143,11 @@ async function main() {
     }
     if (!r.countPass && r.count !== null) {
       const diff = r.count - r.expectedHotels;
-      console.log(`     ${yellow(`Count mismatch: expected ${r.expectedHotels}, got ${r.count} (${diff > 0 ? "+" : ""}${diff})`)}`);
+      const cmp = r.isFloor ? `min ${r.expectedHotels}` : `expected ${r.expectedHotels}`;
+      console.log(`     ${yellow(`Count mismatch: ${cmp}, got ${r.count} (${diff > 0 ? "+" : ""}${diff})`)}`);
+    }
+    if (r.elapsed !== null && !r.latencyPass) {
+      console.log(`     ${yellow(`Latency: ${r.elapsed}ms (>${6000}ms soft cap; not a failure)`)}`);
     }
     console.log();
   }

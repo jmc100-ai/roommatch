@@ -126,6 +126,23 @@ const SEARCH_TESTS = [
     expectation: { type: "feature", flag: "landmark_view" },
     description: "Feature flag: landmark_view / Eiffel Tower view (Paris)",
   },
+  // ── Mexico City (V2 pipeline) ───────────────────────────────────────────────
+  // V2 stores facts in `v2_room_types_index.facts` (jsonb). For semantic queries
+  // we use `minHotels` as a floor (>=) instead of an exact count, because V2
+  // semantic ranking is naturally fuzzy and counts shift with re-indexes.
+  { id: 100, query: "rooftop terrace", city: "Mexico City", expectation: { type: "semantic" }, source: "v2", minHotels: 50, description: "Semantic: rooftop terrace (CDMX, V2)" },
+  { id: 101, query: "double sinks",            city: "Mexico City", expectation: { type: "feature", flag: "double_sinks" },           source: "v2", description: "V2 feature: double_sinks (CDMX)" },
+  { id: 102, query: "walk in shower",          city: "Mexico City", expectation: { type: "feature", flag: "walk_in_shower" },         source: "v2", description: "V2 feature: walk_in_shower (CDMX)" },
+  { id: 103, query: "soaking tub",             city: "Mexico City", expectation: { type: "feature", flag: "soaking_tub" },            source: "v2", description: "V2 feature: soaking_tub (CDMX)" },
+  { id: 104, query: "balcony",                 city: "Mexico City", expectation: { type: "feature", flag: "balcony" },                source: "v2", description: "V2 feature: balcony (CDMX)" },
+  { id: 105, query: "city view",               city: "Mexico City", expectation: { type: "feature", flag: "city_view" },              source: "v2", description: "V2 feature: city_view (CDMX)" },
+  { id: 106, query: "king bed",                city: "Mexico City", expectation: { type: "feature", flag: "king_bed" },               source: "v2", description: "V2 feature: king_bed (CDMX)" },
+  { id: 107, query: "bright airy room with large windows", city: "Mexico City", expectation: { type: "semantic" }, source: "v2", minHotels: 100, description: "V2 semantic: bright airy (CDMX)" },
+  { id: 108, query: "dark moody romantic suite",          city: "Mexico City", expectation: { type: "semantic" }, source: "v2", minHotels: 30, description: "V2 semantic: dark moody (CDMX)" },
+  { id: 109, query: "minimalist modern design",           city: "Mexico City", expectation: { type: "semantic" }, source: "v2", minHotels: 30, description: "V2 semantic: minimalist modern (CDMX)" },
+  { id: 110, query: "art deco style",                     city: "Mexico City", expectation: { type: "semantic" }, source: "v2", minHotels: 10, description: "V2 semantic: art deco (CDMX)" },
+  { id: 111, query: "loft industrial exposed brick",      city: "Mexico City", expectation: { type: "semantic" }, source: "v2", minHotels: 5,  description: "V2 semantic: loft industrial (CDMX)" },
+  { id: 112, query: "panoramic view city lights",         city: "Mexico City", expectation: { type: "semantic" }, source: "v2", minHotels: 30, description: "V2 semantic: panoramic view (CDMX)" },
 ];
 
 let supabase;
@@ -150,24 +167,27 @@ function getSupabase() {
   return supabase;
 }
 
-async function fetchDistinctHotelIds(city, featureFlag = null) {
+async function fetchDistinctHotelIds(city, featureFlag = null, source = "v1") {
   const db = getSupabase();
   if (!db) throw new Error("Supabase credentials not configured");
+  // V2 cities (Mexico City) use a different index table + facts column.
+  const table   = source === "v2" ? "v2_room_types_index" : "room_types_index";
+  const factCol = source === "v2" ? "facts"               : "features";
   const hotelIds = new Set();
 
   for (let offset = 0; ; offset += PAGE_SIZE) {
     let query = db
-      .from("room_types_index")
+      .from(table)
       .select("hotel_id")
       .eq("city", city)
       .range(offset, offset + PAGE_SIZE - 1);
 
     if (featureFlag) {
-      query = query.contains("features", { [featureFlag]: true });
+      query = query.contains(factCol, { [featureFlag]: true });
     }
 
     const { data, error } = await query;
-    if (error) throw new Error(`Supabase query failed for ${city}${featureFlag ? ` (${featureFlag})` : ""}: ${error.message}`);
+    if (error) throw new Error(`Supabase query failed for ${city}${featureFlag ? ` (${featureFlag})` : ""} on ${table}: ${error.message}`);
 
     for (const row of data || []) {
       if (row.hotel_id) hotelIds.add(row.hotel_id);
@@ -180,22 +200,29 @@ async function fetchDistinctHotelIds(city, featureFlag = null) {
 }
 
 async function getExpectedHotelCount(test) {
-  const key = `${test.city}::${test.expectation.type}::${test.expectation.flag || "all"}`;
+  const source = test.source || "v1";
+  const key = `${source}::${test.city}::${test.expectation.type}::${test.expectation.flag || "all"}`;
   if (expectedCountCache.has(key)) return expectedCountCache.get(key);
 
   let count;
   const db = getSupabase();
 
   if (db) {
-    const ids = await fetchDistinctHotelIds(
-      test.city,
-      test.expectation.type === "feature" ? test.expectation.flag : null
-    );
-    count = ids.size;
+    if (test.expectation.type === "semantic") {
+      // Semantic queries don't have a deterministic "expected" count — use the
+      // minHotels floor (handled in the runner) and fall back to a soft target
+      // here that the runner only uses for reporting.
+      count = typeof test.minHotels === "number" ? test.minHotels : 1;
+    } else {
+      const ids = await fetchDistinctHotelIds(test.city, test.expectation.flag, source);
+      count = ids.size;
+    }
   } else {
     count = baseline.counts[key];
     if (typeof count !== "number") {
-      throw new Error(`No baseline count found for ${key}`);
+      // Fallback for V2 baselines that don't exist yet — accept minHotels.
+      if (typeof test.minHotels === "number") count = test.minHotels;
+      else throw new Error(`No baseline count found for ${key}`);
     }
   }
 

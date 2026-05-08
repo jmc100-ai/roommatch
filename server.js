@@ -11,6 +11,83 @@ const fs      = require("fs");
 // Load .env from the repo root (next to server.js), not process.cwd() — IDEs/tasks
 // often start Node from another folder, which breaks local env on localhost.
 require("dotenv").config({ path: path.join(__dirname, ".env") });
+
+// ── Sentry (server) ───────────────────────────────────────────────────────────
+// Init must happen before other requires that throw, so errors during boot are
+// captured. Activates only when SENTRY_DSN_SERVER is set; otherwise no-ops.
+const Sentry = require("@sentry/node");
+const SENTRY_RELEASE = process.env.RENDER_GIT_COMMIT
+  ? `roommatch@${String(process.env.RENDER_GIT_COMMIT).slice(0, 7)}`
+  : "roommatch@local";
+if (process.env.SENTRY_DSN_SERVER) {
+  // Strip URL query/fragment + auth headers from breadcrumbs and events so we
+  // never ship search queries or cookies into Sentry.
+  const stripPii = (val) => {
+    if (val == null) return val;
+    if (typeof val !== "string") return val;
+    return val.split("?")[0].split("#")[0];
+  };
+  Sentry.init({
+    dsn: process.env.SENTRY_DSN_SERVER,
+    environment: process.env.SENTRY_ENV || "production",
+    release: SENTRY_RELEASE,
+    tracesSampleRate: 0,
+    integrations: [Sentry.expressIntegration()],
+    beforeSend(event) {
+      try {
+        if (event.request) {
+          if (event.request.url)         event.request.url         = stripPii(event.request.url);
+          if (event.request.query_string) event.request.query_string = "";
+          if (event.request.headers) {
+            delete event.request.headers.cookie;
+            delete event.request.headers.authorization;
+            delete event.request.headers["x-api-key"];
+          }
+        }
+      } catch (_) {}
+      return event;
+    },
+    beforeBreadcrumb(breadcrumb) {
+      try {
+        if (breadcrumb?.data?.url) breadcrumb.data.url = stripPii(breadcrumb.data.url);
+      } catch (_) {}
+      return breadcrumb;
+    },
+  });
+  console.log(`[sentry] enabled (${process.env.SENTRY_ENV || "production"}, ${SENTRY_RELEASE})`);
+}
+
+// ── PostHog (server) ──────────────────────────────────────────────────────────
+// Mirrors a small set of high-signal events server-side so we still see them
+// when ad-blockers strip the browser SDK. Activates only when POSTHOG_API_KEY.
+const { PostHog: _PostHog } = require("posthog-node");
+let posthog = null;
+if (process.env.POSTHOG_API_KEY) {
+  posthog = new _PostHog(process.env.POSTHOG_API_KEY, {
+    host: process.env.POSTHOG_HOST || "https://us.i.posthog.com",
+    flushAt: 20,
+    flushInterval: 10000,
+  });
+  console.log(`[posthog] server enabled (host=${process.env.POSTHOG_HOST || "us.i.posthog.com"})`);
+}
+function trackServer(distinctId, event, properties) {
+  if (!posthog) return;
+  try {
+    posthog.capture({
+      distinctId: distinctId || "anon",
+      event,
+      properties: {
+        ...(properties || {}),
+        $lib: "roommatch-server",
+        release: SENTRY_RELEASE,
+        env: process.env.SENTRY_ENV || "production",
+      },
+    });
+  } catch (e) {
+    console.warn("[posthog] capture failed:", e.message);
+  }
+}
+
 const { createClient } = require("@supabase/supabase-js");
 
 // Lazy-load heavy pipeline modules so we bind PORT quickly (Render "port scan" / health checks).
@@ -127,6 +204,10 @@ function hotelsCacheFor(city) {
 }
 
 const app         = express();
+// Render terminates TLS at its proxy and forwards X-Forwarded-* headers; this
+// makes req.ip / cookie Secure detection / rate limiting key off the real
+// client IP instead of the proxy.
+app.set("trust proxy", 1);
 // Use production key if set, fall back to sandbox
 const LITEAPI_KEY = process.env.LITEAPI_PROD_KEY || process.env.LITEAPI_KEY || "";
 const IS_PROD     = !!process.env.LITEAPI_PROD_KEY;
@@ -143,6 +224,15 @@ app.head("/api/health", (_, res) => {
 app.get("/api/public-config", (_req, res) => {
   res.json({
     clipSearchEnabled: String(process.env.CLIP_SEARCH_ENABLED || "").toLowerCase() === "true",
+    // Telemetry — these are public-by-design (DSNs are safe to expose; PostHog
+    // project keys are public).
+    sentryDsn:        process.env.SENTRY_DSN_CLIENT || "",
+    posthogKey:       process.env.POSTHOG_PROJECT_KEY || "",
+    posthogHost:      process.env.POSTHOG_HOST || "https://us.i.posthog.com",
+    // Operational toggles
+    betaBanner:       process.env.BETA_BANNER || "",
+    release:          SENTRY_RELEASE,
+    env:              process.env.SENTRY_ENV || "production",
   });
 });
 
@@ -775,8 +865,92 @@ async function liteGet(path) {
   return { ok: r.ok, status: r.status, data: await r.json() };
 }
 
-app.use(cors({ origin: "*" }));
-app.use(express.json());
+// ── Security headers (helmet) ─────────────────────────────────────────────────
+// Skip CSP for the beta — we still inline-set window._WL_BASE_URL etc. and
+// pull in third-party scripts (PostHog, Sentry CDN, MapLibre); writing a
+// correct CSP is its own ticket. The other helmet defaults (HSTS,
+// frameguard, noSniff, etc.) are safe for our setup.
+const helmet = require("helmet");
+app.use(helmet({
+  contentSecurityPolicy: false,
+  crossOriginEmbedderPolicy: false,
+  crossOriginResourcePolicy: { policy: "cross-origin" },
+}));
+
+// ── CORS allowlist ────────────────────────────────────────────────────────────
+// Was previously `origin: "*"` which allowed any site to hit our API. Restrict
+// to known origins; add `RENDER_EXTERNAL_URL` (helps preview deploys) and
+// localhost dev. The `null` origin (curl, server-side, Same-origin POST) is
+// always allowed because cors() passes through requests with no Origin header.
+const _allowedOrigins = new Set([
+  "https://www.travelboop.com",
+  "https://travelboop.com",
+  "https://roommatch-1fg5.onrender.com",
+  "http://localhost:3000",
+  "http://127.0.0.1:3000",
+]);
+if (process.env.RENDER_EXTERNAL_URL) _allowedOrigins.add(process.env.RENDER_EXTERNAL_URL.replace(/\/$/, ""));
+app.use(cors({
+  origin(origin, cb) {
+    if (!origin) return cb(null, true);
+    if (_allowedOrigins.has(origin)) return cb(null, true);
+    return cb(null, false);
+  },
+  credentials: true,
+}));
+app.use(express.json({ limit: "256kb" }));
+
+// ── Rate limiting ─────────────────────────────────────────────────────────────
+// Protects expensive endpoints from accidental floods (or a bad actor inside
+// the beta). Health + public-config are explicitly skipped so monitors and the
+// SPA's first-paint config fetch are never throttled.
+const rateLimit = require("express-rate-limit");
+const RL_SKIP = new Set(["/api/health", "/api/config", "/api/public-config"]);
+function rlHandler(req, res /*, next, options */) {
+  res.status(429).json({
+    error: "rate_limited",
+    detail: "Too many requests. Slow down and try again shortly.",
+  });
+}
+const _rlOpts = { standardHeaders: true, legacyHeaders: false, handler: rlHandler, skip: (req) => RL_SKIP.has(req.path || "") };
+const _rlSearch = rateLimit({ ..._rlOpts, windowMs: 60_000, max: 60 });   // /api/vsearch
+const _rlRates  = rateLimit({ ..._rlOpts, windowMs: 60_000, max: 30 });   // /api/rates
+const _rlMeta   = rateLimit({ ..._rlOpts, windowMs: 60_000, max: 90 });   // /api/hotels-meta
+const _rlAdmin  = rateLimit({ ..._rlOpts, windowMs: 60_000, max: 10 });   // /api/index-* + backfill
+const _rlGeneric = rateLimit({ ..._rlOpts, windowMs: 60_000, max: 240 }); // everything else /api/*
+app.use("/api/vsearch",      _rlSearch);
+app.use("/api/rates",        _rlRates);
+app.use("/api/hotels-meta",  _rlMeta);
+app.use("/api/index-city",   _rlAdmin);
+app.use("/api/index-cancel", _rlAdmin);
+app.use(/^\/api\/v2\//,      _rlGeneric);
+app.use(/^\/api\/backfill-/, _rlAdmin);
+app.use(/^\/api\//,          _rlGeneric);
+
+// ── API beta gate ─────────────────────────────────────────────────────────────
+// When SITE_PASSWORD is set (closed beta), every /api/* request must carry the
+// rm_gate cookie set by /auth — otherwise return 401 JSON. INDEX_SECRET in the
+// body or `x-index-secret` header bypasses (admin/scripts). A small allowlist
+// keeps health checks, the public config endpoint, and unauth'd helpers usable
+// by monitors and the first paint.
+const API_GATE_ALLOWLIST = new Set([
+  "/api/health",
+  "/api/config",
+  "/api/public-config",
+]);
+function _apiBetaGate(req, res, next) {
+  if (!SITE_PASSWORD) return next();
+  if (req.method === "OPTIONS") return next();
+  const p = req.path || "";
+  if (!p.startsWith("/api/")) return next();
+  if (API_GATE_ALLOWLIST.has(p)) return next();
+  const cookies = parseCookies(req.headers.cookie);
+  if (cookies.rm_gate === SITE_PASSWORD_HASH) return next();
+  const sec = req.body?.secret || req.headers["x-index-secret"] || req.query.secret;
+  if (sec && sec === process.env.INDEX_SECRET) return next();
+  return res.status(401).json({ error: "beta_gate_required" });
+}
+app.use(_apiBetaGate);
 
 /** Indexable marketing pages + crawler helpers — do not send global noindex. */
 const MARKETING_HTML = {
@@ -787,6 +961,7 @@ const MARKETING_HTML = {
 function isIndexablePublicPath(p) {
   if (!p) return false;
   if (p === "/sitemap.xml" || p === "/robots.txt") return true;
+  if (p === "/privacy" || p === "/terms") return true;
   if (MARKETING_HTML[p]) return true;
   if (p.endsWith("/") && MARKETING_HTML[p.slice(0, -1)]) return true;
   return false;
@@ -805,8 +980,14 @@ if (SITE_PASSWORD) {
       .update((req.body.password || "").trim() + "rm-salt-2026")
       .digest("hex");
     if (entered === SITE_PASSWORD_HASH) {
-      res.setHeader("Set-Cookie",
-        `rm_gate=${SITE_PASSWORD_HASH}; Max-Age=2592000; Path=/; HttpOnly; SameSite=Strict`);
+      // Secure flag: include only when we're actually behind HTTPS so localhost
+      // sessions aren't silently rejected by Set-Cookie. SameSite=Lax (not
+      // Strict) so the redirect from /auth → / and any same-site nav from
+      // marketing pages preserves the cookie. HttpOnly so the cookie is not
+      // readable from JS (defence in depth — the value is a hash anyway).
+      const isHttps = ((req.headers["x-forwarded-proto"] || req.protocol || "").split(",")[0] || "").trim() === "https";
+      const cookie = `rm_gate=${SITE_PASSWORD_HASH}; Max-Age=2592000; Path=/; HttpOnly; SameSite=Lax${isHttps ? "; Secure" : ""}`;
+      res.setHeader("Set-Cookie", cookie);
       return res.redirect("/");
     }
     return res.send(loginHtml("Wrong password — please try again."));
@@ -855,9 +1036,21 @@ function serveAppHtml(res) {
   const safe = (s) => String(s || "").replace(/[\\"']/g, "");
   const wl  = safe(_wlBaseUrlFromEnv());
   const mt  = safe(_maptilerKeyFromEnv());
+  const sd  = safe(process.env.SENTRY_DSN_CLIENT || "");
+  const phk = safe(process.env.POSTHOG_PROJECT_KEY || "");
+  const phh = safe(process.env.POSTHOG_HOST || "https://us.i.posthog.com");
+  const rel = safe(SENTRY_RELEASE);
+  const env = safe(process.env.SENTRY_ENV || "production");
+  const bb  = safe(process.env.BETA_BANNER || "");
   const html = _readIndexHtml()
     .replace(/__WL_BASE_URL__/g, wl)
-    .replace(/__MAPTILER_KEY__/g, mt);
+    .replace(/__MAPTILER_KEY__/g, mt)
+    .replace(/__SENTRY_DSN__/g, sd)
+    .replace(/__POSTHOG_KEY__/g, phk)
+    .replace(/__POSTHOG_HOST__/g, phh)
+    .replace(/__RELEASE__/g, rel)
+    .replace(/__ENV__/g, env)
+    .replace(/__BETA_BANNER__/g, bb);
   res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
   res.setHeader("Pragma", "no-cache");
   res.setHeader("Expires", "0");
@@ -903,11 +1096,104 @@ Object.entries(MARKETING_HTML).forEach(([route, file]) => {
   app.get(`${route}/`, (req, res) => res.redirect(301, route));
 });
 
+// ── Standalone legal pages ───────────────────────────────────────────────────
+// Self-contained HTML so they're publicly accessible (don't pass beta gate),
+// indexable by crawlers, and shareable as direct URLs. Copy mirrors the
+// in-app overlay versions in client/app.js getStaticPageContent().
+function _legalHtml(title, body) {
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>${title} — TravelBoop</title>
+<meta name="description" content="${title} for TravelBoop, a hotel discovery and visual room search beta."/>
+<link rel="icon" type="image/svg+xml" href="/favicon.svg"/>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300;400;600&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet"/>
+<style>
+  *,*::before,*::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background:#0c0c0e; color:#e8e4dc; font-family:'DM Sans',sans-serif; line-height:1.65; padding:48px 20px 80px; }
+  .wrap { max-width:720px; margin:0 auto; }
+  .top { display:flex; justify-content:space-between; align-items:center; margin-bottom:32px; padding-bottom:16px; border-bottom:1px solid rgba(255,255,255,0.07); }
+  .brand { font-family:'Cormorant Garamond',serif; font-size:22px; font-weight:300; letter-spacing:.05em; color:#c9a96e; text-decoration:none; }
+  .home { color:rgba(232,228,220,0.55); font-size:13px; text-decoration:none; }
+  .home:hover { color:#c9a96e; }
+  h1 { font-family:'Cormorant Garamond',serif; font-size:42px; font-weight:300; letter-spacing:.03em; color:#c9a96e; margin-bottom:24px; }
+  h2 { font-family:'Cormorant Garamond',serif; font-size:22px; font-weight:400; color:#e8d5b0; margin-top:28px; margin-bottom:10px; }
+  p, li { font-size:15px; color:rgba(232,228,220,0.85); margin-bottom:12px; }
+  ul { padding-left:22px; margin-bottom:14px; }
+  a { color:#c9a96e; }
+  .muted { color:rgba(232,228,220,0.55); font-size:13px; margin-top:32px; padding-top:16px; border-top:1px solid rgba(255,255,255,0.05); }
+  .foot { margin-top:48px; font-size:12px; color:rgba(232,228,220,0.45); text-align:center; }
+  .foot a { color:rgba(232,228,220,0.7); text-decoration:none; margin:0 8px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="top">
+    <a class="brand" href="/">TravelBoop</a>
+    <a class="home" href="/">← Home</a>
+  </div>
+  <h1>${title}</h1>
+  ${body}
+  <p class="muted">This is a public beta. Information here is for orientation only and is not legal or professional advice. Features and policies may change without notice.</p>
+  <div class="foot">
+    <a href="/privacy">Privacy</a>·<a href="/terms">Terms</a>·<a href="mailto:beta@travelboop.com">Contact</a>
+  </div>
+</div>
+</body>
+</html>`;
+}
+app.get("/privacy", (_req, res) => {
+  const body = `
+    <p>We take privacy seriously and keep this policy short and concrete for beta users.</p>
+    <h2>What we process</h2>
+    <ul>
+      <li><strong>Search &amp; wizard inputs</strong> — city, queries, and preferences you enter to run searches and personalize neighbourhood scoring.</li>
+      <li><strong>Technical data</strong> — standard server logs (e.g. IP, user agent, timestamps) for security and reliability.</li>
+      <li><strong>Optional access gate</strong> — if the site password feature is enabled, an HttpOnly cookie is used only to remember that you passed the gate.</li>
+      <li><strong>Product analytics</strong> — pseudonymous usage events (search ran, hotel viewed, link clicked) via PostHog. We strip URLs of search queries before sending.</li>
+      <li><strong>Error monitoring</strong> — server and browser exceptions via Sentry, with cookies and query strings stripped.</li>
+      <li><strong>Beta feedback</strong> — when you use the in-app feedback form we store your message, optional email, the URL you were on, and your active search.</li>
+    </ul>
+    <h2>Third parties</h2>
+    <p>Hotel listings, photos, and rates may come from travel data and booking partners (e.g. LiteAPI). AI features may call Google (Gemini) for captions, embeddings, and neighbourhood text. Infrastructure may use Supabase and hosting providers. Analytics and error monitoring use PostHog and Sentry. Transactional emails are sent via Resend. Map tiles are served by Maptiler. Those services process data under their own terms.</p>
+    <h2>Retention &amp; rights</h2>
+    <p>Beta retention policies may evolve. For data questions or removal requests, email <a href="mailto:beta@travelboop.com">beta@travelboop.com</a>. We will respond as promptly as we can for a small team.</p>`;
+  res.setHeader("Content-Type", "text/html; charset=utf-8");
+  res.setHeader("Cache-Control", "public, max-age=600, s-maxage=3600");
+  res.send(_legalHtml("Privacy", body));
+});
+app.get("/terms", (_req, res) => {
+  const body = `
+    <p>By using TravelBoop during the public beta, you agree to these terms. If you do not agree, please stop using the service.</p>
+    <h2>Not advice</h2>
+    <p>TravelBoop does not provide legal, financial, or travel advice. Neighbourhood descriptions and match scores are generated or derived for discovery only — they can be incomplete or wrong.</p>
+    <h2>No guarantee</h2>
+    <p>The service is provided "as is" without warranties of any kind. We do not guarantee availability, accuracy of prices, or suitability of any hotel for your trip.</p>
+    <h2>Bookings</h2>
+    <p>When you leave TravelBoop to book with a third party, their terms apply. We are not a party to your reservation.</p>
+    <h2>Acceptable use</h2>
+    <p>Do not misuse the product (including scraping, probing, or attempting to overload systems). We may suspend access that harms the beta or other users.</p>
+    <h2>Limitation of liability</h2>
+    <p>To the maximum extent permitted by law, TravelBoop and its operators are not liable for indirect or consequential damages arising from use of the beta.</p>
+    <h2>Changes</h2>
+    <p>We may update these terms as the product matures. Continued use after changes means you accept the updated terms.</p>`;
+  res.setHeader("Content-Type", "text/html; charset=utf-8");
+  res.setHeader("Cache-Control", "public, max-age=600, s-maxage=3600");
+  res.send(_legalHtml("Terms of service", body));
+});
+
 app.get("/sitemap.xml", (req, res) => {
   const o = marketingOrigin(req);
-  const urls = Object.keys(MARKETING_HTML).map(
-    (p) => `  <url><loc>${o}${p}</loc><changefreq>weekly</changefreq><priority>0.85</priority></url>`
-  );
+  const urls = [
+    ...Object.keys(MARKETING_HTML).map(
+      (p) => `  <url><loc>${o}${p}</loc><changefreq>weekly</changefreq><priority>0.85</priority></url>`
+    ),
+    `  <url><loc>${o}/privacy</loc><changefreq>monthly</changefreq><priority>0.4</priority></url>`,
+    `  <url><loc>${o}/terms</loc><changefreq>monthly</changefreq><priority>0.4</priority></url>`,
+  ];
   const body = `<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
 ${urls.join("\n")}
@@ -4027,11 +4313,160 @@ app.post("/api/backfill-property-types", async (req, res) => {
   }
 });
 
+// ── Beta endpoints ────────────────────────────────────────────────────────────
+// Resend client (lazy — only constructed if RESEND_API_KEY set)
+let _resend = null;
+function _getResend() {
+  if (_resend) return _resend;
+  if (!process.env.RESEND_API_KEY) return null;
+  try {
+    const { Resend } = require("resend");
+    _resend = new Resend(process.env.RESEND_API_KEY);
+    return _resend;
+  } catch (_) {
+    return null;
+  }
+}
+
+function _clientIp(req) {
+  const xff = (req.headers["x-forwarded-for"] || "").split(",")[0].trim();
+  return xff || req.ip || req.connection?.remoteAddress || "";
+}
+
+// In-app feedback form submissions. Required: { message }. Optional: { distinctId, email, sentiment, currentUrl, currentSearch }.
+// Writes to beta_feedback (Supabase). If SLACK_FEEDBACK_WEBHOOK is set we also
+// fan out a brief preview to Slack so the team sees feedback in real time.
+app.post("/api/feedback", async (req, res) => {
+  try {
+    const b = req.body || {};
+    const message = String(b.message || "").trim().slice(0, 4000);
+    if (!message) return res.status(400).json({ error: "message_required" });
+    const row = {
+      distinct_id:    String(b.distinctId || b.distinct_id || "").slice(0, 64) || null,
+      user_email:     b.email ? String(b.email).trim().toLowerCase().slice(0, 200) : null,
+      sentiment:      Number.isInteger(b.sentiment) && b.sentiment >= 1 && b.sentiment <= 5 ? b.sentiment : null,
+      message,
+      current_url:    String(b.currentUrl || b.current_url || "").slice(0, 500) || null,
+      current_search: String(b.currentSearch || b.current_search || "").slice(0, 500) || null,
+      user_agent:     String(req.headers["user-agent"] || "").slice(0, 300) || null,
+      ip_addr:        _clientIp(req).slice(0, 45) || null,
+    };
+    if (supabaseAdmin) {
+      const { error } = await supabaseAdmin.from("beta_feedback").insert(row);
+      if (error) {
+        console.error("[feedback] insert failed:", error.message);
+        return res.status(500).json({ error: "db_insert_failed" });
+      }
+    } else {
+      console.warn("[feedback] no supabaseAdmin; logging only:", row);
+    }
+    // Fire-and-forget Slack mirror
+    if (process.env.SLACK_FEEDBACK_WEBHOOK) {
+      const slackPayload = {
+        text: `*New beta feedback* ${row.sentiment ? `(${row.sentiment}/5)` : ""}\n` +
+              `> ${message.replace(/\n/g, "\n> ").slice(0, 500)}` +
+              (row.user_email ? `\n_email:_ ${row.user_email}` : "") +
+              (row.current_url ? `\n_url:_ ${row.current_url}` : "") +
+              (row.current_search ? `\n_search:_ ${row.current_search}` : ""),
+      };
+      fetch(process.env.SLACK_FEEDBACK_WEBHOOK, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(slackPayload),
+      }).catch((e) => console.warn("[feedback] slack post failed:", e.message));
+    }
+    trackServer(row.distinct_id, "feedback_submitted_server", {
+      sentiment: row.sentiment,
+      has_email: !!row.user_email,
+      message_length: message.length,
+    });
+    res.json({ ok: true });
+  } catch (e) {
+    console.error("[feedback] error:", e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// One-time beta consent acceptance ledger. Body: { distinctId, email?, policyVersion? }.
+app.post("/api/beta-consent", async (req, res) => {
+  try {
+    const b = req.body || {};
+    const distinctId = String(b.distinctId || b.distinct_id || "").slice(0, 64);
+    if (!distinctId) return res.status(400).json({ error: "distinct_id_required" });
+    const row = {
+      distinct_id:    distinctId,
+      user_email:     b.email ? String(b.email).trim().toLowerCase().slice(0, 200) : null,
+      ip_addr:        _clientIp(req).slice(0, 45) || null,
+      user_agent:     String(req.headers["user-agent"] || "").slice(0, 300) || null,
+      policy_version: String(b.policyVersion || "v1-2026-05-07").slice(0, 40),
+    };
+    if (supabaseAdmin) {
+      // Idempotent — primary key is distinct_id
+      const { error } = await supabaseAdmin.from("beta_consents").upsert(row, { onConflict: "distinct_id" });
+      if (error) {
+        console.error("[beta-consent] upsert failed:", error.message);
+        return res.status(500).json({ error: "db_upsert_failed" });
+      }
+    }
+    trackServer(distinctId, "beta_consent_accepted_server", { policy_version: row.policy_version });
+    res.json({ ok: true });
+  } catch (e) {
+    console.error("[beta-consent] error:", e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Generic server-side event mirror — used by the client whenever it wants the
+// event to survive ad-blockers / private browsing. Body: { distinctId, event, properties }.
+app.post("/api/track", (req, res) => {
+  try {
+    const b = req.body || {};
+    const ev = String(b.event || "").slice(0, 64);
+    if (!ev) return res.status(400).json({ error: "event_required" });
+    trackServer(String(b.distinctId || "").slice(0, 64), ev, b.properties || {});
+    res.json({ ok: true });
+  } catch (e) {
+    console.error("[track] error:", e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Smoke-test Sentry wiring. Hit it with curl/browser; should appear in Sentry
+// within ~30 sec. Gated behind INDEX_SECRET so it can't be abused as a noise tap.
+app.get("/api/debug-sentry", (req, res) => {
+  const secret = req.query.secret || req.headers["x-index-secret"];
+  if (process.env.INDEX_SECRET && secret !== process.env.INDEX_SECRET) {
+    return res.status(401).json({ error: "secret_required" });
+  }
+  setTimeout(() => {
+    throw new Error("debug-sentry: intentional test exception");
+  }, 0);
+  res.json({ ok: true, note: "thrown async; check Sentry within ~30s" });
+});
+
+// Sentry must be installed AFTER all routes but BEFORE the catch-all + your
+// own error handlers. setupExpressErrorHandler patches the Express app to
+// auto-capture unhandled errors thrown in route handlers.
+if (process.env.SENTRY_DSN_SERVER) {
+  Sentry.setupExpressErrorHandler(app);
+}
+
 app.get("*", (_req, res) => serveAppHtml(res));
 
 // ── Graceful shutdown: fix any cities stuck at "indexing" when Render deploys ──
 async function gracefulShutdown(signal) {
   console.log(`[shutdown] ${signal} received — cleaning up stuck indexing jobs`);
+  // Flush telemetry first so we don't lose final breadcrumbs / events.
+  try {
+    if (posthog) await posthog.shutdown();
+  } catch (e) {
+    console.warn("[shutdown] posthog flush failed:", e.message);
+  }
+  try {
+    if (process.env.SENTRY_DSN_SERVER) await Sentry.close(2000);
+  } catch (e) {
+    console.warn("[shutdown] sentry close failed:", e.message);
+  }
   if (!supabaseAdmin) { process.exit(0); return; }
   try {
     // Find any cities still marked as indexing

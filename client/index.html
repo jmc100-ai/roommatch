@@ -6,11 +6,87 @@
   <meta name="robots" content="noindex, nofollow" />
   <title>TravelBoop — Find your vibe</title>
   <meta name="description" content="TravelBoop: neighbourhood picks, AI visual search on real hotel rooms — your Boop when vibe and space line up." />
+  <!-- Open Graph / link unfurls (Twitter, Slack, iMessage, Discord, FB, LinkedIn). -->
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="TravelBoop" />
+  <meta property="og:title" content="TravelBoop — Find your vibe" />
+  <meta property="og:description" content="Neighbourhood picks + AI visual search on real hotel rooms. Find your travel Boop." />
+  <meta property="og:url" content="https://www.travelboop.com" />
+  <meta property="og:image" content="https://www.travelboop.com/og-image.png" />
+  <meta property="og:image:width" content="1200" />
+  <meta property="og:image:height" content="630" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="TravelBoop — Find your vibe" />
+  <meta name="twitter:description" content="Neighbourhood picks + AI visual search on real hotel rooms." />
+  <meta name="twitter:image" content="https://www.travelboop.com/og-image.png" />
+  <meta name="theme-color" content="#0c0c0e" />
   <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-  <!-- Server-injected client config (WL base URL, Maptiler key, etc.) — must run BEFORE app.js so buildBookUrl() / nbhd map have these on first render. -->
+  <link rel="apple-touch-icon" href="/favicon.svg" />
+  <link rel="mask-icon" href="/favicon.svg" color="#c9a96e" />
+  <!-- Server-injected client config (WL base URL, Maptiler key, telemetry, beta banner) — must run BEFORE app.js so buildBookUrl() / nbhd map / Sentry / PostHog have these on first render. -->
   <script>
     window._WL_BASE_URL  = "__WL_BASE_URL__";
     window._MAPTILER_KEY = "__MAPTILER_KEY__";
+    window._SENTRY_DSN   = "__SENTRY_DSN__";
+    window._POSTHOG_KEY  = "__POSTHOG_KEY__";
+    window._POSTHOG_HOST = "__POSTHOG_HOST__";
+    window._RELEASE      = "__RELEASE__";
+    window._ENV          = "__ENV__";
+    window._BETA_BANNER  = "__BETA_BANNER__";
+  </script>
+  <!-- Sentry browser SDK (CDN). Loaded only if a DSN was injected — otherwise the
+       script tag still exists but init() is skipped. PII stripped via beforeSend. -->
+  <script>
+    (function () {
+      if (!window._SENTRY_DSN || /^__/.test(window._SENTRY_DSN)) return;
+      var s = document.createElement("script");
+      s.src = "https://browser.sentry-cdn.com/10.52.0/bundle.tracing.min.js";
+      s.crossOrigin = "anonymous";
+      s.onload = function () {
+        if (!window.Sentry) return;
+        window.Sentry.init({
+          dsn: window._SENTRY_DSN,
+          environment: window._ENV || "production",
+          release: window._RELEASE || undefined,
+          tracesSampleRate: 0,
+          beforeSend: function (event) {
+            try {
+              if (event.request) {
+                if (event.request.url)          event.request.url          = String(event.request.url).split("?")[0].split("#")[0];
+                if (event.request.query_string) event.request.query_string = "";
+              }
+            } catch (_) {}
+            return event;
+          },
+        });
+      };
+      document.head.appendChild(s);
+    })();
+  </script>
+  <!-- PostHog snippet (loaded only when a key is present). -->
+  <script>
+    (function () {
+      if (!window._POSTHOG_KEY || /^__/.test(window._POSTHOG_KEY)) return;
+      !function(t,e){var o,n,p,r;e.__SV||(window.posthog=e,e._i=[],e.init=function(i,s,a){function g(t,e){var o=e.split(".");2==o.length&&(t=t[o[0]],e=o[1]),t[e]=function(){t.push([e].concat(Array.prototype.slice.call(arguments,0)))}}(p=t.createElement("script")).type="text/javascript",p.async=!0,p.src=s.api_host+"/static/array.js",(r=t.getElementsByTagName("script")[0]).parentNode.insertBefore(p,r);var u=e;for(void 0!==a?u=e[a]=[]:a="posthog",u.people=u.people||[],u.toString=function(t){var e="posthog";return"posthog"!==a&&(e+="."+a),t||(e+=" (stub)"),e},u.people.toString=function(){return u.toString(1)+".people (stub)"},o="capture identify alias people.set people.set_once set_config register register_once unregister opt_out_capturing has_opted_out_capturing opt_in_capturing reset isFeatureEnabled onFeatureFlags getFeatureFlag getFeatureFlagPayload reloadFeatureFlags group updateEarlyAccessFeatureEnrollment getEarlyAccessFeatures getActiveMatchingSurveys getSurveys".split(" "),n=0;n<o.length;n++)g(u,o[n]);e._i.push([i,s,a])},e.__SV=1)}(document,window.posthog||[]);
+      window.posthog.init(window._POSTHOG_KEY, {
+        api_host: window._POSTHOG_HOST || "https://us.i.posthog.com",
+        capture_pageview: false, // we fire pageviews manually so we can scrub queries
+        autocapture: false,
+        sanitize_properties: function (props /*, event */) {
+          // Strip query/fragment from any URL-shaped properties so search terms
+          // never leave the browser as PostHog properties.
+          try {
+            for (var k in props) {
+              var v = props[k];
+              if (typeof v === "string" && /^https?:\/\//.test(v)) {
+                props[k] = v.split("?")[0].split("#")[0];
+              }
+            }
+          } catch (_) {}
+          return props;
+        },
+      });
+    })();
   </script>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -18,6 +94,60 @@
   <link rel="stylesheet" href="/styles.css">
 </head>
 <body>
+
+<!-- ─── Beta banner (sticky top; shows only when window._BETA_BANNER is set and not dismissed) ─── -->
+<div id="beta-banner" class="beta-banner" hidden>
+  <span class="beta-banner-text" id="beta-banner-text"></span>
+  <button type="button" class="beta-banner-close" onclick="dismissBetaBanner()" aria-label="Dismiss">&times;</button>
+</div>
+
+<!-- ─── Beta feedback FAB ─────────────────────────────────────── -->
+<button type="button" id="beta-feedback-fab" class="beta-fab" onclick="openBetaFeedback()" aria-label="Send feedback" hidden>
+  <span class="beta-fab-icon" aria-hidden="true">💬</span>
+  <span class="beta-fab-label">Feedback</span>
+</button>
+
+<!-- ─── Beta feedback modal ───────────────────────────────────── -->
+<div id="beta-feedback-modal" class="beta-modal" role="dialog" aria-modal="true" aria-labelledby="bf-title" hidden>
+  <div class="beta-modal-veil" onclick="closeBetaFeedback()"></div>
+  <div class="beta-modal-card">
+    <button type="button" class="beta-modal-close" onclick="closeBetaFeedback()" aria-label="Close">&times;</button>
+    <h2 id="bf-title" class="beta-modal-title">Tell us what you think</h2>
+    <p class="beta-modal-sub">Anything broken, confusing, or just delightful — we read every message.</p>
+    <div class="beta-sentiment" role="radiogroup" aria-label="How was your experience?">
+      <button type="button" class="beta-sent-btn" data-sent="1" onclick="setBetaSentiment(1)" aria-label="Bad">😖</button>
+      <button type="button" class="beta-sent-btn" data-sent="2" onclick="setBetaSentiment(2)" aria-label="Meh">😕</button>
+      <button type="button" class="beta-sent-btn" data-sent="3" onclick="setBetaSentiment(3)" aria-label="OK">🙂</button>
+      <button type="button" class="beta-sent-btn" data-sent="4" onclick="setBetaSentiment(4)" aria-label="Good">😄</button>
+      <button type="button" class="beta-sent-btn" data-sent="5" onclick="setBetaSentiment(5)" aria-label="Great">🤩</button>
+    </div>
+    <textarea id="bf-message" class="beta-modal-textarea" placeholder="What worked, what didn't, what you'd change…" maxlength="4000" rows="5"></textarea>
+    <input id="bf-email" type="email" class="beta-modal-input" placeholder="Email (optional, so we can follow up)" maxlength="200">
+    <div class="beta-modal-actions">
+      <button type="button" class="btn-sec" onclick="closeBetaFeedback()">Cancel</button>
+      <button type="button" class="btn-pri" id="bf-submit" onclick="submitBetaFeedback()">Send feedback →</button>
+    </div>
+    <p class="beta-modal-status" id="bf-status" aria-live="polite"></p>
+  </div>
+</div>
+
+<!-- ─── Beta consent modal (shown once after first gate pass) ───── -->
+<div id="beta-consent-modal" class="beta-modal" role="dialog" aria-modal="true" aria-labelledby="bc-title" hidden>
+  <div class="beta-modal-veil"></div>
+  <div class="beta-modal-card">
+    <h2 id="bc-title" class="beta-modal-title">Welcome to TravelBoop beta</h2>
+    <p class="beta-modal-sub">A quick heads-up before you explore:</p>
+    <ul class="beta-consent-list">
+      <li>This is a closed beta — features, data, and design will change.</li>
+      <li>We collect pseudonymous usage events (PostHog) and error reports (Sentry) so we can improve the product. Search queries are stripped from URLs before they leave your browser.</li>
+      <li>Hotel data and booking links are powered by LiteAPI; bookings happen on their checkout.</li>
+      <li>Read the full <a href="/privacy" target="_blank" rel="noopener">Privacy</a> and <a href="/terms" target="_blank" rel="noopener">Terms</a>.</li>
+    </ul>
+    <div class="beta-modal-actions">
+      <button type="button" class="btn-pri" onclick="acceptBetaConsent()">I understand — let's go →</button>
+    </div>
+  </div>
+</div>
 
 <!-- ─── Top Navbar ─────────────────────────────────────── -->
 <nav class="topnav" id="topnav">
@@ -487,8 +617,15 @@
 </div>
 
 <footer>
-  <span class="footer-text"><strong style="color:var(--text);font-weight:500">TravelBoop</strong> · Find your vibe, then your stay — powered by <a href="https://liteapi.travel" target="_blank">LiteAPI</a></span>
+  <span class="footer-text"><strong style="color:var(--text);font-weight:500">TravelBoop</strong> · Find your vibe, then your stay — powered by <a href="https://liteapi.travel" target="_blank" rel="noopener">LiteAPI</a></span>
   <span class="footer-text">Best-match room type highlighted in green</span>
+  <span class="footer-links">
+    <a href="/privacy">Privacy</a>
+    <span class="footer-sep">·</span>
+    <a href="/terms">Terms</a>
+    <span class="footer-sep">·</span>
+    <a href="mailto:beta@travelboop.com">Contact</a>
+  </span>
 </footer>
 
   </div><!-- /.results-inner -->

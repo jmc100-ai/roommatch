@@ -5532,3 +5532,170 @@
       .hp-carousel-btn { display: none; } /* swipe instead */
       .hp-lb-prev, .hp-lb-next { display: none; }
     }
+
+/* ──────────────────────────────────────────────────────────────────────────
+ * Beta launch UI: footer links, sticky banner, feedback FAB, modals (feedback
+ * + consent). Visual language matches the existing dark + gold theme.
+ * ────────────────────────────────────────────────────────────────────────── */
+
+    /* Footer — add a row for legal/contact links without disrupting existing flex layout */
+    .footer-links {
+      display: inline-flex; align-items: center; gap: 6px;
+      font-size: 12px; color: rgba(232,228,220,0.55);
+    }
+    .footer-links a {
+      color: rgba(232,228,220,0.7);
+      text-decoration: none;
+      transition: color 0.15s;
+    }
+    .footer-links a:hover { color: #c9a96e; }
+    .footer-sep { color: rgba(232,228,220,0.3); }
+
+    /* ── Beta banner (sticky top, dismissible) ───────────────────────────── */
+    .beta-banner {
+      position: sticky; top: 0; left: 0; right: 0;
+      z-index: 80;
+      display: flex; align-items: center; justify-content: center;
+      gap: 12px; padding: 8px 40px 8px 16px;
+      background: linear-gradient(135deg, rgba(201,169,110,0.18), rgba(168,137,61,0.14));
+      border-bottom: 1px solid rgba(201,169,110,0.28);
+      color: #f0e6d0;
+      font-family: 'DM Sans', sans-serif;
+      font-size: 13px; line-height: 1.4;
+      text-align: center;
+      backdrop-filter: blur(6px);
+    }
+    .beta-banner[hidden] { display: none; }
+    .beta-banner-text { max-width: 880px; }
+    .beta-banner-close {
+      position: absolute; right: 8px; top: 50%; transform: translateY(-50%);
+      background: none; border: none; color: rgba(240,230,208,0.7);
+      font-size: 22px; line-height: 1; cursor: pointer;
+      padding: 4px 8px; border-radius: 6px;
+    }
+    .beta-banner-close:hover { color: #c9a96e; background: rgba(255,255,255,0.06); }
+    body.has-beta-banner .topnav { top: 0; } /* topnav layout already absolute below banner thanks to sticky banner pushing flow */
+
+    /* ── Feedback FAB (floating bottom-right) ────────────────────────────── */
+    .beta-fab {
+      position: fixed; right: 18px; bottom: 18px;
+      z-index: 70;
+      display: inline-flex; align-items: center; gap: 8px;
+      padding: 12px 18px;
+      background: linear-gradient(135deg, #c9a96e, #a8893d);
+      color: #18181c;
+      border: none; border-radius: 100px;
+      font-family: 'DM Sans', sans-serif;
+      font-size: 13px; font-weight: 600; letter-spacing: 0.04em;
+      box-shadow: 0 8px 22px rgba(0,0,0,0.32), 0 0 0 1px rgba(201,169,110,0.5) inset;
+      cursor: pointer;
+      transition: transform 0.15s, box-shadow 0.15s;
+    }
+    .beta-fab[hidden] { display: none; }
+    .beta-fab:hover { transform: translateY(-1px); box-shadow: 0 10px 28px rgba(0,0,0,0.42), 0 0 0 1px rgba(201,169,110,0.7) inset; }
+    .beta-fab-icon { font-size: 16px; }
+    @media (max-width: 600px) {
+      .beta-fab { right: 12px; bottom: 12px; padding: 11px 14px; font-size: 12px; }
+      .beta-fab-label { display: none; }
+      .beta-fab-icon { font-size: 18px; }
+    }
+
+    /* ── Modals (feedback + consent) ─────────────────────────────────────── */
+    .beta-modal {
+      position: fixed; inset: 0;
+      z-index: 200;
+      display: flex; align-items: center; justify-content: center;
+      padding: 20px;
+    }
+    .beta-modal[hidden] { display: none; }
+    .beta-modal-veil {
+      position: absolute; inset: 0;
+      background: rgba(0,0,0,0.62);
+      backdrop-filter: blur(6px);
+    }
+    .beta-modal-card {
+      position: relative;
+      width: 100%; max-width: 480px;
+      max-height: calc(100vh - 40px);
+      overflow-y: auto;
+      background: #1a1a1e;
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 16px;
+      padding: 28px 24px 22px;
+      color: #e8e4dc;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.55);
+    }
+    .beta-modal-close {
+      position: absolute; top: 10px; right: 12px;
+      background: none; border: none;
+      color: rgba(232,228,220,0.55);
+      font-size: 26px; line-height: 1;
+      cursor: pointer; padding: 6px 10px; border-radius: 8px;
+    }
+    .beta-modal-close:hover { color: #c9a96e; background: rgba(255,255,255,0.06); }
+    .beta-modal-title {
+      font-family: 'Cormorant Garamond', serif;
+      font-size: 26px; font-weight: 400;
+      color: #c9a96e;
+      margin-bottom: 6px;
+    }
+    .beta-modal-sub {
+      font-size: 13px;
+      color: rgba(232,228,220,0.65);
+      margin-bottom: 18px;
+    }
+    .beta-sentiment {
+      display: flex; gap: 6px;
+      margin-bottom: 14px;
+    }
+    .beta-sent-btn {
+      flex: 1;
+      padding: 10px 0;
+      background: rgba(255,255,255,0.04);
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 10px;
+      font-size: 22px;
+      cursor: pointer;
+      transition: background 0.12s, border-color 0.12s, transform 0.12s;
+    }
+    .beta-sent-btn:hover { background: rgba(255,255,255,0.08); border-color: rgba(201,169,110,0.4); }
+    .beta-sent-btn.active {
+      background: rgba(201,169,110,0.18);
+      border-color: rgba(201,169,110,0.7);
+      transform: scale(1.06);
+    }
+    .beta-modal-textarea, .beta-modal-input {
+      width: 100%;
+      padding: 11px 12px;
+      background: #0c0c0e;
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 10px;
+      color: #e8e4dc;
+      font-family: 'DM Sans', sans-serif;
+      font-size: 14px;
+      margin-bottom: 12px;
+      resize: vertical;
+    }
+    .beta-modal-textarea { min-height: 100px; }
+    .beta-modal-textarea:focus, .beta-modal-input:focus { outline: none; border-color: rgba(201,169,110,0.6); }
+    .beta-modal-actions {
+      display: flex; justify-content: flex-end; gap: 10px;
+      margin-top: 8px;
+    }
+    .beta-modal-status {
+      font-size: 12px;
+      color: rgba(232,228,220,0.7);
+      margin-top: 10px;
+      min-height: 16px;
+    }
+    .beta-consent-list {
+      list-style: disc; padding-left: 20px;
+      margin: 6px 0 18px;
+    }
+    .beta-consent-list li {
+      font-size: 13px;
+      color: rgba(232,228,220,0.85);
+      margin-bottom: 8px;
+      line-height: 1.55;
+    }
+    .beta-consent-list a { color: #c9a96e; }

@@ -6,9 +6,66 @@
     const base = BACKEND || '';
     fetch(`${base}/api/public-config`)
       .then((r) => (r.ok ? r.json() : {}))
-      .then((j) => { PUBLIC_CLIP_SEARCH_ENABLED = !!j.clipSearchEnabled; })
+      .then((j) => {
+        PUBLIC_CLIP_SEARCH_ENABLED = !!j.clipSearchEnabled;
+        // Late-arriving telemetry/banner config: only apply if the server-injected
+        // placeholder wasn't replaced (e.g. local file:// dev). Keeps prod (which
+        // injects via serveAppHtml) idempotent.
+        const looksLikePlaceholder = (v) => !v || /^__/.test(v);
+        if (looksLikePlaceholder(window._POSTHOG_KEY) && j.posthogKey) {
+          window._POSTHOG_KEY  = j.posthogKey;
+          window._POSTHOG_HOST = j.posthogHost || window._POSTHOG_HOST;
+          // PostHog snippet may have already inited a stub; only init for real
+          // if the stub is still present and we now have a key.
+          try {
+            if (window.posthog && typeof window.posthog.init === 'function' && !window.posthog.__loaded) {
+              window.posthog.init(j.posthogKey, { api_host: j.posthogHost || 'https://us.i.posthog.com', capture_pageview: false, autocapture: false });
+            }
+          } catch (_) {}
+        }
+        if (looksLikePlaceholder(window._BETA_BANNER) && j.betaBanner) {
+          window._BETA_BANNER = j.betaBanner;
+          if (typeof initBetaBanner === 'function') initBetaBanner();
+        }
+        if (looksLikePlaceholder(window._RELEASE) && j.release) window._RELEASE = j.release;
+        if (looksLikePlaceholder(window._ENV)     && j.env)     window._ENV     = j.env;
+      })
       .catch(() => {});
   })();
+
+  // ── Telemetry helpers ──────────────────────────────────────────────────────
+  // Persistent per-browser pseudonymous identifier. Used to correlate sessions
+  // in PostHog and inserted into LiteAPI booking URLs as `tb_distinct` so we
+  // can stitch search → click → conversion if a partner ever shares booking
+  // attribution. Stored in localStorage; never includes PII.
+  function _getOrMakeDistinctId() {
+    try {
+      const KEY = 'TB_DISTINCT_ID';
+      let v = localStorage.getItem(KEY);
+      if (!v) {
+        v = (crypto && crypto.randomUUID) ? crypto.randomUUID()
+          : 'tb-' + Math.random().toString(36).slice(2) + Date.now().toString(36);
+        localStorage.setItem(KEY, v);
+      }
+      return v;
+    } catch (_) {
+      return 'tb-anon';
+    }
+  }
+  const _TB_DISTINCT_ID = _getOrMakeDistinctId();
+  window._TB_DISTINCT_ID = _TB_DISTINCT_ID;
+
+  function track(event, properties) {
+    try {
+      if (window.posthog && typeof window.posthog.capture === 'function') {
+        window.posthog.capture(event, Object.assign({
+          release: window._RELEASE || undefined,
+          env:     window._ENV     || undefined,
+        }, properties || {}));
+      }
+    } catch (_) {}
+  }
+  window._tbTrack = track;
 
   let currentMode = 'vector';
   let clipES = null;
@@ -49,6 +106,25 @@
     return (window._WL_BASE_URL || '').replace(/\/$/, '');
   }
 
+  /** Append UTM + tb_distinct to any LiteAPI WL URL so we can attribute booking
+   *  conversions back to the search/result that produced the click. */
+  function _withBookAttribution(urlStr, hotel, roomTypeId) {
+    try {
+      const u = new URL(urlStr);
+      // Don't double-tag; preserve any UTM the partner might already inject.
+      if (!u.searchParams.get('utm_source'))   u.searchParams.set('utm_source',   'travelboop');
+      if (!u.searchParams.get('utm_medium'))   u.searchParams.set('utm_medium',   'beta');
+      if (!u.searchParams.get('utm_campaign')) u.searchParams.set('utm_campaign', 'closed_beta_2026');
+      if (!u.searchParams.get('utm_content')) {
+        u.searchParams.set('utm_content', roomTypeId ? 'room_offer' : 'hotel_page');
+      }
+      if (!u.searchParams.get('tb_distinct')) u.searchParams.set('tb_distinct', _TB_DISTINCT_ID);
+      return u.toString();
+    } catch (_) {
+      return urlStr;
+    }
+  }
+
   /** Build a white-label deep link for a specific room offer (offerId) or hotel page. */
   function buildBookUrl(hotel, roomTypeId) {
     const wl = _wlBaseUrl();
@@ -58,15 +134,28 @@
     }
     // If we have an offerId for this specific room → go straight to checkout
     const offerId = hotel.offerIds?.[roomTypeId];
-    if (offerId) return `${wl}/booking?offerId=${encodeURIComponent(offerId)}`;
+    if (offerId) return _withBookAttribution(`${wl}/booking?offerId=${encodeURIComponent(offerId)}`, hotel, roomTypeId);
 
     // Hotel details page with dates pre-filled (user picks their room on the WL)
     const params = new URLSearchParams();
     if (S.checkin)  params.set('checkin',  S.checkin);
     if (S.checkout) params.set('checkout', S.checkout);
     params.set('occupancies', btoa(JSON.stringify([{ adults: 2, children: [] }])));
-    return `${wl}/hotels/${hotel.id}?${params.toString()}`;
+    return _withBookAttribution(`${wl}/hotels/${hotel.id}?${params.toString()}`, hotel, roomTypeId);
   }
+
+  /** Fire-and-forget PostHog event for any "Find & Book" click. Inline-callable
+   *  from onclick attributes; resilient if the SDK isn't loaded. */
+  function fireFindBookClick(hotelId, roomTypeId, surface) {
+    track('find_book_clicked', {
+      hotel_id:     String(hotelId || ''),
+      room_type_id: roomTypeId || null,
+      surface:      surface || 'unknown',
+      city:         (typeof S !== 'undefined' && S.city) || null,
+      has_dates:    !!(typeof S !== 'undefined' && S.checkin && S.checkout),
+    });
+  }
+  window._tbFireFindBookClick = fireFindBookClick;
   let selectedNeighborhood = null; // { name, bbox?, polygon? } — polygon is geo JSON for /api/vsearch
   let NEIGHBORHOOD_FLOW_ROWS = []; // indexed rows for fetchAndShowNeighborhoods → selectNeighborhoodFlow
   /** True when neighbourhood grid was opened from hotel results (change area) — different chrome + Choose returns to results. */
@@ -4324,6 +4413,21 @@
     const resPre = document.getElementById('results');
     _lbRegistry.length = 0;  // reset photo registry for each new search result
     _lastHotels     = hotels;
+    // Telemetry: each successful render is one "search executed" event from the
+    // user's perspective. Properties stay coarse (no query text) so PostHog
+    // never sees the search query itself.
+    try {
+      const top = (hotels && hotels[0]) || null;
+      track('vsearch_executed', {
+        city:           (S && S.city) || null,
+        result_count:   (hotels || []).length,
+        has_dates:      !!hasDates,
+        has_query:      !!(S && (S.q || S.query)),
+        nbhd_filter:    !!(typeof selectedNeighborhood !== 'undefined' && selectedNeighborhood && selectedNeighborhood.name),
+        search_version: (typeof _lastVsearchUrl === 'string' && /search_version=v1/.test(_lastVsearchUrl)) ? 'v1' : 'v2',
+        top_score:      top ? Math.round((top.vectorScore ?? top.score ?? 0)) : null,
+      });
+    } catch (_) {}
     // Prefetch street-view frames for the top hotel immediately — fire-and-forget so
     // the tour overlay shows with images already cached rather than waiting on-demand.
     if (hotels?.length) {
@@ -6013,6 +6117,17 @@
     const scrollTo = opts.scrollTo;
     const fromPop  = !!opts._fromPopstate;
 
+    // Telemetry — fire even if we're already on this hotel (scroll-intent
+    // counts as engagement). Coarse properties only.
+    try {
+      track('hotel_detail_opened', {
+        hotel_id:  String(hotelId),
+        from_pop:  !!fromPop,
+        scroll_to: scrollTo || null,
+        city:      (S && S.city) || null,
+      });
+    } catch (_) {}
+
     // Already showing this hotel — just honor scroll intent.
     if (_detailHotelId === hotelId) {
       if (scrollTo === 'reviews') _hpScrollToReviews({ smooth: true });
@@ -7468,3 +7583,182 @@
       if (cfg.wl_base_url) window._WL_BASE_URL = cfg.wl_base_url;
     } catch (_) {}
   })();
+
+
+/* ──────────────────────────────────────────────────────────────────────────
+ * Block 3: Beta launch — banner, feedback FAB/modal, consent modal, and
+ * instrumentation init (PostHog identify + global error listeners).
+ * Functions are declared on the global scope so inline onclick="…" works.
+ * ────────────────────────────────────────────────────────────────────────── */
+
+  // ── Beta banner (sticky top, dismissible, persists per-browser) ─────────────
+  const _BETA_BANNER_DISMISS_KEY = 'TB_BETA_BANNER_DISMISSED';
+  function initBetaBanner() {
+    const el = document.getElementById('beta-banner');
+    if (!el) return;
+    const text = (window._BETA_BANNER || '').trim();
+    const looksLikePlaceholder = !text || /^__/.test(text);
+    if (looksLikePlaceholder) { el.hidden = true; return; }
+    let dismissed = '';
+    try { dismissed = localStorage.getItem(_BETA_BANNER_DISMISS_KEY) || ''; } catch (_) {}
+    if (dismissed === text) { el.hidden = true; return; }
+    const t = document.getElementById('beta-banner-text');
+    if (t) t.textContent = text;
+    el.hidden = false;
+    document.body.classList.add('has-beta-banner');
+  }
+  function dismissBetaBanner() {
+    const el = document.getElementById('beta-banner');
+    if (!el) return;
+    el.hidden = true;
+    document.body.classList.remove('has-beta-banner');
+    try { localStorage.setItem(_BETA_BANNER_DISMISS_KEY, (window._BETA_BANNER || '').trim()); } catch (_) {}
+    track('beta_banner_dismissed', {});
+  }
+
+  // ── Beta feedback modal ─────────────────────────────────────────────────────
+  let _betaSentiment = null;
+  function openBetaFeedback() {
+    const m = document.getElementById('beta-feedback-modal');
+    if (!m) return;
+    track('feedback_button_clicked', {});
+    m.hidden = false;
+    document.body.style.overflow = 'hidden';
+    setTimeout(() => {
+      const ta = document.getElementById('bf-message');
+      if (ta) ta.focus();
+    }, 50);
+  }
+  function closeBetaFeedback() {
+    const m = document.getElementById('beta-feedback-modal');
+    if (!m) return;
+    m.hidden = true;
+    document.body.style.overflow = '';
+    _betaSentiment = null;
+    document.querySelectorAll('.beta-sent-btn').forEach(b => b.classList.remove('active'));
+    const status = document.getElementById('bf-status');
+    if (status) status.textContent = '';
+  }
+  function setBetaSentiment(n) {
+    _betaSentiment = Number(n);
+    document.querySelectorAll('.beta-sent-btn').forEach(b => {
+      b.classList.toggle('active', Number(b.dataset.sent) === _betaSentiment);
+    });
+  }
+  async function submitBetaFeedback() {
+    const ta    = document.getElementById('bf-message');
+    const email = document.getElementById('bf-email');
+    const btn   = document.getElementById('bf-submit');
+    const status = document.getElementById('bf-status');
+    const message = (ta?.value || '').trim();
+    if (!message) {
+      if (status) status.textContent = 'Please add a short message before sending.';
+      ta?.focus();
+      return;
+    }
+    if (btn) { btn.disabled = true; btn.textContent = 'Sending…'; }
+    if (status) status.textContent = '';
+    try {
+      const r = await fetch(`${BACKEND}/api/feedback`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          message,
+          email: (email?.value || '').trim() || null,
+          sentiment: _betaSentiment,
+          distinctId: _TB_DISTINCT_ID,
+          currentUrl: location.pathname, // strip query/hash
+          currentSearch: (typeof S !== 'undefined' && (S.q || S.query)) || null,
+        }),
+      });
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      track('feedback_submitted', { sentiment: _betaSentiment, message_length: message.length, has_email: !!(email?.value || '').trim() });
+      if (status) status.textContent = 'Thanks — we read every message.';
+      if (ta) ta.value = '';
+      if (email) email.value = '';
+      setTimeout(closeBetaFeedback, 1200);
+    } catch (e) {
+      if (status) status.textContent = 'Could not send right now — please try again in a minute.';
+    } finally {
+      if (btn) { btn.disabled = false; btn.textContent = 'Send feedback →'; }
+    }
+  }
+
+  // ── Beta consent modal (one-time per browser) ───────────────────────────────
+  const _BETA_CONSENT_KEY = 'TB_BETA_CONSENT_V1';
+  function maybeShowBetaConsent() {
+    let accepted = '';
+    try { accepted = localStorage.getItem(_BETA_CONSENT_KEY) || ''; } catch (_) {}
+    if (accepted) return;
+    const m = document.getElementById('beta-consent-modal');
+    if (!m) return;
+    m.hidden = false;
+    document.body.style.overflow = 'hidden';
+    track('beta_consent_shown', {});
+  }
+  function acceptBetaConsent() {
+    const m = document.getElementById('beta-consent-modal');
+    if (m) m.hidden = true;
+    document.body.style.overflow = '';
+    try { localStorage.setItem(_BETA_CONSENT_KEY, 'v1-' + Date.now()); } catch (_) {}
+    track('beta_consent_accepted', {});
+    fetch(`${BACKEND}/api/beta-consent`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({ distinctId: _TB_DISTINCT_ID, policyVersion: 'v1-2026-05-07' }),
+    }).catch(() => {});
+  }
+
+  // ── Instrumentation init ────────────────────────────────────────────────────
+  // Identifies the persistent distinct_id with PostHog and adds a window error
+  // listener so unhandled exceptions surface in Sentry + a coarse PostHog event.
+  function initBetaInstrumentation() {
+    try {
+      if (window.posthog && typeof window.posthog.identify === 'function') {
+        window.posthog.identify(_TB_DISTINCT_ID, { release: window._RELEASE || undefined, env: window._ENV || undefined });
+      }
+    } catch (_) {}
+    window.addEventListener('error', (e) => {
+      try {
+        track('error_shown', {
+          message: String(e.message || '').slice(0, 200),
+          source:  String(e.filename || '').slice(0, 200).split('?')[0],
+          line:    e.lineno || null,
+        });
+      } catch (_) {}
+    });
+    window.addEventListener('unhandledrejection', (e) => {
+      try {
+        const reason = (e.reason && (e.reason.message || String(e.reason))) || '';
+        track('unhandled_promise_rejection', { message: String(reason).slice(0, 200) });
+      } catch (_) {}
+    });
+  }
+
+  document.addEventListener('DOMContentLoaded', () => {
+    initBetaInstrumentation();
+    initBetaBanner();
+    // Reveal the feedback FAB once the app is up.
+    const fab = document.getElementById('beta-feedback-fab');
+    if (fab) fab.hidden = false;
+    // Consent shown after the first paint so it doesn't compete with a slow
+    // Sentry/PostHog network call.
+    setTimeout(maybeShowBetaConsent, 600);
+
+    // Auto-open the in-app legal overlay if the URL says so. Lets us share
+    // /?legal=privacy or /?legal=terms while still preserving the standalone
+    // /privacy and /terms server-rendered pages for indexing/sharing.
+    try {
+      const sp = new URLSearchParams(location.search);
+      const legal = (sp.get('legal') || '').toLowerCase();
+      if (legal === 'privacy' || legal === 'terms') {
+        setTimeout(() => { try { openStaticPage(legal); } catch (_) {} }, 200);
+      }
+    } catch (_) {}
+
+    // Telemetry: emit a single beta_gate_passed (we know we got past the gate
+    // because the SPA loaded). Distinct from beta_consent_accepted.
+    track('beta_gate_passed', { path: location.pathname });
+  });

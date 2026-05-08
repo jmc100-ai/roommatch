@@ -89,6 +89,34 @@ META_SYNC_LIMIT        — top-N hotels for which `/api/vsearch` (V2 path) fetch
 NLP_INTENT_TIMEOUT_MS  — `buildFactIntentLLM` (Gemini 2.5 flash-lite) call timeout in ms. Default `3000`. On timeout we fall back to the deterministic regex router (`v2-facts-1`); fine for most queries. Raise only if you see frequent `(router=v2-facts-1)` in logs and the regex is missing important facts.
 ```
 
+### Beta-launch env vars (added 2026-05-07)
+```
+SENTRY_DSN_SERVER       — server-side @sentry/node DSN. Unset → Sentry no-ops.
+SENTRY_DSN_CLIENT       — browser Sentry DSN. Public-by-design; injected into served HTML.
+SENTRY_ENV              — environment tag for Sentry (e.g. `production`, `staging`).
+POSTHOG_PROJECT_KEY     — PostHog "Project API Key" (public). Browser tracking.
+POSTHOG_API_KEY         — same key, used by `posthog-node` for server-side mirror events.
+POSTHOG_HOST            — default `https://us.i.posthog.com`.
+RESEND_API_KEY          — Resend transactional email API key (used by `scripts/email/send-emails.js`).
+BETA_PASSWORD           — same value as `SITE_PASSWORD`, embedded by the email script in invites.
+BETA_FROM               — From: header for outbound emails (e.g. `TravelBoop Beta <beta@travelboop.com>`).
+BETA_REPLY_TO           — Reply-To: header.
+BETA_BASE_URL           — base URL embedded in invite emails. Defaults to `https://www.travelboop.com`.
+BETA_CALENDAR_URL       — optional Cal.com / Calendly URL embedded in nudge / call-invite emails.
+BETA_BANNER             — optional sticky-top banner text shown to all users until dismissed (e.g. "Slow searches today — fix in flight"). Empty/unset → no banner.
+SLACK_FEEDBACK_WEBHOOK  — optional. When set, every `POST /api/feedback` mirrors a brief preview to Slack.
+```
+
+### Beta-launch architecture notes
+- **API beta gate**: when `SITE_PASSWORD` is set, every `/api/*` request requires the `rm_gate` cookie issued by `POST /auth` (or `INDEX_SECRET` in body / `x-index-secret` header). Allowlist: `/api/health`, `/api/config`, `/api/public-config`. Returns `401 { error: "beta_gate_required" }` on failure.
+- **Rate limits** (per-IP, 60s window): `/api/vsearch` 60/min, `/api/rates` 30/min, `/api/hotels-meta` 90/min, admin/backfill routes 10/min, all other `/api/*` 240/min. Hits return `429 { error: "rate_limited" }`.
+- **CORS** is allowlisted to `travelboop.com`, `www.travelboop.com`, the Render URL, and localhost. No more `origin: "*"`.
+- **helmet** is enabled with default headers (HSTS, frameguard, noSniff, etc.). CSP is intentionally off until we have time to write a correct policy that allows Sentry/PostHog/MapLibre/inline injected config.
+- **`rm_gate` cookie** is `HttpOnly; SameSite=Lax`, with `Secure` set when `x-forwarded-proto=https`.
+- **PII stripping** applied at every layer: server Sentry strips query strings + cookies + auth headers in `beforeSend`; browser Sentry strips query strings; PostHog `sanitize_properties` strips query/fragment from any URL-shaped property; client `track()` never includes the actual search query text.
+- **Feedback flow**: `POST /api/feedback` → `beta_feedback` table + optional Slack webhook. **Consent flow**: one-time modal on first gate pass → `POST /api/beta-consent` → `beta_consents` table (idempotent on `distinct_id`).
+- **Booking attribution**: `buildBookUrl()` always appends `utm_source=travelboop`, `utm_medium=beta`, `utm_campaign=closed_beta_2026`, `utm_content=room_offer|hotel_page`, and `tb_distinct=<persistent browser uuid>` so we can attribute LiteAPI conversions back to a search session if a partner ever shares booking data.
+
 ### White-label booking links (Find & Book buttons)
 - All "Find & Book" CTAs (search results card, room rows, hotel detail page sidebar + mobile sticky bar) call `buildBookUrl(hotel, roomTypeId)` in `client/app.js`.
 - URL formats sent to the WL:
@@ -227,6 +255,12 @@ NOTIFY pgrst, 'reload config';
 | GET /api/hotel/:hotelId | Hotel details data (live-fetch metadata + DB rooms) — consumed by the dedicated `/hotel/:hotelId` page (was: slide-out panel, now removed) |
 | GET /api/hotel/:hotelId/reviews?limit&offset&language | **Live LiteAPI guest reviews proxy** — no DB write, in-memory hint cache only (3 min TTL, 200-entry LRU). Slim DTO + `Cache-Control: private, no-store`. **Never feed review text into embeddings, HyDE, or any prompt.** |
 | GET /api/health | Health check |
+| POST /api/feedback | Beta in-app feedback intake. Body: `{message, email?, sentiment?, distinctId, currentUrl, currentSearch}`. Inserts into `beta_feedback`; mirrors to Slack via `SLACK_FEEDBACK_WEBHOOK` if set. |
+| POST /api/beta-consent | One-time consent ledger. Body: `{distinctId, email?, policyVersion?}`. Idempotent upsert into `beta_consents`. |
+| POST /api/track | Generic server-side PostHog event mirror. Body: `{distinctId, event, properties}`. Used to bypass ad-blockers for high-signal events. |
+| GET /api/debug-sentry?secret= | Throws an async test exception; should appear in Sentry within ~30s. Gated by `INDEX_SECRET`. |
+| GET /privacy | Standalone, indexable, gate-bypassing privacy policy page. Mirrors copy from in-app overlay (`getStaticPageContent('privacy')`). |
+| GET /terms | Standalone, indexable, gate-bypassing terms page. Mirrors copy from in-app overlay (`getStaticPageContent('terms')`). |
 | GET /hotel/:hotelId | **SPA route** — serves `client/index.html` (no-cache, gate-aware). Client JS reads `location.pathname` and renders the dedicated hotel detail page (`#st-hotel-detail`). |
 
 ---
