@@ -3936,11 +3936,11 @@
       about: {
         title: 'About TravelBoop',
         html: `
-          <p><strong>TravelBoop</strong> is a small, opinionated tool for travellers who care about <em>neighbourhood feel</em> and <em>how a room actually looks</em> — not only stars and lobby photos.</p>
-          <p>We blend a guided vibe flow, neighbourhood storytelling, and photo-first hotel cards so what you imagine before you book is closer to what you walk into.</p>
-          <h2>Beta honesty</h2>
-          <p>We are still tuning cities, data, and ranking. Your feedback in the purple chat button genuinely shapes what we build next.</p>
-          <p>Engineering friends can peek at the open repo: <a href="https://github.com/jmc100-ai/roommatch" target="_blank" rel="noopener noreferrer">GitHub — roommatch</a></p>
+          <p><strong>TravelBoop</strong> is here for the moment after you have picked a city — when you still need to answer “<em>which part of town</em>?” and “<em>does this room actually look like my trip?</em>” We focus on neighbourhood character and real room photos, so you are not guessing from the same glossy lobby shot on every site.</p>
+          <p>A short, friendly flow captures how you like to travel, then we line up hotels you can <strong>see</strong> before you commit — less mismatch between what you pictured and what you check into.</p>
+          <h2>We are in beta</h2>
+          <p>We are still growing cities, data, and polish. Tap the purple <strong>Feedback</strong> button anytime — it really does steer what we build next.</p>
+          <p>Curious how it is built? Developers can follow along on <a href="https://github.com/jmc100-ai/roommatch" target="_blank" rel="noopener noreferrer">GitHub</a>.</p>
           ${commonFoot}`,
       },
       privacy: {
