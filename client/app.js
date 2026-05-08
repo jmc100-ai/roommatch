@@ -3936,11 +3936,13 @@
       about: {
         title: 'About TravelBoop',
         html: `
-          <p><strong>TravelBoop</strong> is here for the moment after you have picked a city — when you still need to answer “<em>which part of town</em>?” and “<em>does this room actually look like my trip?</em>” We focus on neighbourhood character and real room photos, so you are not guessing from the same glossy lobby shot on every site.</p>
-          <p>A short, friendly flow captures how you like to travel, then we line up hotels you can <strong>see</strong> before you commit — less mismatch between what you pictured and what you check into.</p>
-          <h2>We are in beta</h2>
-          <p>We are still growing cities, data, and polish. Tap the purple <strong>Feedback</strong> button anytime — it really does steer what we build next.</p>
-          <p>Curious how it is built? Developers can follow along on <a href="https://github.com/jmc100-ai/roommatch" target="_blank" rel="noopener noreferrer">GitHub</a>.</p>
+          <p><strong>TravelBoop</strong> helps you find a hotel that actually fits your trip — not just a place to sleep.</p>
+          <p>Once you've chosen a city, the hard part is often figuring out where to stay and whether a hotel really matches the vibe you want. TravelBoop focuses on neighborhood personality and real room photos, so you can get a better feel for the experience before you book.</p>
+          <p>Answer a few quick questions about how you like to travel, and we'll help surface hotels and areas that fit your style — whether you want walkable cafés, quiet streets, nightlife, local character, or something else entirely.</p>
+          <p>The goal: fewer booking surprises and more "this is exactly what I hoped for."</p>
+          <h2>Currently in Beta</h2>
+          <p>TravelBoop is still growing — we're adding more cities, improving recommendations, and refining the experience every week. If you spot something confusing or have ideas, use the purple <strong>Feedback</strong> button anytime. Your feedback directly shapes what we build next.</p>
+          <p>TravelBoop is currently in beta, so features and information may change as the product evolves.</p>
           ${commonFoot}`,
       },
       privacy: {
