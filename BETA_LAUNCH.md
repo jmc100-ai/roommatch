@@ -29,6 +29,7 @@ Set these in the Render dashboard (Environment tab, then Manual Deploy):
 | `BETA_REPLY_TO`          | `beta@travelboop.com`                                 | Where replies go.                                                             |
 | `BETA_CALENDAR_URL`      | (optional) e.g. `https://cal.com/your-handle`         | Embedded in emails.                                                           |
 | `SLACK_FEEDBACK_WEBHOOK` | (optional)                                            | Mirrors every `/api/feedback` POST to a Slack channel.                        |
+| `BETA_FEEDBACK_EMAIL`    | (optional, recommended) e.g. `you@example.com`        | Mirrors every `/api/feedback` POST to this address via Resend. Reply-To is set to the submitter's email when provided. Requires `RESEND_API_KEY` + `BETA_FROM`. |
 | `BETA_BANNER`            | (optional) e.g. "Slow searches today — fix in flight" | Shown sticky-top to all users when set.                                       |
 
 

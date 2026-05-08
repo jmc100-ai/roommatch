@@ -4360,7 +4360,7 @@ app.post("/api/feedback", async (req, res) => {
     } else {
       console.warn("[feedback] no supabaseAdmin; logging only:", row);
     }
-    // Fire-and-forget Slack mirror
+    // Fire-and-forget Slack mirror (optional — set SLACK_FEEDBACK_WEBHOOK to enable)
     if (process.env.SLACK_FEEDBACK_WEBHOOK) {
       const slackPayload = {
         text: `*New beta feedback* ${row.sentiment ? `(${row.sentiment}/5)` : ""}\n` +
@@ -4374,6 +4374,46 @@ app.post("/api/feedback", async (req, res) => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(slackPayload),
       }).catch((e) => console.warn("[feedback] slack post failed:", e.message));
+    }
+    // Fire-and-forget email mirror (optional — set BETA_FEEDBACK_EMAIL + RESEND_API_KEY to enable)
+    if (process.env.BETA_FEEDBACK_EMAIL && process.env.RESEND_API_KEY && process.env.BETA_FROM) {
+      const resend = _getResend();
+      if (resend) {
+        const sentLabel = row.sentiment ? ` ${row.sentiment}/5` : "";
+        const subject   = `[TravelBoop beta]${sentLabel} ${message.slice(0, 60).replace(/\s+/g, " ")}${message.length > 60 ? "…" : ""}`;
+        const escape    = (s) => String(s || "").replace(/[&<>]/g, (c) => ({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]));
+        const html = `
+          <div style="font-family:-apple-system,Segoe UI,Roboto,sans-serif;color:#1a1a1e;max-width:560px">
+            <h2 style="font-family:Georgia,serif;color:#a8893d;margin:0 0 4px">New beta feedback${sentLabel ? " · " + sentLabel.trim() : ""}</h2>
+            <p style="color:#666;font-size:12px;margin:0 0 16px">${escape(new Date().toUTCString())}</p>
+            <blockquote style="border-left:3px solid #c9a96e;padding:8px 14px;margin:0 0 18px;background:#faf6ee;white-space:pre-wrap;font-size:14px;line-height:1.55">${escape(message)}</blockquote>
+            <table style="font-size:12px;color:#444;border-collapse:collapse">
+              ${row.user_email     ? `<tr><td style="padding:2px 8px 2px 0;color:#888">email</td><td>${escape(row.user_email)}</td></tr>`     : ""}
+              ${row.distinct_id    ? `<tr><td style="padding:2px 8px 2px 0;color:#888">distinct_id</td><td><code>${escape(row.distinct_id)}</code></td></tr>` : ""}
+              ${row.current_url    ? `<tr><td style="padding:2px 8px 2px 0;color:#888">on page</td><td>${escape(row.current_url)}</td></tr>`    : ""}
+              ${row.current_search ? `<tr><td style="padding:2px 8px 2px 0;color:#888">searching</td><td>${escape(row.current_search)}</td></tr>` : ""}
+              ${row.user_agent     ? `<tr><td style="padding:2px 8px 2px 0;color:#888">user-agent</td><td style="color:#999;font-size:11px">${escape(row.user_agent)}</td></tr>` : ""}
+            </table>
+            <p style="color:#999;font-size:11px;margin:20px 0 0">All submissions are also stored in <code>beta_feedback</code> in Supabase.</p>
+          </div>`;
+        const plain = `New beta feedback${sentLabel}\n\n` + message + "\n\n" +
+          (row.user_email     ? `email: ${row.user_email}\n` : "") +
+          (row.distinct_id    ? `distinct_id: ${row.distinct_id}\n` : "") +
+          (row.current_url    ? `on page: ${row.current_url}\n` : "") +
+          (row.current_search ? `searching: ${row.current_search}\n` : "");
+        // Reply-To set to the user's email when present so you can reply directly.
+        const replyTo = row.user_email || process.env.BETA_REPLY_TO || undefined;
+        resend.emails.send({
+          from: process.env.BETA_FROM,
+          to:   process.env.BETA_FEEDBACK_EMAIL,
+          subject,
+          html,
+          text: plain,
+          ...(replyTo ? { replyTo } : {}),
+        }).then((r) => {
+          if (r?.error) console.warn("[feedback] resend error:", r.error.message || r.error);
+        }).catch((e) => console.warn("[feedback] resend send failed:", e.message));
+      }
     }
     trackServer(row.distinct_id, "feedback_submitted_server", {
       sentiment: row.sentiment,

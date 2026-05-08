@@ -105,6 +105,7 @@ BETA_BASE_URL           — base URL embedded in invite emails. Defaults to `htt
 BETA_CALENDAR_URL       — optional Cal.com / Calendly URL embedded in nudge / call-invite emails.
 BETA_BANNER             — optional sticky-top banner text shown to all users until dismissed (e.g. "Slow searches today — fix in flight"). Empty/unset → no banner.
 SLACK_FEEDBACK_WEBHOOK  — optional. When set, every `POST /api/feedback` mirrors a brief preview to Slack.
+BETA_FEEDBACK_EMAIL     — optional. When set (and RESEND_API_KEY + BETA_FROM are configured), every `POST /api/feedback` is also emailed here via Resend. Reply-To is the submitter's email when present so you can reply directly. Slack and email fan-outs are independent — set either, both, or neither.
 ```
 
 ### Beta-launch architecture notes
@@ -114,7 +115,7 @@ SLACK_FEEDBACK_WEBHOOK  — optional. When set, every `POST /api/feedback` mirro
 - **helmet** is enabled with default headers (HSTS, frameguard, noSniff, etc.). CSP is intentionally off until we have time to write a correct policy that allows Sentry/PostHog/MapLibre/inline injected config.
 - **`rm_gate` cookie** is `HttpOnly; SameSite=Lax`, with `Secure` set when `x-forwarded-proto=https`.
 - **PII stripping** applied at every layer: server Sentry strips query strings + cookies + auth headers in `beforeSend`; browser Sentry strips query strings; PostHog `sanitize_properties` strips query/fragment from any URL-shaped property; client `track()` never includes the actual search query text.
-- **Feedback flow**: `POST /api/feedback` → `beta_feedback` table + optional Slack webhook. **Consent flow**: one-time modal on first gate pass → `POST /api/beta-consent` → `beta_consents` table (idempotent on `distinct_id`).
+- **Feedback flow**: `POST /api/feedback` → `beta_feedback` table + optional Slack webhook (`SLACK_FEEDBACK_WEBHOOK`) + optional Resend email (`BETA_FEEDBACK_EMAIL`). Both fan-outs are fire-and-forget so they never block the API response. **Consent flow**: one-time modal on first gate pass → `POST /api/beta-consent` → `beta_consents` table (idempotent on `distinct_id`).
 - **Booking attribution**: `buildBookUrl()` always appends `utm_source=travelboop`, `utm_medium=beta`, `utm_campaign=closed_beta_2026`, `utm_content=room_offer|hotel_page`, and `tb_distinct=<persistent browser uuid>` so we can attribute LiteAPI conversions back to a search session if a partner ever shares booking data.
 
 ### White-label booking links (Find & Book buttons)
