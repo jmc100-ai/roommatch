@@ -136,8 +136,10 @@
     const offerId = hotel.offerIds?.[roomTypeId];
     if (offerId) return _withBookAttribution(`${wl}/booking?offerId=${encodeURIComponent(offerId)}`, hotel, roomTypeId);
 
-    // Hotel details page with dates pre-filled (user picks their room on the WL)
+    // Hotel details page with dates pre-filled (user picks their room on the WL).
+    // `tab=rooms` opens the Rooms tab instead of Overview on Nuitée WL (e.g. travelboop.nuitee.link).
     const params = new URLSearchParams();
+    params.set('tab', 'rooms');
     if (S.checkin)  params.set('checkin',  S.checkin);
     if (S.checkout) params.set('checkout', S.checkout);
     params.set('occupancies', btoa(JSON.stringify([{ adults: 2, children: [] }])));
@@ -3720,7 +3722,7 @@
       resultsEl.innerHTML = buildResultsSkeletonCardsHTML(5);
     }
     const rc = document.getElementById('resultCount');
-    if (rc) rc.textContent = 'Finding matches…';
+    if (rc) rc.textContent = 'Finding hotels that match your vibe…';
     const availFilter = document.getElementById('availFilter');
     if (availFilter) availFilter.style.display = 'none';
     scheduleSyncAvailFilterMount();

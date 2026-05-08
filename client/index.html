@@ -606,11 +606,16 @@
 
 <div class="results-stack" id="resultsStack">
   <div id="results"></div>
-  <div id="searchLoadingOverlay" class="search-loading-overlay" aria-hidden="true" aria-busy="false" aria-live="polite">
+  <div id="searchLoadingOverlay" class="search-loading-overlay" role="status" aria-hidden="true" aria-busy="false" aria-live="polite" aria-label="Search in progress">
     <div class="search-loading-overlay-veil" aria-hidden="true"></div>
     <div class="search-loading-card">
       <div class="search-loading-spinner" aria-hidden="true"></div>
-      <p class="search-loading-title">Finding matching hotels…</p>
+      <p class="search-loading-title">Finding hotels that match your vibe…</p>
+      <div class="search-loading-dotrow" aria-hidden="true">
+        <span class="search-loading-dot"></span>
+        <span class="search-loading-dot"></span>
+        <span class="search-loading-dot"></span>
+      </div>
       <p class="search-loading-sub">This usually takes a few seconds.</p>
     </div>
   </div>
