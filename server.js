@@ -2068,6 +2068,23 @@ app.get("/api/vsearch", async (req, res) => {
         if (boopRaw) {
           const boopProfile = JSON.parse(decodeURIComponent(boopRaw));
           const luxuryPref  = Number(boopProfile?.prefs?.luxury ?? 0);
+          const priceMatters = Number(boopProfile?.answers?.priceMatters);
+          // Only apply boop-derived ranking tweaks when this request is actually
+          // using wizard hotel/must-have signals — otherwise a stale saved profile
+          // could still ride along on a free-text-only search.
+          const hasBoopTailoredQuery = !!(
+            String(req.query.hotel_query || "").trim() ||
+            String(req.query.must_haves || "").trim()
+          );
+          const nbhdWeight = v2.body.stats?.nbhd_rank_weight ?? 0;
+          const v2ResortHotels = () => {
+            v2.body.hotels.sort((a, b) => {
+              const ca = (1 - nbhdWeight) * (a.vectorScore || 0) / 100 + nbhdWeight * ((a.nbhd_fit_pct ?? 62) / 100);
+              const cb = (1 - nbhdWeight) * (b.vectorScore || 0) / 100 + nbhdWeight * ((b.nbhd_fit_pct ?? 62) / 100);
+              if (Math.abs(cb - ca) > 1e-6) return cb - ca;
+              return (b.vectorScore || 0) - (a.vectorScore || 0);
+            });
+          };
           if (luxuryPref < -5) {
             // Max penalty: 25% for luxury=-16, scales linearly. At luxury=-5 ≈ 8%.
             const luxPenFactor = Math.min(0.30, Math.abs(luxuryPref) / 50);
@@ -2079,16 +2096,29 @@ app.get("/api/vsearch", async (req, res) => {
                 h.vectorScore = Math.max(0, Math.round(h.vectorScore * (1 - penalty)));
               }
             }
-            // Re-sort after adjusting scores, preserving the neighbourhood blend.
-            const nbhdWeight = v2.body.stats?.nbhd_rank_weight ?? 0;
-            v2.body.hotels.sort((a, b) => {
-              const ca = (1 - nbhdWeight) * (a.vectorScore || 0) / 100 + nbhdWeight * ((a.nbhd_fit_pct ?? 62) / 100);
-              const cb = (1 - nbhdWeight) * (b.vectorScore || 0) / 100 + nbhdWeight * ((b.nbhd_fit_pct ?? 62) / 100);
-              if (Math.abs(cb - ca) > 1e-6) return cb - ca;
-              return (b.vectorScore || 0) - (a.vectorScore || 0);
-            });
+            v2ResortHotels();
             v2.body.stats.luxury_star_penalty_applied = true;
             v2.body.stats.luxury_pref = luxuryPref;
+          }
+          // Wizard slider "price matters" (answers): cosine scores barely separate
+          // luxury from value — nudge 4–5★ down when the user said price is important.
+          if (
+            hasBoopTailoredQuery &&
+            Number.isFinite(priceMatters) &&
+            priceMatters > 0
+          ) {
+            const clampPm = Math.min(100, Math.max(0, priceMatters));
+            const pmPenFactor = Math.min(0.28, 0.04 + (clampPm / 100) * 0.26);
+            for (const h of v2.body.hotels) {
+              const stars = h.starRating || 3;
+              if (stars > 3) {
+                const penalty = pmPenFactor * Math.min(1, (stars - 3) / 2);
+                h.vectorScore = Math.max(0, Math.round(h.vectorScore * (1 - penalty)));
+              }
+            }
+            v2ResortHotels();
+            v2.body.stats.price_matters_star_penalty_applied = true;
+            v2.body.stats.price_matters = clampPm;
           }
         }
       } catch (e) {

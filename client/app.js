@@ -4491,7 +4491,17 @@
     const shouldOpenVibeTour = !!(_vibeTourPending && hotels?.length && S.boopProfile);
     _deferResultsRenderUntilTourClose = shouldOpenVibeTour;
     _vibeTourPending = false;
-    _currentSort    = 'match';
+    // Boop "price matters" only affected Match+Price before — default was always
+    // pure Match, so Ritz-type matches stayed on top. When this search is anchored
+    // by wizard hotel/must-have signals and the slider is not neutral, default to
+    // Match+Price (uses nightly rates when dates exist; server also star-nudges).
+    const pmForDefault = Number(S.boopProfile?.answers?.priceMatters);
+    const boopAnchoredSearch =
+      (typeof S.hotelQ === 'string' && S.hotelQ.trim().length > 0) ||
+      (Array.isArray(S.mustHaves) && S.mustHaves.length > 0);
+    const usePriceBlendDefault =
+      boopAnchoredSearch && Number.isFinite(pmForDefault) && pmForDefault !== 0;
+    _currentSort    = usePriceBlendDefault ? 'match+price' : 'match';
     _sortReverse    = false;
     _displayedCount = 10;
     _nbhdFilter     = null;  // BOOP v4 — reset the top-nbhd refine strip filter
@@ -4514,7 +4524,7 @@
     document.getElementById('discovery-flow').style.display = 'none';
     document.getElementById('st-results').style.display     = 'block';
     document.querySelectorAll('.sort-btn').forEach(b => {
-      b.classList.toggle('active', b.dataset.sort === 'match');
+      b.classList.toggle('active', b.dataset.sort === _currentSort);
       b.disabled = false;
       b.classList.remove('loading');
     });
@@ -5808,6 +5818,23 @@
         if (!priced.length) return 50;
         return gamma * normPriceExpensive(p) + (1 - gamma) * normPriceCheap(p);
       };
+      // When LiteAPI has not returned nightly rates yet (or user has no dates),
+      // approximate "cheap vs splurge" from star class so Match+Price still does
+      // something when the Boop slider is off neutral.
+      const normStarCheap = h => {
+        const s = Number(h.starRating);
+        if (!Number.isFinite(s) || s <= 0) return 50;
+        return Math.max(0, Math.min(100, ((5 - Math.min(s, 5)) / 5) * 100));
+      };
+      const normStarExpensive = h => {
+        const s = Number(h.starRating);
+        if (!Number.isFinite(s) || s <= 0) return 50;
+        return Math.max(0, Math.min(100, (Math.min(s, 5) / 5) * 100));
+      };
+      const normBlendForHotel = h => {
+        if (priced.length) return normSlider(h.price);
+        return gamma * normStarExpensive(h) + (1 - gamma) * normStarCheap(h);
+      };
       const MATCH_W = 0.25 + gamma * 0.53;
       const PRICE_W = 1 - MATCH_W;
       hotels.sort((a, b) => {
@@ -5815,7 +5842,18 @@
         const bScore = hotelEffectiveScore(b);
         const tierDiff = tier(aScore) - tier(bScore);
         if (tierDiff !== 0) return tierDiff;
-        if (!priced.length) {
+        if (!priced.length && pm === 0) {
+          const cmp = bScore - aScore;
+          return _sortReverse ? -cmp : cmp;
+        }
+        if (!priced.length && pm !== 0) {
+          const aComb = MATCH_W * aScore + PRICE_W * normBlendForHotel(a);
+          const bComb = MATCH_W * bScore + PRICE_W * normBlendForHotel(b);
+          const d = bComb - aComb;
+          if (Math.abs(d) > 1e-6) {
+            const sign = d > 0 ? 1 : -1;
+            return _sortReverse ? -sign : sign;
+          }
           const cmp = bScore - aScore;
           return _sortReverse ? -cmp : cmp;
         }
