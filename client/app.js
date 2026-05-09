@@ -569,6 +569,9 @@
       delete a.nbhdPace;
       delete a.nbhdLocation;
     }
+    const pm = Number(a.priceMatters);
+    if (!Number.isFinite(pm)) a.priceMatters = 0;
+    else a.priceMatters = Math.max(-100, Math.min(100, Math.round(pm)));
     return a;
   }
 
@@ -781,6 +784,7 @@
       roomStyle: 'sleek',
       nbhdScene: 'calm_central',
       hotelPersonality: 'polished',
+      priceMatters: 0,
     };
     const normalizedAnswers = migrateBoopProfileAnswersIfNeeded({ ...answers });
     const prefs = {
@@ -832,7 +836,7 @@
   function resetBoopState() {
     BOOP.idx = 0;
     BOOP.prefs = {};
-    BOOP.answers = { group_size: 'couple' };
+    BOOP.answers = { group_size: 'couple', priceMatters: 0 };
     BOOP.dealbreakers = new Set();
     BOOP.slider = 0;
     BOOP.freetext = '';
@@ -1505,6 +1509,21 @@
     renderBoopQuestion();
   }
 
+  /** Stay-vibe screen: -100 less … 0 neutral … +100 price very important (Match+Price blend). */
+  function boopPriceMattersCaption(n) {
+    const v = Math.max(-100, Math.min(100, Number(n) || 0));
+    if (v <= -33) return 'Less important';
+    if (v >= 33) return 'Very important';
+    return 'Neutral';
+  }
+
+  function boopPriceMattersInput(v) {
+    const n = Math.max(-100, Math.min(100, parseInt(v, 10) || 0));
+    BOOP.answers.priceMatters = n;
+    const el = document.getElementById('boop-price-matter-cur');
+    if (el) el.textContent = boopPriceMattersCaption(n);
+  }
+
   function boopNext() {
     BOOP.idx += 1;
     renderBoopQuestion();
@@ -1931,7 +1950,26 @@
         ? ' boop-grid--quad'
         : ((q.options && q.options.length >= 3) ? ' boop-grid--triple' : '');
       const currentPick = BOOP.answers[q.id];
-      body = `<div class="boop-grid${gridClass}">${q.options.map((o, cardIdx) => {
+      let priceMatterBlock = '';
+      if (q.id === 'stayVibe') {
+        if (BOOP.answers.priceMatters == null || !Number.isFinite(Number(BOOP.answers.priceMatters))) {
+          BOOP.answers.priceMatters = 0;
+        }
+        const pm = Math.max(-100, Math.min(100, Number(BOOP.answers.priceMatters) || 0));
+        const pmCaption = boopPriceMattersCaption(pm);
+        priceMatterBlock = `<div class="boop-price-matter">
+          <div class="boop-price-matter-label">How much should price matter?</div>
+          <div class="boop-price-matter-ends">
+            <span>Less important</span>
+            <span>Very important</span>
+          </div>
+          <input type="range" class="boop-price-matter-range" id="boop-price-matter-range" min="-100" max="100" step="1" value="${pm}"
+            oninput="boopPriceMattersInput(this.value)"
+            aria-valuemin="-100" aria-valuemax="100" aria-valuenow="${pm}" aria-valuetext="${escHtml(pmCaption)}" />
+          <div class="boop-price-matter-cur" id="boop-price-matter-cur">${escHtml(pmCaption)}</div>
+        </div>`;
+      }
+      body = `${priceMatterBlock}<div class="boop-grid${gridClass}">${q.options.map((o, cardIdx) => {
         const isCurrent = overlayMode && o.id === currentPick;
         return `
         <button class="boop-card${isCurrent ? ' boop-card--current' : ''}" onclick="boopChoose('${q.id}','${o.id}')">
@@ -5705,6 +5743,13 @@
     return false;
   }
 
+  /** Wizard "How much should price matter" (-100…100) for Match+Price ranking. */
+  function boopPriceMattersForSort() {
+    const pm = Number(S.boopProfile?.answers?.priceMatters);
+    if (!Number.isFinite(pm)) return 0;
+    return Math.max(-100, Math.min(100, pm));
+  }
+
   function getSortedHotelsForDisplay() {
     let hotels = [..._lastHotels].filter(hotelPassesAvailFilter).filter(hotelPassesFreeCancelFilter);
     if (_nbhdFilter) {
@@ -5734,8 +5779,8 @@
         return _sortReverse ? -cmp : cmp;
       });
     } else if (_currentSort === 'match+price') {
-      // Default: strong match + higher nightly rate first (luxury curve). Toggle: value
-      // mode (cheaper nights score higher on the price axis). Same match tiers as before.
+      // Match tier first. Then blend match % with a price score shaped by Boop
+      // "price matters" slider (-100 less → +100 very) and the sort-direction toggle.
       const tier = s => s >= 40 ? 0 : s >= 15 ? 1 : 2;
       const priced = hotels.filter(h => h.price != null).map(h => h.price).sort((a, b) => a - b);
       let p10 = 0;
@@ -5756,9 +5801,15 @@
         if (!priced.length) return 50;
         return Math.max(0, Math.min(100, ((p - p10) / priceRange) * 100));
       };
-      const normPrice = _sortReverse ? normPriceCheap : normPriceExpensive;
-      const MATCH_W = 0.42;
-      const PRICE_W = 0.58;
+      const pm = boopPriceMattersForSort();
+      const gamma = (100 - pm) / 200;
+      const normSlider = p => {
+        if (p == null) return 0;
+        if (!priced.length) return 50;
+        return gamma * normPriceExpensive(p) + (1 - gamma) * normPriceCheap(p);
+      };
+      const MATCH_W = 0.25 + gamma * 0.53;
+      const PRICE_W = 1 - MATCH_W;
       hotels.sort((a, b) => {
         const aScore = hotelEffectiveScore(a);
         const bScore = hotelEffectiveScore(b);
@@ -5768,10 +5819,13 @@
           const cmp = bScore - aScore;
           return _sortReverse ? -cmp : cmp;
         }
-        const aComb = MATCH_W * aScore + PRICE_W * normPrice(a.price);
-        const bComb = MATCH_W * bScore + PRICE_W * normPrice(b.price);
+        const aComb = MATCH_W * aScore + PRICE_W * normSlider(a.price);
+        const bComb = MATCH_W * bScore + PRICE_W * normSlider(b.price);
         const d = bComb - aComb;
-        if (Math.abs(d) > 1e-6) return d > 0 ? 1 : -1;
+        if (Math.abs(d) > 1e-6) {
+          const sign = d > 0 ? 1 : -1;
+          return _sortReverse ? -sign : sign;
+        }
         if (bScore !== aScore) return bScore - aScore;
         if (a.price != null && b.price != null) {
           return _sortReverse ? a.price - b.price : b.price - a.price;

@@ -3577,6 +3577,46 @@
     .boop-q-head { margin-bottom:10px; }
     .boop-q-title { font-size:clamp(24px,2.6vw,34px); line-height:1.2; margin-top:0; font-family:'Cormorant Garamond',serif; }
     .boop-q-sub { margin-top:6px; font-size:13px; color:var(--muted); line-height:1.55; }
+    /* Stay style — price importance slider above the 4 vibe cards */
+    .boop-price-matter {
+      max-width: 520px;
+      margin: 16px auto 20px;
+      padding: 14px 16px 12px;
+      border-radius: 14px;
+      border: 1px solid var(--border);
+      background: rgba(255,255,255,0.03);
+    }
+    .boop-price-matter-label {
+      text-align: center;
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text);
+      margin-bottom: 8px;
+    }
+    .boop-price-matter-ends {
+      display: flex;
+      justify-content: space-between;
+      font-size: 11px;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 6px;
+      padding: 0 2px;
+    }
+    .boop-price-matter-range {
+      width: 100%;
+      display: block;
+      margin: 4px 0 8px;
+      accent-color: var(--accent);
+      height: 28px;
+      cursor: pointer;
+    }
+    .boop-price-matter-cur {
+      text-align: center;
+      font-size: 13px;
+      color: var(--accent2);
+      font-weight: 500;
+    }
     /* Must-haves step: slightly tighter spacing under headline (title matches other steps) */
     .boop-wrap--deal .boop-q-head { margin-bottom:6px; }
     .boop-wrap--deal .boop-q-sub { margin-top:4px; font-size:12px; line-height:1.45; }
