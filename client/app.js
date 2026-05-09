@@ -239,7 +239,18 @@
   }
   let selectedCityData     = null; // {name, country_code, lat, lng} from Geoapify autocomplete
   const NBHD_CITY_ROWS = {};
+  /** Visible labels for sort buttons — used when re-rendering arrow indicators. */
+  const SORT_LABELS = {
+    match:                'Best Match',
+    'match+price':        'Match + Price',
+    'match+price+rating': 'Best Value',
+    price:                'Best Price',
+    rating:               'Guest Rating',
+    stars:                'Stars',
+  };
   let _currentSort    = 'match';
+  /** Clicking the active sort again flips direction (see getSortedHotelsForDisplay). */
+  let _sortReverse    = false;
   let _viewMode       = localStorage.getItem('rmViewMode') || 'cards';
   let _displayedCount = 10;
   let _ratesReqId     = 0;   // incremented per search to discard stale rate responses
@@ -472,7 +483,7 @@
     {
       id:'nbhdScene',
       label:'Area',
-      title:'What kind of area should wrap your hotel?',
+      title:'What kind of area do you want to stay in?',
       sub:'Pick the street energy and location that feel right — one gut choice.',
       type:'cards',
       options:[
@@ -4443,6 +4454,7 @@
     _deferResultsRenderUntilTourClose = shouldOpenVibeTour;
     _vibeTourPending = false;
     _currentSort    = 'match';
+    _sortReverse    = false;
     _displayedCount = 10;
     _nbhdFilter     = null;  // BOOP v4 — reset the top-nbhd refine strip filter
     _pricesLoaded   = false;
@@ -4469,6 +4481,7 @@
       b.classList.remove('loading');
     });
     syncSortMoreTriggerAccent();
+    syncSortDirectionIndicators();
     if (shouldOpenVibeTour) {
       if (resPre) resPre.classList.add('no-anim');
       const sortedHotels = getSortedHotelsForDisplay();
@@ -4738,15 +4751,40 @@
     btn.classList.toggle('sort-more-trigger--accent', !onSurface);
   }
 
+  /** Updates sort pill text + ▲/▼ for the active control (aria-sort for a11y). */
+  function syncSortDirectionIndicators() {
+    document.querySelectorAll('.sort-btn[data-sort]').forEach(btn => {
+      const sort = btn.dataset.sort;
+      const label = SORT_LABELS[sort] || sort;
+      const active = btn.classList.contains('active');
+      btn.removeAttribute('aria-sort');
+      if (!active) {
+        btn.textContent = label;
+        return;
+      }
+      // Price: default cheap-first = ascending $; others: default "strongest first" = descending on score/combined.
+      const ascending = sort === 'price' ? !_sortReverse : _sortReverse;
+      btn.setAttribute('aria-sort', ascending ? 'ascending' : 'descending');
+      const glyph = ascending ? '\u25B2' : '\u25BC';
+      btn.innerHTML = `${label}<span class="sort-btn__dir" aria-hidden="true">${glyph}</span>`;
+    });
+  }
+
   function setSortBy(sort) {
     if ((sort === 'match+price' || sort === 'match+price+rating' || sort === 'price') && !_pricesLoaded) return;
-    _currentSort    = sort;
+    if (sort === _currentSort) {
+      _sortReverse = !_sortReverse;
+    } else {
+      _currentSort = sort;
+      _sortReverse = false;
+    }
     _displayedCount = 10;
     document.querySelectorAll('.sort-btn').forEach(b => {
-      b.classList.toggle('active', b.dataset.sort === sort);
+      b.classList.toggle('active', b.dataset.sort === _currentSort);
     });
     closeSortMorePop();
     syncSortMoreTriggerAccent();
+    syncSortDirectionIndicators();
     renderSorted();
   }
 
@@ -5681,25 +5719,66 @@
       });
     }
     if (_currentSort === 'rating') {
-      hotels.sort((a, b) => (b.rating || 0) - (a.rating || 0));
+      hotels.sort((a, b) => {
+        const cmp = (b.rating || 0) - (a.rating || 0);
+        return _sortReverse ? -cmp : cmp;
+      });
     } else if (_currentSort === 'stars') {
-      hotels.sort((a, b) => (b.starRating || 0) - (a.starRating || 0));
+      hotels.sort((a, b) => {
+        const cmp = (b.starRating || 0) - (a.starRating || 0);
+        return _sortReverse ? -cmp : cmp;
+      });
     } else if (_currentSort === 'price') {
-      hotels.sort((a, b) => (a.price ?? Infinity) - (b.price ?? Infinity));
+      hotels.sort((a, b) => {
+        const cmp = (a.price ?? Infinity) - (b.price ?? Infinity);
+        return _sortReverse ? -cmp : cmp;
+      });
     } else if (_currentSort === 'match+price') {
+      // Default: strong match + higher nightly rate first (luxury curve). Toggle: value
+      // mode (cheaper nights score higher on the price axis). Same match tiers as before.
       const tier = s => s >= 40 ? 0 : s >= 15 ? 1 : 2;
+      const priced = hotels.filter(h => h.price != null).map(h => h.price).sort((a, b) => a - b);
+      let p10 = 0;
+      let p90 = 0;
+      let priceRange = 1;
+      if (priced.length) {
+        p10 = priced[Math.floor(priced.length * 0.10)] ?? priced[0];
+        p90 = priced[Math.floor(priced.length * 0.90)] ?? priced[priced.length - 1];
+        priceRange = Math.max(p90 - p10, 1);
+      }
+      const normPriceCheap = p => {
+        if (p == null) return 0;
+        if (!priced.length) return 50;
+        return Math.max(0, Math.min(100, ((p90 - p) / priceRange) * 100));
+      };
+      const normPriceExpensive = p => {
+        if (p == null) return 0;
+        if (!priced.length) return 50;
+        return Math.max(0, Math.min(100, ((p - p10) / priceRange) * 100));
+      };
+      const normPrice = _sortReverse ? normPriceCheap : normPriceExpensive;
+      const MATCH_W = 0.42;
+      const PRICE_W = 0.58;
       hotels.sort((a, b) => {
         const aScore = hotelEffectiveScore(a);
         const bScore = hotelEffectiveScore(b);
         const tierDiff = tier(aScore) - tier(bScore);
         if (tierDiff !== 0) return tierDiff;
-        const scoreDiff = bScore - aScore;
-        if (Math.abs(scoreDiff) > 3) return scoreDiff;
-        const aHasPrice = a.price != null;
-        const bHasPrice = b.price != null;
-        if (aHasPrice !== bHasPrice) return bHasPrice ? 1 : -1;
-        if (!aHasPrice) return scoreDiff;
-        return a.price - b.price;
+        if (!priced.length) {
+          const cmp = bScore - aScore;
+          return _sortReverse ? -cmp : cmp;
+        }
+        const aComb = MATCH_W * aScore + PRICE_W * normPrice(a.price);
+        const bComb = MATCH_W * bScore + PRICE_W * normPrice(b.price);
+        const d = bComb - aComb;
+        if (Math.abs(d) > 1e-6) return d > 0 ? 1 : -1;
+        if (bScore !== aScore) return bScore - aScore;
+        if (a.price != null && b.price != null) {
+          return _sortReverse ? a.price - b.price : b.price - a.price;
+        }
+        if (a.price != null) return -1;
+        if (b.price != null) return 1;
+        return 0;
       });
     } else if (_currentSort === 'match+price+rating') {
       const tier = s => s >= 40 ? 0 : s >= 15 ? 1 : 2;
@@ -5715,15 +5794,20 @@
         const tierDiff = tier(aScore) - tier(bScore);
         if (tierDiff !== 0) return tierDiff;
         const scoreDiff = bScore - aScore;
-        if (Math.abs(scoreDiff) > 3) return scoreDiff;
-        const aValue = 0.50 * normPrice(a.price) + 0.50 * normRating(a.rating);
-        const bValue = 0.50 * normPrice(b.price) + 0.50 * normRating(b.rating);
-        return bValue - aValue;
+        let cmp = 0;
+        if (Math.abs(scoreDiff) > 3) cmp = scoreDiff;
+        else {
+          const aValue = 0.50 * normPrice(a.price) + 0.50 * normRating(a.rating);
+          const bValue = 0.50 * normPrice(b.price) + 0.50 * normRating(b.rating);
+          cmp = bValue - aValue;
+        }
+        return _sortReverse ? -cmp : cmp;
       });
     } else if (_currentSort === 'match') {
       const wNbhd = typeof _lastVsearchStats?.nbhd_rank_weight === 'number' ? _lastVsearchStats.nbhd_rank_weight : 0;
       const canFilter = _showAvailOnly && _hasDateSearch && _pricesLoaded;
       hotels.sort((a, b) => {
+        let cmp = 0;
         if (wNbhd > 0 && a.nbhd_fit_pct != null && b.nbhd_fit_pct != null) {
           // Use vectorScore (hotel-level, matches server sort basis) unless
           // availability filtering is active (then room-level effective score is correct).
@@ -5732,9 +5816,10 @@
           const ca = (1 - wNbhd) * ra + wNbhd * (a.nbhd_fit_pct / 100);
           const cb = (1 - wNbhd) * rb + wNbhd * (b.nbhd_fit_pct / 100);
           const d = cb - ca;
-          if (Math.abs(d) > 1e-9) return d > 0 ? 1 : -1;
+          if (Math.abs(d) > 1e-9) cmp = d > 0 ? 1 : -1;
         }
-        return hotelEffectiveScore(b) - hotelEffectiveScore(a);
+        if (cmp === 0) cmp = hotelEffectiveScore(b) - hotelEffectiveScore(a);
+        return _sortReverse ? -cmp : cmp;
       });
     }
     return hotels;
@@ -5788,6 +5873,7 @@
       obs.observe(sentinel);
     }
     updateFreeCancelHint();
+    syncSortDirectionIndicators();
   }
 
   // ── showMoreRooms ─────────────────────────────────────────────────────────

@@ -717,7 +717,7 @@ The implemented search flow is:
 2. **"Let's shape your vibe" — 5-question Boop wizard** (`#st-boop`) — users go through this immediately after city selection; this is the primary engagement path. The wizard has 5 inner screens driven by `BOOP_QUESTIONS`:
    - Q1 `trip`: "Have you been to this city before?" (single-tap)
    - Q2 `stayVibe`: "What kind of stay feels right?" (single-tap)
-   - Q3 `nbhdScene`: "What kind of area should wrap your hotel?" (single-tap)
+   - Q3 `nbhdScene`: "What kind of area do you want to stay in?" (single-tap)
    - Q4 `musthaves`: "Pick what matters most" + group size (multi-select)
    - Q5 `extras`: "Anything else we should know?" (free text; "Find hotels →")
    - Completing the wizard calls `boopFinish()` → `runBoopSearch()` → jumps directly to results (skipping nbhd/style/dates steps unless user navigates back)
