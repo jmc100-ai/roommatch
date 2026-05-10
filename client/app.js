@@ -4813,16 +4813,18 @@
     console.log(`[prices] hotel prices: ${Object.keys(priceMap).length}, room prices: ${roomPricedRooms} rooms across ${Object.keys(roomPriceMap).length} hotels`);
     _pricesLoaded  = true;
     _hasDateSearch = true;
-    // Default availability filter to OFF so the match-sorted list stays stable.
-    // User can enable it via the toggle to filter to available rooms only.
-    _showAvailOnly = false;
+    // Default "Available rooms only" to ON whenever the user searched with
+    // dates AND we actually got rates back. Cuts a 3,500-hotel firehose down
+    // to a list the user can act on. Falls back to OFF if zero hotels priced
+    // (e.g. supplier outage) so the user still sees results.
+    _showAvailOnly = pricedCount > 0;
     _setPriceBtnsState(true);
 
-    // Show availability toggle (unchecked = off by default)
     const availFilter = document.getElementById('availFilter');
     if (availFilter) {
       availFilter.style.display = 'flex';
-      document.getElementById('availOnlyCheck').checked = false;
+      const cb = document.getElementById('availOnlyCheck');
+      if (cb) cb.checked = _showAvailOnly;
     }
     scheduleSyncAvailFilterMount();
 
@@ -5813,13 +5815,21 @@
   }
 
   // Returns true if the hotel should be shown given the current availability filter.
-  // When "available rooms only" is active, hotels with no rate data from LiteAPI
-  // are hidden entirely rather than shown at 0% — cleaner UX than showing a result
-  // the user can't act on.
+  // "Available rooms only" means: the user can immediately pick a specific
+  // bookable room from a card that has photos. Two kinds of hotels we hide:
+  //   1. Stubs (no indexed roomTypes) — even if LiteAPI returned a hotel-level
+  //      price, the card has no rooms to surface, so it's an incomplete result.
+  //   2. Hotels in our index that have zero priced rooms AND no hotel-level
+  //      price — supplier returned nothing usable.
+  // Hotels with indexed rooms keep showing when EITHER any indexed room got a
+  // price OR a hotel-level price is set (some suppliers return rates only at
+  // the hotel level — the per-room "Book" button still falls back to the WL
+  // hotel page).
   function hotelPassesAvailFilter(h) {
     if (!(_showAvailOnly && _hasDateSearch && _pricesLoaded)) return true;
+    if (!(h.roomTypes && h.roomTypes.length > 0)) return false;
     if (h.price != null) return true;
-    const availRooms = (h.roomTypes || []).filter(rt => rt.roomTypeId != null && h.roomPrices?.[rt.roomTypeId] != null);
+    const availRooms = h.roomTypes.filter(rt => rt.roomTypeId != null && h.roomPrices?.[rt.roomTypeId] != null);
     return availRooms.length > 0;
   }
 
