@@ -4571,7 +4571,14 @@
       if (hotelIds.length > 0) params.set('hotelIds', hotelIds.join(','));
       const resp = await fetch(`${BACKEND}/api/rates?` + params);
       if (reqId !== _ratesReqId) return;  // stale — a new search was started
-      if (!resp.ok) { _fetchingPrices = false; _setPriceBtnsState(true); return; }
+      if (!resp.ok) {
+        _fetchingPrices = false;
+        for (const h of _lastHotels) { h.price = null; }
+        _pricesLoaded = true;
+        _setPriceBtnsState(true);
+        _setRatesStatus('', 'Rates unavailable — add dates again or sort by match');
+        return;
+      }
       const data = await resp.json();
       if (reqId !== _ratesReqId) return;
       _fetchingPrices = false;
@@ -4580,8 +4587,10 @@
       console.warn('[prices]', e.message);
       if (reqId === _ratesReqId) {
         _fetchingPrices = false;
+        for (const h of _lastHotels) { h.price = null; }
+        _pricesLoaded = true;
         _setPriceBtnsState(true);
-        _setRatesStatus('', '');
+        _setRatesStatus('', 'Rates unavailable — add dates again or sort by match');
         updateFreeCancelHint();
       }
     }
@@ -4722,7 +4731,12 @@
     // Merge hotel-level and per-room prices + offerIds onto hotel objects for re-render persistence
     let roomPricedRooms = 0;
     for (const hotel of _lastHotels) {
-      if (priceMap[hotel.id] !== undefined) hotel.price = priceMap[hotel.id];
+      if (Object.prototype.hasOwnProperty.call(priceMap, hotel.id)) {
+        const pv = priceMap[hotel.id];
+        hotel.price = pv == null || !Number.isFinite(Number(pv)) ? null : Number(pv);
+      } else {
+        hotel.price = null;
+      }
       if (roomPriceMap[hotel.id]) {
         hotel.roomPrices = roomPriceMap[hotel.id];
         roomPricedRooms += Object.keys(roomPriceMap[hotel.id]).length;
@@ -4819,7 +4833,9 @@
   }
 
   function setSortBy(sort) {
-    if ((sort === 'match+price' || sort === 'match+price+rating' || sort === 'price') && !_pricesLoaded) return;
+    // Match+Price / Best Value need nightly rates (or explicit no-dates path) before blend logic is meaningful.
+    // "Best Price" must still run: otherwise a failed / slow rates fetch leaves clicks as no-ops forever.
+    if ((sort === 'match+price' || sort === 'match+price+rating') && !_pricesLoaded) return;
     if (sort === _currentSort) {
       _sortReverse = !_sortReverse;
     } else {
@@ -5784,9 +5800,22 @@
         return _sortReverse ? -cmp : cmp;
       });
     } else if (_currentSort === 'price') {
+      // Cheap-first default. Missing nightly $ must not compare as NaN (would keep vector order → Ritz stuck on top).
       hotels.sort((a, b) => {
-        const cmp = (a.price ?? Infinity) - (b.price ?? Infinity);
-        return _sortReverse ? -cmp : cmp;
+        const aP = a.price;
+        const bP = b.price;
+        const aOk = aP != null && Number.isFinite(Number(aP));
+        const bOk = bP != null && Number.isFinite(Number(bP));
+        if (!aOk && !bOk) {
+          const cmp = hotelEffectiveScore(b) - hotelEffectiveScore(a);
+          return _sortReverse ? -cmp : cmp;
+        }
+        if (!aOk) return 1;
+        if (!bOk) return -1;
+        const cmp = Number(aP) - Number(bP);
+        if (cmp !== 0) return _sortReverse ? -cmp : cmp;
+        const tie = hotelEffectiveScore(b) - hotelEffectiveScore(a);
+        return _sortReverse ? -tie : tie;
       });
     } else if (_currentSort === 'match+price') {
       // Match tier first. Then blend match % with a price score shaped by Boop
