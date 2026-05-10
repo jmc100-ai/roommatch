@@ -2101,14 +2101,16 @@ app.get("/api/vsearch", async (req, res) => {
             v2.body.stats.luxury_pref = luxuryPref;
           }
           // Wizard slider "price matters" (answers): cosine scores barely separate
-          // luxury from value — nudge 4–5★ down when the user said price is important.
+          // luxury from value. Neutral (0) and "very important" (+): nudge 4–5★ down
+          // so Ritz-type does not own the top on match alone. "Less important" (−):
+          // skip — user explicitly allows splurge / premium to surface.
           if (
             hasBoopTailoredQuery &&
             Number.isFinite(priceMatters) &&
-            priceMatters > 0
+            priceMatters >= 0
           ) {
             const clampPm = Math.min(100, Math.max(0, priceMatters));
-            const pmPenFactor = Math.min(0.28, 0.04 + (clampPm / 100) * 0.26);
+            const pmPenFactor = Math.min(0.28, 0.08 + (clampPm / 100) * 0.22);
             for (const h of v2.body.hotels) {
               const stars = h.starRating || 3;
               if (stars > 3) {

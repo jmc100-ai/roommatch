@@ -5813,10 +5813,17 @@
         if (!priced.length) return 50;
         return Math.max(0, Math.min(100, ((p - p10) / priceRange) * 100));
       };
-      const pm = boopPriceMattersForSort();
-      // gamma ∈ [0,1]: higher → reward higher $ (slider left "price less important").
-      // pm=0 → ~0.41 (cheap-leaning); pm=100 → 0 (cheapest wins on price axis); pm=-100 → 1.
-      const gamma = Math.max(0, Math.min(1, (70 - pm) / 170));
+      const pmRaw = boopPriceMattersForSort();
+      const pm = Number.isFinite(pmRaw) ? Math.max(-100, Math.min(100, pmRaw)) : 0;
+      // gamma ∈ [0,1]: higher → more "premium $ / 5★" on the price axis.
+      // pm < 0 ("price less important"): full curve so Ritz-type can rank on match + splurge.
+      // pm >= 0 (neutral + "very important"): cap gamma so neutral never rewards ultra-luxury at the top.
+      let gamma;
+      if (pm < 0) {
+        gamma = Math.max(0, Math.min(1, (70 - pm) / 170));
+      } else {
+        gamma = Math.max(0, Math.min(0.07, ((100 - pm) / 100) * 0.07));
+      }
       const normSlider = p => {
         if (p == null) return 0;
         if (!priced.length) return 50;
@@ -5851,11 +5858,14 @@
           const bP = b.price != null;
           if (aP !== bP) return aP ? -1 : 1;
         }
-        if (!priced.length && pm === 0) {
+        // No nightly rates yet: only pure match when user explicitly said price is
+        // *less* important (luxury can win). Neutral / "important" use star proxy
+        // so 5★ does not default to #1 on match alone.
+        if (!priced.length && pm < 0) {
           const cmp = bScore - aScore;
           return _sortReverse ? -cmp : cmp;
         }
-        if (!priced.length && pm !== 0) {
+        if (!priced.length && pm >= 0) {
           const aComb = MATCH_W * aScore + PRICE_W * normBlendForHotel(a);
           const bComb = MATCH_W * bScore + PRICE_W * normBlendForHotel(b);
           const d = bComb - aComb;
