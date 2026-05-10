@@ -5944,9 +5944,17 @@
   // just refusing to show ghost cards with no bookable row.
   function hotelPassesAvailFilter(h) {
     if (!(_showAvailOnly && _hasDateSearch && _pricesLoaded)) return true;
-    if (!(h.roomTypes && h.roomTypes.length > 0)) return false;
-    const availRooms = h.roomTypes.filter(rt => rt.roomTypeId != null && h.roomPrices?.[rt.roomTypeId] != null);
-    return availRooms.length > 0;
+    // Pass when the card has at least one bookable row. Since rate-only
+    // mappedRoomIds are now merged into OTHER ROOM TYPES (no separate
+    // section), any non-empty h.roomPrices map means at least one row on
+    // the card is bookable. Previously this required an *indexed* room to
+    // be priced — that hid ~80% of priced hotels in Mexico City because
+    // LiteAPI mostly returns rates for room types we don't have photos for
+    // (luxury catalog rooms with photos:[] in /data/hotel).
+    const rp = h && h.roomPrices;
+    if (!rp) return false;
+    for (const _k in rp) return true;
+    return false;
   }
 
   function hotelPassesFreeCancelFilter(h) {
