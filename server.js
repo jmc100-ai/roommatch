@@ -1317,38 +1317,109 @@ app.get("/api/debug-rates", async (req, res) => {
   const { hotelId, checkin, checkout } = req.query;
   if (!hotelId || !checkin || !checkout) return res.status(400).json({ error: "hotelId, checkin, checkout required" });
   const nights = Math.round((new Date(checkout) - new Date(checkin)) / 86400000);
-  const liteRes = await fetch("https://api.liteapi.travel/v3.0/hotels/rates", {
+
+  // 1) /hotels/rates — what's bookable
+  const ratesRes = await fetch("https://api.liteapi.travel/v3.0/hotels/rates", {
     method: "POST",
     headers: { "X-API-Key": LITEAPI_KEY, "Content-Type": "application/json", "accept": "application/json" },
     body: JSON.stringify({ hotelIds: [hotelId], checkin, checkout, currency: "EUR", guestNationality: "US",
       occupancies: [{ adults: 2 }], maxRatesPerHotel: 20, roomMapping: true, timeout: 22 }),
   });
-  const json = await liteRes.json();
-  const ratesList = json?.data?.rates ?? json?.data ?? json?.rates ?? [];
+  const ratesJson = await ratesRes.json();
+  const ratesList = ratesJson?.data?.rates ?? ratesJson?.data ?? ratesJson?.rates ?? [];
   const hotel = ratesList[0];
-  if (!hotel) return res.json({ httpStatus: liteRes.status, foundHotel: false, raw: json });
-  const roomTypes = (hotel.roomTypes || []).map(rt => {
+
+  // 2) /data/hotel — the full catalog (rooms with AND without photos)
+  let catalogRooms = [];
+  let catalogRoomCount = 0;
+  let catalogRoomsWithPhotos = 0;
+  try {
+    const detailRes = await fetch(`https://api.liteapi.travel/v3.0/data/hotel?hotelId=${encodeURIComponent(hotelId)}`, {
+      headers: { "X-API-Key": LITEAPI_KEY, "accept": "application/json" },
+    });
+    const detailJson = await detailRes.json();
+    const rooms = detailJson?.data?.rooms ?? [];
+    catalogRoomCount = rooms.length;
+    catalogRooms = rooms.map(r => {
+      const photoCount = (r.photos || []).length;
+      if (photoCount > 0) catalogRoomsWithPhotos++;
+      return {
+        room_type_id: r.id ?? r.roomId ?? r.roomTypeId ?? null,
+        name:         r.roomName || r.name || null,
+        photo_count:  photoCount,
+        indexed:      photoCount > 0, // mirrors index-city-v2.js behaviour
+      };
+    });
+  } catch (e) { /* tolerate catalog failure — still report rates */ }
+
+  // 3) Our indexed inventory for this hotel (what we actually persisted)
+  let indexedRooms = [];
+  try {
+    const { data, error } = await db
+      .from("v2_room_inventory")
+      .select("room_name,room_type_id")
+      .eq("hotel_id", hotelId);
+    if (!error && data) {
+      const seen = new Map();
+      for (const row of data) {
+        const k = `${row.room_type_id ?? "_null_"}|${row.room_name}`;
+        if (!seen.has(k)) seen.set(k, { room_type_id: row.room_type_id, room_name: row.room_name, photo_rows: 0 });
+        seen.get(k).photo_rows++;
+      }
+      indexedRooms = Array.from(seen.values());
+    }
+  } catch (e) { /* tolerate */ }
+  const indexedIds = new Set(indexedRooms.map(r => r.room_type_id != null ? String(r.room_type_id) : null).filter(Boolean));
+
+  // 4) Cross-reference each rate against indexed inventory
+  const roomTypes = !hotel ? [] : (hotel.roomTypes || []).map(rt => {
     const firstRate = rt.rates?.[0] || {};
-    // Check multiple possible price locations in LiteAPI response
     const fromRetailTotal  = firstRate.retailRate?.total?.[0]?.amount;
     const fromRetailNet    = firstRate.retailRate?.net?.[0]?.amount;
     const fromTotal        = firstRate.total;
     const fromNet          = firstRate.net;
     const resolved = fromRetailTotal ?? fromRetailNet ?? fromTotal ?? fromNet ?? null;
+    const mid = firstRate.mappedRoomId;
+    const matchedIndex = mid != null && indexedIds.has(String(mid));
     return {
       roomTypeId:      rt.roomTypeId,
       rateCount:       rt.rates?.length,
-      mappedRoomId:    firstRate.mappedRoomId,
+      mappedRoomId:    mid,
       name:            firstRate.name,
-      retailTotal:     fromRetailTotal,
-      retailNet:       fromRetailNet,
-      directTotal:     fromTotal,
-      directNet:       fromNet,
-      resolvedAmount:  resolved,
       perNight:        resolved ? Math.round(resolved / nights) : null,
+      // diagnostic: cause of mismatch
+      mapping:         mid == null
+        ? "NULL_MAPPED_ID"          // cause 1: LiteAPI didn't tag this rate
+        : matchedIndex
+          ? "MATCHED_INDEXED"        // good
+          : (catalogRooms.find(c => String(c.room_type_id) === String(mid))
+              ? "IN_CATALOG_NOT_INDEXED"   // cause 2: catalog room had 0 photos, we dropped it
+              : "ID_NOT_IN_CATALOG"),       // cause 3: rate-only / supplier drift
     };
   });
-  res.json({ httpStatus: liteRes.status, hotelId, nights, roomTypeCount: roomTypes.length, roomTypes, rawKeys: Object.keys(json) });
+
+  const summary = !hotel ? { foundHotel: false } : {
+    foundHotel: true,
+    rates_total:                roomTypes.length,
+    rates_with_mappedRoomId:    roomTypes.filter(r => r.mappedRoomId != null).length,
+    rates_matched_indexed:      roomTypes.filter(r => r.mapping === "MATCHED_INDEXED").length,
+    rates_null_mapped_id:       roomTypes.filter(r => r.mapping === "NULL_MAPPED_ID").length,
+    rates_catalog_not_indexed:  roomTypes.filter(r => r.mapping === "IN_CATALOG_NOT_INDEXED").length,
+    rates_id_not_in_catalog:    roomTypes.filter(r => r.mapping === "ID_NOT_IN_CATALOG").length,
+    catalog_rooms_total:        catalogRoomCount,
+    catalog_rooms_with_photos:  catalogRoomsWithPhotos,
+    indexed_room_types:         indexedRooms.length,
+  };
+
+  res.json({
+    httpStatus: ratesRes.status,
+    hotelId,
+    nights,
+    summary,
+    rates: roomTypes,
+    indexedRooms,
+    catalogRooms,
+  });
 });
 
 // ── Gemini model debug endpoint ───────────────────────────────────────────────
