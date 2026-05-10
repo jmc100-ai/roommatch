@@ -86,6 +86,21 @@
   let _vibeTourPseudoFullscreen = false;
   let _deferResultsRenderUntilTourClose = false;
   /**
+   * Date-aware first-render gating. When the user types dates AND the active
+   * default sort is price-dependent (match+price / match+price+rating / price),
+   * we hold the FIRST render of the results list until /api/rates lands so the
+   * list paints once with the final price-aware sort instead of paint-then-
+   * reshuffle. The vibe tour acts as natural cover; by the time it closes,
+   * rates are usually already in. Bypassed (immediate render) when rates take
+   * longer than RATES_GATE_TIMEOUT_MS so we never block the UI indefinitely.
+   * Subsequent re-renders (sort changes, filter toggles) are unaffected — only
+   * the first paint is gated.
+   */
+  let _ratesArrivalPromise = null;
+  let _ratesArrivalResolve = null;
+  let _initialRenderHappened = false;
+  const RATES_GATE_TIMEOUT_MS = 5000;
+  /**
    * Hotel id chosen as the vibe-tour hero. While set, getSortedHotelsForDisplay()
    * pins this hotel to position 0 of the rendered list so the card the user just
    * saw in the tour is also #1 in results — even if rates arrive between the tour
@@ -3818,6 +3833,70 @@
     }
   }
 
+  /**
+   * Single entry point for the FIRST paint of the results list after a search.
+   *
+   * - No dates / non-price-dependent sort / prices already loaded → render now.
+   * - Dates entered + price-dependent default sort + rates in flight →
+   *   keep the existing skeleton/spinner UI showing, swap the result-count
+   *   line to "Finalizing rates for your dates…", and await rates landing
+   *   (capped at RATES_GATE_TIMEOUT_MS so we never block forever). On resolve
+   *   or timeout, render once.
+   *
+   * applyPrices() is wired to NO-OP its renderSortedSmooth() while
+   * _initialRenderHappened is false, so when rates arrive during the wait
+   * they don't trigger a competing render — this helper is the sole owner
+   * of the first paint.
+   */
+  async function revealResultsWhenReady() {
+    const priceDependentSort =
+      _currentSort === 'match+price' ||
+      _currentSort === 'match+price+rating' ||
+      _currentSort === 'price';
+    const haveDates = !!(S.checkin && S.checkout);
+    const needWait = haveDates && priceDependentSort && _fetchingPrices && !_pricesLoaded;
+
+    if (!needWait) {
+      exitResultsPendingMode();
+      const resEl = document.getElementById('results');
+      if (resEl) resEl.classList.remove('no-anim');
+      _initialRenderHappened = true;
+      renderSorted();
+      return;
+    }
+
+    // Hold the skeleton/spinner UI in place; update the status text so the
+    // user knows we're waiting on live rates (vs. still finding hotels).
+    const st = document.getElementById('st-results');
+    if (st) st.classList.add('results-pending');
+    const slo = document.getElementById('searchLoadingOverlay');
+    if (slo) {
+      slo.setAttribute('aria-hidden', 'false');
+      slo.setAttribute('aria-busy', 'true');
+    }
+    const resultsEl = document.getElementById('results');
+    if (resultsEl && !resultsEl.innerHTML.trim()) {
+      resultsEl.classList.add('no-anim');
+      resultsEl.innerHTML = buildResultsSkeletonCardsHTML(5);
+    }
+    const rc = document.getElementById('resultCount');
+    if (rc) rc.textContent = 'Finalizing live rates for your dates…';
+
+    const t0 = Date.now();
+    const ratesP = _ratesArrivalPromise || Promise.resolve();
+    await Promise.race([
+      ratesP,
+      new Promise(r => setTimeout(r, RATES_GATE_TIMEOUT_MS))
+    ]);
+    const waited = Date.now() - t0;
+    if (waited > 50) console.log(`[reveal] gated render waited ${waited}ms for rates (loaded=${_pricesLoaded})`);
+
+    exitResultsPendingMode();
+    if (resultsEl) resultsEl.classList.remove('no-anim');
+    _initialRenderHappened = true;
+    renderSorted();
+  }
+
   function startSearch() {
     _vibeTourPending = false;
     _deferResultsRenderUntilTourClose = false;
@@ -4540,6 +4619,17 @@
     _fetchingPrices = !!hasDates;
     _hasDateSearch  = false;
     _showAvailOnly  = false;
+    // Reset the gated-first-render machinery for this search. When dates are
+    // entered we create a fresh rates-arrival promise that fetchPrices() will
+    // resolve; revealResultsWhenReady() awaits it before the first paint so
+    // the list lands once with the price-aware sort applied.
+    _initialRenderHappened = false;
+    if (hasDates) {
+      _ratesArrivalPromise = new Promise(r => { _ratesArrivalResolve = r; });
+    } else {
+      _ratesArrivalPromise = null;
+      _ratesArrivalResolve = null;
+    }
     const availFilter = document.getElementById('availFilter');
     if (availFilter) availFilter.style.display = 'none';
     // Show property-type dropdown when results include non-hotel property types (V2 cities)
@@ -4576,9 +4666,7 @@
       return;
     }
     _vibeTourLeadId = null;
-    exitResultsPendingMode();
-    if (resPre) resPre.classList.remove('no-anim');
-    renderSorted();
+    revealResultsWhenReady();
   }
 
   function _setPriceBtnsState(loaded) {
@@ -4604,23 +4692,35 @@
   async function fetchPrices(city, checkin, checkout, reqId, hotelIds = []) {
     _setPriceBtnsState(false);  // show spinner only while fetch is in flight
     _setRatesStatus('loading', 'Checking live rates…');
+    // Signals revealResultsWhenReady() that rates have landed (success OR
+    // error). Always called exactly once per fetchPrices invocation so a
+    // gated render can never stall waiting on a failed/stale rates call.
+    const _signalRatesArrived = () => {
+      if (_ratesArrivalResolve) {
+        const r = _ratesArrivalResolve;
+        _ratesArrivalResolve = null;
+        try { r(); } catch (_) {}
+      }
+    };
     try {
       const params = new URLSearchParams({ city, checkin, checkout });
       if (hotelIds.length > 0) params.set('hotelIds', hotelIds.join(','));
       const resp = await fetch(`${BACKEND}/api/rates?` + params);
-      if (reqId !== _ratesReqId) return;  // stale — a new search was started
+      if (reqId !== _ratesReqId) { _signalRatesArrived(); return; }  // stale — a new search was started
       if (!resp.ok) {
         _fetchingPrices = false;
         for (const h of _lastHotels) { h.price = null; }
         _pricesLoaded = true;
         _setPriceBtnsState(true);
         _setRatesStatus('', 'Rates unavailable — add dates again or sort by match');
+        _signalRatesArrived();
         return;
       }
       const data = await resp.json();
-      if (reqId !== _ratesReqId) return;
+      if (reqId !== _ratesReqId) { _signalRatesArrived(); return; }
       _fetchingPrices = false;
       applyPrices(data.prices || {}, data.roomPrices || {}, data.currency || 'EUR', data.pricedCount || 0, data);
+      _signalRatesArrived();
     } catch (e) {
       console.warn('[prices]', e.message);
       if (reqId === _ratesReqId) {
@@ -4631,6 +4731,7 @@
         _setRatesStatus('', 'Rates unavailable — add dates again or sort by match');
         updateFreeCancelHint();
       }
+      _signalRatesArrived();
     }
   }
 
@@ -4834,6 +4935,19 @@
     //  - match / rating / stars: order doesn't change with prices → update in-place,
     //    no re-render, no flash, list stays stable.
     //  - match+price / price: user expects re-ranking by price → full re-sort.
+    //
+    // First-paint gating: if the gated initial render (revealResultsWhenReady)
+    // hasn't fired yet, we DON'T render here — we just stash prices on the
+    // hotel objects. The awaiting helper will pick them up when its rates
+    // promise resolves and paint the list once with the price-aware sort.
+    // This is what eliminates the visible "match-only → match+price" reshuffle
+    // on date-aware searches. The result-count + rates-status updates below
+    // are also skipped during the gate so the skeleton's "Finalizing live
+    // rates…" text remains visible until the gated render lands.
+    if (!_initialRenderHappened) {
+      updateFreeCancelHint();
+      return;
+    }
     const priceDependentSort = _currentSort === 'match+price' || _currentSort === 'match+price+rating' || _currentSort === 'price';
     if (priceDependentSort || _requireFreeCancel) {
       renderSortedSmooth();
@@ -5539,10 +5653,7 @@
     document.body.style.overflow = '';
     if (_deferResultsRenderUntilTourClose) {
       _deferResultsRenderUntilTourClose = false;
-      const resEl = document.getElementById('results');
-      exitResultsPendingMode();
-      if (resEl) resEl.classList.remove('no-anim');
-      renderSorted();
+      revealResultsWhenReady();
     }
     if (scrollToList) {
       document.getElementById('results')?.querySelector('.hotel-card,.hotel-row')?.scrollIntoView({ behavior:'smooth', block:'start' });
@@ -6080,11 +6191,19 @@
     const remaining = hotels.length - _displayedCount;
     const total     = hotels.length;
 
-    // Update result count in sort bar
+    // Update result count in sort bar. Include "· N priced" suffix once
+    // rates have landed so the gated first-paint render produces the same
+    // count line that applyPrices would have written (post-rates).
     const showing = toShow.length;
     const nbhdSuffix = selectedNeighborhood?.name ? ` · ${selectedNeighborhood.name}` : '';
+    let pricedSuffix = '';
+    if (_pricesLoaded && _hasDateSearch) {
+      let priced = 0;
+      for (const h of _lastHotels) { if (h && h.price != null) priced++; }
+      if (priced > 0) pricedSuffix = ` · ${priced} priced`;
+    }
     document.getElementById('resultCount').textContent =
-      remaining > 0 ? `Showing ${showing} of ${total} hotels${nbhdSuffix}` : `${total} hotel${total !== 1 ? 's' : ''}${nbhdSuffix}`;
+      remaining > 0 ? `Showing ${showing} of ${total} hotels${nbhdSuffix}${pricedSuffix}` : `${total} hotel${total !== 1 ? 's' : ''}${nbhdSuffix}${pricedSuffix}`;
     const dbgBtn = document.getElementById('debugCopyBtn');
     if (dbgBtn) dbgBtn.style.display = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' ? '' : 'none';
 
