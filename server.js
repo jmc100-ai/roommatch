@@ -211,6 +211,16 @@ app.set("trust proxy", 1);
 // Use production key if set, fall back to sandbox
 const LITEAPI_KEY = process.env.LITEAPI_PROD_KEY || process.env.LITEAPI_KEY || "";
 const IS_PROD     = !!process.env.LITEAPI_PROD_KEY;
+
+// LiteAPI /hotels/rates request knob: how many rate offers to ask for per
+// hotel. Higher = more distinct mappedRoomId coverage (especially luxury hotels
+// where one room can carry 8+ rate plans and crowd out other rooms in the
+// response), at the cost of payload size and parse time. 100 is the empirical
+// sweet spot for Mexico City (~50K rates / ~25 MB gzipped). Tune down to 50
+// if Render's network struggles; tune up to 150 if coverage still feels thin.
+// Clamped 10–250 as a guardrail.
+const LITEAPI_MAX_RATES_PER_HOTEL = Math.max(10, Math.min(250,
+  Number(process.env.LITEAPI_MAX_RATES_PER_HOTEL) || 100));
 const PORT        = process.env.PORT || 3000;
 
 // Keep health check fast and dependency-free for Render startup probes.
@@ -1323,7 +1333,7 @@ app.get("/api/debug-rates", async (req, res) => {
     method: "POST",
     headers: { "X-API-Key": LITEAPI_KEY, "Content-Type": "application/json", "accept": "application/json" },
     body: JSON.stringify({ hotelIds: [hotelId], checkin, checkout, currency: "EUR", guestNationality: "US",
-      occupancies: [{ adults: 2 }], maxRatesPerHotel: 20, roomMapping: true, timeout: 22 }),
+      occupancies: [{ adults: 2 }], maxRatesPerHotel: LITEAPI_MAX_RATES_PER_HOTEL, roomMapping: true, timeout: 22 }),
   });
   const ratesJson = await ratesRes.json();
   const ratesList = ratesJson?.data?.rates ?? ratesJson?.data ?? ratesJson?.rates ?? [];
@@ -3059,7 +3069,7 @@ app.get("/api/rates", async (req, res) => {
         currency: "EUR",
         guestNationality: "US",
         occupancies: [{ adults: 2 }],
-        maxRatesPerHotel: 20,
+        maxRatesPerHotel: LITEAPI_MAX_RATES_PER_HOTEL,
         roomMapping: true,
         timeout: 22,
       }),
@@ -3142,7 +3152,20 @@ app.get("/api/rates", async (req, res) => {
 
     const pricedCount = Object.keys(prices).length;
     const roomPricedCount = Object.values(roomPrices).reduce((s, rm) => s + Object.keys(rm).length, 0);
-    console.log(`[rates] ${city}: ${pricedCount}/${hotelIds.length} hotels priced, ${roomPricedCount} room type rates`);
+    // Distinct-rooms-per-hotel histogram. Validates the LITEAPI_MAX_RATES_PER_HOTEL
+    // knob: if most priced hotels are in the 0–1 bucket we're still missing
+    // rooms (consider bumping); if most are 6+ we may be over-fetching.
+    const bucketsHist = { '0': 0, '1': 0, '2-3': 0, '4-5': 0, '6+': 0 };
+    for (const hid of Object.keys(prices)) {
+      const n = roomPrices[hid] ? Object.keys(roomPrices[hid]).length : 0;
+      if (n === 0) bucketsHist['0']++;
+      else if (n === 1) bucketsHist['1']++;
+      else if (n <= 3) bucketsHist['2-3']++;
+      else if (n <= 5) bucketsHist['4-5']++;
+      else bucketsHist['6+']++;
+    }
+    console.log(`[rates] ${city}: ${pricedCount}/${hotelIds.length} hotels priced, ${roomPricedCount} room type rates, maxRates=${LITEAPI_MAX_RATES_PER_HOTEL}`);
+    console.log(`[rates] distinct-rooms histogram: 0:${bucketsHist['0']} 1:${bucketsHist['1']} 2-3:${bucketsHist['2-3']} 4-5:${bucketsHist['4-5']} 6+:${bucketsHist['6+']}`);
     res.json({ prices, roomPrices, offerIds, roomFreeCancel, hotelFreeCancel, currency: "EUR", nights, pricedCount });
 
   } catch (err) {
