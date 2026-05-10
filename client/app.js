@@ -4687,13 +4687,15 @@
   // Server caps synchronous LiteAPI metadata to top META_SYNC_LIMIT (~30) hotels
   // and returns the rest in data.deferred_meta_ids. We chunk-fetch the rest
   // here so cards beyond #30 fill in their name / stars / location / rating
-  // shortly after first paint without blocking TTFB.
+  // shortly after first paint without blocking TTFB. CHUNK=200 matches the
+  // server endpoint cap so a Mexico-City-sized fill (~3500 ids) needs ~18
+  // sequential calls rather than ~35 — cuts wall clock roughly in half.
   let _metaLazyReqId = 0;
   async function lazyFetchHotelMeta(deferredIds, searchReqId) {
     if (!Array.isArray(deferredIds) || !deferredIds.length) return;
     const ourReqId = ++_metaLazyReqId;
     const t0 = Date.now();
-    const CHUNK = 100;
+    const CHUNK = 200;
     for (let i = 0; i < deferredIds.length; i += CHUNK) {
       // Bail if a newer search started — those hotels aren't on screen anymore.
       if (ourReqId !== _metaLazyReqId) return;
@@ -4743,6 +4745,27 @@
           (stars ? `<span class="stars">${stars}</span>` : '') +
           (location ? `<span class="hotel-location">${location}</span>` : '') +
           rating + propChip;
+      }
+
+      // Stub cards (rank > GALLERY_LIMIT in V2 search → no indexed room photos)
+      // render with an empty hero placeholder. Once LiteAPI mainPhoto arrives via
+      // lazy meta, swap in a real image so the card stops looking broken without
+      // forcing a full re-render. We only patch when the existing hero is the
+      // single blank placeholder; if real images are already there (because the
+      // hotel had room/gallery photos), leave them alone.
+      if (m.mainPhoto) {
+        const cardEl = document.getElementById(`hotel-card-${h.id}`);
+        const heroEl = cardEl?.querySelector('.hotel-hero');
+        if (heroEl) {
+          const blank = heroEl.querySelector('.hotel-hero-blank');
+          const realImgs = heroEl.querySelectorAll('.hotel-hero-img:not(.hotel-hero-blank)');
+          if (blank && realImgs.length === 0) {
+            heroEl.classList.remove('hero-2');
+            heroEl.classList.add('hero-1');
+            heroEl.innerHTML =
+              `<img class="hotel-hero-img" src="${escHtml(m.mainPhoto)}" alt="" loading="lazy" onerror="this.classList.add('hotel-hero-blank');this.style.visibility='hidden'">`;
+          }
+        }
       }
     }
   }

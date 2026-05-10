@@ -2073,20 +2073,21 @@ app.get("/api/vsearch", async (req, res) => {
       resolveCityName,
     });
     if (v2.status === 200 && v2.body?.hotels?.length) {
-      // Only fetch LiteAPI metadata for the TOP META_SYNC_LIMIT photo-having hotels —
-      // those are the cards the user actually sees on first paint. Background-fetch the
-      // rest so they're warm in _hotelMetaCache by the time the client lazy-loads them
-      // via /api/hotels-meta as the user scrolls. This trades a tiny ranking edge case
-      // (star-penalty re-sort below uses starRating; tail hotels won't be penalised
-      // until the lazy-fetch fills their meta) for a 2–3s reduction in cold TTFB.
+      // Sync-fetch LiteAPI metadata for the top META_SYNC_LIMIT hotels (regardless of
+      // whether their indexed room photos were loaded by Phase B) — those are the
+      // cards the user sees on first paint. Lazy-fetch the rest in the background so
+      // every hotel — including "stubs" beyond GALLERY_LIMIT that have no indexed
+      // room rows — still gets a real LiteAPI name, hero photo, star rating, and
+      // address. Without this, stubs would render as "Hotel in {city}" forever.
       const META_SYNC_LIMIT = parseInt(process.env.META_SYNC_LIMIT || "30", 10);
-      const photoHotels  = v2.body.hotels.filter(h => h.roomTypes?.length > 0);
-      const syncIds      = photoHotels.slice(0, META_SYNC_LIMIT).map((h) => String(h.id).trim());
-      const deferredIds  = photoHotels.slice(META_SYNC_LIMIT).map((h) => String(h.id).trim());
+      const allIds       = v2.body.hotels.map((h) => String(h.id).trim()).filter(Boolean);
+      const syncIds      = allIds.slice(0, META_SYNC_LIMIT);
+      const deferredIds  = allIds.slice(META_SYNC_LIMIT);
+      const photoHotels  = v2.body.hotels.filter(h => h.roomTypes?.length > 0).length;
       const t0meta = Date.now();
       const liveMeta = await fetchHotelMetaBatch(syncIds);
       const filled = Object.values(liveMeta).filter(Boolean).length;
-      console.log(`[v2-meta] sync fetched ${filled}/${syncIds.length} hotels in ${Date.now()-t0meta}ms (deferred ${deferredIds.length}, stubs ${v2.body.hotels.length - photoHotels.length})`);
+      console.log(`[v2-meta] sync fetched ${filled}/${syncIds.length} hotels in ${Date.now()-t0meta}ms (deferred ${deferredIds.length}, total ${allIds.length}, with_photos ${photoHotels})`);
       for (const h of v2.body.hotels) {
         const sid = String(h.id).trim();
         const m = liveMeta[sid];

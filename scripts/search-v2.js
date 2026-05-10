@@ -260,7 +260,7 @@ async function runV2Search({ req, supabase, supabaseAdmin, resolveCityName }) {
         .eq("city", city),
       fetchClient
         .from("v2_room_types_index")
-        .select("hotel_id,room_name,facts,photo_count")
+        .select("hotel_id,room_name,facts,photo_count,photo_type_counts")
         .eq("city", city)
         .limit(100000),
     ]);
@@ -311,15 +311,22 @@ async function runV2Search({ req, supabase, supabaseAdmin, resolveCityName }) {
   // ── Build per-room confirmed facts + hotel coverage from the pre-built index ─
   // hotelFactHits: hotel_id → Set of fact_keys confirmed true (for coverage boost)
   const hotelFactHits = new Map();
-  // roomTypeMap: hotel_id → [{ room_name, facts{} }]  (aggregated from index rows)
-  const roomTypeMap = new Map(); // hotel_id → [{room_name, facts}]
+  // roomTypeMap: hotel_id → [{ room_name, facts, photo_count, photo_type_counts }]
+  // photo_count + photo_type_counts feed the unified photo-aware hotel scoring
+  // below so every hotel (not just top-GALLERY_LIMIT) is ranked on the same scale.
+  const roomTypeMap = new Map();
 
   for (const row of indexRows) {
     if (!eligibleSet.has(row.hotel_id)) continue;
     const facts = row.facts || {};
 
     if (!roomTypeMap.has(row.hotel_id)) roomTypeMap.set(row.hotel_id, []);
-    roomTypeMap.get(row.hotel_id).push({ room_name: row.room_name || "Room", facts });
+    roomTypeMap.get(row.hotel_id).push({
+      room_name:         row.room_name || "Room",
+      facts,
+      photo_count:       row.photo_count || 0,
+      photo_type_counts: row.photo_type_counts || {},
+    });
 
     // Build hotel-level fact hits for coverage scoring
     for (const [fk, fv] of Object.entries(facts)) {
@@ -356,11 +363,13 @@ async function runV2Search({ req, supabase, supabaseAdmin, resolveCityName }) {
 
       if (!byHotel.has(hotelId)) byHotel.set(hotelId, []);
       byHotel.get(hotelId).push({
-        room_name:    rt.room_name,
-        room_type_id: null, // not stored in index; resolved via photos in Phase B
+        room_name:         rt.room_name,
+        room_type_id:      null, // not stored in index; resolved via photos in Phase B
         rawScore,
         factResult,
-        features: rt.facts,
+        features:          rt.facts,
+        photo_count:       rt.photo_count,
+        photo_type_counts: rt.photo_type_counts,
       });
     }
   }
@@ -581,45 +590,69 @@ async function runV2Search({ req, supabase, supabaseAdmin, resolveCityName }) {
     }
   }
 
-  // Build hotel scores using photo-count penalty (mirrors V1 photoHotelScores logic)
-  const hotelDisplayScores = new Map(); // hotel_id → { topScore, rankScore }
+  // ── Unified hotel display scoring ──────────────────────────────────────────
+  // Single photo-aware aggregation applied to EVERY hotel (3500+) instead of
+  // the previous split where top-250 used mean-of-top-3 photo sims while the
+  // tail used MAX room rawScore. The split caused stub hotels (rank > 250, no
+  // photos loaded) to leapfrog photo hotels because their topScore was computed
+  // on a kinder scale (MAX vs mean). Both groups now use the same metric, fed
+  // by index data only — no extra DB calls.
+  //
+  // Algorithm per hotel:
+  //   1. Sort the hotel's rooms by rawScore DESC.
+  //   2. Compute a weighted top-3 mean by walking the sorted rooms and
+  //      "consuming" up to 3 photos worth of contribution. Each photo of room R
+  //      contributes R.rawScore. The per-room photo budget is photo_type_counts
+  //      [intentType] when an intent type was detected (e.g. bathroom); falls
+  //      back to total photo_count if no room has any intent-type photo.
+  //   3. rankScore: when soft/hard fact flags are present, use h.sBoosted (the
+  //      coverage-boosted hotel sim) so the soft-flag coverage semantics still
+  //      apply. Otherwise use the photo-aware mean directly.
+  //   4. Photo-count penalty: if total indexed photos for the hotel < 3, scale
+  //      topScore by totalPhotos/3 (applied to all hotels uniformly now).
+  const hotelDisplayScores = new Map();
 
-  for (const h of rankedHotels.slice(0, GALLERY_LIMIT)) {
-    const allPhotos   = photosByHotel.get(h.hotel_id) || [];
-    const totalPhotos = allPhotos.length;
-
-    // Collect per-photo scores for mean-of-top-3 (mirrors V1 hotelScoreMap approach)
-    // Each photo inherits the similarity of its room type.
-    const allPhotoScores    = [];
-    const intentPhotoScores = [];
-    for (const p of allPhotos) {
-      const sim = roomTypeSimMap.get(`${h.hotel_id}::${p.room_name}`) ?? h.rawSim;
-      allPhotoScores.push(sim);
-      if (!intentType || p.photo_type === intentType) intentPhotoScores.push(sim);
+  let penalisedCount = 0;
+  for (const h of rankedHotels) {
+    const rooms = byHotel.get(h.hotel_id) || [];
+    let totalAll = 0;
+    let totalIntent = 0;
+    for (const r of rooms) {
+      totalAll += r.photo_count || 0;
+      if (intentType) totalIntent += (r.photo_type_counts?.[intentType] || 0);
     }
-    const scoringScores = intentPhotoScores.length > 0 ? intentPhotoScores : allPhotoScores;
-    scoringScores.sort((a, b) => b - a);
-    const rawScore = scoringScores.length > 0
-      ? scoringScores.slice(0, 3).reduce((s, x) => s + x, 0) / Math.min(3, scoringScores.length)
-      : h.rawSim;
+    const useIntent = !!intentType && totalIntent > 0;
 
-    // Use boosted hotel sim as rankScore when flags are active (mirrors V1)
-    const rankScore = hasFlags ? h.sBoosted : rawScore;
+    let photoMeanScore = h.rawSim || 0;
+    if ((useIntent ? totalIntent : totalAll) > 0) {
+      const sortedRooms = rooms.slice().sort((a, b) => (b.rawScore || 0) - (a.rawScore || 0));
+      let remaining = 3, sum = 0, taken = 0;
+      for (const r of sortedRooms) {
+        if (remaining === 0) break;
+        const cnt = useIntent
+          ? (r.photo_type_counts?.[intentType] || 0)
+          : (r.photo_count || 0);
+        if (cnt === 0) continue;
+        const take = Math.min(cnt, remaining);
+        sum += (r.rawScore || 0) * take;
+        taken += take;
+        remaining -= take;
+      }
+      if (taken > 0) photoMeanScore = sum / taken;
+    }
+
+    const rankScore = hasFlags ? h.sBoosted : photoMeanScore;
     let topScore = remap(rankScore);
 
-    // Photo-count penalty: < 3 total photos → multiply by len/3 (exact V1)
-    if (totalPhotos < 3) {
-      topScore *= totalPhotos / 3;
-      console.log(`[v2] photo-count penalty: ${h.hotel_id} only ${totalPhotos} photos → ${topScore.toFixed(1)}`);
+    if (totalAll < 3) {
+      topScore *= totalAll / 3;
+      penalisedCount++;
     }
 
     hotelDisplayScores.set(h.hotel_id, { topScore, rankScore });
   }
-
-  // For hotels outside GALLERY_LIMIT: no photo data, use room-type score directly
-  for (const h of rankedHotels.slice(GALLERY_LIMIT)) {
-    const rankScore = hasFlags ? h.sBoosted : h.rawSim;
-    hotelDisplayScores.set(h.hotel_id, { topScore: remap(rankScore), rankScore });
+  if (penalisedCount > 0) {
+    console.log(`[v2] photo-count penalty applied to ${penalisedCount} hotels (< 3 indexed photos)`);
   }
 
   // ── Final hotel sort (mirrors V1 allHotels.sort) ──────────────────────────
