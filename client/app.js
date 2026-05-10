@@ -4843,8 +4843,13 @@
     // Show "Live rates" confirmation then fade out
     _setRatesStatus('done', '✓ Live rates');
 
-    // Update the result count to show pricing coverage
-    const total = _lastHotels.length;
+    // Update the result count to show pricing coverage. Reflect the
+    // availability filter so the count matches what the user actually sees
+    // (otherwise we'd say "Showing 10 of 3497" while only ~150 cards render).
+    const visibleHotels = (_showAvailOnly && _hasDateSearch && _pricesLoaded)
+      ? _lastHotels.filter(hotelPassesAvailFilter)
+      : _lastHotels;
+    const total = visibleHotels.length;
     const showing = Math.min(_displayedCount, total);
     const remaining = total - _displayedCount;
     const countEl = document.getElementById('resultCount');
@@ -5815,20 +5820,19 @@
   }
 
   // Returns true if the hotel should be shown given the current availability filter.
-  // "Available rooms only" means: the user can immediately pick a specific
-  // bookable room from a card that has photos. Two kinds of hotels we hide:
-  //   1. Stubs (no indexed roomTypes) — even if LiteAPI returned a hotel-level
-  //      price, the card has no rooms to surface, so it's an incomplete result.
-  //   2. Hotels in our index that have zero priced rooms AND no hotel-level
-  //      price — supplier returned nothing usable.
-  // Hotels with indexed rooms keep showing when EITHER any indexed room got a
-  // price OR a hotel-level price is set (some suppliers return rates only at
-  // the hotel level — the per-room "Book" button still falls back to the WL
-  // hotel page).
+  // "Available rooms only" means: the user can click Book on at least one
+  // specific indexed room. We hide:
+  //   1. Stubs (no indexed roomTypes) — incomplete card.
+  //   2. Hotels where LiteAPI's mappedRoomId doesn't match any of our indexed
+  //      room_type_id values — supplier may have returned a hotel-level rate,
+  //      but every individual room row would render "not available", making
+  //      the card incoherent (e.g. Hilton Mexico City Reforma: €282 hotel
+  //      rate but 8 indexed rooms all unmatched).
+  // The card-level "Lowest available" badge remains for hotels we keep; we're
+  // just refusing to show ghost cards with no bookable row.
   function hotelPassesAvailFilter(h) {
     if (!(_showAvailOnly && _hasDateSearch && _pricesLoaded)) return true;
     if (!(h.roomTypes && h.roomTypes.length > 0)) return false;
-    if (h.price != null) return true;
     const availRooms = h.roomTypes.filter(rt => rt.roomTypeId != null && h.roomPrices?.[rt.roomTypeId] != null);
     return availRooms.length > 0;
   }
