@@ -85,6 +85,15 @@
   let _vibeTourAudio = null;
   let _vibeTourPseudoFullscreen = false;
   let _deferResultsRenderUntilTourClose = false;
+  /**
+   * Hotel id chosen as the vibe-tour hero. While set, getSortedHotelsForDisplay()
+   * pins this hotel to position 0 of the rendered list so the card the user just
+   * saw in the tour is also #1 in results — even if rates arrive between the tour
+   * opening and the list rendering and would otherwise reshuffle the order
+   * (e.g. price-aware Match+Price sort that promotes higher-$$$ matches once
+   * /api/rates fills in). Cleared by a new search or any user-initiated sort.
+   */
+  let _vibeTourLeadId = null;
   /** hotelId → Street View URL array (possibly empty after a completed fetch) */
   const _svFrameCache = {};        // hotelId → urls[] (settled results)
   const _svFrameInFlight = {};     // hotelId → Promise (in-flight dedup)
@@ -4556,10 +4565,17 @@
       if (resPre) resPre.classList.add('no-anim');
       const sortedHotels = getSortedHotelsForDisplay();
       const topForTour = sortedHotels[0] || hotels[0];
+      // Pin the tour hero to position 0 of the eventual results render so the
+      // card stays #1 even if rates arrive mid-tour and the price-aware sort
+      // (Match+Price with non-neutral pm) would otherwise promote a different
+      // hotel above it. Cleared in startVectorSearch (new search) and
+      // setSortBy (user-initiated sort change).
+      _vibeTourLeadId = topForTour?.id != null ? String(topForTour.id) : null;
       updateFreeCancelHint();
       setTimeout(() => openVibeTourWithStreetView(topForTour ? [topForTour] : hotels), 120);
       return;
     }
+    _vibeTourLeadId = null;
     exitResultsPendingMode();
     if (resPre) resPre.classList.remove('no-anim');
     renderSorted();
@@ -4885,6 +4901,10 @@
     if (sort === _currentSort) {
       _sortReverse = !_sortReverse;
     } else {
+      // Switching to a different sort releases the vibe-tour pin so the chosen
+      // sort is applied without any "stuck on top" hero from the prior tour.
+      // Direction toggles on the *same* sort keep the pin (no surprise).
+      _vibeTourLeadId = null;
       _currentSort = sort;
       _sortReverse = false;
     }
@@ -6017,6 +6037,20 @@
         if (cmp === 0) cmp = hotelEffectiveScore(b) - hotelEffectiveScore(a);
         return _sortReverse ? -cmp : cmp;
       });
+    }
+
+    // Vibe-tour pin: keep the hotel the user just saw in the tour at #1 even if
+    // a later sort criterion (typically Match+Price after rates load) would
+    // demote it. The pin is only honoured when the lead hotel is still in the
+    // filtered/sorted set; if it has been filtered out (e.g. nbhd or property
+    // filter), we let the natural sort win. Pin is cleared by setSortBy and at
+    // the start of every new search.
+    if (_vibeTourLeadId) {
+      const idx = hotels.findIndex((h) => h && String(h.id) === _vibeTourLeadId);
+      if (idx > 0) {
+        const lead = hotels.splice(idx, 1)[0];
+        hotels.unshift(lead);
+      }
     }
     return hotels;
   }
