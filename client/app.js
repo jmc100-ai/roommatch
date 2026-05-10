@@ -6260,17 +6260,37 @@
   const COMPACT_SHOW = 3;
 
   function roomsSectionHTML(roomTypes, hotelScore, roomPrices, hasDateSearch, noAvailNotice, openCompactIdx = -1, hotel = null) {
-    // ── D3: extra-rate rows — priced mappedRoomIds we don't have indexed photos
-    // for. Surfaces additional bookable options on the card without lying about
-    // photo coverage. Computed against the FULL indexed list (hotel.roomTypes),
-    // not the filtered `roomTypes` param, so the set difference is stable
-    // regardless of "Available only" state.
-    const extrasSection = buildExtraRatesSectionHTML(hotel);
+    // ── Rate-only entries: priced mappedRoomIds from /api/rates that don't
+    // match any indexed room (no photo coverage in our DB). Computed against
+    // the FULL indexed list (hotel.roomTypes), not the filtered `roomTypes`
+    // param, so the set is stable regardless of "Available only" state. They
+    // get rendered inline in the OTHER ROOM TYPES list (after indexed rows)
+    // so the card has a single "more rooms" section instead of two stacked
+    // headers.
+    const indexedIdSet = new Set(
+      (hotel?.roomTypes || [])
+        .map(rt => rt.roomTypeId != null ? String(rt.roomTypeId) : null)
+        .filter(Boolean)
+    );
+    const extraIds = hotel?.roomPrices
+      ? Object.keys(hotel.roomPrices).filter(k => !indexedIdSet.has(k))
+      : [];
+    extraIds.sort((a, b) => (hotel.roomPrices[a] || 0) - (hotel.roomPrices[b] || 0));
 
+    // No indexed rooms at all (stub card). Still render any rate-only rows
+    // under a header so the user has bookable options.
     if (roomTypes.length === 0) {
-      // Notice + extras (if any). Card still has bookable rows when LiteAPI gave
-      // us rate-only rooms even though we have no indexed-room match.
-      return `${noAvailNotice}${extrasSection}`;
+      if (extraIds.length === 0) return noAvailNotice;
+      const visibleIds = extraIds.slice(0, COMPACT_SHOW);
+      const hiddenIds  = extraIds.slice(COMPACT_SHOW);
+      const visibleHTML = visibleIds.map(id => extraRateRowHTML(id, hotel, false)).join('');
+      const hiddenHTML  = hiddenIds.map(id => extraRateRowHTML(id, hotel, true)).join('');
+      const showMoreBtn = hiddenIds.length > 0
+        ? `<button class="rooms-show-more" onclick="showMoreRooms(this)">Show ${hiddenIds.length} more room type${hiddenIds.length !== 1 ? 's' : ''} ↓</button>`
+        : '';
+      return `${noAvailNotice}
+        <div class="rooms-other-header">OTHER ROOM TYPES (${extraIds.length})</div>
+        <div class="rooms-other">${visibleHTML}${hiddenHTML}${showMoreBtn}</div>`;
     }
 
     const featured = roomTypes[0];
@@ -6278,33 +6298,41 @@
 
     const featuredHTML = roomTypeHTML(featured, true, hotelScore, roomPrices, hasDateSearch, 'featured', false, hotel);
 
+    // Combined "other rooms" list: indexed compact rows + rate-only rows in
+    // a single section. Indexed first (they have photos + vibe scores), then
+    // rate-only (cheapest first). One COMPACT_SHOW=3 visible window across
+    // both kinds, the rest hidden behind "Show N more".
     let othersSection = '';
-    if (others.length > 0) {
-      const visibleOthers = others.slice(0, COMPACT_SHOW);
-      const hiddenOthers  = others.slice(COMPACT_SHOW);
+    const totalOthers = others.length + extraIds.length;
+    if (totalOthers > 0) {
+      // Build a unified entries array, then split into visible/hidden.
+      const entries = [];
+      others.forEach((rt, i) => entries.push({ kind: 'indexed', rt, indexedIdx: i }));
+      extraIds.forEach(id => entries.push({ kind: 'rate', id }));
 
-      const visibleHTML = visibleOthers.map((rt, ci) =>
-        roomTypeHTML(rt, openCompactIdx >= 0 && ci === openCompactIdx, hotelScore, roomPrices, hasDateSearch, 'compact', false, hotel)
-      ).join('');
+      const visibleEntries = entries.slice(0, COMPACT_SHOW);
+      const hiddenEntries  = entries.slice(COMPACT_SHOW);
 
-      const hiddenHTML = hiddenOthers.map(rt =>
-        roomTypeHTML(rt, false, hotelScore, roomPrices, hasDateSearch, 'compact', true, hotel)
-      ).join('');
+      const renderEntry = (e, isHidden) => e.kind === 'indexed'
+        ? roomTypeHTML(e.rt, openCompactIdx >= 0 && e.indexedIdx === openCompactIdx, hotelScore, roomPrices, hasDateSearch, 'compact', isHidden, hotel)
+        : extraRateRowHTML(e.id, hotel, isHidden);
 
-      const showMoreBtn = hiddenOthers.length > 0
-        ? `<button class="rooms-show-more" onclick="showMoreRooms(this)">Show ${hiddenOthers.length} more room type${hiddenOthers.length !== 1 ? 's' : ''} ↓</button>`
+      const visibleHTML = visibleEntries.map(e => renderEntry(e, false)).join('');
+      const hiddenHTML  = hiddenEntries.map(e => renderEntry(e, true)).join('');
+
+      const showMoreBtn = hiddenEntries.length > 0
+        ? `<button class="rooms-show-more" onclick="showMoreRooms(this)">Show ${hiddenEntries.length} more room type${hiddenEntries.length !== 1 ? 's' : ''} ↓</button>`
         : '';
 
       othersSection = `
-        <div class="rooms-other-header">OTHER ROOM TYPES (${others.length})</div>
+        <div class="rooms-other-header">OTHER ROOM TYPES (${totalOthers})</div>
         <div class="rooms-other">${visibleHTML}${hiddenHTML}${showMoreBtn}</div>`;
     }
 
     return `${noAvailNotice}
       <div class="hotel-divider-band">BEST MATCHING ROOM</div>
       ${featuredHTML}
-      ${othersSection}
-      ${extrasSection}`;
+      ${othersSection}`;
   }
 
   // When the user has "Available only" on, push bookable indexed rooms to the
@@ -6325,32 +6353,13 @@
     return [...priced, ...unpriced];
   }
 
-  // ── D3 helpers ─────────────────────────────────────────────────────────────
-  // LiteAPI's /hotels/rates often returns rates for room categories we don't
-  // have indexed photos for (rooms with 0 photos in /data/hotel that our
-  // quality filter skipped, or rate-only inventory that exists in the supplier
-  // pipeline but not in the catalog). We surface those as thin "More bookable
-  // rates" rows — name + price + Book button, no photos, no vibe score — so
-  // cards aren't artificially limited to the 1-2 indexed rooms LiteAPI's
-  // cheapness-sorted response surfaces per hotel.
-  function buildExtraRatesSectionHTML(hotel) {
-    if (!hotel || !hotel.roomPrices) return '';
-    const indexedIds = new Set(
-      (hotel.roomTypes || [])
-        .map(rt => rt.roomTypeId != null ? String(rt.roomTypeId) : null)
-        .filter(Boolean)
-    );
-    const extraIds = Object.keys(hotel.roomPrices).filter(k => !indexedIds.has(k));
-    if (extraIds.length === 0) return '';
-    // Cheapest first so the most attractive bookable rate is on top.
-    extraIds.sort((a, b) => (hotel.roomPrices[a] || 0) - (hotel.roomPrices[b] || 0));
-    const rows = extraIds.map(id => extraRateRowHTML(id, hotel)).join('');
-    return `
-      <div class="rooms-other-header rooms-other-header--rates">MORE BOOKABLE RATES (${extraIds.length})</div>
-      <div class="rooms-other rooms-other--rates">${rows}</div>`;
-  }
-
-  function extraRateRowHTML(rateId, hotel) {
+  // ── Rate-only row ─────────────────────────────────────────────────────────
+  // Renders a thin "OTHER ROOM TYPES" row for a mappedRoomId we have a price
+  // for but no indexed photos. Slot-compatible with the compact roomTypeHTML
+  // output so it can sit inline in the same `.rooms-other` list — no separate
+  // header needed. Visually distinguished by a placeholder thumb (the dashed
+  // 🛏 box) instead of a photo. Non-collapsible (no chevron, no photo strip).
+  function extraRateRowHTML(rateId, hotel, isHidden = false) {
     const perNight = hotel.roomPrices?.[rateId];
     if (perNight == null) return '';
     const rawName = hotel.roomNames?.[rateId] || 'Available rate';
@@ -6361,13 +6370,13 @@
     const bookHTML = bookUrl
       ? `<a class="book-btn book-btn--room" href="${bookUrl}" target="_blank" rel="noopener" onclick="event.stopPropagation()">Book →</a>`
       : '';
+    const hiddenClass = isHidden ? ' room-hidden' : '';
     return `
-      <div class="room-type-row room-type-row--rate-only">
+      <div class="room-type-row room-type-row--rate-only${hiddenClass}">
         <div class="room-type-header">
           <div class="room-thumb room-thumb--placeholder" aria-hidden="true">🛏</div>
           <div class="room-type-left">
             <span class="room-type-name">${escHtml(rawName)}</span>
-            <span class="room-rate-only-label">rate available · photos not yet indexed</span>
             <span class="room-rate">€${perNight.toLocaleString()}<span class="room-rate-per">/night</span></span>
             ${fcBadge}
           </div>
