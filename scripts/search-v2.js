@@ -661,7 +661,7 @@ async function runV2Search({ req, supabase, supabaseAdmin, resolveCityName }) {
     if (!hasPhotos) {
       return {
         id:           hotelId,
-        name:         hotelId,      // live metadata injected by server.js fetchHotelMetaBatch
+        name:         "", // real name from LiteAPI merged in server.js (never use raw id as title)
         address:      "",
         city,
         country:      "",
@@ -765,7 +765,7 @@ async function runV2Search({ req, supabase, supabaseAdmin, resolveCityName }) {
 
     return {
       id:          hotelId,
-      name:        hotelId,        // live metadata injected by server.js fetchHotelMetaBatch
+      name:        "", // real name from LiteAPI merged in server.js (never use raw id as title)
       address:     "",
       city,
       country:      "",

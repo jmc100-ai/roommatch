@@ -130,7 +130,10 @@
     const wl = _wlBaseUrl();
     if (!wl) {
       // Fallback: Google search until white label is configured
-      return `https://www.google.com/search?q=${encodeURIComponent((hotel.name||'') + ' ' + (hotel.city||'') + ' hotel booking')}`;
+      const nm = String(hotel?.name || '').trim();
+      const qName = nm && !isPlaceholderHotelTitle(nm, hotel?.id) ? nm : '';
+      const q = [qName, hotel.city || '', 'hotel booking'].filter(Boolean).join(' ');
+      return `https://www.google.com/search?q=${encodeURIComponent(q)}`;
     }
     // If we have an offerId for this specific room → go straight to checkout
     const offerId = hotel.offerIds?.[roomTypeId];
@@ -2324,6 +2327,22 @@
 
   function escHtml(s) {
     return (s||'').replace(/"/g,'&quot;').replace(/'/g,'&#39;').replace(/</g,'&lt;');
+  }
+
+  /** LiteAPI ids look like `lp` + hex — never show as the card / header title. */
+  function isPlaceholderHotelTitle(name, hotelId) {
+    const n = String(name ?? '').trim();
+    const id = String(hotelId ?? '').trim();
+    if (!n) return true;
+    if (id && n === id) return true;
+    return /^lp[0-9a-f]{6,}$/i.test(n);
+  }
+
+  /** Human-readable hotel title for UI (cards, rows, detail) until metadata loads. */
+  function hotelDisplayTitle(h) {
+    if (!h) return 'Hotel';
+    if (isPlaceholderHotelTitle(h.name, h.id)) return 'Hotel';
+    return String(h.name).trim() || 'Hotel';
   }
 
   /** Hero / card `photo_credit` from API — source-aware attribution. */
@@ -4696,7 +4715,7 @@
       const m = metaMap[h.id];
       if (!m) continue;
       // Mutate hotel object so future renders persist these values.
-      if (m.name)        h.name        = m.name;
+      if (m.name && !isPlaceholderHotelTitle(m.name, h.id)) h.name = m.name;
       if (m.mainPhoto)   h.mainPhoto   = m.mainPhoto;
       if (m.starRating)  h.starRating  = m.starRating;
       if (m.guestRating) h.rating      = m.guestRating;
@@ -5670,7 +5689,7 @@
     const previewPhotos = topRoom ? (topRoom.photos || []).slice(0, 3) : [];
 
     const thumbHTML = h.mainPhoto
-      ? `<img class="hotel-row-thumb" src="${h.mainPhoto}" alt="${h.name}" loading="lazy" onerror="this.outerHTML='<div class=hotel-row-thumb-placeholder></div>'">`
+      ? `<img class="hotel-row-thumb" src="${h.mainPhoto}" alt="${escHtml(hotelDisplayTitle(h))}" loading="lazy" onerror="this.outerHTML='<div class=hotel-row-thumb-placeholder></div>'">`
       : `<div class="hotel-row-thumb-placeholder"></div>`;
 
     const stars  = h.starRating > 0 ? '★'.repeat(Math.min(Math.round(h.starRating), 5)) : '';
@@ -5724,7 +5743,7 @@
       <div class="hotel-row" id="hrow-${h.id}" onclick="toggleHotelRow('${h.id}')">
         ${thumbHTML}
         <div class="hotel-row-info">
-          <div class="hotel-row-name">${h.name}</div>
+          <div class="hotel-row-name">${escHtml(hotelDisplayTitle(h))}</div>
           <div class="hotel-row-meta">${stars ? `<span style="color:var(--accent);font-size:10px">${stars}</span> · ` : ''}${h.address || h.city || ''}</div>
           <div class="hotel-row-score">${rating}</div>
         </div>
@@ -6613,7 +6632,7 @@
     const sidebarHTML = `
       <aside class="hpage-sidebar">
         <div class="hpage-sidebar-card">
-          <div class="hpage-sb-name">${escHtml(d.name || d.hotel_id)}</div>
+          <div class="hpage-sb-name">${escHtml(hotelDisplayTitle({ name: d.name, id: d.hotel_id }))}</div>
           <div class="hpage-sb-sub">
             ${stars ? `<span class="hp-stars">${stars}</span>` : ''}
             ${ratingBadge}
@@ -6649,7 +6668,7 @@
       <div class="hpage-grid">
         <div class="hpage-content">
           <div class="hp-meta">
-            <h1 class="hp-name">${escHtml(d.name || d.hotel_id)}</h1>
+            <h1 class="hp-name">${escHtml(hotelDisplayTitle({ name: d.name, id: d.hotel_id }))}</h1>
             <div class="hp-sub">
               ${stars ? `<span class="hp-stars">${stars}</span>` : ''}
               ${ratingBadge}
@@ -7112,7 +7131,7 @@
         ${heroStrip}
         <div class="hotel-header">
           <div class="hotel-header-left">
-            <div class="hotel-name" id="hotel-name-${h.id}">${h.name}</div>
+            <div class="hotel-name" id="hotel-name-${h.id}">${escHtml(hotelDisplayTitle(h))}</div>
             <div class="hotel-meta" id="hotel-meta-${h.id}">
               ${stars ? `<span class="stars">${stars}</span>` : ''}
               ${location ? `<span class="hotel-location">${location}</span>` : ''}

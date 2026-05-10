@@ -267,6 +267,23 @@ app.listen(PORT, "0.0.0.0", () => {
 // ── In-memory hotel metadata cache (replaces hotels_cache DB reads for display) ──
 // Stores name, main photo, ratings fetched live from LiteAPI; NOT persisted to DB.
 // TTL: 4 hours. Only top-N hotels per search are fetched (those with photo data).
+// LiteAPI property ids look like `lp` + hex — never treat as a guest-facing hotel name.
+function isPlaceholderHotelTitle(name, hotelId) {
+  const n = String(name ?? "").trim();
+  const id = String(hotelId ?? "").trim();
+  if (!n) return true;
+  if (id && n === id) return true;
+  return /^lp[0-9a-f]{6,}$/i.test(n);
+}
+
+function resolveHotelNameFromMeta(meta, hotelId, fallbackName) {
+  const mName = meta && typeof meta.name === "string" ? meta.name.trim() : "";
+  if (mName && !isPlaceholderHotelTitle(mName, hotelId)) return mName;
+  const fb = String(fallbackName ?? "").trim();
+  if (fb && !isPlaceholderHotelTitle(fb, hotelId)) return fb;
+  return "";
+}
+
 const _hotelMetaCache = new Map(); // hotelId → { name, mainPhoto, starRating, guestRating, address, expiresAt }
 // 24h: hotel name/photo/star/rating barely change. Reduces LiteAPI re-fetch frequency
 // across the day; instance restarts still cause a one-time cold load (see prefetchHotelMetaBackground).
@@ -301,8 +318,9 @@ async function fetchHotelMetaBatch(hotelIds) {
         const amenities = Array.isArray(rawFacilities)
           ? rawFacilities.map(f => (typeof f === "string" ? f : f?.name || f?.facilityName || "")).filter(Boolean)
           : [];
+        const rawNm = (h.name || h.hotelName || "").trim();
         _hotelMetaCache.set(hotelId, {
-          name:        h.name        || h.hotelName  || null,
+          name:        !isPlaceholderHotelTitle(rawNm, hotelId) ? (rawNm || null) : null,
           mainPhoto:   h.main_photo  || h.mainPhoto  || h.hotelImages?.[0]?.url || null,
           starRating:  h.starRating  || h.star_rating || 0,
           guestRating: h.rating      || h.guestRating || h.guest_rating || 0,
@@ -2045,11 +2063,13 @@ app.get("/api/vsearch", async (req, res) => {
       for (const h of v2.body.hotels) {
         const m = liveMeta[h.id];
         if (m) {
-          h.name        = m.name        || h.name || h.id;
+          h.name        = resolveHotelNameFromMeta(m, h.id, h.name);
           h.mainPhoto   = m.mainPhoto   || null;
           h.starRating  = m.starRating  || 0;
           h.rating      = m.guestRating || 0;
           h.address     = m.address     || "";
+        } else if (isPlaceholderHotelTitle(h.name, h.id)) {
+          h.name = "";
         }
       }
       // Tell the client which IDs still need a meta fetch so it can lazy-batch them.
@@ -2670,7 +2690,7 @@ app.get("/api/vsearch", async (req, res) => {
       if (!hasPhotos) {
         return {
           id:          hotelId,
-          name:        fallbackName || hotelId,
+          name:        resolveHotelNameFromMeta({}, hotelId, fallbackName),
           address:     "",
           city,
           country:     "",
@@ -2757,7 +2777,7 @@ app.get("/api/vsearch", async (req, res) => {
 
       return {
         id:          hotelId,
-        name:        meta.name || fallbackName || hotelId,
+        name:        resolveHotelNameFromMeta(meta, hotelId, fallbackName),
         address:     meta.address || "",
         city,
         country:     "",
@@ -4129,7 +4149,7 @@ app.get("/api/hotel/:hotelId", async (req, res) => {
 
     return {
       hotel_id:      hotelId,
-      name:          meta.name || hotelId,
+      name:          resolveHotelNameFromMeta(meta, hotelId, ""),
       star_rating:   meta.starRating || 0,
       guest_rating:  meta.guestRating || 0,
       address:       meta.address || "",
