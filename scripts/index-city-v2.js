@@ -347,36 +347,66 @@ async function reindexCityV2(city, limit = 200, forceRebuild = true) {
         cached_at: new Date().toISOString(),
       }, { onConflict: "hotel_id" });
 
-      const MAX_PHOTOS_PER_ROOM = 5;  // cap per room type to ensure coverage across all rooms
+      // Per-room photo selection.
+      //
+      // Previously a single hotel-wide `seenUrls` Set deduped photo URLs across
+      // all rooms in the catalog. LiteAPI commonly assigns the same physical
+      // photo URL to several sibling room types (e.g. Deluxe King + Grand
+      // Deluxe King at hotels that didn't shoot each tier separately). With a
+      // hotel-wide Set the first iterated room claimed those URLs and every
+      // later room saw them as "seen" and skipped — sometimes ending up with
+      // zero indexed photos (e.g. St. Regis MX `1144966`). Combined with the
+      // old unique index on `(hotel_id, photo_url)`, the DB also enforced a
+      // single-owner-per-URL constraint that compounded the bug.
+      //
+      // Fix: per-room dedup; rely on the new unique index
+      // `(hotel_id, COALESCE(room_type_id, '_null_'), photo_url)` to dedup
+      // accidental in-room duplicates at the DB level. Captions/facts for a
+      // shared URL are computed once and reused across rooms via captionCache,
+      // so Gemini is never called twice for the same image.
+      const MAX_PHOTOS_PER_ROOM = 8;
       const chosen = [];
-      const seenUrls = new Set();
       for (const room of (detail.rooms || [])) {
         const roomName = room.roomName || room.name || "Room";
         const roomTypeId = room.id || room.roomId || room.roomTypeId || null;
+        const seenInRoom = new Set();
         let roomPhotoCount = 0;
         for (const p of (room.photos || [])) {
           if (roomPhotoCount >= MAX_PHOTOS_PER_ROOM) break;
           const url = p.url || p.hd_url || "";
-          if (!url || seenUrls.has(url)) continue;
-          seenUrls.add(url);
+          if (!url || seenInRoom.has(url)) continue;
+          seenInRoom.add(url);
           chosen.push({ roomName, roomTypeId, url, type: classifyPhoto(p, roomName) });
           roomPhotoCount++;
         }
-        // No global PHOTO_LIMIT_PER_HOTEL break — every room type gets its fair share
       }
+
+      // Caption+facts cache keyed by URL. Promise-valued so PHOTO_CONCURRENCY
+      // parallel workers that pick the same URL collapse to a single
+      // Gemini call instead of racing each other.
+      const captionCache = new Map();
+      const getCaptionFor = (photo) => {
+        const existing = captionCache.get(photo.url);
+        if (existing) return existing;
+        const p = (async () => {
+          const cap = await geminiCaption(photo.url, { type: photo.type, roomName: photo.roomName });
+          const detectedType = (cap?.match(/PHOTO[_ ]TYPE:\s*([^\n\r]+)/i)?.[1] || photo.type || "other").toLowerCase().trim();
+          const facts = parseStructuredCaption(cap);
+          return { caption: cap, detectedType, facts };
+        })();
+        captionCache.set(photo.url, p);
+        return p;
+      };
 
       for (let j = 0; j < chosen.length; j += PHOTO_CONCURRENCY) {
         const chunk = chosen.slice(j, j + PHOTO_CONCURRENCY);
         await Promise.all(chunk.map(async (photo) => {
-          const cap = await geminiCaption(photo.url, { type: photo.type, roomName: photo.roomName });
-          const summary = extractFeatureSummary(cap);
-          // New format uses PHOTO_TYPE: (underscore), old used PHOTO TYPE: (space) — handle both
-          const detectedType = (cap?.match(/PHOTO[_ ]TYPE:\s*([^\n\r]+)/i)?.[1] || photo.type || "other").toLowerCase().trim();
+          const { caption, detectedType, facts } = await getCaptionFor(photo);
           await db.from("v2_room_inventory").upsert({
             hotel_id: hotelId, city, country_code: cc, room_name: photo.roomName, room_type_id: photo.roomTypeId || null,
             photo_url: photo.url, photo_type: detectedType, source: "vision",
-          }, { onConflict: "hotel_id,photo_url" });
-          const factRows = parseStructuredCaption(cap).map((f) => ({
+          }, { onConflict: "hotel_id,room_type_id,photo_url" });
+          const factRows = facts.map((f) => ({
             hotel_id: hotelId,
             room_type_id: photo.roomTypeId || null,
             city,
