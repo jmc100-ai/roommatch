@@ -4678,19 +4678,18 @@
         const openCompactIdx = openIdx >= 0 ? openIdx : -1;
 
         const allRoomTypes = h.roomTypes || [];
-        const isAvail = rt => rt.roomTypeId != null && h.roomPrices?.[rt.roomTypeId] != null;
-        const canFilter = _showAvailOnly && _hasDateSearch && _pricesLoaded;
-        const availRoomTypes = allRoomTypes.filter(isAvail);
-        const hasHotelAvail = h.price != null;
-        const visibleRooms = canFilter
-          ? (availRoomTypes.length > 0 ? availRoomTypes : (hasHotelAvail ? allRoomTypes : []))
-          : allRoomTypes;
-        const noAvailRooms = canFilter && visibleRooms.length === 0;
+        // "Available only" is a HOTEL-level filter (hotelPassesAvailFilter
+        // hides whole hotels without any matched bookable room). Inside a
+        // card that passes, show every indexed room so the user sees full
+        // visual context — unmatched rooms render with their "not available"
+        // badge. When the filter is on, sort bookable rooms first so the
+        // featured "BEST MATCHING ROOM" slot is always something the user
+        // can actually book.
+        const visibleRooms = sortRoomsForCard(allRoomTypes, h);
         const isStub = allRoomTypes.length === 0;
-        const notice = noAvailRooms
-          ? (isStub && hasHotelAvail
-              ? `<div class="no-avail-notice">Available for your dates — room photos not in our visual index yet</div>`
-              : `<div class="no-avail-notice">No rooms available for these dates — <button class="no-avail-link" onclick="setAvailFilter(false);document.getElementById('availOnlyCheck').checked=false">show all room types</button></div>`)
+        const hasHotelAvail = h.price != null;
+        const notice = (isStub && hasHotelAvail && _showAvailOnly && _hasDateSearch && _pricesLoaded)
+          ? `<div class="no-avail-notice">Available for your dates — room photos not in our visual index yet</div>`
           : '';
         roomsEl.innerHTML = roomsSectionHTML(visibleRooms, h.vectorScore, h.roomPrices, _hasDateSearch, notice, openCompactIdx, h);
         bindFeaturedStripNavs(roomsEl);
@@ -5737,12 +5736,11 @@
     const sym   = _priceCurrency === 'EUR' ? '€' : '$';
     const score = hotelEffectiveScore(h);
     const hotelIdAttr = escHtml(String(h.id));
+    // Show every indexed room regardless of "Available only" — the toggle is
+    // a hotel-level filter (see hotelPassesAvailFilter), not a room-level one.
+    // Unmatched rooms render with their existing "not available" cue.
     const allRoomTypes = h.roomTypes || [];
-    const canFilter    = _showAvailOnly && _hasDateSearch && _pricesLoaded;
-    const availRTs     = allRoomTypes.filter(rt => rt.roomTypeId != null && h.roomPrices?.[rt.roomTypeId] != null);
-    const visibleRooms = canFilter
-      ? (availRTs.length > 0 ? availRTs : (h.price != null ? allRoomTypes : []))
-      : allRoomTypes;
+    const visibleRooms = allRoomTypes;
 
     const topRoom = visibleRooms[0];
     const previewPhotos = topRoom ? (topRoom.photos || []).slice(0, 3) : [];
@@ -6188,6 +6186,24 @@
       ${featuredHTML}
       ${othersSection}
       ${extrasSection}`;
+  }
+
+  // When the user has "Available only" on, push bookable indexed rooms to the
+  // front so the featured ("BEST MATCHING ROOM") slot lands on something they
+  // can actually book. Within each group (bookable / not) preserve the
+  // server's vibe-score ordering. When the filter is off, leave the list as-is.
+  function sortRoomsForCard(rooms, hotel) {
+    if (!rooms || rooms.length === 0) return rooms || [];
+    const filterActive = _showAvailOnly && _hasDateSearch && _pricesLoaded;
+    if (!filterActive) return rooms;
+    const priced = [];
+    const unpriced = [];
+    for (const rt of rooms) {
+      const has = rt && rt.roomTypeId != null && hotel?.roomPrices?.[rt.roomTypeId] != null;
+      (has ? priced : unpriced).push(rt);
+    }
+    if (priced.length === 0 || unpriced.length === 0) return rooms;
+    return [...priced, ...unpriced];
   }
 
   // ── D3 helpers ─────────────────────────────────────────────────────────────
@@ -7213,21 +7229,19 @@
          </button>`
       : '';
 
-    // ── Room filtering (availability toggle) ────────────────────────────────
+    // ── Rooms inside the card ───────────────────────────────────────────────
+    // "Available only" is a HOTEL-level filter (see hotelPassesAvailFilter).
+    // Inside a card that passes, show every indexed room so the user sees
+    // full visual context — unmatched rooms render with their "not available"
+    // badge via roomTypeHTML's isUnavail path. When the filter is on, sort
+    // bookable rooms first so the featured "BEST MATCHING ROOM" slot is
+    // always something the user can actually book.
     const allRoomTypes = h.roomTypes || [];
-    const isAvail  = rt => rt.roomTypeId != null && h.roomPrices?.[rt.roomTypeId] != null;
-    const canFilter = _showAvailOnly && _hasDateSearch && _pricesLoaded;
-    const availRoomTypes = allRoomTypes.filter(isAvail);
-    const hasHotelAvail  = h.price != null;
-    const roomTypes = canFilter
-      ? (availRoomTypes.length > 0 ? availRoomTypes : (hasHotelAvail ? allRoomTypes : []))
-      : allRoomTypes;
-    const noAvailRooms = canFilter && roomTypes.length === 0;
+    const roomTypes = sortRoomsForCard(allRoomTypes, h);
     const isStub = allRoomTypes.length === 0;
-    const noAvailNotice = noAvailRooms
-      ? (isStub && hasHotelAvail
-          ? `<div class="no-avail-notice">Available for your dates — room photos not in our visual index yet</div>`
-          : `<div class="no-avail-notice">No rooms available for these dates — <button class="no-avail-link" onclick="setAvailFilter(false);document.getElementById('availOnlyCheck').checked=false">show all room types</button></div>`)
+    const hasHotelAvail = h.price != null;
+    const noAvailNotice = (isStub && hasHotelAvail && _showAvailOnly && _hasDateSearch && _pricesLoaded)
+      ? `<div class="no-avail-notice">Available for your dates — room photos not in our visual index yet</div>`
       : '';
 
     // ── Hotel hero: mainPhoto (large left) + up to 2 gallery/room photos (stacked right) ──
