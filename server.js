@@ -215,12 +215,13 @@ const IS_PROD     = !!process.env.LITEAPI_PROD_KEY;
 // LiteAPI /hotels/rates request knob: how many rate offers to ask for per
 // hotel. Higher = more distinct mappedRoomId coverage (especially luxury hotels
 // where one room can carry 8+ rate plans and crowd out other rooms in the
-// response), at the cost of payload size and parse time. 100 is the empirical
-// sweet spot for Mexico City (~50K rates / ~25 MB gzipped). Tune down to 50
-// if Render's network struggles; tune up to 150 if coverage still feels thin.
-// Clamped 10–250 as a guardrail.
-const LITEAPI_MAX_RATES_PER_HOTEL = Math.max(10, Math.min(250,
-  Number(process.env.LITEAPI_MAX_RATES_PER_HOTEL) || 100));
+// response), at the cost of payload size and parse time.
+// Mexico City baseline at 200 = empirically the right ceiling: at 100 the
+// distinct-rooms histogram clustered at 1-2/hotel with 0 hotels reaching 6+;
+// bumping to 200 should push more hotels into 4-5 and 6+. Above ~250 LiteAPI's
+// payload tradeoffs start to dominate. Clamped 10-300 as a guardrail.
+const LITEAPI_MAX_RATES_PER_HOTEL = Math.max(10, Math.min(300,
+  Number(process.env.LITEAPI_MAX_RATES_PER_HOTEL) || 200));
 const PORT        = process.env.PORT || 3000;
 
 // Keep health check fast and dependency-free for Render startup probes.
@@ -3089,6 +3090,7 @@ app.get("/api/rates", async (req, res) => {
     const ratesList = json?.data?.rates ?? json?.data ?? json?.rates ?? [];
     const prices        = {};  // hotel_id → cheapest $/night (hotel-level display)
     const roomPrices    = {};  // hotel_id → { room_type_id → $/night }
+    const roomNames     = {};  // hotel_id → { room_type_id → rate name (for "extra rates" rows when room_type_id isn't in our indexed inventory) }
     const offerIds      = {};  // hotel_id → { room_type_id → offerId } for white-label deep links
     const roomFreeCancel = {}; // hotel_id → { room_type_id → bool } — cheapest shown rate per room
     const hotelFreeCancel = {}; // hotel_id → true if any returned rate with a price is free-cancel
@@ -3136,6 +3138,12 @@ app.get("/api/rates", async (req, res) => {
           if (!roomPrices[hotelId]) roomPrices[hotelId] = {};
           if (!roomPrices[hotelId][key] || perNight < roomPrices[hotelId][key]) {
             roomPrices[hotelId][key] = perNight;
+            // Capture rate name so the client can render "extra rates" rows for
+            // rate-only rooms (mappedRoomIds we don't have in v2_room_inventory).
+            if (firstRate?.name) {
+              if (!roomNames[hotelId]) roomNames[hotelId] = {};
+              roomNames[hotelId][key] = String(firstRate.name).slice(0, 120);
+            }
             // Capture the offerId for this rate — used for white-label checkout deep links
             const offerId = firstRate?.offerId || firstRate?.offer_id;
             if (offerId) {
@@ -3166,7 +3174,7 @@ app.get("/api/rates", async (req, res) => {
     }
     console.log(`[rates] ${city}: ${pricedCount}/${hotelIds.length} hotels priced, ${roomPricedCount} room type rates, maxRates=${LITEAPI_MAX_RATES_PER_HOTEL}`);
     console.log(`[rates] distinct-rooms histogram: 0:${bucketsHist['0']} 1:${bucketsHist['1']} 2-3:${bucketsHist['2-3']} 4-5:${bucketsHist['4-5']} 6+:${bucketsHist['6+']}`);
-    res.json({ prices, roomPrices, offerIds, roomFreeCancel, hotelFreeCancel, currency: "EUR", nights, pricedCount });
+    res.json({ prices, roomPrices, roomNames, offerIds, roomFreeCancel, hotelFreeCancel, currency: "EUR", nights, pricedCount });
 
   } catch (err) {
     console.error("[rates]", err.message);

@@ -4803,6 +4803,9 @@
         hotel.roomPrices = roomPriceMap[hotel.id];
         roomPricedRooms += Object.keys(roomPriceMap[hotel.id]).length;
       }
+      // Rate-name map for "extra rates" rows — only used for mappedRoomIds we
+      // don't have in our indexed v2_room_inventory (i.e. rate-only rooms).
+      if (ratesData.roomNames?.[hotel.id]) hotel.roomNames = ratesData.roomNames[hotel.id];
       // Store offerIds for white-label checkout deep links
       if (ratesData.offerIds?.[hotel.id]) hotel.offerIds = ratesData.offerIds[hotel.id];
       if (ratesData.roomFreeCancel?.[hotel.id]) hotel.roomFreeCancel = ratesData.roomFreeCancel[hotel.id];
@@ -6140,7 +6143,18 @@
   const COMPACT_SHOW = 3;
 
   function roomsSectionHTML(roomTypes, hotelScore, roomPrices, hasDateSearch, noAvailNotice, openCompactIdx = -1, hotel = null) {
-    if (roomTypes.length === 0) return noAvailNotice;
+    // ── D3: extra-rate rows — priced mappedRoomIds we don't have indexed photos
+    // for. Surfaces additional bookable options on the card without lying about
+    // photo coverage. Computed against the FULL indexed list (hotel.roomTypes),
+    // not the filtered `roomTypes` param, so the set difference is stable
+    // regardless of "Available only" state.
+    const extrasSection = buildExtraRatesSectionHTML(hotel);
+
+    if (roomTypes.length === 0) {
+      // Notice + extras (if any). Card still has bookable rows when LiteAPI gave
+      // us rate-only rooms even though we have no indexed-room match.
+      return `${noAvailNotice}${extrasSection}`;
+    }
 
     const featured = roomTypes[0];
     const others   = roomTypes.slice(1);
@@ -6172,7 +6186,59 @@
     return `${noAvailNotice}
       <div class="hotel-divider-band">BEST MATCHING ROOM</div>
       ${featuredHTML}
-      ${othersSection}`;
+      ${othersSection}
+      ${extrasSection}`;
+  }
+
+  // ── D3 helpers ─────────────────────────────────────────────────────────────
+  // LiteAPI's /hotels/rates often returns rates for room categories we don't
+  // have indexed photos for (rooms with 0 photos in /data/hotel that our
+  // quality filter skipped, or rate-only inventory that exists in the supplier
+  // pipeline but not in the catalog). We surface those as thin "More bookable
+  // rates" rows — name + price + Book button, no photos, no vibe score — so
+  // cards aren't artificially limited to the 1-2 indexed rooms LiteAPI's
+  // cheapness-sorted response surfaces per hotel.
+  function buildExtraRatesSectionHTML(hotel) {
+    if (!hotel || !hotel.roomPrices) return '';
+    const indexedIds = new Set(
+      (hotel.roomTypes || [])
+        .map(rt => rt.roomTypeId != null ? String(rt.roomTypeId) : null)
+        .filter(Boolean)
+    );
+    const extraIds = Object.keys(hotel.roomPrices).filter(k => !indexedIds.has(k));
+    if (extraIds.length === 0) return '';
+    // Cheapest first so the most attractive bookable rate is on top.
+    extraIds.sort((a, b) => (hotel.roomPrices[a] || 0) - (hotel.roomPrices[b] || 0));
+    const rows = extraIds.map(id => extraRateRowHTML(id, hotel)).join('');
+    return `
+      <div class="rooms-other-header rooms-other-header--rates">MORE BOOKABLE RATES (${extraIds.length})</div>
+      <div class="rooms-other rooms-other--rates">${rows}</div>`;
+  }
+
+  function extraRateRowHTML(rateId, hotel) {
+    const perNight = hotel.roomPrices?.[rateId];
+    if (perNight == null) return '';
+    const rawName = hotel.roomNames?.[rateId] || 'Available rate';
+    const fcMap = hotel.roomFreeCancel;
+    const showFc = fcMap && (fcMap[rateId] === true || fcMap[String(rateId)] === true);
+    const fcBadge = showFc ? '<span class="room-fc-badge">Free cancel</span>' : '';
+    const bookUrl = buildBookUrl(hotel, rateId);
+    const bookHTML = bookUrl
+      ? `<a class="book-btn book-btn--room" href="${bookUrl}" target="_blank" rel="noopener" onclick="event.stopPropagation()">Book →</a>`
+      : '';
+    return `
+      <div class="room-type-row room-type-row--rate-only">
+        <div class="room-type-header">
+          <div class="room-thumb room-thumb--placeholder" aria-hidden="true">🛏</div>
+          <div class="room-type-left">
+            <span class="room-type-name">${escHtml(rawName)}</span>
+            <span class="room-rate-only-label">rate available · photos not yet indexed</span>
+            <span class="room-rate">€${perNight.toLocaleString()}<span class="room-rate-per">/night</span></span>
+            ${fcBadge}
+          </div>
+          ${bookHTML}
+        </div>
+      </div>`;
   }
 
   // ── BOOP v4 — Top-neighbourhood refine strip ─────────────────────────────
