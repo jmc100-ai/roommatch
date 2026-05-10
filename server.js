@@ -979,6 +979,7 @@ const _rlGeneric = rateLimit({ ..._rlOpts, windowMs: 60_000, max: 240 }); // eve
 app.use("/api/vsearch",      _rlSearch);
 app.use("/api/rates",        _rlRates);
 app.use("/api/hotels-meta",  _rlMeta);
+app.use("/api/hotel-rooms",  _rlMeta);
 app.use("/api/index-city",   _rlAdmin);
 app.use("/api/index-cancel", _rlAdmin);
 app.use(/^\/api\/v2\//,      _rlGeneric);
@@ -1368,6 +1369,11 @@ app.get("/api/debug-rates", async (req, res) => {
   // 3) Our indexed inventory for this hotel (what we actually persisted)
   let indexedRooms = [];
   try {
+    // db isn't declared at module scope — has to be wired up per handler.
+    // Without this the supabase query throws ReferenceError, gets swallowed
+    // by the try/catch, and indexedRooms stays [] — making every rate look
+    // like IN_CATALOG_NOT_INDEXED even when it matches indexed inventory.
+    const db = supabaseAdmin || supabase;
     const { data, error } = await db
       .from("v2_room_inventory")
       .select("room_name,room_type_id")
@@ -4201,6 +4207,91 @@ app.get("/api/hotels-meta", async (req, res) => {
     res.json({ hotels: out });
   } catch (e) {
     console.error("[hotels-meta]", e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ── GET /api/hotel-rooms — lazy room data for stub hotels ───────────────────
+// /api/vsearch returns ALL hotels in a city (e.g. 3500 for Mexico City) but
+// only fetches photos+room data for the top GALLERY_LIMIT=250 by vibe sim.
+// The remaining 3250 are returned as stubs (roomTypes: []). When /api/rates
+// gives those stubs a price, the card has nothing visual to show — the user
+// sees "Queen Room" as a rate-only row even when we DO have 12 indexed
+// photos for that room in v2_room_inventory. This endpoint serves that
+// missing data: pass the stub-hotel IDs, get back roomTypes (name + photos
+// + photo_type) per hotel. No vibe scoring — stubs are by definition
+// outside the top-vibe-ranked set, so score is 0. Bookable via rate-only
+// matching on roomTypeId.
+//
+// Request:  GET /api/hotel-rooms?ids=lp1,lp2,...&city=Mexico%20City
+// Response: { hotels: { [hotel_id]: { roomTypes: [{name, roomTypeId, photos[]}] } } }
+app.get("/api/hotel-rooms", async (req, res) => {
+  const idsRaw = String(req.query.ids || "").trim();
+  const city   = String(req.query.city || "").trim();
+  if (!idsRaw) return res.status(400).json({ error: "ids required (comma-separated)" });
+  if (!city)   return res.status(400).json({ error: "city required" });
+  const ids = idsRaw.split(",").map(s => s.trim()).filter(Boolean).slice(0, 150);
+  if (!ids.length) return res.status(400).json({ error: "no valid ids" });
+  try {
+    const t0 = Date.now();
+    const db = supabaseAdmin || supabase;
+    // Pull every photo row for the requested hotels. v2_room_inventory has
+    // both photo_url and photo_type (unlike v2_room_feature_facts which
+    // doesn't). For 150 hotels × ~5 rooms × ~5 photos = ~3750 rows max.
+    const { data, error } = await db
+      .from("v2_room_inventory")
+      .select("hotel_id, room_name, room_type_id, photo_url, photo_type")
+      .in("hotel_id", ids)
+      .eq("city", city)
+      .limit(5000);
+    if (error) {
+      console.error("[hotel-rooms] db error:", error.message);
+      return res.status(500).json({ error: error.message });
+    }
+    // Group: hotel_id → (room_name → { roomTypeId, photos[], photo_type counts })
+    // Cap each room at 10 photos so cards aren't bloated.
+    const PHOTOS_PER_ROOM = 10;
+    const byHotel = new Map();
+    for (const row of (data || [])) {
+      if (!byHotel.has(row.hotel_id)) byHotel.set(row.hotel_id, new Map());
+      const rooms = byHotel.get(row.hotel_id);
+      const rn = row.room_name || "Room";
+      if (!rooms.has(rn)) {
+        rooms.set(rn, {
+          roomTypeId: row.room_type_id != null ? String(row.room_type_id) : null,
+          photos:     [],
+          seen:       new Set(),
+        });
+      }
+      const entry = rooms.get(rn);
+      if (entry.photos.length >= PHOTOS_PER_ROOM) continue;
+      if (!row.photo_url || entry.seen.has(row.photo_url)) continue;
+      entry.seen.add(row.photo_url);
+      entry.photos.push(row.photo_url);
+    }
+    // Shape output to match what client/app.js renders for the indexed compact
+    // row path (roomTypeHTML 'compact' variant). score=0 since stubs aren't
+    // vibe-scored; the rate-only matching kicks in via roomTypeId.
+    const out = {};
+    for (const [hotelId, rooms] of byHotel.entries()) {
+      out[hotelId] = {
+        roomTypes: [...rooms.entries()].map(([name, e]) => ({
+          name,
+          roomTypeId: e.roomTypeId,
+          photos:     e.photos,
+          score:      0,
+          amenities:  [],
+          beds:       "",
+          size:       "",
+        })),
+      };
+    }
+    const filledHotels = Object.keys(out).length;
+    const totalRooms = Object.values(out).reduce((s, h) => s + h.roomTypes.length, 0);
+    console.log(`[hotel-rooms] returned ${filledHotels}/${ids.length} hotels, ${totalRooms} rooms in ${Date.now()-t0}ms`);
+    res.json({ hotels: out });
+  } catch (e) {
+    console.error("[hotel-rooms]", e.message);
     res.status(500).json({ error: e.message });
   }
 });

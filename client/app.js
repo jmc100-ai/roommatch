@@ -4721,6 +4721,13 @@
       _fetchingPrices = false;
       applyPrices(data.prices || {}, data.roomPrices || {}, data.currency || 'EUR', data.pricedCount || 0, data);
       _signalRatesArrived();
+      // V2 search only fetches photos for the top GALLERY_LIMIT (250) hotels.
+      // For ~3500-hotel cities like Mexico City, hotels ranked > 250 come back
+      // as stubs (roomTypes: []) even when we have indexed photos for them.
+      // When LiteAPI prices those stubs, lazy-fetch their room data so the
+      // card stops showing "rate-only" rows for rooms we actually have photos
+      // for. Fire-and-forget so the rates path stays fast.
+      lazyFetchStubRooms(reqId);
     } catch (e) {
       console.warn('[prices]', e.message);
       if (reqId === _ratesReqId) {
@@ -4806,6 +4813,75 @@
   // shortly after first paint without blocking TTFB. CHUNK=200 matches the
   // server endpoint cap so a Mexico-City-sized fill (~3500 ids) needs ~18
   // sequential calls rather than ~35 — cuts wall clock roughly in half.
+  // ── Lazy stub-room fetch ───────────────────────────────────────────────────
+  // V2 search returns ALL hotels but only fetches photos+roomTypes for the
+  // top GALLERY_LIMIT (250). Beyond that, hotels come back as stubs with
+  // roomTypes: []. After /api/rates lands and shows which stubs are priced,
+  // this fetches their indexed room data via /api/hotel-rooms and merges it
+  // in place so cards show real room rows (with photos) instead of "Queen
+  // Room - rate-only" fallback rows. Bails if a newer search starts.
+  let _stubRoomsLazyReqId = 0;
+  async function lazyFetchStubRooms(searchReqId) {
+    if (!_hasDateSearch || !_pricesLoaded || !S.city) return;
+    // Find priced stub hotels: ranked > 250 by vibe (so no roomTypes) but
+    // LiteAPI gave us a per-room price (so they're bookable).
+    const stubIds = [];
+    for (const h of _lastHotels) {
+      if (!h || !h.id) continue;
+      if (Array.isArray(h.roomTypes) && h.roomTypes.length > 0) continue;
+      const rp = h.roomPrices;
+      if (!rp) continue;
+      let hasAnyPrice = false;
+      for (const _k in rp) { hasAnyPrice = true; break; }
+      if (hasAnyPrice) stubIds.push(String(h.id));
+    }
+    if (!stubIds.length) return;
+    const ourReqId = ++_stubRoomsLazyReqId;
+    const t0 = Date.now();
+    const CHUNK = 100;  // matches server's 150-id cap with a safety margin
+    let merged = 0;
+    for (let i = 0; i < stubIds.length; i += CHUNK) {
+      if (ourReqId !== _stubRoomsLazyReqId) return;
+      if (searchReqId !== _ratesReqId) return;  // bail on new search
+      const slice = stubIds.slice(i, i + CHUNK);
+      try {
+        const params = new URLSearchParams({ ids: slice.join(','), city: S.city });
+        const r = await fetch(`${BACKEND}/api/hotel-rooms?` + params);
+        if (!r.ok) continue;
+        const d = await r.json();
+        if (ourReqId !== _stubRoomsLazyReqId) return;
+        if (searchReqId !== _ratesReqId) return;
+        if (d?.hotels) merged += applyStubRoomsInPlace(d.hotels);
+      } catch (_) { /* non-fatal */ }
+    }
+    console.log(`[perf] lazy stub rooms: ${stubIds.length} stubs, ${merged} hotels merged in ${Date.now() - t0}ms`);
+  }
+
+  // Mirrors applyMetaInPlace pattern. For each hotel in roomsMap, mutate the
+  // _lastHotels entry (so future re-renders persist the rooms), then patch
+  // its on-screen card (#hotel-rooms-{id}) without a full list re-render.
+  // Only patches cards where roomTypes were empty (avoid clobbering anything
+  // we already have, in case the server briefly returns mixed data).
+  function applyStubRoomsInPlace(roomsMap) {
+    if (!roomsMap || typeof roomsMap !== 'object') return 0;
+    let merged = 0;
+    for (const h of _lastHotels) {
+      const sid = String(h.id);
+      const entry = roomsMap[sid] ?? roomsMap[h.id];
+      if (!entry || !Array.isArray(entry.roomTypes) || entry.roomTypes.length === 0) continue;
+      if (Array.isArray(h.roomTypes) && h.roomTypes.length > 0) continue;
+      h.roomTypes = entry.roomTypes;
+      merged++;
+      const roomsEl = document.getElementById(`hotel-rooms-${h.id}`);
+      if (!roomsEl) continue;
+      const visibleRooms = sortRoomsForCard(h.roomTypes, h);
+      // notice was for stub cards; now that we have rooms, drop it.
+      roomsEl.innerHTML = roomsSectionHTML(visibleRooms, h.vectorScore, h.roomPrices, _hasDateSearch, '', -1, h);
+      bindFeaturedStripNavs(roomsEl);
+    }
+    return merged;
+  }
+
   let _metaLazyReqId = 0;
   async function lazyFetchHotelMeta(deferredIds, searchReqId) {
     if (!Array.isArray(deferredIds) || !deferredIds.length) return;
