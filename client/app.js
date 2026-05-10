@@ -5791,7 +5791,9 @@
     } else if (_currentSort === 'match+price') {
       // Match tier first. Then blend match % with a price score shaped by Boop
       // "price matters" slider (-100 less → +100 very) and the sort-direction toggle.
+      // Default (neutral slider): lean toward lower nightly $ — not "premium first".
       const tier = s => s >= 40 ? 0 : s >= 15 ? 1 : 2;
+      const hasRateContext = _hasDateSearch && _pricesLoaded;
       const priced = hotels.filter(h => h.price != null).map(h => h.price).sort((a, b) => a - b);
       let p10 = 0;
       let p90 = 0;
@@ -5812,7 +5814,9 @@
         return Math.max(0, Math.min(100, ((p - p10) / priceRange) * 100));
       };
       const pm = boopPriceMattersForSort();
-      const gamma = (100 - pm) / 200;
+      // gamma ∈ [0,1]: higher → reward higher $ (slider left "price less important").
+      // pm=0 → ~0.41 (cheap-leaning); pm=100 → 0 (cheapest wins on price axis); pm=-100 → 1.
+      const gamma = Math.max(0, Math.min(1, (70 - pm) / 170));
       const normSlider = p => {
         if (p == null) return 0;
         if (!priced.length) return 50;
@@ -5842,6 +5846,11 @@
         const bScore = hotelEffectiveScore(b);
         const tierDiff = tier(aScore) - tier(bScore);
         if (tierDiff !== 0) return tierDiff;
+        if (hasRateContext) {
+          const aP = a.price != null;
+          const bP = b.price != null;
+          if (aP !== bP) return aP ? -1 : 1;
+        }
         if (!priced.length && pm === 0) {
           const cmp = bScore - aScore;
           return _sortReverse ? -cmp : cmp;
@@ -5866,7 +5875,8 @@
         }
         if (bScore !== aScore) return bScore - aScore;
         if (a.price != null && b.price != null) {
-          return _sortReverse ? a.price - b.price : b.price - a.price;
+          // Default: cheaper first (lower $). Reversed: expensive first.
+          return _sortReverse ? b.price - a.price : a.price - b.price;
         }
         if (a.price != null) return -1;
         if (b.price != null) return 1;
@@ -5874,17 +5884,26 @@
       });
     } else if (_currentSort === 'match+price+rating') {
       const tier = s => s >= 40 ? 0 : s >= 15 ? 1 : 2;
+      const hasRateContext = _hasDateSearch && _pricesLoaded;
       const pricedHotels = hotels.filter(h => h.price != null).map(h => h.price).sort((a, b) => a - b);
       const p10 = pricedHotels[Math.floor(pricedHotels.length * 0.10)] ?? pricedHotels[0] ?? 100;
       const p90 = pricedHotels[Math.floor(pricedHotels.length * 0.90)] ?? pricedHotels[pricedHotels.length - 1] ?? 500;
       const priceRange = Math.max(p90 - p10, 1);
-      const normPrice  = p => p == null ? 50 : Math.max(0, Math.min(100, (p90 - p) / priceRange * 100));
+      const normPrice  = p => {
+        if (p == null) return hasRateContext ? 0 : 50;
+        return Math.max(0, Math.min(100, (p90 - p) / priceRange * 100));
+      };
       const normRating = r => r > 0 ? (r / 10) * 100 : 60;
       hotels.sort((a, b) => {
         const aScore = hotelEffectiveScore(a);
         const bScore = hotelEffectiveScore(b);
         const tierDiff = tier(aScore) - tier(bScore);
         if (tierDiff !== 0) return tierDiff;
+        if (hasRateContext) {
+          const aP = a.price != null;
+          const bP = b.price != null;
+          if (aP !== bP) return aP ? -1 : 1;
+        }
         const scoreDiff = bScore - aScore;
         let cmp = 0;
         if (Math.abs(scoreDiff) > 3) cmp = scoreDiff;
