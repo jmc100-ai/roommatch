@@ -213,15 +213,17 @@ const LITEAPI_KEY = process.env.LITEAPI_PROD_KEY || process.env.LITEAPI_KEY || "
 const IS_PROD     = !!process.env.LITEAPI_PROD_KEY;
 
 // LiteAPI /hotels/rates request knob: how many rate offers to ask for per
-// hotel. Higher = more distinct mappedRoomId coverage (especially luxury hotels
-// where one room can carry 8+ rate plans and crowd out other rooms in the
-// response), at the cost of payload size and parse time.
-// Mexico City baseline at 200 = empirically the right ceiling: at 100 the
-// distinct-rooms histogram clustered at 1-2/hotel with 0 hotels reaching 6+;
-// bumping to 200 should push more hotels into 4-5 and 6+. Above ~250 LiteAPI's
-// payload tradeoffs start to dominate. Clamped 10-300 as a guardrail.
+// hotel. Empirically confirmed (Mexico City, 2026-05-10) that LiteAPI's
+// response saturates at ~1.7 distinct mappedRoomIds per priced hotel
+// regardless of cap — going from 20 -> 100 -> 200 returned essentially
+// identical histograms (0:0 ~1:230 ~2-3:243 ~4-5:15 ~6+:0). Extra slots
+// just get filled with more rate-plan variants of the same rooms.
+// 60 is the sweet spot: captures the structural ceiling LiteAPI gives us
+// at ~⅓ the payload of 200. D3 (extra-rate rows on the client, see
+// roomNames in /api/rates response) does the real "fill the card" work.
+// Clamped 10-300 as a guardrail.
 const LITEAPI_MAX_RATES_PER_HOTEL = Math.max(10, Math.min(300,
-  Number(process.env.LITEAPI_MAX_RATES_PER_HOTEL) || 200));
+  Number(process.env.LITEAPI_MAX_RATES_PER_HOTEL) || 60));
 const PORT        = process.env.PORT || 3000;
 
 // Keep health check fast and dependency-free for Render startup probes.
