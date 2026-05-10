@@ -277,7 +277,7 @@ function isPlaceholderHotelTitle(name, hotelId) {
 }
 
 function resolveHotelNameFromMeta(meta, hotelId, fallbackName) {
-  const mName = meta && typeof meta.name === "string" ? meta.name.trim() : "";
+  const mName = String(meta?.name ?? "").trim();
   if (mName && !isPlaceholderHotelTitle(mName, hotelId)) return mName;
   const fb = String(fallbackName ?? "").trim();
   if (fb && !isPlaceholderHotelTitle(fb, hotelId)) return fb;
@@ -289,8 +289,34 @@ const _hotelMetaCache = new Map(); // hotelId → { name, mainPhoto, starRating,
 // across the day; instance restarts still cause a one-time cold load (see prefetchHotelMetaBackground).
 const HOTEL_META_TTL_MS = 24 * 60 * 60 * 1000;
 
+function extractLiteHotelName(h) {
+  if (!h || typeof h !== "object") return "";
+  const parts = [
+    h.name,
+    h.hotelName,
+    h.title,
+    h.propertyName,
+    h.property_name,
+    h.hotel?.name,
+    h.accommodation?.name,
+  ];
+  for (const p of parts) {
+    if (typeof p === "string" && p.trim().length > 0) return p.trim();
+  }
+  return "";
+}
+
 async function fetchHotelMetaBatch(hotelIds) {
-  const needed = hotelIds.filter(id => {
+  const normalized = [...new Set((hotelIds || []).map((id) => String(id).trim()).filter(Boolean))];
+  const out = {};
+  for (const id of normalized) out[id] = _hotelMetaCache.get(id) || null;
+
+  if (!LITEAPI_KEY) {
+    if (normalized.length) console.warn("[hotel-meta] LITEAPI_KEY missing — cannot resolve hotel names");
+    return out;
+  }
+
+  const needed = normalized.filter((id) => {
     const c = _hotelMetaCache.get(id);
     return !c || c.expiresAt < Date.now();
   });
@@ -301,15 +327,17 @@ async function fetchHotelMetaBatch(hotelIds) {
     // CHUNK=50 caused ~3s sequential blocking on cold caches when fetching 250.
     const CHUNK = 200;
     for (let i = 0; i < needed.length; i += CHUNK) {
-      const results = await Promise.allSettled(needed.slice(i, i + CHUNK).map(async (hotelId) => {
+      const results = await Promise.allSettled(needed.slice(i, i + CHUNK).map(async (hotelIdRaw) => {
+        const hotelId = String(hotelIdRaw).trim();
         const r = await fetch(
-          `https://api.liteapi.travel/v3.0/data/hotel?hotelId=${hotelId}`,
+          `https://api.liteapi.travel/v3.0/data/hotel?hotelId=${encodeURIComponent(hotelId)}`,
           { headers: { "X-API-Key": LITEAPI_KEY, "accept": "application/json" } }
         );
         if (!r.ok) throw new Error(`HTTP ${r.status}`);
         const d = await r.json();
-        const h = d?.data;
-        if (!h) throw new Error("no data");
+        let h = d?.data;
+        if (Array.isArray(h)) h = h[0];
+        if (!h || typeof h !== "object") throw new Error("no data");
         const rawDesc = h.hotelDescription || h.description || h.longDescription || "";
         const cleanDesc = typeof rawDesc === "string"
           ? rawDesc.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim()
@@ -318,7 +346,7 @@ async function fetchHotelMetaBatch(hotelIds) {
         const amenities = Array.isArray(rawFacilities)
           ? rawFacilities.map(f => (typeof f === "string" ? f : f?.name || f?.facilityName || "")).filter(Boolean)
           : [];
-        const rawNm = (h.name || h.hotelName || "").trim();
+        const rawNm = extractLiteHotelName(h);
         _hotelMetaCache.set(hotelId, {
           name:        !isPlaceholderHotelTitle(rawNm, hotelId) ? (rawNm || null) : null,
           mainPhoto:   h.main_photo  || h.mainPhoto  || h.hotelImages?.[0]?.url || null,
@@ -338,8 +366,7 @@ async function fetchHotelMetaBatch(hotelIds) {
       if (err > 0) console.warn(`[hotel-meta] chunk ${i}-${i+CHUNK}: ${ok} ok, ${err} errors`);
     }
   }
-  const out = {};
-  for (const id of hotelIds) out[id] = _hotelMetaCache.get(id) || null;
+  for (const id of normalized) out[id] = _hotelMetaCache.get(id) || null;
   return out;
 }
 
@@ -348,7 +375,7 @@ async function fetchHotelMetaBatch(hotelIds) {
 // _hotelMetaCache. Errors are swallowed — the worst case is a cache miss.
 function prefetchHotelMetaBackground(hotelIds) {
   if (!Array.isArray(hotelIds) || !hotelIds.length) return;
-  const needed = hotelIds.filter(id => {
+  const needed = hotelIds.map((id) => String(id).trim()).filter(Boolean).filter((id) => {
     const c = _hotelMetaCache.get(id);
     return !c || c.expiresAt < Date.now();
   });
@@ -2054,21 +2081,22 @@ app.get("/api/vsearch", async (req, res) => {
       // until the lazy-fetch fills their meta) for a 2–3s reduction in cold TTFB.
       const META_SYNC_LIMIT = parseInt(process.env.META_SYNC_LIMIT || "30", 10);
       const photoHotels  = v2.body.hotels.filter(h => h.roomTypes?.length > 0);
-      const syncIds      = photoHotels.slice(0, META_SYNC_LIMIT).map(h => h.id);
-      const deferredIds  = photoHotels.slice(META_SYNC_LIMIT).map(h => h.id);
+      const syncIds      = photoHotels.slice(0, META_SYNC_LIMIT).map((h) => String(h.id).trim());
+      const deferredIds  = photoHotels.slice(META_SYNC_LIMIT).map((h) => String(h.id).trim());
       const t0meta = Date.now();
       const liveMeta = await fetchHotelMetaBatch(syncIds);
       const filled = Object.values(liveMeta).filter(Boolean).length;
       console.log(`[v2-meta] sync fetched ${filled}/${syncIds.length} hotels in ${Date.now()-t0meta}ms (deferred ${deferredIds.length}, stubs ${v2.body.hotels.length - photoHotels.length})`);
       for (const h of v2.body.hotels) {
-        const m = liveMeta[h.id];
+        const sid = String(h.id).trim();
+        const m = liveMeta[sid];
         if (m) {
-          h.name        = resolveHotelNameFromMeta(m, h.id, h.name);
+          h.name        = resolveHotelNameFromMeta(m, sid, h.name);
           h.mainPhoto   = m.mainPhoto   || null;
           h.starRating  = m.starRating  || 0;
           h.rating      = m.guestRating || 0;
           h.address     = m.address     || "";
-        } else if (isPlaceholderHotelTitle(h.name, h.id)) {
+        } else if (isPlaceholderHotelTitle(h.name, sid)) {
           h.name = "";
         }
       }
@@ -4051,9 +4079,10 @@ app.get("/api/hotels-meta", async (req, res) => {
     const meta = await fetchHotelMetaBatch(ids);
     const out = {};
     for (const id of ids) {
-      const m = meta[id];
+      const sid = String(id);
+      const m = meta[sid];
       if (m) {
-        out[id] = {
+        out[sid] = {
           name:        m.name        || null,
           mainPhoto:   m.mainPhoto   || null,
           starRating:  m.starRating  || 0,

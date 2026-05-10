@@ -2341,8 +2341,10 @@
   /** Human-readable hotel title for UI (cards, rows, detail) until metadata loads. */
   function hotelDisplayTitle(h) {
     if (!h) return 'Hotel';
-    if (isPlaceholderHotelTitle(h.name, h.id)) return 'Hotel';
-    return String(h.name).trim() || 'Hotel';
+    const n = String(h.name ?? '').trim();
+    if (n && !isPlaceholderHotelTitle(n, h.id)) return n;
+    const city = String(h.city || S.city || '').trim();
+    return city ? `Hotel in ${city}` : 'Hotel';
   }
 
   /** Hero / card `photo_credit` from API — source-aware attribution. */
@@ -4161,7 +4163,8 @@
     }
     const hotels = (_lastVsearchHotels || []).slice(0, 10).map((h, i) => ({
       rank: i + 1,
-      name: h.name,
+      name_raw: h.name,
+      display_as: hotelDisplayTitle(h),
       vectorScore: h.vectorScore,
       hotelScore: h.hotelScore ?? null,
       nbhd_fit_pct: h.nbhd_fit_pct ?? null,
@@ -4712,10 +4715,11 @@
   function applyMetaInPlace(metaMap) {
     if (!metaMap || typeof metaMap !== 'object') return;
     for (const h of _lastHotels) {
-      const m = metaMap[h.id];
+      const sid = String(h.id);
+      const m = metaMap[sid] ?? metaMap[h.id];
       if (!m) continue;
       // Mutate hotel object so future renders persist these values.
-      if (m.name && !isPlaceholderHotelTitle(m.name, h.id)) h.name = m.name;
+      if (m.name && !isPlaceholderHotelTitle(m.name, sid)) h.name = m.name;
       if (m.mainPhoto)   h.mainPhoto   = m.mainPhoto;
       if (m.starRating)  h.starRating  = m.starRating;
       if (m.guestRating) h.rating      = m.guestRating;
@@ -4723,7 +4727,7 @@
 
       // Patch the visible card without a full re-render.
       const nameEl = document.getElementById(`hotel-name-${h.id}`);
-      if (nameEl && m.name) nameEl.textContent = m.name;
+      if (nameEl) nameEl.textContent = hotelDisplayTitle(h);
 
       const metaEl = document.getElementById(`hotel-meta-${h.id}`);
       if (metaEl) {
@@ -6632,7 +6636,7 @@
     const sidebarHTML = `
       <aside class="hpage-sidebar">
         <div class="hpage-sidebar-card">
-          <div class="hpage-sb-name">${escHtml(hotelDisplayTitle({ name: d.name, id: d.hotel_id }))}</div>
+          <div class="hpage-sb-name">${escHtml(hotelDisplayTitle({ name: d.name, id: d.hotel_id, city: d.city }))}</div>
           <div class="hpage-sb-sub">
             ${stars ? `<span class="hp-stars">${stars}</span>` : ''}
             ${ratingBadge}
@@ -6668,7 +6672,7 @@
       <div class="hpage-grid">
         <div class="hpage-content">
           <div class="hp-meta">
-            <h1 class="hp-name">${escHtml(hotelDisplayTitle({ name: d.name, id: d.hotel_id }))}</h1>
+            <h1 class="hp-name">${escHtml(hotelDisplayTitle({ name: d.name, id: d.hotel_id, city: d.city }))}</h1>
             <div class="hp-sub">
               ${stars ? `<span class="hp-stars">${stars}</span>` : ''}
               ${ratingBadge}
