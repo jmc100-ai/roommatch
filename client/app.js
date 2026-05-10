@@ -4898,13 +4898,15 @@
     // Match+Price / Best Value need nightly rates (or explicit no-dates path) before blend logic is meaningful.
     // "Best Price" must still run: otherwise a failed / slow rates fetch leaves clicks as no-ops forever.
     if ((sort === 'match+price' || sort === 'match+price+rating') && !_pricesLoaded) return;
+    // Any user-initiated click on a sort control releases the vibe-tour pin so
+    // the user is fully in control of the order from this point on. This covers
+    // both "switch sort" and "toggle direction on the active sort" — without
+    // it, toggling direction on the active sort looked like the sort was
+    // broken (the pinned hero stayed at #1 either way).
+    _vibeTourLeadId = null;
     if (sort === _currentSort) {
       _sortReverse = !_sortReverse;
     } else {
-      // Switching to a different sort releases the vibe-tour pin so the chosen
-      // sort is applied without any "stuck on top" hero from the prior tour.
-      // Direction toggles on the *same* sort keep the pin (no surprise).
-      _vibeTourLeadId = null;
       _currentSort = sort;
       _sortReverse = false;
     }
