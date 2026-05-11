@@ -6206,9 +6206,20 @@
       };
       const MATCH_W = 0.25 + gamma * 0.53;
       const PRICE_W = 1 - MATCH_W;
+      // Neighbourhood blend — mirrors Best Match (see "match" branch). Without
+      // this, the Match+Price formula treats a 63%-nbhd Condesa vacation_home
+      // identically to a 95%-nbhd Paseo de la Reforma hotel, and the user's
+      // nbhdScene preference is silently dropped. wNbhd=0.55 by default
+      // (config in _lastVsearchStats.nbhd_rank_weight from /api/vsearch).
+      const wNbhd = typeof _lastVsearchStats?.nbhd_rank_weight === 'number' ? _lastVsearchStats.nbhd_rank_weight : 0;
+      const blendMatchSignal = h => {
+        const s = hotelEffectiveScore(h);
+        if (wNbhd <= 0 || h.nbhd_fit_pct == null) return s;
+        return (1 - wNbhd) * s + wNbhd * h.nbhd_fit_pct;
+      };
       hotels.sort((a, b) => {
-        const aScore = hotelEffectiveScore(a);
-        const bScore = hotelEffectiveScore(b);
+        const aScore = blendMatchSignal(a);
+        const bScore = blendMatchSignal(b);
         const tierDiff = tier(aScore) - tier(bScore);
         if (tierDiff !== 0) return tierDiff;
         if (hasRateContext) {
@@ -6253,9 +6264,18 @@
         return Math.max(0, Math.min(100, (p90 - p) / priceRange * 100));
       };
       const normRating = r => r > 0 ? (r / 10) * 100 : 60;
+      // Same neighbourhood blend as Match+Price — without it Best Value
+      // ignores nbhdScene preference and ranks low-nbhd cheap properties
+      // alongside high-nbhd hotels.
+      const wNbhd = typeof _lastVsearchStats?.nbhd_rank_weight === 'number' ? _lastVsearchStats.nbhd_rank_weight : 0;
+      const blendMatchSignal = h => {
+        const s = hotelEffectiveScore(h);
+        if (wNbhd <= 0 || h.nbhd_fit_pct == null) return s;
+        return (1 - wNbhd) * s + wNbhd * h.nbhd_fit_pct;
+      };
       hotels.sort((a, b) => {
-        const aScore = hotelEffectiveScore(a);
-        const bScore = hotelEffectiveScore(b);
+        const aScore = blendMatchSignal(a);
+        const bScore = blendMatchSignal(b);
         const tierDiff = tier(aScore) - tier(bScore);
         if (tierDiff !== 0) return tierDiff;
         if (hasRateContext) {
