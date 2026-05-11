@@ -4661,18 +4661,33 @@ app.post("/api/backfill-property-types", async (req, res) => {
     const VILLA_RE      = /\bvilla\b/i;
     const VACHOME_RE    = /\b(vacation home|vacation rental|house)\b/i;
     const ANY_RENTAL_RE = /\b(apartment|vacation home|vacation rental|house|villa|hostel|dormitory|dorm|bunk bed)\b/i;
-    // Fetch all room inventory rows for city (hotel_id + room_name only)
-    const { data: rows, error: fetchErr } = await db
-      .from("v2_room_inventory")
-      .select("hotel_id, room_name")
-      .eq("city", city);
-    if (fetchErr) throw new Error(fetchErr.message);
-    // Group by hotel_id
+    // Fetch all room inventory rows for city (hotel_id + room_name only).
+    // PAGINATION REQUIRED: PostgREST defaults to a 10k-row cap (via
+    // pgrst.db_max_rows). Mexico City has ~74k inventory rows, so a single
+    // .select() silently returned only ~10k → only 678 of 3497 hotels got
+    // classified, and lp114339 (Ire Ile My Hostel) stayed mis-classified as
+    // "hotel" after a backfill that *reported* success. We page through in
+    // 1000-row windows until we hit a short page.
+    const PAGE = 1000;
     const byHotel = new Map();
-    for (const r of (rows || [])) {
-      if (!byHotel.has(r.hotel_id)) byHotel.set(r.hotel_id, []);
-      byHotel.get(r.hotel_id).push(r.room_name || "");
+    let from = 0, fetched = 0;
+    while (true) {
+      const { data: page, error: fetchErr } = await db
+        .from("v2_room_inventory")
+        .select("hotel_id, room_name")
+        .eq("city", city)
+        .range(from, from + PAGE - 1);
+      if (fetchErr) throw new Error(fetchErr.message);
+      if (!page || page.length === 0) break;
+      for (const r of page) {
+        if (!byHotel.has(r.hotel_id)) byHotel.set(r.hotel_id, []);
+        byHotel.get(r.hotel_id).push(r.room_name || "");
+      }
+      fetched += page.length;
+      if (page.length < PAGE) break;
+      from += PAGE;
     }
+    console.log(`[backfill-property-types] ${city}: paged ${fetched} inventory rows for ${byHotel.size} hotels`);
     let updated = 0;
     for (const [hotelId, roomNames] of byHotel.entries()) {
       const hostelCount  = roomNames.filter(n => HOSTEL_RE.test(n)).length;
