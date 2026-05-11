@@ -6133,8 +6133,19 @@
       });
     } else if (_currentSort === 'match+price') {
       // Match tier first. Then blend match % with a price score shaped by Boop
-      // "price matters" slider (-100 less → +100 very) and the sort-direction toggle.
-      // Default (neutral slider): lean toward lower nightly $ — not "premium first".
+      // "price matters" slider (-100 less → +100 very). The ▲/▼ direction
+      // toggle FLIPS THE PRICE TIEBREAKER ONLY — it never reverses the match
+      // direction. Without this contract (i.e. the literal-reverse behaviour
+      // shipped pre-May 2026), ▲ would put low-match-cheap hotels above
+      // 100%-match polished hotels (observed lp24f0a "Hotel Century Reforma"
+      // at #1 with 67% match because user toggled ▲).
+      //
+      // Concretely:
+      //   ▼ pm=-100  → match-first, expensive-tiebreak (splurge)
+      //   ▲ pm=-100  → match-first, cheap-tiebreak     (still splurge user but cheap-first within ties)
+      //   ▼ pm=+100  → match-first, cheap-tiebreak     (value)
+      //   ▲ pm=+100  → match-first, expensive-tiebreak
+      //   pm=0       → ▲/▼ flip cheap vs expensive symmetrically
       const tier = s => s >= 40 ? 0 : s >= 15 ? 1 : 2;
       const hasRateContext = _hasDateSearch && _pricesLoaded;
       const priced = hotels.filter(h => h.price != null).map(h => h.price).sort((a, b) => a - b);
@@ -6167,10 +6178,14 @@
       } else {
         gamma = Math.max(0, Math.min(0.07, ((100 - pm) / 100) * 0.07));
       }
+      // Direction toggle inverts the price-axis preference but leaves MATCH_W
+      // (which drives whether match or price dominates) alone — so reversing
+      // can never demote a 100% match below a 67% match.
+      const priceGamma = _sortReverse ? (1 - gamma) : gamma;
       const normSlider = p => {
         if (p == null) return 0;
         if (!priced.length) return 50;
-        return gamma * normPriceExpensive(p) + (1 - gamma) * normPriceCheap(p);
+        return priceGamma * normPriceExpensive(p) + (1 - priceGamma) * normPriceCheap(p);
       };
       // When LiteAPI has not returned nightly rates yet (or user has no dates),
       // approximate "cheap vs splurge" from star class so Match+Price still does
@@ -6187,7 +6202,7 @@
       };
       const normBlendForHotel = h => {
         if (priced.length) return normSlider(h.price);
-        return gamma * normStarExpensive(h) + (1 - gamma) * normStarCheap(h);
+        return priceGamma * normStarExpensive(h) + (1 - priceGamma) * normStarCheap(h);
       };
       const MATCH_W = 0.25 + gamma * 0.53;
       const PRICE_W = 1 - MATCH_W;
@@ -6201,34 +6216,25 @@
           const bP = b.price != null;
           if (aP !== bP) return aP ? -1 : 1;
         }
-        // No nightly rates yet: only pure match when user explicitly said price is
-        // *less* important (luxury can win). Neutral / "important" use star proxy
-        // so 5★ does not default to #1 on match alone.
+        // No nightly rates yet: pure match descending (match always wins —
+        // ▲/▼ has no effect since there's no price axis to flip).
         if (!priced.length && pm < 0) {
-          const cmp = bScore - aScore;
-          return _sortReverse ? -cmp : cmp;
+          return bScore - aScore;
         }
         if (!priced.length && pm >= 0) {
           const aComb = MATCH_W * aScore + PRICE_W * normBlendForHotel(a);
           const bComb = MATCH_W * bScore + PRICE_W * normBlendForHotel(b);
           const d = bComb - aComb;
-          if (Math.abs(d) > 1e-6) {
-            const sign = d > 0 ? 1 : -1;
-            return _sortReverse ? -sign : sign;
-          }
-          const cmp = bScore - aScore;
-          return _sortReverse ? -cmp : cmp;
+          if (Math.abs(d) > 1e-6) return d > 0 ? 1 : -1;
+          return bScore - aScore;
         }
         const aComb = MATCH_W * aScore + PRICE_W * normSlider(a.price);
         const bComb = MATCH_W * bScore + PRICE_W * normSlider(b.price);
         const d = bComb - aComb;
-        if (Math.abs(d) > 1e-6) {
-          const sign = d > 0 ? 1 : -1;
-          return _sortReverse ? -sign : sign;
-        }
+        if (Math.abs(d) > 1e-6) return d > 0 ? 1 : -1;
         if (bScore !== aScore) return bScore - aScore;
         if (a.price != null && b.price != null) {
-          // Default: cheaper first (lower $). Reversed: expensive first.
+          // Final price tiebreak respects the ▲/▼ toggle directly.
           return _sortReverse ? b.price - a.price : a.price - b.price;
         }
         if (a.price != null) return -1;
