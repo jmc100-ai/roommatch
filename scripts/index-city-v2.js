@@ -159,6 +159,16 @@ async function geminiCaption(imageUrl, photoContext = {}, retries = 5) {
       "ORGANIC_WOOD_HEAVY: yes|no|unknown",
       "MID_CENTURY_MODERN: yes|no|unknown",
       "VINTAGE_FURNITURE: yes|no|unknown",
+      // Visual style enum — pick EXACTLY ONE as `yes`, the other four as `no` (mutex).
+      // This drives the boop wizard's stayVibe ranking (sleek_polished etc.). Unlike
+      // the other style booleans above (which Gemini over-extracts, hitting 80-98%
+      // coverage and providing zero discrimination), the enum is forced single-choice
+      // so the room-level majority vote can pick a winner.
+      "VISUAL_STYLE_SLEEK_POLISHED: yes|no|unknown",
+      "VISUAL_STYLE_COZY_WARM: yes|no|unknown",
+      "VISUAL_STYLE_VIBRANT_ECLECTIC: yes|no|unknown",
+      "VISUAL_STYLE_MOODY_DARK: yes|no|unknown",
+      "VISUAL_STYLE_CLASSIC_TRADITIONAL: yes|no|unknown",
       // Views
       "SKYLINE_VIEW: yes|no|unknown",
       "WATER_VIEW: yes|no|unknown",
@@ -177,6 +187,13 @@ async function geminiCaption(imageUrl, photoContext = {}, retries = 5) {
       "- RAINFALL_SHOWER: yes ONLY if an overhead ceiling-mounted rainfall showerhead is clearly visible.",
       "- PRIVATE_BALCONY: yes ONLY if an outdoor balcony/terrace attached to this specific room is visible. A view photo without balcony railings = no.",
       "- FLOOR_TO_CEILING_WINDOWS: yes ONLY if windows extend from floor to ceiling or very close (>85% of wall height).",
+      "- VISUAL_STYLE_*: pick EXACTLY ONE as `yes`. The other four MUST be `no` (not `unknown`). Definitions:",
+      "    • SLEEK_POLISHED      — modern minimalist, clean lines, neutral palette, polished surfaces, contemporary hotel-luxury aesthetic",
+      "    • COZY_WARM           — warm tones, soft textiles, comfortable, inviting, traditional homey decor",
+      "    • VIBRANT_ECLECTIC    — bold colours, playful patterns, mixed eras, artsy, distinctive personality",
+      "    • MOODY_DARK          — dark colours, dramatic lighting, rich textures, sultry sophisticated speakeasy feel",
+      "    • CLASSIC_TRADITIONAL — formal classical decor, ornate, elegant, conventional, dated heritage style",
+      "  If the photo is not a room interior (exterior, map, food, etc.), answer all five visual styles as `unknown`.",
       `Context: room="${photoContext.roomName || "unknown"}" type="${photoContext.type || "other"}"`,
       isLikelyBath ? "This is likely a bathroom — answer all bathroom fields carefully." : "Answer bathroom fields as unknown unless clearly visible.",
       "Only answer yes for features CLEARLY and UNAMBIGUOUSLY visible in this photo. When in doubt = unknown.",

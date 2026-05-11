@@ -1,0 +1,37 @@
+feat(v2): add mutex visual_style enum to discriminate sleek/cozy/eclectic/moody/classic
+
+Why
+---
+Existing palette booleans (palette_minimalist, palette_earth, palette_vibrant,
+warm_light_temp) are over-extracted by Gemini's vision pipeline — set on
+80-98% of Mexico City hotels. Useless as discriminators when the user asks
+for sleek polished vs cozy warm: every room collapsed to 94-100% match
+after the adaptive remap, regardless of actual style. Reported in transcript:
+lp60bd0 Hotel del Principado (visibly warm/earthy decor) at 100% on a
+sleek_polished search.
+
+What
+----
+- Five mutex fact_keys: visual_style_sleek_polished/cozy_warm/vibrant_eclectic/
+  moody_dark/classic_traditional. Gemini picks EXACTLY one per photo; rooms
+  resolve via the existing rebuild_v2_room_types_index_city aggregation.
+- STAY_VIBE_TO_VISUAL_STYLE maps Boop's stayVibe answer 1:1 to the fact_key.
+- search-v2.js mergeStayVibeIntoIntent injects soft pref (weight 0.9) AFTER
+  the LLM/regex router. visual_style facts hidden from the router prompt so
+  the model cannot double-pick.
+- index-city-v2.js caption prompt asks for VISUAL_STYLE_* fields — future
+  cities populate this automatically.
+- scripts/classify-visual-style.js (NEW): incremental backfill for cities
+  indexed before this feature. Tiny single-label Gemini call (~$0.000038)
+  with idempotent skip-already-classified logic. ~$2.40 + ~1h for Mexico
+  City (~63k unique photos).
+- POST /api/v2/classify-visual-style admin endpoint to trigger from prod.
+
+Bootstrap
+---------
+Until classifier runs, no hotel has the new facts. Injection still fires but
+softRatio is uniformly 0 so adaptive remap collapses everything to the same
+flat range as before — no regression. After classifier finishes, hotels with
+the matching style get both the coverage boost and softRatio differentiation.
+
+CLAUDE.md updated with cost/runtime, env knobs, verification SQL.

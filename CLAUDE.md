@@ -253,6 +253,7 @@ NOTIFY pgrst, 'reload config';
 | POST /api/index-city | Trigger indexing (requires INDEX_SECRET in body) |
 | POST /api/backfill-feature-embeddings | Re-embed feature_summary + re-extract feature_flags for a city |
 | POST /api/backfill-room-ids | Backfill room_type_id for existing rows (requires INDEX_SECRET) |
+| POST /api/v2/classify-visual-style | Incremental Gemini visual_style classification for an indexed city. Body: `{city, secret, limit?}`. Idempotent. See "Visual style classification" below for cost + runtime. |
 | GET /api/debug-city?city | LiteAPI coverage analysis |
 | GET /api/debug-gemini | Test available Gemini model names |
 | GET /api/debug-photos?hotelId | Show raw LiteAPI photo fields |
@@ -514,6 +515,58 @@ SELECT
 | Apr 28 2026 | Changed default to V2 in server.js |
 | May 1 2026 | Failed run — triggered with limit=3616 via live endpoint; cleared inventory; failed on every inventory insert (missing photo_url column); wrote 154,588 facts orphaned |
 | May 1 2026 | Fixed: added photo_url + unique index to v2_room_inventory; cleared all Mexico City V2 data; launched full reindex limit=3616 |
+| May 11 2026 | Added `visual_style_*` fact catalog + classifier (see "Visual style classification" below) |
+
+### Visual style classification (May 2026)
+
+**Problem:** The existing palette booleans (`palette_minimalist`, `palette_earth`, `palette_vibrant`, `warm_light_temp`) are over-extracted by Gemini's vision pipeline — set on 80–98 % of Mexico City hotels. They describe rooms truthfully ("this room has SOME wood AND SOME minimalist accents AND warm-toned lighting") but are useless as discriminators when the user asks for "sleek polished" vs "cozy warm". This collapsed search-quality on style queries: every room ended up at 94–100 % match after adaptive remap, regardless of actual style.
+
+**Fix:** Add a single mutex-classified `visual_style` enum per photo with 5 buckets, aggregated to room level by majority vote.
+
+**Fact keys** (FACT_CATALOG in `scripts/fact-catalog.js`):
+- `visual_style_sleek_polished` — modern minimalist, clean lines, neutral palette, contemporary hotel-luxury
+- `visual_style_cozy_warm` — warm tones, soft textiles, comfortable, traditional homey
+- `visual_style_vibrant_eclectic` — bold colours, playful patterns, mixed eras, artsy, distinctive
+- `visual_style_moody_dark` — dark colours, dramatic lighting, rich textures, sultry sophisticated
+- `visual_style_classic_traditional` — formal classical decor, ornate, elegant, conventional
+
+These map 1:1 to the Boop wizard's `stayVibe` answer via `STAY_VIBE_TO_VISUAL_STYLE` in `scripts/fact-catalog.js`. The legacy `distinct_unique` wizard label maps to `visual_style_vibrant_eclectic`.
+
+**Search integration (`scripts/search-v2.js`):** After `intent` is resolved, `mergeStayVibeIntoIntent` injects a soft preference (weight 0.9) for the matching `visual_style_*` fact. This bypasses the LLM/regex query parser entirely — the parser deliberately skips style words because they were noisy; visual_style replaces that path. **Visual_style facts are hidden from the LLM router prompt** (`FACT_DESCRIPTIONS` filtered in `buildFactIntentLLM`) so the model can't double-pick from free text.
+
+**Full indexer (`scripts/index-city-v2.js`):** Caption prompt includes 5 new `VISUAL_STYLE_*` lines with a `pick EXACTLY ONE as yes` instruction. New cities (London, NYC, etc.) get visual_style populated automatically. The 5 fact_key mappings are in `STRUCTURED_FIELD_TO_FACT` in `scripts/fact-catalog.js`, so the existing `parseStructuredCaption` handles them with no special logic.
+
+**Backfill for existing cities (`scripts/classify-visual-style.js`):** Incremental pass over already-indexed photos. Each photo gets one tiny Gemini call (single-label classifier prompt, ~5-token output) costing ~$0.000038. Mexico City (~63 329 unique photo URLs): **~$2.40, ~1 hour wall-clock** at default rates. Idempotent — checks `v2_room_feature_facts` for an existing `visual_style_*` row before calling Gemini. Photos shared across sibling room types fan one classification out to all duplicates so we never call Gemini twice for the same URL.
+
+**Trigger (production):**
+```powershell
+$body = '{"city":"Mexico City","secret":"roommatch-2026"}'
+Invoke-RestMethod -Uri "https://roommatch-1fg5.onrender.com/api/v2/classify-visual-style" `
+  -Method POST -ContentType "application/json" -Body $body
+```
+Tail Render logs for `[vs-classify]` lines. When done it auto-calls `rebuild_v2_room_types_index_city(city)` so the new facts flow into the aggregated index.
+
+**Local CLI (uses `.env`):**
+```powershell
+node scripts/classify-visual-style.js --city="Mexico City"           # full pass
+node scripts/classify-visual-style.js --city="Mexico City" --limit=200  # quick smoke test
+```
+
+**Env knobs** (rarely need tweaking):
+- `VS_PHOTO_CONCURRENCY` — parallel Gemini calls (default 8)
+- `VS_RATE_PER_MIN` — Gemini calls/min ceiling (default 1000; matches Flash Lite tier-2)
+
+**Verification after run:**
+```sql
+SELECT
+  COUNT(DISTINCT CASE WHEN facts->>'visual_style_sleek_polished'    = 'true' THEN hotel_id END) AS sleek,
+  COUNT(DISTINCT CASE WHEN facts->>'visual_style_cozy_warm'         = 'true' THEN hotel_id END) AS cozy,
+  COUNT(DISTINCT CASE WHEN facts->>'visual_style_vibrant_eclectic'  = 'true' THEN hotel_id END) AS vibrant,
+  COUNT(DISTINCT CASE WHEN facts->>'visual_style_moody_dark'        = 'true' THEN hotel_id END) AS moody,
+  COUNT(DISTINCT CASE WHEN facts->>'visual_style_classic_traditional' = 'true' THEN hotel_id END) AS classic
+FROM v2_room_types_index WHERE city = 'Mexico City';
+```
+Expect each bucket to cover **somewhere in the 5–40 % range** (mutex ensures no over-extraction). If any bucket > 60 %, the prompt may be biased — re-tune `buildVisualStyleClassifierPrompt` and rerun.
 
 ### V2 Known Issues Fixed
 - **`v2_room_inventory` missing `photo_url`** — fixed May 1 2026 (ALTER TABLE + unique index)

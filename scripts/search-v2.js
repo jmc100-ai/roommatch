@@ -14,7 +14,7 @@
  *   - HOTEL_SIM adaptive remapping for hotelScore
  */
 
-const { buildFactIntent, buildFactIntentLLM, scoreFactSet } = require("./fact-catalog");
+const { buildFactIntent, buildFactIntentLLM, scoreFactSet, mergeStayVibeIntoIntent, STAY_VIBE_TO_VISUAL_STYLE } = require("./fact-catalog");
 const { normalizePolygonRing, pointInPolygon, bboxFromRing } = require("./neighborhood-vibe-data");
 
 // ── Phase-A in-memory cache (per city, 5-minute TTL) ─────────────────────────
@@ -305,7 +305,18 @@ async function runV2Search({ req, supabase, supabaseAdmin, resolveCityName }) {
   // of this function. Cache hits are synchronous; uncached Gemini calls have
   // typically completed by the time we reach this point (overlapped with
   // resolveCityName + geo prefilter + phase-A DB).
-  const intent = await intentPromise;
+  let intent = await intentPromise;
+
+  // Inject visual_style soft preference from boop_profile.answers.stayVibe.
+  // This bypasses the LLM/regex query parser (which deliberately doesn't pick
+  // visual_style facts from free text — they only come from the wizard
+  // selection). Without this injection, queries like "sleek modern minimalist"
+  // produced detected_fact_keys=[] → every room got the same baseline 0.725
+  // score → adaptive remap collapsed everything to 94-100% match.
+  const stayVibeFact = STAY_VIBE_TO_VISUAL_STYLE[String(stayVibe || "").toLowerCase()];
+  if (stayVibeFact) {
+    intent = mergeStayVibeIntoIntent(intent, stayVibe);
+  }
 
   // Detected fact keys (hard + soft from intent) — mirrors detectedFlagKeys in V1
   const detectedFactKeys = [

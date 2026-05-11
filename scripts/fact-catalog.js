@@ -14,6 +14,12 @@ const FACT_CATALOG = [
   // Style & lifestyle
   "palette_minimalist","palette_moody","palette_earth","palette_vibrant","organic_wood_heavy","king_bed","canopy_bed","mid_century_modern","vintage_furniture",
   "record_player","bluetooth_audio","espresso_station","indoor_plants","full_length_mirror","cocktail_station","laptop_safe",
+  // Visual style — single mutex enum classification (one true per photo, majority-vote
+  // at room level). Boop wizard's `stayVibe` answer injects a soft preference for the
+  // matching fact via buildStayVibeIntent. Designed to discriminate where the noisy
+  // palette_* booleans cannot (palette_minimalist is set on 83% of MX City hotels).
+  "visual_style_sleek_polished","visual_style_cozy_warm","visual_style_vibrant_eclectic",
+  "visual_style_moody_dark","visual_style_classic_traditional",
   // View & context
   "skyline_view","water_view","green_view","courtyard_view","landmark_view","high_floor","street_level_view","privacy_sheers","balcony_furniture",
   // Added coverage facts
@@ -132,6 +138,15 @@ const FACT_DESCRIPTIONS = {
   organic_wood_heavy:      "heavy use of natural wood throughout",
   mid_century_modern:      "mid-century modern furniture and design",
   vintage_furniture:       "vintage or antique furniture pieces",
+  // Visual style (single mutex enum). The LLM router should NOT pick these from a
+  // free-text query — they are injected separately by buildStayVibeIntent based on
+  // boop_profile.answers.stayVibe. Descriptions kept here so debugging tools can
+  // print human labels.
+  visual_style_sleek_polished:    "sleek polished modern, minimalist clean lines, neutral palette, contemporary",
+  visual_style_cozy_warm:         "cozy warm inviting, soft textiles, comfortable, traditional homey",
+  visual_style_vibrant_eclectic:  "vibrant eclectic, bold colours, playful patterns, mixed eras, artsy",
+  visual_style_moody_dark:        "moody dark dramatic, deep colours, rich textures, sultry sophisticated",
+  visual_style_classic_traditional: "classic traditional formal, ornate, elegant, conventional decor",
   // Views
   skyline_view:            "city skyline panoramic view",
   water_view:              "ocean, river, sea, or lake view",
@@ -183,7 +198,11 @@ async function buildFactIntentLLM(query, opts = {}, geminiKey = "") {
   // Short or empty queries — skip LLM, use regex fallback
   if (queryNorm.length < 4) return buildFactIntent(query, opts);
 
+  // visual_style_* facts are injected by buildStayVibeIntent based on the boop
+  // wizard's stayVibe answer, NOT from free-text query. Hide them from the LLM
+  // prompt so it can't double-pick them (which would conflict with injection).
   const factLines = Object.entries(FACT_DESCRIPTIONS)
+    .filter(([k]) => !k.startsWith("visual_style_"))
     .map(([k, desc]) => `${k}: ${desc}`)
     .join("\n");
 
@@ -466,6 +485,12 @@ const STRUCTURED_FIELD_TO_FACT = {
   ORGANIC_WOOD_HEAVY:      "organic_wood_heavy",
   MID_CENTURY_MODERN:      "mid_century_modern",
   VINTAGE_FURNITURE:       "vintage_furniture",
+  // ── Visual style enum (mutex; Gemini picks exactly one as `yes`) ──────────
+  VISUAL_STYLE_SLEEK_POLISHED:    "visual_style_sleek_polished",
+  VISUAL_STYLE_COZY_WARM:         "visual_style_cozy_warm",
+  VISUAL_STYLE_VIBRANT_ECLECTIC:  "visual_style_vibrant_eclectic",
+  VISUAL_STYLE_MOODY_DARK:        "visual_style_moody_dark",
+  VISUAL_STYLE_CLASSIC_TRADITIONAL: "visual_style_classic_traditional",
   // ── Views & context ───────────────────────────────────────────────────────
   SKYLINE_VIEW:            "skyline_view",
   WATER_VIEW:              "water_view",
@@ -511,13 +536,114 @@ function parseStructuredCaption(caption) {
   return facts;
 }
 
+// ── Visual style enum (mutex classification) ────────────────────────────────
+// Five-bucket enum stored as 5 boolean fact_keys (exactly one true per photo).
+// Aggregated at room level by `rebuild_v2_room_types_index_city` via the same
+// yes_count ≥ 1 / no_count ≥ 2 rule as other facts. The Boop wizard's stayVibe
+// answer maps 1:1 to one of these via STAY_VIBE_TO_VISUAL_STYLE so search can
+// inject a soft preference without depending on free-text LLM extraction.
+const VISUAL_STYLE_FACT_KEYS = [
+  "visual_style_sleek_polished",
+  "visual_style_cozy_warm",
+  "visual_style_vibrant_eclectic",
+  "visual_style_moody_dark",
+  "visual_style_classic_traditional",
+];
+
+const STAY_VIBE_TO_VISUAL_STYLE = {
+  sleek_polished:      "visual_style_sleek_polished",
+  cozy_warm:           "visual_style_cozy_warm",
+  vibrant_eclectic:    "visual_style_vibrant_eclectic",
+  distinct_unique:     "visual_style_vibrant_eclectic", // legacy boop label
+  moody_dark:          "visual_style_moody_dark",
+  classic_traditional: "visual_style_classic_traditional",
+};
+
+/**
+ * Return an intent fragment expressing the user's stayVibe preference as a
+ * strong soft preference for the matching visual_style fact. Returns null when
+ * stayVibe is unset or unknown. Intended to be merged into the intent returned
+ * by buildFactIntentLLM/buildFactIntent BEFORE scoring.
+ *
+ *   weight 0.9 — strong enough to materially shift ranking, not a hard filter
+ *   (so a non-matching room can still surface if other facts compensate).
+ */
+function buildStayVibeIntent(stayVibe) {
+  if (!stayVibe || typeof stayVibe !== "string") return null;
+  const factKey = STAY_VIBE_TO_VISUAL_STYLE[stayVibe.toLowerCase()];
+  if (!factKey || !FACT_SET.has(factKey)) return null;
+  return {
+    fact_key: factKey,
+    weight: 0.9,
+    direction: "prefer",
+    source: "boop_stayvibe",
+  };
+}
+
+/**
+ * Merge a stayVibe-derived soft preference into an existing intent without
+ * mutating callers' references. The new soft pref is appended; if the same
+ * fact_key already exists, the higher weight wins.
+ */
+function mergeStayVibeIntoIntent(intent, stayVibe) {
+  const frag = buildStayVibeIntent(stayVibe);
+  if (!frag) return intent;
+  const soft = [...(intent.soft_preferences || [])];
+  const existing = soft.findIndex((s) => s.fact_key === frag.fact_key);
+  if (existing >= 0) {
+    if ((frag.weight || 0) > (soft[existing].weight || 0)) soft[existing] = frag;
+  } else {
+    soft.push(frag);
+  }
+  return { ...intent, soft_preferences: soft };
+}
+
+/**
+ * Minimal prompt for the visual_style classifier-only backfill script. Returns
+ * a single label on its own line so the parser doesn't need to handle the full
+ * structured-caption format. Used by scripts/classify-visual-style.js.
+ */
+function buildVisualStyleClassifierPrompt(photoContext = {}) {
+  return [
+    "Classify this hotel room photo's primary visual style. Pick the SINGLE best fit.",
+    "",
+    "Options (reply with EXACTLY ONE of these labels, nothing else):",
+    "- sleek_polished      — modern minimalist, clean lines, neutral palette, polished surfaces, contemporary, hotel-luxury aesthetic",
+    "- cozy_warm           — warm tones, soft textiles, comfortable, inviting, traditional homey decor",
+    "- vibrant_eclectic    — bold colours, playful patterns, mixed eras, artsy, distinctive personality",
+    "- moody_dark          — dark colours, dramatic lighting, rich textures, sultry, sophisticated speakeasy feel",
+    "- classic_traditional — formal classical decor, ornate, elegant, conventional, often dated heritage style",
+    "",
+    `Context: room="${photoContext.roomName || "unknown"}" type="${photoContext.type || "other"}"`,
+    "If the photo is not a room interior (e.g. exterior, map, food) or you cannot tell, reply EXACTLY: unknown",
+    "Reply with one label only. No explanation, no markdown, no extra text.",
+  ].join("\n");
+}
+
+/** Parse the classifier's one-line reply into a fact_key (or null). */
+function parseVisualStyleReply(text) {
+  if (!text) return null;
+  const m = String(text).trim().toLowerCase().match(/^[a-z_]+/);
+  if (!m) return null;
+  const label = m[0];
+  if (label === "unknown") return null;
+  const factKey = `visual_style_${label}`;
+  return FACT_SET.has(factKey) ? factKey : null;
+}
+
 module.exports = {
   FACT_CATALOG,
   FACT_SET,
   FACT_DESCRIPTIONS,
   STRUCTURED_FIELD_TO_FACT,
+  VISUAL_STYLE_FACT_KEYS,
+  STAY_VIBE_TO_VISUAL_STYLE,
   buildFactIntent,
   buildFactIntentLLM,
+  buildStayVibeIntent,
+  mergeStayVibeIntoIntent,
+  buildVisualStyleClassifierPrompt,
+  parseVisualStyleReply,
   extractFactsFromSignals,
   parseStructuredCaption,
   scoreFactSet,

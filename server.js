@@ -4081,6 +4081,34 @@ app.post("/api/v2/backfill-room-types", async (req, res) => {
   }
 });
 
+// ── V2 visual_style classification (Gemini vision, single-label) ─────────────
+// Incremental per-photo backfill so boop's stayVibe answer drives ranking.
+// Idempotent — skips photos that already have a visual_style_* fact row.
+// See scripts/classify-visual-style.js for design + cost notes.
+app.post("/api/v2/classify-visual-style", async (req, res) => {
+  const { city, secret, limit, country_code } = req.body || {};
+  if (secret !== (process.env.INDEX_SECRET || "roommatch-index")) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
+  if (!city) return res.status(400).json({ error: "city required" });
+  res.json({
+    message: `visual_style classification started for ${city}`,
+    city,
+    limit: Number.isFinite(limit) ? limit : null,
+    note: "Tail Render logs ([vs-classify] prefix) for progress. Typical: ~1h for Mexico City.",
+  });
+  try {
+    const { classifyVisualStyleForCity } = require("./scripts/classify-visual-style");
+    const result = await classifyVisualStyleForCity(city, {
+      limit: Number.isFinite(limit) ? Number(limit) : undefined,
+      country_code: country_code || undefined,
+    });
+    console.log("[vs-classify] complete:", result);
+  } catch (e) {
+    console.error(`[vs-classify] failed for ${city}:`, e.message);
+  }
+});
+
 app.get("/api/v2/index-status", async (req, res) => {
   const cityInput = (req.query.city || "").trim();
   if (!cityInput || !supabase) return res.json({ status: "unknown" });
