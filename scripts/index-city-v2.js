@@ -8,14 +8,22 @@ const GEMINI_KEY = process.env.GEMINI_KEY || "";
 const SUPABASE_URL = process.env.SUPABASE_URL || "";
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_ANON_KEY || "";
 
-// Throughput knobs. Indexing for Mexico City showed the bottleneck wasn't the
-// rate cap — it was per-caption latency × concurrency. With the per-room dedup
-// fix landing more photos per hotel (~70 vs ~25 before), the old defaults
-// projected to ~13 hr for a full reindex. These higher values target ~3 hr
-// total. Existing 5-retry exponential backoff on 429/503 catches overshoot.
-const BATCH_SIZE = 50;
-const PHOTO_CONCURRENCY = 8;
-const CAPTION_RATE_PER_MIN = 1500;
+// Throughput knobs. Constrained by Render Starter plan memory (512 MB):
+// in-flight photo buffers must stay under ~75 to avoid OOM crashes
+// (each cupid.travel photo base64s to 2–5 MB and we hold two copies during
+// the Gemini call). BATCH * CONC = 75 is the proven-safe ceiling.
+//
+// To speed this up further we'd need either (a) a Render plan upgrade to
+// Standard (2 GB), (b) streaming photos to Gemini without buffering full
+// base64, or (c) passing image URLs to Gemini instead of bytes. Tracked
+// as a future optimisation; current ETA ~10-13 hr for a full MX reindex.
+//
+// RATE is bumped above the prior 500/min in case the bottleneck ever
+// shifts to the rate limiter; with current concurrency we'll naturally
+// stay below this cap.
+const BATCH_SIZE = 25;
+const PHOTO_CONCURRENCY = 3;
+const CAPTION_RATE_PER_MIN = 1000;
 let _capWindow = Date.now();
 let _capCount = 0;
 
