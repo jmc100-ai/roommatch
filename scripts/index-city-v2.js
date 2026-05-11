@@ -8,9 +8,14 @@ const GEMINI_KEY = process.env.GEMINI_KEY || "";
 const SUPABASE_URL = process.env.SUPABASE_URL || "";
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_ANON_KEY || "";
 
-const BATCH_SIZE = 25;
-const PHOTO_CONCURRENCY = 3;
-const CAPTION_RATE_PER_MIN = 500;
+// Throughput knobs. Indexing for Mexico City showed the bottleneck wasn't the
+// rate cap — it was per-caption latency × concurrency. With the per-room dedup
+// fix landing more photos per hotel (~70 vs ~25 before), the old defaults
+// projected to ~13 hr for a full reindex. These higher values target ~3 hr
+// total. Existing 5-retry exponential backoff on 429/503 catches overshoot.
+const BATCH_SIZE = 50;
+const PHOTO_CONCURRENCY = 8;
+const CAPTION_RATE_PER_MIN = 1500;
 let _capWindow = Date.now();
 let _capCount = 0;
 
