@@ -4086,7 +4086,7 @@ app.post("/api/v2/backfill-room-types", async (req, res) => {
 // Idempotent — skips photos that already have a visual_style_* fact row.
 // See scripts/classify-visual-style.js for design + cost notes.
 app.post("/api/v2/classify-visual-style", async (req, res) => {
-  const { city, secret, limit, country_code } = req.body || {};
+  const { city, secret, limit, country_code, concurrency, rate_per_min } = req.body || {};
   if (secret !== (process.env.INDEX_SECRET || "roommatch-index")) {
     return res.status(401).json({ error: "Unauthorized" });
   }
@@ -4095,13 +4095,17 @@ app.post("/api/v2/classify-visual-style", async (req, res) => {
     message: `visual_style classification started for ${city}`,
     city,
     limit: Number.isFinite(limit) ? limit : null,
-    note: "Tail Render logs ([vs-classify] prefix) for progress. Typical: ~1h for Mexico City.",
+    concurrency: Number(concurrency) || null,
+    rate_per_min: Number(rate_per_min) || null,
+    note: "Tail Render logs ([vs-classify] prefix) for progress.",
   });
   try {
     const { classifyVisualStyleForCity } = require("./scripts/classify-visual-style");
     const result = await classifyVisualStyleForCity(city, {
       limit: Number.isFinite(limit) ? Number(limit) : undefined,
       country_code: country_code || undefined,
+      concurrency: Number(concurrency) || undefined,
+      rate_per_min: Number(rate_per_min) || undefined,
     });
     console.log("[vs-classify] complete:", result);
   } catch (e) {

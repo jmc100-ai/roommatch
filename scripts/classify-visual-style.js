@@ -52,8 +52,13 @@ const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_ANON_KEY;
 const GEMINI_KEY   = process.env.GEMINI_KEY;
 
-const PHOTO_CONCURRENCY    = parseInt(process.env.VS_PHOTO_CONCURRENCY || "8", 10);
-const CAPTION_RATE_PER_MIN = parseInt(process.env.VS_RATE_PER_MIN || "1000", 10);
+// Defaults — overridable per-call via opts.concurrency / opts.rate_per_min.
+// Render Starter shows actual throughput peaks around 6-8 r/s end-to-end
+// (network + Gemini latency-bound), so 8 was a conservative start. Higher
+// concurrency (24-32) saturates outbound bandwidth on Starter without
+// hitting Gemini's per-key tier-2 rate. Override at call time when needed.
+const DEFAULT_PHOTO_CONCURRENCY = parseInt(process.env.VS_PHOTO_CONCURRENCY || "8", 10);
+const DEFAULT_RATE_PER_MIN      = parseInt(process.env.VS_RATE_PER_MIN || "1000", 10);
 
 let _capWindow = Date.now();
 let _capCount  = 0;
@@ -68,13 +73,13 @@ function getDb() {
  * winning fact_key (e.g. "visual_style_sleek_polished") or null when the model
  * can't classify (non-room photo, low confidence). Retries on 429/503.
  */
-async function classifyOne(photoUrl, roomName, photoType, retries = 4) {
+async function classifyOne(photoUrl, roomName, photoType, ratePerMin, retries = 4) {
   if (!GEMINI_KEY) return null;
   try {
-    // Rate limit — Gemini Flash Lite tier-2 caps at ~1000/min.
+    const cap = ratePerMin || DEFAULT_RATE_PER_MIN;
     const now = Date.now();
     if (now - _capWindow > 60000) { _capWindow = now; _capCount = 0; }
-    if (_capCount >= CAPTION_RATE_PER_MIN) {
+    if (_capCount >= cap) {
       const wait = 61000 - (now - _capWindow);
       await new Promise((r) => setTimeout(r, Math.max(500, wait)));
       _capWindow = Date.now();
@@ -111,7 +116,7 @@ async function classifyOne(photoUrl, roomName, photoType, retries = 4) {
         const attempt = 5 - retries;
         const delay = Math.min(attempt * attempt * 3000, 60000);
         await new Promise((res) => setTimeout(res, delay));
-        return classifyOne(photoUrl, roomName, photoType, retries - 1);
+        return classifyOne(photoUrl, roomName, photoType, ratePerMin, retries - 1);
       }
       return null;
     }
@@ -120,7 +125,7 @@ async function classifyOne(photoUrl, roomName, photoType, retries = 4) {
     const txt = d?.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || "";
     return parseVisualStyleReply(txt);
   } catch (_err) {
-    if (retries > 0) return classifyOne(photoUrl, roomName, photoType, retries - 1);
+    if (retries > 0) return classifyOne(photoUrl, roomName, photoType, ratePerMin, retries - 1);
     return null;
   }
 }
@@ -212,9 +217,11 @@ async function classifyVisualStyleForCity(city, opts = {}) {
   const db = getDb();
   const cc = opts.country_code || "";
   const limit = Number.isFinite(opts.limit) ? Math.max(0, opts.limit) : Infinity;
+  const concurrency = Math.max(1, Number(opts.concurrency) || DEFAULT_PHOTO_CONCURRENCY);
+  const ratePerMin  = Math.max(60, Number(opts.rate_per_min) || DEFAULT_RATE_PER_MIN);
   const started = Date.now();
 
-  console.log(`[vs-classify] city="${city}" concurrency=${PHOTO_CONCURRENCY} rate/min=${CAPTION_RATE_PER_MIN}`);
+  console.log(`[vs-classify] city="${city}" concurrency=${concurrency} rate/min=${ratePerMin}`);
 
   const { toClassify, inventory } = await fetchPhotosNeedingClassification(db, city);
   console.log(`[vs-classify] inventory=${inventory.length} photos, to-classify=${toClassify.length} unique photo URLs`);
@@ -232,10 +239,16 @@ async function classifyVisualStyleForCity(city, opts = {}) {
   let done = 0, classified = 0, unknown = 0;
   const t0 = Date.now();
 
-  for (let i = 0; i < work.length; i += PHOTO_CONCURRENCY) {
-    const chunk = work.slice(i, i + PHOTO_CONCURRENCY);
+  // Adaptive log cadence — every ~5% or every 500 photos (whichever is smaller).
+  // The old `i % 200` gate produced one log every ~7 min at low throughput which
+  // made it hard to spot whether the run was alive or stuck.
+  const logEvery = Math.max(50, Math.min(500, Math.floor(work.length / 20)));
+  let nextLogAt = logEvery;
+
+  for (let i = 0; i < work.length; i += concurrency) {
+    const chunk = work.slice(i, i + concurrency);
     const results = await Promise.all(chunk.map(async (row) => {
-      const winner = await classifyOne(row.photo_url, row.room_name, row.photo_type);
+      const winner = await classifyOne(row.photo_url, row.room_name, row.photo_type, ratePerMin);
       return { row, winner };
     }));
 
@@ -267,11 +280,12 @@ async function classifyVisualStyleForCity(city, opts = {}) {
     }
     if (factRows.length) await upsertVisualStyleFacts(db, factRows);
 
-    if (i % 200 === 0 || done === work.length) {
+    if (done >= nextLogAt || done === work.length) {
       const dt = (Date.now() - t0) / 1000;
       const rate = dt > 0 ? (done / dt).toFixed(1) : "—";
       const eta  = work.length > done && dt > 0 ? Math.round((work.length - done) / (done / dt)) : 0;
       console.log(`[vs-classify] ${done}/${work.length} classified=${classified} unknown=${unknown} ${rate}/s ETA ~${eta}s`);
+      nextLogAt = done + logEvery;
     }
   }
 
@@ -303,9 +317,13 @@ if (require.main === module) {
   const city  = arg("city", "Mexico City");
   const limit = arg("limit", null);
   const cc    = arg("country_code", null);
+  const conc  = arg("concurrency", null);
+  const rpm   = arg("rate_per_min", null);
   classifyVisualStyleForCity(city, {
     limit:  limit ? parseInt(limit, 10) : undefined,
     country_code: cc || undefined,
+    concurrency: conc ? parseInt(conc, 10) : undefined,
+    rate_per_min: rpm ? parseInt(rpm, 10) : undefined,
   })
     .then((r) => { console.log("RESULT", JSON.stringify(r, null, 2)); process.exit(0); })
     .catch((e) => { console.error("ERROR", e.message); process.exit(1); });
