@@ -3227,14 +3227,18 @@ app.get("/api/rates", async (req, res) => {
     console.log(`[rates] main pass: ${mainStats.totalRoomTypes} room types, ${mainStats.withMappedId} with mappedRoomId, +${mainStats.newMappedIds} room rates`);
 
     // ── Top-N detail pass.
-    //    LiteAPI silently caps to ~1 rate per hotel when the request batch >= 50
-    //    hotels (bisected: full at 48, capped at 50). For the hotels users see
-    //    first, re-query in chunks below the cap so we get all 3-5 rates per
-    //    hotel. Only runs when batch >= 50 (single-hotel & small-city searches
-    //    are already getting full rates from the main call).
+    //    LiteAPI has a per-request global rate budget that gets split across
+    //    the cohort. Big batches → 1 rate per hotel. Small batches with all
+    //    priced hotels → 2 rates per hotel. Small batches with some unpriced
+    //    hotels → 3+ rates per priced hotel (the unpriced hotels contribute 0
+    //    and "give" their budget share to the rest). We deliberately do NOT
+    //    pre-filter to priced hotels here — keeping the natural input order
+    //    means unpriced hotels dilute the cohort and improve per-hotel rate
+    //    coverage for the priced ones users actually see. Validated against
+    //    lp3e1a2 in Mexico City: with priced-only cohort the target gets 2
+    //    rates; with mixed cohort the target gets all 3.
     if (RATES_DETAIL_TOPN > 0 && hotelIds.length >= 50) {
-      const orderedPriced = hotelIds.filter(id => acc.prices[id] != null);
-      const detailIds = orderedPriced.slice(0, RATES_DETAIL_TOPN);
+      const detailIds = hotelIds.slice(0, RATES_DETAIL_TOPN);
       if (detailIds.length > 0) {
         const chunks = [];
         for (let i = 0; i < detailIds.length; i += RATES_DETAIL_CHUNK) {
@@ -3255,7 +3259,8 @@ app.get("/api/rates", async (req, res) => {
             console.warn(`[rates] detail chunk failed: ${r.reason?.message}`);
           }
         }
-        console.log(`[rates] detail pass: top ${detailIds.length} hotels, ${callsOk}/${chunks.length} chunks ok (size<=${RATES_DETAIL_CHUNK}), +${newRoomRates} extra room rates in ${Date.now() - t0}ms`);
+        const pricedInDetail = detailIds.filter(id => acc.prices[id] != null).length;
+        console.log(`[rates] detail pass: top ${detailIds.length} hotels (${pricedInDetail} priced from main), ${callsOk}/${chunks.length} chunks ok (size<=${RATES_DETAIL_CHUNK}), +${newRoomRates} extra room rates in ${Date.now() - t0}ms`);
       }
     }
 
