@@ -5054,7 +5054,14 @@
       return;
     }
     const priceDependentSort = _currentSort === 'match+price' || _currentSort === 'match+price+rating' || _currentSort === 'price';
-    if (priceDependentSort || _requireFreeCancel) {
+    // When "Available only" is on, prices arriving will remove cards (any hotel
+    // LiteAPI didn't return rates for → hotelPassesAvailFilter returns false).
+    // applyPricesInPlace only updates DOM text on already-rendered cards; it
+    // can't remove them, so we'd be left with "No rates found" cards still
+    // visible at the top of the list (e.g. `lp114339` Ire Ile My Hostel
+    // showing #1 with no rates because the filter never re-ran).
+    const availFilterActive = _showAvailOnly && _hasDateSearch;
+    if (priceDependentSort || _requireFreeCancel || availFilterActive) {
       renderSortedSmooth();
     } else {
       applyPricesInPlace(sym, pricedCount);

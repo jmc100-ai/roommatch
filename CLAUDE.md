@@ -660,14 +660,26 @@ CREATE INDEX IF NOT EXISTS v2_hotels_cache_proptype ON v2_hotels_cache(city, pro
 ```
 **Classification logic (in priority order):**
 1. Use LiteAPI `propertyType`/`accommodationType` field if present and non-null
-2. Fall back to room-name heuristics: if ALL room types for a hotel match rental patterns (`/apartment|vacation home|house|villa|loft|dormitory|hostel/i`) → `apartment_rental` or `hostel`. If any non-rental room type exists → `hotel`.
+2. Fall back to room-name heuristics:
+   - **Hostel**: ANY room matches `/hostel|dormitory|dorm|bunk bed/i` → `hostel`. Hostels routinely mix dorm beds with private rooms (e.g. `lp114339` "Ire Ile My Hostel" has 2 "Economy Shared Dormitory" + 2 "Basic Triple Room"); the old "ALL rooms must match" rule silently bucketed these mixed hostels back into `hotel`. Fixed May 2026.
+   - **Apartment / villa / vacation_home**: ALL room types match the corresponding pattern. This stricter rule prevents a luxury hotel with one "Apartment Suite" room from being mis-classified as an apartment rental.
 3. Default: `hotel`
 
 **Backfill:** `POST /api/backfill-property-types` endpoint — scans `v2_room_inventory` grouped by hotel, applies heuristics, updates `v2_hotels_cache.property_type`. Also update `index-city-v2.js` to write `property_type` during future indexing runs.
 
 **Gotchas:**
-- "Apartment Suite" at a Marriott ≠ apartment rental. Heuristic must require ALL room types to match, not just one.
+- "Apartment Suite" at a Marriott ≠ apartment rental. Apartment heuristic requires ALL room types to match. (Hostel heuristic is the opposite: ANY dorm-style room flips the property.)
 - Paris/KL use V1 `hotels_cache` — no `property_type` column there. Phase 5 toggle must be hidden for V1 cities.
+
+**Hotel-level property-type penalty in V2 ranking (May 2026):**
+Without this, boop's `stayVibe` preference silently drops into a tie because room similarity clamps everyone at sim_max → `vectorScore=100` for dozens of hotels, and insertion order from the DB query decides which one shows #1 (`lp114339` Ire Ile My Hostel observed at #1 for a `sleek_polished` query). `scripts/search-v2.js` now reads `stayVibe` from `boop_profile.answers` and multiplies `topScore` by:
+- `hostel` × `sleek_polished`     → 0.72
+- `hostel` × `cozy_warm`           → 0.85
+- `hostel` × `distinct_unique`     → 0.85
+- `apartment|villa|vacation_home` × `sleek_polished` → 0.90
+- everything else → 1.0 (no penalty)
+
+Goal is tiebreaking, not exclusion. Set `stayVibe=null` (no boop) → no penalty applied. The explicit "Hotels only" UI filter is still the right tool when the user wants hard exclusion.
 
 ### Phase 2 — `GET /api/hotel/:hotelId` endpoint
 Returns everything the details panel needs. Logic:

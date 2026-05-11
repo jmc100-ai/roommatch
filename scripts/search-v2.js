@@ -149,12 +149,41 @@ async function runV2Search({ req, supabase, supabaseAdmin, resolveCityName }) {
 
   // ── Group size — room-level capacity penalty ───────────────────────────────
   // Read from boop_profile.answers.group_size; default "couple".
+  // Also read stayVibe so we can apply a HOTEL-level property-type penalty
+  // (Fix 3 for lp114339-class bugs: hostel ranks #1 for sleek_polished
+  // queries because rooms tie at sim_max and there's no tiebreaker).
   let groupSize = "couple";
+  let stayVibe  = null;
   try {
     const bp = req.query.boop_profile ? JSON.parse(req.query.boop_profile) : null;
     const gs = bp?.answers?.group_size;
     if (gs === "solo" || gs === "couple" || gs === "group") groupSize = gs;
+    const sv = bp?.answers?.stayVibe;
+    if (typeof sv === "string" && sv.length > 0) stayVibe = sv;
   } catch (_) {}
+
+  // Hotel-level property-type fit. Multiplicative penalty applied to topScore
+  // so the polished/luxury preference from BOOP actually downranks hostels +
+  // apartments instead of silently dropping into a sim-score tie at 100.
+  //
+  // Values are gentle enough to not nuke valid budget options; the goal is
+  // tiebreaking, not exclusion. Default (no boop) returns 1.0 — only the
+  // active "Hotels only" property-type filter does explicit exclusion.
+  function propertyTypePenalty(propertyType) {
+    if (!stayVibe) return 1.0;
+    if (propertyType === "hostel") {
+      if (stayVibe === "sleek_polished")  return 0.72;
+      if (stayVibe === "cozy_warm")       return 0.85;
+      if (stayVibe === "distinct_unique") return 0.85;
+      return 1.0;
+    }
+    if (propertyType === "apartment" || propertyType === "apartment_rental" ||
+        propertyType === "vacation_home" || propertyType === "villa") {
+      if (stayVibe === "sleek_polished")  return 0.90;
+      return 1.0;
+    }
+    return 1.0;
+  }
 
   // Returns a [0-1] multiplier to apply to rawScore based on group size fit.
   //
@@ -648,6 +677,14 @@ async function runV2Search({ req, supabase, supabaseAdmin, resolveCityName }) {
       topScore *= totalAll / 3;
       penalisedCount++;
     }
+
+    // Property-type fit penalty (Fix 3): downrank hostels/apartments when
+    // boop stayVibe says polished. Without this, dozens of hotels tie at
+    // topScore=100 after remap clamps everything at sim_max, and insertion
+    // order from the DB query decides which one shows #1.
+    const ptype = hotelMeta.get(h.hotel_id)?.property_type || "hotel";
+    const ptPenalty = propertyTypePenalty(ptype);
+    if (ptPenalty !== 1.0) topScore *= ptPenalty;
 
     hotelDisplayScores.set(h.hotel_id, { topScore, rankScore });
   }

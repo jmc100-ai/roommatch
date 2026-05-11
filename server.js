@@ -4675,16 +4675,24 @@ app.post("/api/backfill-property-types", async (req, res) => {
     }
     let updated = 0;
     for (const [hotelId, roomNames] of byHotel.entries()) {
-      const rentalCount  = roomNames.filter(n => ANY_RENTAL_RE.test(n)).length;
       const hostelCount  = roomNames.filter(n => HOSTEL_RE.test(n)).length;
       const villaCount   = roomNames.filter(n => VILLA_RE.test(n)).length;
       const vachomeCount = roomNames.filter(n => VACHOME_RE.test(n)).length;
       let property_type = "hotel";
-      if (rentalCount === roomNames.length) {
-        if (hostelCount > 0)       property_type = "hostel";
-        else if (villaCount > 0)   property_type = "villa";
-        else if (vachomeCount > 0) property_type = "vacation_home";
-        else                       property_type = "apartment";
+      // Hostel rule: ANY dorm-style room flips the property to "hostel".
+      // Hostels mix dorm beds with private rooms (e.g. lp114339 has 2 dorm
+      // + 2 "Basic Triple Room"). Old "ALL rooms must match" rule bucketed
+      // these back into "hotel" silently.
+      if (hostelCount > 0) {
+        property_type = "hostel";
+      } else {
+        const rentalCount = roomNames.filter(n => ANY_RENTAL_RE.test(n)).length;
+        // Apartments/villas/vacation_homes still require ALL rooms to match.
+        if (rentalCount === roomNames.length) {
+          if (villaCount > 0)        property_type = "villa";
+          else if (vachomeCount > 0) property_type = "vacation_home";
+          else                       property_type = "apartment";
+        }
       }
       const { error: upErr } = await db.from("v2_hotels_cache")
         .update({ property_type })

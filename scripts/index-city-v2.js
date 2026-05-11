@@ -336,15 +336,26 @@ async function reindexCityV2(city, limit = 200, forceRebuild = true) {
         const rooms = detail.rooms || [];
         if (rooms.length > 0) {
           const names = rooms.map(r => r.roomName || r.name || "");
-          const rentalCount  = names.filter(n => ANY_RENTAL_RE.test(n)).length;
-          if (rentalCount === rooms.length) {
-            const hostelCount  = names.filter(n => HOSTEL_RE.test(n)).length;
-            const villaCount   = names.filter(n => VILLA_RE.test(n)).length;
-            const vachomeCount = names.filter(n => VACHOME_RE.test(n)).length;
-            if (hostelCount > 0)       property_type = "hostel";
-            else if (villaCount > 0)   property_type = "villa";
-            else if (vachomeCount > 0) property_type = "vacation_home";
-            else                       property_type = "apartment";
+          const hostelCount  = names.filter(n => HOSTEL_RE.test(n)).length;
+          // Hostel rule: ANY dorm-style room flips the property to "hostel".
+          // Hostels routinely mix dorm beds with private rooms (e.g. lp114339
+          // "Ire Ile My Hostel" has 2 "Economy Shared Dormitory" rows + 2
+          // "Basic Triple Room" rows). The old "ALL rooms must match" rule
+          // silently bucketed these mixed hostels back into "hotel".
+          if (hostelCount > 0) {
+            property_type = "hostel";
+          } else {
+            const rentalCount  = names.filter(n => ANY_RENTAL_RE.test(n)).length;
+            // Apartments/villas/vacation_homes still require ALL rooms to
+            // match (a luxury hotel with one "Apartment Suite" room isn't a
+            // vacation rental).
+            if (rentalCount === rooms.length) {
+              const villaCount   = names.filter(n => VILLA_RE.test(n)).length;
+              const vachomeCount = names.filter(n => VACHOME_RE.test(n)).length;
+              if (villaCount > 0)        property_type = "villa";
+              else if (vachomeCount > 0) property_type = "vacation_home";
+              else                       property_type = "apartment";
+            }
           }
         }
       }
