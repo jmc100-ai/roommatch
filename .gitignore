@@ -21,3 +21,6 @@ mcp-*.log
  
 # Local Windows dev helpers 
 restart-localhost.bat
+
+# Local commit-message scratch (used for heredoc-style commits on PowerShell)
+.commit-msg.tmp.txt
