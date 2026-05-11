@@ -87,7 +87,9 @@ LITEAPI_WL_DOMAIN      — LiteAPI white-label domain WITHOUT scheme, e.g. `trav
 MAPTILER_KEY           — Maptiler API key (free tier: 100k tile loads/month at maptiler.com). Powers the neighbourhood-vibe-page map module (MapLibre GL). Server exposes via `/api/config` AND injects into `window._MAPTILER_KEY` in served HTML so the map can boot before any /api/config fetch. **Must be restricted by HTTP referrer in the Maptiler dashboard** (Allowed origins: `travelboop.com`, `www.travelboop.com`, `roommatch-1fg5.onrender.com`, `localhost:*`). Unset → map falls back to OSM raster tiles (works but lower quality + against OSM tile usage policy at scale).
 META_SYNC_LIMIT        — top-N hotels for which `/api/vsearch` (V2 path) fetches LiteAPI metadata synchronously before sending the response. Default `30`. Lower = faster TTFB, more cards initially show with placeholder name until lazy-load arrives. The remainder are listed in `data.deferred_meta_ids` and lazy-fetched by the client via `/api/hotels-meta`. See "V2 Search Latency" section below.
 NLP_INTENT_TIMEOUT_MS  — `buildFactIntentLLM` (Gemini 2.5 flash-lite) call timeout in ms. Default `3000`. On timeout we fall back to the deterministic regex router (`v2-facts-1`); fine for most queries. Raise only if you see frequent `(router=v2-facts-1)` in logs and the regex is missing important facts.
-LITEAPI_MAX_RATES_PER_HOTEL — `/hotels/rates` request knob (used by `/api/rates` AND `/api/debug-rates`). Default `60`, clamped 10–300. **Empirically confirmed (Mexico City, 2026-05-10) that the LiteAPI response saturates at ~1.7 distinct mappedRoomIds per priced hotel regardless of cap.** Bumping from 20 → 100 → 200 returned essentially identical histograms (`0:0 ~1:230 ~2-3:243 ~4-5:15 ~6+:0`) — extra slots just got filled with more rate-plan variants of the same rooms. 60 captures the same structural ceiling at ~⅓ the payload of 200. The `[rates] distinct-rooms histogram` log line is the empirical signal for tuning. If you ever see hotels in the 6+ bucket showing up at 60, that means LiteAPI changed its response policy and you can experiment with higher caps again. **The real "fill the card" work is done by D3 (`roomNames` + extra-rate rows on the client), not by tuning this knob** — LiteAPI's `/hotels/rates` sorts by cheapness across the whole hotel and the cheap rooms' rate plans crowd out the rest of the hotel's rooms.
+LITEAPI_MAX_RATES_PER_HOTEL — `/hotels/rates` request knob (used by `/api/rates` AND `/api/debug-rates`). Default `60`, clamped 10–300. **Updated diagnosis (2026-05-11):** the real reason the response previously looked saturated at ~1.7 rates/hotel wasn't this cap — it was a hidden LiteAPI server-side cap that kicks in when the request batch size is `>= 50` hotels. Bisected empirically: a batch of 48 hotels returns full 3–5 rates each; a batch of 50+ returns 1 (cheapest only) regardless of `maxRatesPerHotel`. `/api/rates` now works around this with a two-pass design: (1) one large batched call drives hotel-level cheapest prices for sorting/filtering, (2) a top-N detail pass re-queries the highest-ranked priced hotels in chunks of <=40 to recover the missing per-room rates. Tuned by `RATES_DETAIL_TOPN` / `RATES_DETAIL_CHUNK` below. The `[rates] distinct-rooms histogram` log line is the empirical signal for tuning — for the top-N rows it should skew toward the 2-3 / 4-5 buckets after the detail pass.
+RATES_DETAIL_TOPN           — number of top-ranked-and-priced hotels to re-fetch with smaller batches to recover the per-room rates dropped by LiteAPI's batch-size cap (see `LITEAPI_MAX_RATES_PER_HOTEL` above). Default `50`, clamped 0–200. Set `0` to disable the detail pass entirely (single-call legacy behaviour). Cost: 1-2 extra parallel LiteAPI calls per `/api/rates` invocation, ~1-2 s added latency. Only runs when the batched-call input had `>= 50` hotels (single-hotel / small-city searches already get full rates from the main call).
+RATES_DETAIL_CHUNK          — chunk size for the detail pass. Default `40`, clamped 10–48. Must stay below the empirical threshold of 50 hotels per batch where LiteAPI starts truncating rates.
 ```
 
 ### Beta-launch env vars (added 2026-05-07)
@@ -340,15 +342,20 @@ else:
 ## Pricing (/api/rates)
 
 **Flow:**
-1. Fetch all hotel_ids for city from hotels_cache
-2. POST to LiteAPI `/hotels/rates` with all IDs, `maxRatesPerHotel:10`, `roomMapping:true`
-3. Key: `rates[0].mappedRoomId` = integer matching `room_type_id` in DB (USE THIS, not `roomTypeId`)
-4. Returns `prices` (hotel_id → cheapest/night) and `roomPrices` (hotel_id → {room_type_id → $/night})
+1. Fetch all hotel_ids for city from `v2_hotels_cache` (or use ranked IDs passed by client via `hotelIds=...` query param, sliced to 200).
+2. **Main pass:** POST to LiteAPI `/hotels/rates` with all IDs, `maxRatesPerHotel: 60`, `roomMapping: true`. Drives hotel-level cheapest prices.
+3. **Detail pass** (when batch size `>= 50`): re-query the top `RATES_DETAIL_TOPN` (default 50) ranked-and-priced hotels in parallel chunks of `RATES_DETAIL_CHUNK` (default 40) each. Reason: LiteAPI silently caps to ~1 rate/hotel when the request batch is `>= 50`, regardless of `maxRatesPerHotel`. Bisected empirically — full at 48, capped at 50. Without the detail pass, hotels like *City Express Reforma* show "Queen Room — available" while three other genuinely-bookable room types (incl. Superior King) render as "not available". The detail pass merges all 3–5 rates per top hotel into `roomPrices` / `roomNames` / `offerIds` / `roomFreeCancel`. Failure tolerant: `Promise.allSettled` — partial detail-pass failures just leave those hotels at cheapest-only.
+4. Returns `prices` (hotel_id → cheapest/night), `roomPrices` (hotel_id → {room_type_id → $/night}), `roomNames`, `offerIds`, `roomFreeCancel`, `hotelFreeCancel`, `currency`, `nights`, `pricedCount`.
 
 **IMPORTANT — LiteAPI ID mismatch:**
 - `/hotels/rates` `roomTypeId` = encoded base64 string — useless for matching
 - `/hotels/rates` `rates[0].mappedRoomId` = integer matching `/data/hotel` IDs → USE THIS
 - `rates[0].name` ≠ `/data/hotel` `roomName` — do NOT match by name
+
+**Implementation notes:**
+- `liteRatesCall(hotelIds, checkin, checkout)` in `server.js` is the shared helper for both the main and detail-pass requests. Throws on 429 / non-2xx so the handler can surface `rateLimited` flag.
+- `mergeLiteRatesIntoMaps(ratesList, nights, acc)` mutates an accumulator object in place; the detail pass can only add new mappedRoomIds or improve prices, never overwrite better data already populated by the main call.
+- Knobs: `RATES_DETAIL_TOPN` (default 50), `RATES_DETAIL_CHUNK` (default 40) — see env-var section. `RATES_DETAIL_TOPN=0` disables the detail pass entirely.
 
 ---
 
