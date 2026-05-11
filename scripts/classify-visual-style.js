@@ -239,55 +239,74 @@ async function classifyVisualStyleForCity(city, opts = {}) {
   let done = 0, classified = 0, unknown = 0;
   const t0 = Date.now();
 
-  // Adaptive log cadence — every ~5% or every 500 photos (whichever is smaller).
-  // The old `i % 200` gate produced one log every ~7 min at low throughput which
-  // made it hard to spot whether the run was alive or stuck.
+  // Worker-pool pattern. The original chunked `Promise.all` blocked all N
+  // workers whenever any single call hit Gemini's 429 retry path (up to 60 s
+  // backoff per attempt × 4 retries = ~2.5 min). A true worker pool keeps
+  // throughput steady: each worker pulls the next task immediately upon
+  // finishing its own, so one slow call only blocks one worker.
+  //
+  // Batched DB writes — we accumulate fact rows in `pendingFacts` and flush
+  // every FLUSH_EVERY photos to amortise the network round-trip.
+  const FLUSH_EVERY = 50;
   const logEvery = Math.max(50, Math.min(500, Math.floor(work.length / 20)));
   let nextLogAt = logEvery;
+  let pendingFacts = [];
+  let cursor = 0; // shared work index across workers
 
-  for (let i = 0; i < work.length; i += concurrency) {
-    const chunk = work.slice(i, i + concurrency);
-    const results = await Promise.all(chunk.map(async (row) => {
+  const flush = async () => {
+    if (!pendingFacts.length) return;
+    const batch = pendingFacts;
+    pendingFacts = [];
+    try { await upsertVisualStyleFacts(db, batch); }
+    catch (e) { console.warn("[vs-classify] upsert error:", e.message); }
+  };
+
+  const worker = async (_workerId) => {
+    while (true) {
+      const i = cursor++;
+      if (i >= work.length) return;
+      const row = work[i];
+      const t = Date.now();
       const winner = await classifyOne(row.photo_url, row.room_name, row.photo_type, ratePerMin);
-      return { row, winner };
-    }));
-
-    const factRows = [];
-    for (const { row, winner } of results) {
+      const dt = Date.now() - t;
       done++;
-      if (!winner) { unknown++; continue; }
-      classified++;
-      // Fan out the winning fact across every duplicate room_type_id within
-      // the same hotel that shares this photo_url. One Gemini call → up to
-      // ~3 fact rows (LiteAPI often duplicates an image across sibling rooms).
-      const dupes = dupesByPhoto.get(`${row.hotel_id}|${row.photo_url}`) || [row];
-      for (const d of dupes) {
-        factRows.push({
-          hotel_id:      d.hotel_id,
-          room_type_id:  d.room_type_id || null,
-          city,
-          country_code: cc,
-          room_name:    d.room_name,
-          photo_url:    d.photo_url,
-          fact_key:     winner,
-          fact_value:   1,
-          confidence:   0.85,
-          source:       "vision_classifier",
-          extractor_version: "v2-vs-1",
-          updated_at:   new Date().toISOString(),
-        });
+      if (winner) {
+        classified++;
+        const dupes = dupesByPhoto.get(`${row.hotel_id}|${row.photo_url}`) || [row];
+        for (const d of dupes) {
+          pendingFacts.push({
+            hotel_id:      d.hotel_id,
+            room_type_id:  d.room_type_id || null,
+            city,
+            country_code: cc,
+            room_name:    d.room_name,
+            photo_url:    d.photo_url,
+            fact_key:     winner,
+            fact_value:   1,
+            confidence:   0.85,
+            source:       "vision_classifier",
+            extractor_version: "v2-vs-1",
+            updated_at:   new Date().toISOString(),
+          });
+        }
+      } else {
+        unknown++;
+      }
+
+      if (pendingFacts.length >= FLUSH_EVERY) await flush();
+
+      if (done >= nextLogAt || done === work.length) {
+        const total = (Date.now() - t0) / 1000;
+        const rate = total > 0 ? (done / total).toFixed(1) : "—";
+        const eta  = work.length > done && total > 0 ? Math.round((work.length - done) / (done / total)) : 0;
+        console.log(`[vs-classify] ${done}/${work.length} classified=${classified} unknown=${unknown} ${rate}/s last=${dt}ms ETA ~${eta}s`);
+        nextLogAt = done + logEvery;
       }
     }
-    if (factRows.length) await upsertVisualStyleFacts(db, factRows);
+  };
 
-    if (done >= nextLogAt || done === work.length) {
-      const dt = (Date.now() - t0) / 1000;
-      const rate = dt > 0 ? (done / dt).toFixed(1) : "—";
-      const eta  = work.length > done && dt > 0 ? Math.round((work.length - done) / (done / dt)) : 0;
-      console.log(`[vs-classify] ${done}/${work.length} classified=${classified} unknown=${unknown} ${rate}/s ETA ~${eta}s`);
-      nextLogAt = done + logEvery;
-    }
-  }
+  await Promise.all(Array.from({ length: concurrency }, (_, k) => worker(k)));
+  await flush();
 
   const summary = {
     city,
