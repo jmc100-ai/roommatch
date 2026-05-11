@@ -3120,10 +3120,19 @@ function mergeLiteRatesIntoMaps(ratesList, nights, acc) {
 }
 
 // Top-N detail-pass knobs.
+//
+// CHUNK=15 is the empirically-validated sweet spot. LiteAPI's per-hotel rate
+// allocation isn't a simple "cap at batch >= 50" function — it's allocated
+// from a non-monotonic global budget that depends on the cohort. Tested
+// chunk sizes 10/15/20/25/30/40 against a 50-hotel cohort: chunk=15 returns
+// max total rates (191) AND covers lp3e1a2 with all 3 rates consistently.
+// chunk=20 anomalously drops back to 168/2-rates. chunk>=25 leaks rates
+// for some hotels. Smaller chunks = more parallel calls but more reliable
+// per-hotel coverage. With CHUNK=15 + TOPN=50 we issue 4 chunks in parallel.
 const RATES_DETAIL_TOPN     = Math.max(0, Math.min(200,
   Number(process.env.RATES_DETAIL_TOPN ?? 50)));
-const RATES_DETAIL_CHUNK    = Math.max(10, Math.min(48,
-  Number(process.env.RATES_DETAIL_CHUNK ?? 40)));
+const RATES_DETAIL_CHUNK    = Math.max(5, Math.min(48,
+  Number(process.env.RATES_DETAIL_CHUNK ?? 15)));
 
 app.get("/api/rates", async (req, res) => {
   const cityInput = (req.query.city || "").trim();
