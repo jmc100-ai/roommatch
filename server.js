@@ -3240,9 +3240,21 @@ app.get("/api/rates", async (req, res) => {
     if (RATES_DETAIL_TOPN > 0 && hotelIds.length >= 50) {
       const detailIds = hotelIds.slice(0, RATES_DETAIL_TOPN);
       if (detailIds.length > 0) {
-        const chunks = [];
-        for (let i = 0; i < detailIds.length; i += RATES_DETAIL_CHUNK) {
-          chunks.push(detailIds.slice(i, i + RATES_DETAIL_CHUNK));
+        // ── Round-robin chunk assignment.
+        //    Adjacent hotels in search-ranked order tend to share a star tier
+        //    (top hits are luxury, mid-pack is mid-tier, etc.). Sequential
+        //    chunking groups same-tier hotels together; LiteAPI's per-request
+        //    budget then gets split thin among them, so luxury hotels with 20+
+        //    room types steal allocation from their neighbours. Round-robin
+        //    interleaves tiers across chunks so each chunk has a mix, which
+        //    empirically lets the smaller hotels keep their full rate counts.
+        //    Validated against lp3e1a2 in Mexico City: sequential chunks
+        //    co-located it with lp4bab4 (St. Regis, 20 rooms) and capped it at
+        //    2 rates; isolated in a separate chunk it returns all 3.
+        const numChunks = Math.ceil(detailIds.length / RATES_DETAIL_CHUNK);
+        const chunks = Array.from({ length: numChunks }, () => []);
+        for (let i = 0; i < detailIds.length; i++) {
+          chunks[i % numChunks].push(detailIds[i]);
         }
         const t0 = Date.now();
         const results = await Promise.allSettled(
