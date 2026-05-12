@@ -567,27 +567,10 @@ async function runV2Search({ req, supabase, supabaseAdmin, resolveCityName }) {
     }
   }
   const hasHotelFactSignal = Object.keys(factWeightsRaw).length > 0;
-
-  // ── Hotel-vibe scoring scope: ALL ranked hotels, not just topHotelIds ─────
-  //
-  // The adaptive remap clamps `topScore=100` for every hotel whose sBoosted
-  // is ≥ SIM_MAX (the result-set maximum). With a typical SIM_MAX≈0.85 and a
-  // long-tail catalogue, far more than GALLERY_LIMIT hotels can clamp at
-  // topScore=100. Any of those NOT in topHotelIds gets `hotelVibePct=null`,
-  // which collapses primarySignal to topScore=100 — outranking real scored
-  // hotels whose primarySignal is pulled below 100 by their actual
-  // hotelVibePct<100. Symptom: 9/10 unscored hotels in the visible top 10.
-  //
-  // Fix: score every ranked hotel. score_hotels_facts_v2 is a cheap
-  // aggregation over v2_room_feature_facts (already filtered to the active
-  // fact_keys + city), so 250 → 3500 hotels is ~linear in row count but
-  // negligible vs total query latency. Photos / primary-nbhd / photo-facts
-  // remain bounded to topHotelIds (those are the expensive ops).
-  const vibeScoringIds = rankedHotels.map((h) => h.hotel_id);
-  const hotelVibePromise = (hasHotelFactSignal && vibeScoringIds.length)
+  const hotelVibePromise = (hasHotelFactSignal && topHotelIds.length)
     ? fetchClient.rpc("score_hotels_facts_v2", {
         p_city:          city,
-        p_hotel_ids:     vibeScoringIds,
+        p_hotel_ids:     topHotelIds,
         p_fact_weights:  factWeightsRaw,
         p_public_weight: Number(process.env.HOTEL_VIBE_PUBLIC_WEIGHT) || 5.0,
       })
@@ -890,12 +873,35 @@ async function runV2Search({ req, supabase, supabaseAdmin, resolveCityName }) {
     };
   });
 
-  // Helper: combined primary sort signal. When hotelVibePct is null (no
-  // hotel-facts signal for this query), the blend collapses to topScore.
+  // Helper: combined primary sort signal.
+  //
+  // Three cases:
+  //   1. hotelVibePct != null      — hotel was scored. Blend room+vibe.
+  //   2. hotelVibePct == null AND hotelVibeModel == "v2_facts"
+  //                                — global vibe signal exists but this
+  //                                  hotel sat outside topHotelIds, so we
+  //                                  don't have a coverage number for it.
+  //                                  Treat as zero coverage so it can't
+  //                                  outrank scored hotels just because
+  //                                  we didn't compute its hVP. Without
+  //                                  this branch an unscored hotel with
+  //                                  topScore=100 gets primarySignal=100,
+  //                                  beating a scored hotel with hVP=89
+  //                                  (primarySignal=97.8) — the exact
+  //                                  "9/10 unscored in top 10" bug.
+  //   3. hotelVibePct == null AND no global signal — there is no hotel-
+  //                                  vibe signal AT ALL for this query,
+  //                                  so falling back to topScore alone
+  //                                  is correct (every hotel is in the
+  //                                  same boat).
   function primarySignal(h) {
-    return h.hotelVibePct != null
-      ? (1 - HOTEL_VIBE_BLEND_WEIGHT) * h.topScore + HOTEL_VIBE_BLEND_WEIGHT * h.hotelVibePct
-      : h.topScore;
+    if (h.hotelVibePct != null) {
+      return (1 - HOTEL_VIBE_BLEND_WEIGHT) * h.topScore + HOTEL_VIBE_BLEND_WEIGHT * h.hotelVibePct;
+    }
+    if (hotelVibeModel === "v2_facts") {
+      return (1 - HOTEL_VIBE_BLEND_WEIGHT) * h.topScore;
+    }
+    return h.topScore;
   }
 
   // Deterministic tiebreaker stack. The first two signals can clamp at
