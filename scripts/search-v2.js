@@ -465,7 +465,11 @@ async function runV2Search({ req, supabase, supabaseAdmin, resolveCityName }) {
 
   console.log(`[v2 perf] scoring: ${Date.now()-_t0}ms  ranked=${rankedHotels.length}`);
 
-  const topHotelIds = rankedHotels.slice(0, GALLERY_LIMIT).map((h) => h.hotel_id);
+  // Initial top set by room-match (sBoosted). When nbhd-boop runs below, we
+  // recompute this so the post-boop top — i.e. the hotels that will actually
+  // appear in the user's results — is the set we score / fetch photos for.
+  // Mutable on purpose; see post-boop reshuffle.
+  let topHotelIds = rankedHotels.slice(0, GALLERY_LIMIT).map((h) => h.hotel_id);
 
   // ── Neighbourhood BOOP blend (same as V1) ─────────────────────────────────
   let nbhdFitByHotelId = null;
@@ -497,6 +501,45 @@ async function runV2Search({ req, supabase, supabaseAdmin, resolveCityName }) {
       nbhdHoodRows       = nbhdResult.hoodRows;
       if (nbhdFitByHotelId?.size) {
         console.log(`[v2] nbhd_boop_rank: weight=${nbhdRankWeight} nbhd_scores=${nbhdFitByHotelId.size} primary_assignments=${nbhdPrimaryByHotel.size}`);
+
+        // Post-boop topHotelIds reshuffle.
+        //
+        // The final result order (lines below) blends room match with nbhd
+        // fit via `(1 - w) * primarySignal + w * nbhd_fit_pct`. With nbhd
+        // weight set high (default 0.55 from .env), a hotel at position
+        // ~2000 by pure room match but with near-100% nbhd fit can leapfrog
+        // hotels in the top 250.
+        //
+        // If we don't re-pick topHotelIds here, those promoted hotels:
+        //   - won't have photos fetched         → render with no photos
+        //   - won't be in `hotelVibeRawMap`     → hotelScore = null
+        //   - won't be in `primaryNbhdMap`      → no neighbourhood chip
+        //   - won't be in `photoFactSet`        → photos can't be reordered
+        //                                         by query-matching facts
+        //
+        // Rerank by the same blend the final sort uses (using raw sBoosted
+        // as a stand-in for primarySignal — we don't yet have hotelVibePct
+        // here; the small mismatch only matters for borderline picks at the
+        // edge of GALLERY_LIMIT, which is fine).
+        const w = nbhdRankWeight;
+        const NEUTRAL_NBHD = parseFloat(process.env.VSEARCH_NBHD_NEUTRAL_PCT || "62") / 100;
+        const rerankedTop = rankedHotels
+          .map((r) => {
+            const nb = (nbhdFitByHotelId.get(r.hotel_id) ?? (NEUTRAL_NBHD * 100)) / 100;
+            return { hotel_id: r.hotel_id, blended: (1 - w) * r.sBoosted + w * nb };
+          })
+          .sort((a, b) => b.blended - a.blended)
+          .slice(0, GALLERY_LIMIT)
+          .map((r) => r.hotel_id);
+
+        const before = new Set(topHotelIds);
+        const after = new Set(rerankedTop);
+        const promoted = rerankedTop.filter((id) => !before.has(id)).length;
+        const demoted = topHotelIds.filter((id) => !after.has(id)).length;
+        topHotelIds = rerankedTop;
+        if (promoted > 0) {
+          console.log(`[v2] nbhd_reshuffle: promoted=${promoted} demoted=${demoted} (top ${GALLERY_LIMIT})`);
+        }
       }
     } catch (_) {}
   }
