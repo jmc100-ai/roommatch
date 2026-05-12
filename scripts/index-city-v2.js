@@ -1,7 +1,21 @@
 #!/usr/bin/env node
 require("dotenv").config();
 const { createClient } = require("@supabase/supabase-js");
-const { parseStructuredCaption } = require("./fact-catalog");
+const {
+  parseStructuredCaption,
+  buildHotelPublicClassifierPrompt,
+  parseHotelPublicReply,
+  AREA_FACT_KEYS,
+  VISUAL_STYLE_FACT_KEYS,
+} = require("./fact-catalog");
+
+// How many of `v2_hotels_cache.hotel_photos` to caption per hotel. LiteAPI
+// returns up to ~30 near-duplicates for chain hotels; the first 12 cover
+// lobby + bar + pool + facade with diminishing returns after that.
+const HOTEL_PUBLIC_PHOTOS_PER_HOTEL = 12;
+// Extractor version stamp on hotel-public fact rows. Bump on prompt changes.
+const HOTEL_PUBLIC_EXTRACTOR_VERSION = "v2-hp-1";
+const HOTEL_PUBLIC_ROOM_NAME = "__hotel_public__";
 
 const LITEAPI_KEY = process.env.LITEAPI_PROD_KEY || process.env.LITEAPI_KEY || "";
 const GEMINI_KEY = process.env.GEMINI_KEY || "";
@@ -256,6 +270,134 @@ async function upsertV2Facts(db, rows) {
   if (error) throw error;
 }
 
+// ── Hotel public-area photo classifier (lobby/pool/bar/...) ─────────────────
+// Re-uses the indexer's caption rate-gate by sharing the _capWindow/_capCount
+// variables. Returns the parsed { areas, visualStyle } object or
+// { areas: [], visualStyle: null } on permanent failure.
+async function geminiClassifyPublicPhoto(imageUrl, retries = 4) {
+  if (!GEMINI_KEY) return { areas: [], visualStyle: null };
+  try {
+    const now = Date.now();
+    if (now - _capWindow > 60000) { _capWindow = now; _capCount = 0; }
+    if (_capCount >= CAPTION_RATE_PER_MIN) {
+      const wait = 61000 - (now - _capWindow);
+      await new Promise((r) => setTimeout(r, Math.max(500, wait)));
+      _capWindow = Date.now();
+      _capCount = 0;
+    }
+    _capCount++;
+
+    const imgRes = await fetch(imageUrl, {
+      headers: { "User-Agent": "Mozilla/5.0" },
+      signal: AbortSignal.timeout(12000),
+    });
+    if (!imgRes.ok) return { areas: [], visualStyle: null };
+    const b64  = Buffer.from(await imgRes.arrayBuffer()).toString("base64");
+    const mime = imgRes.headers.get("content-type")?.split(";")[0] || "image/jpeg";
+    const prompt = buildHotelPublicClassifierPrompt({
+      roomName: HOTEL_PUBLIC_ROOM_NAME,
+      type:     "other",
+    });
+
+    const r = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=${GEMINI_KEY}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contents: [{ parts: [{ inline_data: { mime_type: mime, data: b64 } }, { text: prompt }] }],
+          generationConfig: { maxOutputTokens: 64, temperature: 0 },
+        }),
+        signal: AbortSignal.timeout(20000),
+      }
+    );
+    if (!r.ok) {
+      if ((r.status === 429 || r.status === 503) && retries > 0) {
+        const attempt = 5 - retries;
+        const delay = Math.min(attempt * attempt * 3000, 60000);
+        await new Promise((res) => setTimeout(res, delay));
+        return geminiClassifyPublicPhoto(imageUrl, retries - 1);
+      }
+      return { areas: [], visualStyle: null };
+    }
+
+    const d   = await r.json();
+    const txt = d?.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || "";
+    return parseHotelPublicReply(txt);
+  } catch (_err) {
+    if (retries > 0) return geminiClassifyPublicPhoto(imageUrl, retries - 1);
+    return { areas: [], visualStyle: null };
+  }
+}
+
+/**
+ * Classify up to HOTEL_PUBLIC_PHOTOS_PER_HOTEL hotel-public photos for the
+ * given hotel and persist inventory + fact rows. Per-hotel best-effort: a
+ * single Gemini failure does not abort hotel indexing.
+ */
+async function processHotelPublicPhotos(db, { hotelId, city, cc, hotelPhotoUrls }) {
+  const urls = (hotelPhotoUrls || []).slice(0, HOTEL_PUBLIC_PHOTOS_PER_HOTEL);
+  if (!urls.length) return 0;
+  let processed = 0;
+  for (const url of urls) {
+    const { areas, visualStyle } = await geminiClassifyPublicPhoto(url);
+    const stamp = new Date().toISOString();
+    const dominantArea = areas.length > 0 ? areas[0].replace(/^area_/, "") : "other";
+
+    await db.from("v2_room_inventory").upsert({
+      hotel_id:        hotelId,
+      city,
+      country_code:    cc,
+      room_name:       HOTEL_PUBLIC_ROOM_NAME,
+      room_type_id:    null,
+      photo_url:       url,
+      photo_type:      dominantArea,
+      caption:         null,
+      feature_summary: null,
+      source:          "hotel_public_classifier",
+    }, { onConflict: "hotel_id,room_type_id,photo_url" });
+
+    const factRows = [];
+    for (const areaKey of AREA_FACT_KEYS) {
+      factRows.push({
+        hotel_id:          hotelId,
+        room_type_id:      null,
+        city,
+        country_code:      cc,
+        room_name:         HOTEL_PUBLIC_ROOM_NAME,
+        photo_url:         url,
+        fact_key:          areaKey,
+        fact_value:        areas.includes(areaKey) ? 1 : 0,
+        confidence:        0.85,
+        source:            "hotel_public_classifier",
+        extractor_version: HOTEL_PUBLIC_EXTRACTOR_VERSION,
+        updated_at:        stamp,
+      });
+    }
+    if (visualStyle) {
+      for (const styleKey of VISUAL_STYLE_FACT_KEYS) {
+        factRows.push({
+          hotel_id:          hotelId,
+          room_type_id:      null,
+          city,
+          country_code:      cc,
+          room_name:         HOTEL_PUBLIC_ROOM_NAME,
+          photo_url:         url,
+          fact_key:          styleKey,
+          fact_value:        styleKey === visualStyle ? 1 : 0,
+          confidence:        0.85,
+          source:            "hotel_public_classifier",
+          extractor_version: HOTEL_PUBLIC_EXTRACTOR_VERSION,
+          updated_at:        stamp,
+        });
+      }
+    }
+    if (factRows.length) await upsertV2Facts(db, factRows);
+    processed++;
+  }
+  return processed;
+}
+
 async function clearCityV2Data(db, city) {
   await db.from("v2_room_feature_facts").delete().eq("city", city);
   await db.from("v2_room_inventory").delete().eq("city", city);
@@ -464,6 +606,18 @@ async function reindexCityV2(city, limit = 200, forceRebuild = true) {
           await upsertV2Facts(db, factRows);
           photosDone++;
         }));
+      }
+
+      // Phase 1b: classify hotel-public photos (lobby/pool/bar/...) so the
+      // hotel-level vibe score can blend room + public coverage. Best-effort;
+      // a hotel without classified public photos still ranks via room facts.
+      try {
+        const publicProcessed = await processHotelPublicPhotos(db, {
+          hotelId, city, cc, hotelPhotoUrls: hotelPhotos,
+        });
+        photosDone += publicProcessed;
+      } catch (e) {
+        console.warn(`[v2-index] hotel-public classify failed for ${hotelId}: ${e.message}`);
       }
       hotelsDone++;
     }));

@@ -4113,6 +4113,43 @@ app.post("/api/v2/classify-visual-style", async (req, res) => {
   }
 });
 
+// ── V2 hotel-public photo classification (Phase 1b: hotel-vibe scoring) ──────
+// Same pattern as classify-visual-style but for `v2_hotels_cache.hotel_photos`
+// (lobby, pool, bar, exterior, ...). Emits area_* presence facts + visual_style_*
+// per photo into `v2_room_feature_facts` under room_name='__hotel_public__'.
+// `score_hotels_facts_v2` then blends room and public coverage to produce
+// `hotelScore` for every hotel.
+//
+// Mexico City: ~3500 hotels × ~8 public photos avg ≈ 28k photos, ~35 min,
+// ~$1.06 at concurrency=24 / rate_per_min=1500.
+// See scripts/classify-hotel-public.js for design notes.
+app.post("/api/v2/classify-hotel-public", async (req, res) => {
+  const { city, secret, limit, concurrency, rate_per_min } = req.body || {};
+  if (secret !== (process.env.INDEX_SECRET || "roommatch-index")) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
+  if (!city) return res.status(400).json({ error: "city required" });
+  res.json({
+    message: `hotel-public classification started for ${city}`,
+    city,
+    limit: Number.isFinite(limit) ? limit : null,
+    concurrency: Number(concurrency) || null,
+    rate_per_min: Number(rate_per_min) || null,
+    note: "Tail Render logs ([hp-classify] prefix) for progress.",
+  });
+  try {
+    const { classifyHotelPublicForCity } = require("./scripts/classify-hotel-public");
+    const result = await classifyHotelPublicForCity(city, {
+      limit: Number.isFinite(limit) ? Number(limit) : undefined,
+      concurrency: Number(concurrency) || undefined,
+      rate_per_min: Number(rate_per_min) || undefined,
+    });
+    console.log("[hp-classify] complete:", result);
+  } catch (e) {
+    console.error(`[hp-classify] failed for ${city}:`, e.message);
+  }
+});
+
 app.get("/api/v2/index-status", async (req, res) => {
   const cityInput = (req.query.city || "").trim();
   if (!cityInput || !supabase) return res.json({ status: "unknown" });

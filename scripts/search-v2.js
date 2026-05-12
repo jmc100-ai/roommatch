@@ -497,46 +497,118 @@ async function runV2Search({ req, supabase, supabaseAdmin, resolveCityName }) {
 
   console.log(`[v2 perf] post-boop: ${Date.now()-_t0}ms`);
 
-  // ── Phase B: photos + hotel-embed + score_hotels + primary-nbhd (all parallel) ──
-  const hotelEmbedPromise = embedText(hotelQuery, process.env.GEMINI_KEY || "");
-
-  // score_hotels needs the embedding — chain it off the embed promise so it
-  // runs as soon as the embedding is ready without blocking the photo fetch.
-  const hotelVibePromise = hotelEmbedPromise.then(embedding => {
-    if (!embedding || !topHotelIds.length) return null;
-    return fetchClient.rpc("score_hotels", {
-      query_embedding: embedding,
-      search_city:     city,
-      hotel_ids:       topHotelIds,
-    });
-  });
+  // ── Phase B: photos + hotel-vibe-facts + primary-nbhd (all parallel) ──
+  //
+  // Hotel-vibe scoring uses `score_hotels_facts_v2` (facts coverage of the
+  // user's soft preferences, aggregated to hotel level from per-photo facts)
+  // and replaces the legacy `score_hotels` (text-embedding cosine against
+  // `hotel_profile_index`, which was never populated for any V2 city and
+  // permanently produced `hotel_vibe_model="fallback_rating"`). The new
+  // model mirrors the room scoring: facts + soft prefs + adaptive remap.
+  //
+  // Fact weights are built from intent.soft_preferences (which already
+  // includes the stayVibe-injected visual_style_* fact). We intentionally
+  // exclude hard_filters from the hotel-level model because hard filters
+  // apply at room level (e.g. must_haves like "balcony"); the hotel score
+  // should reflect aesthetic / area fit, not room-level binary requirements.
+  const factWeightsRaw = {};
+  for (const sp of (intent.soft_preferences || [])) {
+    if (sp && sp.fact_key && Number.isFinite(sp.weight) && sp.weight > 0) {
+      factWeightsRaw[sp.fact_key] = Math.max(0, Math.min(1, sp.weight));
+    }
+  }
+  const hasHotelFactSignal = Object.keys(factWeightsRaw).length > 0;
+  const hotelVibePromise = (hasHotelFactSignal && topHotelIds.length)
+    ? fetchClient.rpc("score_hotels_facts_v2", {
+        p_city:          city,
+        p_hotel_ids:     topHotelIds,
+        p_fact_weights:  factWeightsRaw,
+        p_public_weight: Number(process.env.HOTEL_VIBE_PUBLIC_WEIGHT) || 5.0,
+      })
+    : Promise.resolve(null);
 
   const needPrimaryNbhdRpc = nbhdPrimaryByHotel.size === 0;
   const phaseB = await Promise.all([
     fetchClient.rpc("get_v2_room_photos", { p_hotel_ids: topHotelIds, p_city: city, p_max_per_hotel: 10 }),
-    hotelEmbedPromise,
     hotelVibePromise,
     ...(needPrimaryNbhdRpc
       ? [fetchClient.rpc("get_primary_nbhds_for_hotels", { p_hotel_ids: topHotelIds })]
       : []),
   ]);
-  const [photosResult, hotelEmbedding, hotelVibeResult] = phaseB;
-  const primaryNbhdRpcResult = needPrimaryNbhdRpc ? phaseB[3] : null;
+  const [photosResult, hotelVibeResult] = phaseB;
+  const primaryNbhdRpcResult = needPrimaryNbhdRpc ? phaseB[2] : null;
 
-  console.log(`[v2 perf] phase-B parallel (photos+embed+nbhd): ${Date.now()-_t0}ms  photos=${photosResult.data?.length}`);
+  console.log(`[v2 perf] phase-B parallel (photos+vibe+nbhd): ${Date.now()-_t0}ms  photos=${photosResult.data?.length}`);
   if (photosResult.error) return { status: 500, body: { error: photosResult.error.message } };
 
-  // hotel-vibe score from parallel result
-  const hotelVibeSimMap = new Map();
+  // ── Hotel-vibe scoring (facts-based, mirrors room model) ───────────────────
+  // `hotelVibeRawMap` holds the score_hotels_facts_v2 raw_score (0..1) per
+  // hotel, with Phase-2 auxiliary priors (star, guest, photo-completeness)
+  // folded in BEFORE adaptive remap. `hotelSimMaxRaw` is the result-set max
+  // used for the same SIM_MAX/SIM_MIN adaptive window the room scoring uses.
+  const hotelVibeRawMap = new Map(); // hotelId → adjusted raw score (0..1)
+  const hotelVibeCovMap = new Map(); // hotelId → { room_coverage, public_coverage } (debug, not on payload by default)
   let hotelSimMaxRaw = 0;
   let hotelVibeModel = "fallback_rating";
+
   if (hotelVibeResult && !hotelVibeResult.error && hotelVibeResult.data?.length) {
-    hotelVibeModel = "score_hotels";
+    hotelVibeModel = "v2_facts";
+
+    // ── Phase 2 auxiliary priors (small nudges; all clamped) ─────────────────
+    // star_prior:   ±0.10 around 3-star centre.
+    //               Only applied when stayVibe says "sleek_polished" OR
+    //               "classic_traditional" — both inherently luxury-leaning.
+    //               Otherwise neutral (0). Keeps cozy/eclectic/moody scoring
+    //               clean from a star bias the user didn't ask for.
+    // guest_prior: ±0.06 around 7.5/10 centre. Applied universally — well-
+    //               reviewed hotels are slightly preferred regardless of
+    //               vibe (this matches user mental models).
+    // photo_completeness: hotels with fewer than 6 indexed photos take a
+    //               linear penalty up to ×0.5. Mirrors the room-scoring
+    //               photo-count penalty so sparse catalogue hotels can't
+    //               leapfrog rich ones on a strong single fact.
+    const wantsLuxuryPrior =
+      stayVibe === "sleek_polished" || stayVibe === "classic_traditional";
+
+    const STAR_PRIOR_W   = parseFloat(process.env.HOTEL_VIBE_STAR_PRIOR   ?? "0.10");
+    const GUEST_PRIOR_W  = parseFloat(process.env.HOTEL_VIBE_GUEST_PRIOR  ?? "0.06");
+    const PHOTO_MIN      = parseInt(  process.env.HOTEL_VIBE_PHOTO_MIN    ?? "6",  10);
+
     for (const r of hotelVibeResult.data) {
-      hotelVibeSimMap.set(r.hotel_id, r.similarity);
-      if (r.similarity > hotelSimMaxRaw) hotelSimMaxRaw = r.similarity;
+      const meta = hotelMeta.get(r.hotel_id) || {};
+      let adj = Math.max(0, Math.min(1, Number(r.raw_score) || 0));
+
+      // Star prior (centred on 3-star). Hotels with no star_rating get 0.
+      const star = Number(meta.star_rating) || 0;
+      if (wantsLuxuryPrior && star > 0) {
+        const starDelta = STAR_PRIOR_W * Math.max(-1, Math.min(1, (star - 3) / 2));
+        adj = Math.max(0, Math.min(1, adj + starDelta));
+      }
+
+      // Guest prior (centred on 7.5/10).
+      const guest = Number(meta.guest_rating) || 0;
+      if (guest > 0) {
+        const guestDelta = GUEST_PRIOR_W * Math.max(-1, Math.min(1, (guest - 7.5) / 2.5));
+        adj = Math.max(0, Math.min(1, adj + guestDelta));
+      }
+
+      // Photo-completeness penalty: < PHOTO_MIN indexed photos scales the
+      // raw score down linearly. total_room_photos + total_public_photos
+      // is the natural denominator.
+      const totalPhotos = (r.total_room_photos || 0) + (r.total_public_photos || 0);
+      if (totalPhotos < PHOTO_MIN) {
+        adj *= Math.max(0, totalPhotos / PHOTO_MIN);
+      }
+
+      hotelVibeRawMap.set(r.hotel_id, adj);
+      hotelVibeCovMap.set(r.hotel_id, {
+        room:   r.room_coverage   || {},
+        public: r.public_coverage || {},
+      });
+      if (adj > hotelSimMaxRaw) hotelSimMaxRaw = adj;
     }
   }
+
   const HOTEL_SIM_MAX  = hotelSimMaxRaw > 0 ? hotelSimMaxRaw : 0.9;
   const HOTEL_SIM_MIN  = Math.max(HOTEL_SIM_MAX - 0.30, 0);
   const hotelSimSpan   = Math.max(HOTEL_SIM_MAX - HOTEL_SIM_MIN, 1e-9);
@@ -704,36 +776,95 @@ async function runV2Search({ req, supabase, supabaseAdmin, resolveCityName }) {
   }
 
   // ── Final hotel sort (mirrors V1 allHotels.sort) ──────────────────────────
+  //
+  // Display-score is `topScore` (room-level match). We additionally compute
+  // `hotelVibePct` (0..100, from adaptive remap of the facts-coverage
+  // raw_score) and blend it into the primary sort signal:
+  //
+  //   blended = (1 - W_blend) * topScore + W_blend * hotelVibePct
+  //
+  // `HOTEL_VIBE_BLEND_WEIGHT` env (default 0.20) controls how much the
+  // hotel vibe nudges the primary ranking. The room score remains the
+  // dominant signal; hotel vibe breaks ties and shifts mid-pack ordering.
+  // When `hotel_vibe_model = "fallback_rating"` (no facts signal), the
+  // blend collapses to topScore-only via hotelVibePct=null.
+  //
+  // Tiebreaker stack: blended → hotelVibePct → guest_rating → star_rating
+  //                   → hotel_id alpha. Eliminates the "arbitrary which
+  //                   hotel is #1 when 10 tie at vectorScore=100" complaint.
+  const HOTEL_VIBE_BLEND_WEIGHT = Math.max(0, Math.min(1,
+    parseFloat(process.env.HOTEL_VIBE_BLEND_WEIGHT ?? "0.20")
+  ));
   const allHotels = rankedHotels.map((h) => {
     const { topScore } = hotelDisplayScores.get(h.hotel_id) || { topScore: 0 };
-    return { hotel_id: h.hotel_id, topScore, sBoosted: h.sBoosted, rawSim: h.rawSim };
+    const rawHotelSim = hotelVibeRawMap.get(h.hotel_id);
+    const hotelVibePct = rawHotelSim != null
+      ? Math.max(0, Math.min(100, ((rawHotelSim - HOTEL_SIM_MIN) / hotelSimSpan) * 100))
+      : null;
+    const meta = hotelMeta.get(h.hotel_id) || {};
+    return {
+      hotel_id:     h.hotel_id,
+      topScore,
+      hotelVibePct,
+      sBoosted:     h.sBoosted,
+      rawSim:       h.rawSim,
+      guest_rating: Number(meta.guest_rating) || 0,
+      star_rating:  Number(meta.star_rating)  || 0,
+    };
   });
-  allHotels.sort((a, b) => b.topScore - a.topScore);
+
+  // Helper: combined primary sort signal. When hotelVibePct is null (no
+  // hotel-facts signal for this query), the blend collapses to topScore.
+  function primarySignal(h) {
+    return h.hotelVibePct != null
+      ? (1 - HOTEL_VIBE_BLEND_WEIGHT) * h.topScore + HOTEL_VIBE_BLEND_WEIGHT * h.hotelVibePct
+      : h.topScore;
+  }
+
+  // Deterministic tiebreaker: primarySignal → hotelVibe → guest_rating
+  // → star_rating → hotel_id alphabetical. The hotel_id final fallback
+  // guarantees stable ordering across reloads even when every other
+  // signal is tied.
+  function compareHotels(a, b) {
+    const sa = primarySignal(a);
+    const sb = primarySignal(b);
+    if (Math.abs(sb - sa) > 1e-6) return sb - sa;
+
+    const va = a.hotelVibePct ?? -1;
+    const vb = b.hotelVibePct ?? -1;
+    if (vb !== va) return vb - va;
+
+    if (b.guest_rating !== a.guest_rating) return b.guest_rating - a.guest_rating;
+    if (b.star_rating  !== a.star_rating)  return b.star_rating  - a.star_rating;
+
+    return a.hotel_id.localeCompare(b.hotel_id);
+  }
+  allHotels.sort(compareHotels);
 
   if (nbhdFitByHotelId?.size > 0 && nbhdRankWeight > 0) {
     const w = nbhdRankWeight;
     allHotels.sort((a, b) => {
       const nbA = nbhdFitByHotelId.get(a.hotel_id) ?? 62;
       const nbB = nbhdFitByHotelId.get(b.hotel_id) ?? 62;
-      const ca  = (1 - w) * (a.topScore / 100) + w * (nbA / 100);
-      const cb  = (1 - w) * (b.topScore / 100) + w * (nbB / 100);
+      const ca  = (1 - w) * (primarySignal(a) / 100) + w * (nbA / 100);
+      const cb  = (1 - w) * (primarySignal(b) / 100) + w * (nbB / 100);
       if (Math.abs(cb - ca) > 1e-6) return cb - ca;
-      return b.topScore - a.topScore;
+      // Same deterministic tiebreaker stack as the non-nbhd path.
+      return compareHotels(a, b);
     });
   }
 
   // ── Build response payload ─────────────────────────────────────────────────
-  const hotels = allHotels.map(({ hotel_id: hotelId, topScore }) => {
+  const hotels = allHotels.map(({ hotel_id: hotelId, topScore, hotelVibePct }) => {
     const meta       = hotelMeta.get(hotelId) || {};
     const score      = Math.round(topScore);
     const allPhotos  = photosByHotel.get(hotelId) || [];
     const hasPhotos  = allPhotos.length > 0;
 
-    // hotelScore: same adaptive HOTEL_SIM_MIN/MAX/SPAN as V1
-    const rawHotelSim = hotelVibeSimMap.get(hotelId);
-    const hotelScore  = rawHotelSim != null
-      ? Math.round(Math.max(0, Math.min(100, ((rawHotelSim - HOTEL_SIM_MIN) / hotelSimSpan) * 100)))
-      : null;
+    // Hotel-level vibe score (0-100). null when no facts signal for this query
+    // (e.g. empty intent.soft_preferences). The UI's "Hotel Vibe %" badge reads
+    // this; client falls back to room match if null.
+    const hotelScore = hotelVibePct != null ? Math.round(hotelVibePct) : null;
 
     const primaryNbhd = primaryNbhdMap.get(hotelId) || null;
     const nbhdFitPct  = nbhdFitByHotelId?.get(hotelId);
@@ -874,7 +1005,10 @@ async function runV2Search({ req, supabase, supabaseAdmin, resolveCityName }) {
 
   console.log(
     `[v2] ranked: ${hotels.length} hotels | SIM_MAX=${SIM_MAX.toFixed(4)} SIM_MIN=${SIM_MIN.toFixed(4)} ` +
-    `maxRaw=${maxRawSim.toFixed(4)} hotel_vibe=${hotelVibeModel}`
+    `maxRaw=${maxRawSim.toFixed(4)} hotel_vibe=${hotelVibeModel}` +
+    (hotelVibeModel === "v2_facts"
+      ? ` HV_MAX=${HOTEL_SIM_MAX.toFixed(4)} HV_BLEND=${HOTEL_VIBE_BLEND_WEIGHT.toFixed(2)} (${hotelVibeRawMap.size} hotels scored)`
+      : "")
   );
   console.log(`[v2 perf] TOTAL: ${Date.now()-_t0}ms (since phase-A) | wall: ${Date.now()-_t0Total}ms (since handler entry)`);
 
@@ -898,6 +1032,9 @@ async function runV2Search({ req, supabase, supabaseAdmin, resolveCityName }) {
         sim_min:                  parseFloat(SIM_MIN.toFixed(4)),
         max_raw_fact_score:       parseFloat(maxRawSim.toFixed(4)),
         hotel_vibe_model:         hotelVibeModel,
+        hotel_vibe_sim_max:       hotelVibeModel === "v2_facts" ? parseFloat(HOTEL_SIM_MAX.toFixed(4)) : null,
+        hotel_vibe_blend_weight:  hotelVibeModel === "v2_facts" ? HOTEL_VIBE_BLEND_WEIGHT : null,
+        hotel_vibe_fact_weights:  hotelVibeModel === "v2_facts" ? factWeightsRaw : null,
         nbhd_rank_weight_config:  Number.isFinite(rawNbhdW) ? rawNbhdW : undefined,
         nbhd_rank_weight_active:  nbhdRankWeight,
         nbhd_blend_applied:       nbhdBlendApplied,

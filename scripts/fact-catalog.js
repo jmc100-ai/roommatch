@@ -20,6 +20,14 @@ const FACT_CATALOG = [
   // palette_* booleans cannot (palette_minimalist is set on 83% of MX City hotels).
   "visual_style_sleek_polished","visual_style_cozy_warm","visual_style_vibrant_eclectic",
   "visual_style_moody_dark","visual_style_classic_traditional",
+  // Hotel public-area presence (non-mutex; a poolside bar can be both `area_pool` and
+  // `area_bar`). Populated by the hotel-public photo classifier from photos in
+  // `v2_hotels_cache.hotel_photos` (NOT from in-room photos). Aggregated at hotel level
+  // to a coverage value (`rooms_with_area / total_public_photos`) that feeds the
+  // hotel_vibe_score. Lets the LLM router answer queries like "hotel with a rooftop bar"
+  // by mapping the phrase to {area_rooftop, area_bar} soft preferences.
+  "area_lobby","area_pool","area_restaurant","area_bar","area_gym","area_spa",
+  "area_exterior","area_courtyard_garden","area_rooftop","area_meeting_room",
   // View & context
   "skyline_view","water_view","green_view","courtyard_view","landmark_view","high_floor","street_level_view","privacy_sheers","balcony_furniture",
   // Added coverage facts
@@ -58,6 +66,19 @@ const FACT_SYNONYMS = [
   { fact: "nightlife_noise_risk", rx: /\bnoisy\b|\bnightlife\b|\bloud\b/i },
   { fact: "wifi_quality_high", rx: /\bfast wifi\b|\bgood wifi\b|\breliable wifi\b/i },
   { fact: "step_free_access", rx: /\bstep[- ]free\b|\baccessible\b/i },
+  // Hotel public-area synonyms (non-mutex). These let the regex router pick up
+  // amenity-style phrases that the wizard doesn't capture; the LLM router also
+  // sees FACT_DESCRIPTIONS for these and can route richer phrasing.
+  { fact: "area_lobby",            rx: /\blobby\b|\blobbies\b|\bfront desk\b|\breception\b/i },
+  { fact: "area_pool",             rx: /\bpool\b|\bswimming\b/i },
+  { fact: "area_restaurant",       rx: /\brestaurant\b|\bdining room\b|\bbreakfast room\b|\beat in\b/i },
+  { fact: "area_bar",              rx: /\bbar\b|\bcocktail\s*bar\b|\blounge\s*bar\b/i },
+  { fact: "area_gym",              rx: /\bgym\b|\bfitness\s*(center|centre|room)?\b|\bworkout room\b/i },
+  { fact: "area_spa",              rx: /\bspa\b|\bsauna\b|\bsteam room\b|\bjacuzzi\b|\bhot tub\b|\bwellness\b/i },
+  { fact: "area_exterior",         rx: /\bexterior\b|\bfacade\b|\bbuilding outside\b/i },
+  { fact: "area_courtyard_garden", rx: /\bcourtyard\b|\bgarden\b|\bpatio\b/i },
+  { fact: "area_rooftop",          rx: /\brooftop\b|\broof\s*top\b|\bsky\s*bar\b|\bsky\s*deck\b|\broof terrace\b/i },
+  { fact: "area_meeting_room",     rx: /\bmeeting room\b|\bconference room\b|\bboardroom\b/i },
 ];
 
 // ── Human-readable descriptions for LLM NLP router ──────────────────────────
@@ -147,6 +168,19 @@ const FACT_DESCRIPTIONS = {
   visual_style_vibrant_eclectic:  "vibrant eclectic, bold colours, playful patterns, mixed eras, artsy",
   visual_style_moody_dark:        "moody dark dramatic, deep colours, rich textures, sultry sophisticated",
   visual_style_classic_traditional: "classic traditional formal, ornate, elegant, conventional decor",
+  // Hotel public-area presence (non-mutex). The LLM router CAN and SHOULD pick these
+  // from free-text queries like "rooftop bar", "hotel with a pool", "spa hotel".
+  // Coverage is derived from the hotel's PUBLIC photos (not in-room photos).
+  area_lobby:              "hotel lobby, reception, or front-of-house lounge area",
+  area_pool:               "swimming pool or pool deck (indoor or outdoor)",
+  area_restaurant:         "hotel restaurant or main dining room",
+  area_bar:                "hotel bar, cocktail lounge, or lounge bar",
+  area_gym:                "fitness centre, gym, or workout room",
+  area_spa:                "spa, sauna, steam room, hot tub, or wellness centre",
+  area_exterior:           "exterior building shot or facade",
+  area_courtyard_garden:   "outdoor courtyard, garden, or patio",
+  area_rooftop:            "rooftop terrace, rooftop bar, or rooftop pool",
+  area_meeting_room:       "meeting room, conference room, or boardroom",
   // Views
   skyline_view:            "city skyline panoramic view",
   water_view:              "ocean, river, sea, or lake view",
@@ -491,6 +525,19 @@ const STRUCTURED_FIELD_TO_FACT = {
   VISUAL_STYLE_VIBRANT_ECLECTIC:  "visual_style_vibrant_eclectic",
   VISUAL_STYLE_MOODY_DARK:        "visual_style_moody_dark",
   VISUAL_STYLE_CLASSIC_TRADITIONAL: "visual_style_classic_traditional",
+  // ── Hotel public-area presence (non-mutex; only emitted by hotel-public photo
+  // pipeline, not by room photos). The same FIELD_NAME → fact_key mapping works
+  // because parseStructuredCaption is photo-source agnostic.
+  AREA_LOBBY:              "area_lobby",
+  AREA_POOL:               "area_pool",
+  AREA_RESTAURANT:         "area_restaurant",
+  AREA_BAR:                "area_bar",
+  AREA_GYM:                "area_gym",
+  AREA_SPA:                "area_spa",
+  AREA_EXTERIOR:           "area_exterior",
+  AREA_COURTYARD_GARDEN:   "area_courtyard_garden",
+  AREA_ROOFTOP:            "area_rooftop",
+  AREA_MEETING_ROOM:       "area_meeting_room",
   // ── Views & context ───────────────────────────────────────────────────────
   SKYLINE_VIEW:            "skyline_view",
   WATER_VIEW:              "water_view",
@@ -677,6 +724,106 @@ function parseVisualStyleReply(text) {
   return FACT_SET.has(factKey) ? factKey : null;
 }
 
+// ── Hotel public-area classifier (Phase 1b: hotel-vibe scoring) ─────────────
+// Public photos come from `v2_hotels_cache.hotel_photos` (lobbies, pools, bars,
+// exteriors, etc.). They are NEVER guest-room interiors. Two parallel signals
+// are extracted per photo:
+//   1. `area_*` (NON-mutex)  — which kind of public space is in the frame.
+//      Multiple can be true on the same photo (rooftop bar = rooftop + bar).
+//   2. `visual_style_*` (MUTEX) — same five buckets as room photos so the
+//      stayVibe injection works identically across rooms and public areas.
+const AREA_FACT_KEYS = [
+  "area_lobby","area_pool","area_restaurant","area_bar","area_gym",
+  "area_spa","area_exterior","area_courtyard_garden","area_rooftop","area_meeting_room",
+];
+const AREA_LABEL_TO_FACT = Object.fromEntries(
+  AREA_FACT_KEYS.map((k) => [k.replace(/^area_/, ""), k])
+);
+
+/**
+ * Minimal prompt for the hotel public-area classifier backfill script. Returns
+ * two structured lines so a tiny parser can extract both signals deterministically.
+ * Used by scripts/classify-hotel-public.js.
+ *
+ * Design goals:
+ *  - `AREAS:` is multi-select. A rooftop bar legitimately occupies both
+ *    `area_rooftop` and `area_bar`. List every area visible in the frame.
+ *  - `STYLE:` reuses the same strict criteria as room photos so the aesthetic
+ *    signal is comparable across rooms and public areas.
+ *  - Lean toward `unknown` STYLE for plain generic lobbies / utility spaces;
+ *    lean toward `none` AREAS for genuinely unrecognisable photos.
+ *  - One photo, one reply, two lines. Parser tolerates whitespace and case.
+ */
+function buildHotelPublicClassifierPrompt(photoContext = {}) {
+  return [
+    "This is a HOTEL PUBLIC-AREA photo (lobby, pool, bar, restaurant, gym, spa,",
+    "exterior, courtyard, rooftop, or meeting room). It is NEVER a guest-room",
+    "interior — guest rooms are classified by a separate prompt.",
+    "",
+    "Reply with EXACTLY TWO lines, no other text:",
+    "",
+    "LINE 1 (AREAS, multi-select):",
+    "  AREAS: <comma-separated list, one or more of the following labels>",
+    "  Labels: lobby, pool, restaurant, bar, gym, spa, exterior,",
+    "          courtyard_garden, rooftop, meeting_room",
+    "  Pick EVERY label that is clearly visible in this frame. Examples:",
+    "    rooftop bar with city view              → AREAS: rooftop,bar",
+    "    pool deck with sunbeds                   → AREAS: pool",
+    "    indoor restaurant with bar counter       → AREAS: restaurant,bar",
+    "    front desk + lounge seating              → AREAS: lobby",
+    "    facade of building from street           → AREAS: exterior",
+    "    landscaped patio between two buildings   → AREAS: courtyard_garden",
+    "  If no labeled area is recognisable, reply: AREAS: none",
+    "",
+    "LINE 2 (STYLE, single mutex):",
+    "  STYLE: <one of: sleek_polished | cozy_warm | vibrant_eclectic | moody_dark | classic_traditional | unknown>",
+    "  Apply the SAME strict criteria as for room photos (REQUIRES + DISQUALIFIES",
+    "  per category). Lean toward `unknown` for plain corporate-lobby /",
+    "  utility-corridor spaces, food close-ups, or low-quality crops. A photo",
+    "  showing only the exterior facade or only a sign should usually be STYLE: unknown.",
+    "",
+    `Context: room="${photoContext.roomName || "__hotel_public__"}" type="${photoContext.type || "other"}"`,
+    "",
+    "Reply with exactly two lines: AREAS: ...   and   STYLE: ...",
+  ].join("\n");
+}
+
+/**
+ * Parse the hotel-public classifier reply. Returns:
+ *   { areas: ["lobby", "bar"], visualStyle: "visual_style_sleek_polished" | null }
+ * `areas` is always an array of fact_keys (possibly empty when "none"). The
+ * function is forgiving about case, surrounding text, and missing lines.
+ */
+function parseHotelPublicReply(text) {
+  if (!text) return { areas: [], visualStyle: null };
+  const lines = String(text).split(/\r?\n/);
+  let areaLine = "";
+  let styleLine = "";
+  for (const raw of lines) {
+    const line = raw.trim();
+    if (/^areas\s*:/i.test(line))  areaLine  = line.replace(/^areas\s*:\s*/i,  "");
+    if (/^style\s*:/i.test(line))  styleLine = line.replace(/^style\s*:\s*/i,  "");
+  }
+  const areas = [];
+  if (areaLine && !/^none\b/i.test(areaLine) && !/^unknown\b/i.test(areaLine)) {
+    for (const raw of areaLine.split(",")) {
+      const label = raw.trim().toLowerCase().replace(/[^a-z_]/g, "");
+      if (!label) continue;
+      const factKey = AREA_LABEL_TO_FACT[label];
+      if (factKey) areas.push(factKey);
+    }
+  }
+  let visualStyle = null;
+  if (styleLine) {
+    const m = styleLine.trim().toLowerCase().match(/^[a-z_]+/);
+    if (m && m[0] !== "unknown") {
+      const fk = `visual_style_${m[0]}`;
+      if (FACT_SET.has(fk)) visualStyle = fk;
+    }
+  }
+  return { areas: [...new Set(areas)], visualStyle };
+}
+
 module.exports = {
   FACT_CATALOG,
   FACT_SET,
@@ -690,6 +837,10 @@ module.exports = {
   mergeStayVibeIntoIntent,
   buildVisualStyleClassifierPrompt,
   parseVisualStyleReply,
+  AREA_FACT_KEYS,
+  AREA_LABEL_TO_FACT,
+  buildHotelPublicClassifierPrompt,
+  parseHotelPublicReply,
   extractFactsFromSignals,
   parseStructuredCaption,
   scoreFactSet,

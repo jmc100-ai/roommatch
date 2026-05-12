@@ -87,6 +87,14 @@ LITEAPI_WL_DOMAIN      — LiteAPI white-label domain WITHOUT scheme, e.g. `trav
 MAPTILER_KEY           — Maptiler API key (free tier: 100k tile loads/month at maptiler.com). Powers the neighbourhood-vibe-page map module (MapLibre GL). Server exposes via `/api/config` AND injects into `window._MAPTILER_KEY` in served HTML so the map can boot before any /api/config fetch. **Must be restricted by HTTP referrer in the Maptiler dashboard** (Allowed origins: `travelboop.com`, `www.travelboop.com`, `roommatch-1fg5.onrender.com`, `localhost:*`). Unset → map falls back to OSM raster tiles (works but lower quality + against OSM tile usage policy at scale).
 META_SYNC_LIMIT        — top-N hotels for which `/api/vsearch` (V2 path) fetches LiteAPI metadata synchronously before sending the response. Default `30`. Lower = faster TTFB, more cards initially show with placeholder name until lazy-load arrives. The remainder are listed in `data.deferred_meta_ids` and lazy-fetched by the client via `/api/hotels-meta`. See "V2 Search Latency" section below.
 NLP_INTENT_TIMEOUT_MS  — `buildFactIntentLLM` (Gemini 2.5 flash-lite) call timeout in ms. Default `3000`. On timeout we fall back to the deterministic regex router (`v2-facts-1`); fine for most queries. Raise only if you see frequent `(router=v2-facts-1)` in logs and the regex is missing important facts.
+HOTEL_VIBE_BLEND_WEIGHT — weight of the facts-based hotel-vibe score in V2's primary sort signal. Default `0.20` (80% room match + 20% hotel vibe). Set `0` to make hotelScore display-only. See "HOTEL VIBE MODEL" section.
+HOTEL_VIBE_PUBLIC_WEIGHT — one hotel-public photo (lobby/pool/bar) counts as N room photos in the combined coverage formula inside `score_hotels_facts_v2`. Default `5.0`.
+HOTEL_VIBE_STAR_PRIOR    — ±range of the star_rating prior applied to hotel raw_score. Default `0.10`. Only fires when stayVibe ∈ {sleek_polished, classic_traditional}.
+HOTEL_VIBE_GUEST_PRIOR   — ±range of the guest_rating prior applied to hotel raw_score. Default `0.06`. Universal.
+HOTEL_VIBE_PHOTO_MIN     — hotels with fewer than this many indexed photos scale linearly toward 0 in hotel_vibe. Default `6`.
+HP_PHOTOS_PER_HOTEL      — per-hotel cap for `scripts/classify-hotel-public.js`. Default `12`. Higher = more cost, diminishing returns past ~12.
+HP_PHOTO_CONCURRENCY     — parallel Gemini calls in the hotel-public backfill. Inherits `VS_PHOTO_CONCURRENCY` if unset.
+HP_RATE_PER_MIN          — Gemini calls/min ceiling in the hotel-public backfill. Inherits `VS_RATE_PER_MIN` if unset.
 LITEAPI_MAX_RATES_PER_HOTEL — `/hotels/rates` request knob (used by `/api/rates` AND `/api/debug-rates`). Default `60`, clamped 10–300. **Updated diagnosis (2026-05-11):** the real reason the response previously looked saturated at ~1.7 rates/hotel wasn't this cap — it was a hidden LiteAPI server-side cap that kicks in when the request batch size is `>= 50` hotels. Bisected empirically: a batch of 48 hotels returns full 3–5 rates each; a batch of 50+ returns 1 (cheapest only) regardless of `maxRatesPerHotel`. `/api/rates` now works around this with a two-pass design: (1) one large batched call drives hotel-level cheapest prices for sorting/filtering, (2) a top-N detail pass re-queries the highest-ranked priced hotels in chunks of <=40 to recover the missing per-room rates. Tuned by `RATES_DETAIL_TOPN` / `RATES_DETAIL_CHUNK` below. The `[rates] distinct-rooms histogram` log line is the empirical signal for tuning — for the top-N rows it should skew toward the 2-3 / 4-5 buckets after the detail pass.
 RATES_DETAIL_TOPN           — number of top-ranked-and-priced hotels to re-fetch with smaller batches to recover the per-room rates dropped by LiteAPI's batch-size cap (see `LITEAPI_MAX_RATES_PER_HOTEL` above). Default `50`, clamped 0–200. Set `0` to disable the detail pass entirely (single-call legacy behaviour). Cost: 1-2 extra parallel LiteAPI calls per `/api/rates` invocation, ~1-2 s added latency. Only runs when the batched-call input had `>= 50` hotels (single-hotel / small-city searches already get full rates from the main call).
 RATES_DETAIL_CHUNK          — chunk size for the detail pass. Default `15`, clamped 5–48. Empirically validated as the best size (tested 10/15/20/25/30/40 against a 50-hotel cohort): chunk=15 returns the most total rates AND covers individual hotels (e.g. `lp3e1a2`) with all 3 rates consistently. chunk=20 anomalously drops some hotels back to 1-2 rates; chunk>=25 leaks rates for some hotels too. LiteAPI's allocation is **non-monotonic** with batch size — it's not a simple "cap at >=50" function; smaller chunks are more reliable per-hotel, at the cost of slightly more parallel API calls. With defaults (`TOPN=50`, `CHUNK=15`) we issue 4 chunks in parallel per `/api/rates` call.
@@ -254,6 +262,7 @@ NOTIFY pgrst, 'reload config';
 | POST /api/backfill-feature-embeddings | Re-embed feature_summary + re-extract feature_flags for a city |
 | POST /api/backfill-room-ids | Backfill room_type_id for existing rows (requires INDEX_SECRET) |
 | POST /api/v2/classify-visual-style | Incremental Gemini visual_style classification for an indexed city. Body: `{city, secret, limit?}`. Idempotent. See "Visual style classification" below for cost + runtime. |
+| POST /api/v2/classify-hotel-public | Incremental Gemini hotel-public photo classification (lobby/pool/bar/...) for an indexed city. Body: `{city, secret, limit?, concurrency?, rate_per_min?}`. Populates `area_*` + `visual_style_*` facts under `room_name='__hotel_public__'`. Powers Phase 1b of hotel-vibe scoring. See "HOTEL VIBE MODEL" section. |
 | GET /api/debug-city?city | LiteAPI coverage analysis |
 | GET /api/debug-gemini | Test available Gemini model names |
 | GET /api/debug-photos?hotelId | Show raw LiteAPI photo fields |
@@ -323,6 +332,162 @@ Examples: double sinks, soaking tub, bathtub, walk-in shower, rainfall shower, b
 - "Available rooms only" toggle: shows only hotels where LiteAPI confirmed pricing
 - Hotels with no rate data from LiteAPI are **hidden entirely** (not shown at 0%) when filter is active
 - `hotelPassesAvailFilter(h)` checks `h.price != null` OR has per-room pricing matches
+
+---
+
+## HOTEL VIBE MODEL (Phase 1a + 1b + 2 — shipped May 2026)
+
+V2 hotel-level vibe scoring. Replaces the legacy `hotel_vibe_model="fallback_rating"` (which was permanent because `hotel_profile_index` had 0 rows for every city — the text-embedding path was never populated). The new model mirrors the room scoring (facts + soft prefs + adaptive remap) but aggregates to hotel level.
+
+### What changed
+
+**Stats payload (`/api/vsearch` V2):**
+```
+hotel_vibe_model:        "v2_facts" | "fallback_rating"
+hotel_vibe_sim_max:      0.0..1.0   (adaptive ceiling when v2_facts)
+hotel_vibe_blend_weight: 0.0..1.0   (HOTEL_VIBE_BLEND_WEIGHT, default 0.20)
+hotel_vibe_fact_weights: {fact_key: weight}   (exactly what was passed to the RPC)
+```
+
+**Per-hotel response (`hotels[i]`):**
+```
+hotelScore:    0..100 | null      (real now, not always-null)
+vectorScore:   0..100              (room match, unchanged)
+```
+
+**Log line:**
+```
+[v2] ranked: N hotels | SIM_MAX=... SIM_MIN=... maxRaw=...
+     hotel_vibe=v2_facts HV_MAX=0.7234 HV_BLEND=0.20 (250 hotels scored)
+```
+
+### Architecture
+
+**Phase 1a — Room facts coverage (rooms-only signal)**
+- `score_hotels_facts_v2(p_city, p_hotel_ids, p_fact_weights, p_public_weight=5.0)` SQL RPC.
+- For each hotel × each fact_key, computes:
+  - `room_coverage = yes_distinct_photos / (yes + no) distinct_photos`  (room photos, room_name != '__hotel_public__')
+  - `public_coverage = yes_distinct_photos / (yes + no) distinct_photos` (public photos, room_name = '__hotel_public__')
+  - `combined = (room_cov × n_room + W × pub_cov × n_pub) / (n_room + W × n_pub)`  where W = `p_public_weight`
+- `raw_score = Σ(weight × combined_cov) / Σ(weight)` — normalised 0..1.
+- Works directly from raw `v2_room_feature_facts` (not from `v2_room_types_index.facts`) so it can apply different aggregation semantics to mutex vs non-mutex facts in one query.
+- File: `supabase/score-hotels-facts-v2.sql`.
+
+**Phase 1b — Hotel public-area photo classification (lobby/pool/bar/...)**
+- `scripts/classify-hotel-public.js` — incremental backfill for existing cities. Reads photos from `v2_hotels_cache.hotel_photos` (LiteAPI-provided, never persisted as content beyond the URL) and calls a single Gemini 2.5 Flash Lite classifier that returns:
+  ```
+  AREAS: lobby,bar              (multi-select, non-mutex)
+  STYLE: sleek_polished         (mutex, same 5 buckets as rooms)
+  ```
+- Writes inventory rows with `room_name='__hotel_public__'` and `photo_type` = dominant area; writes facts rows for ALL 10 `area_*` facts (1 yes per detected area, 0 for the rest) plus the visual_style 1y+4n symmetric writes when STYLE != unknown.
+- `scripts/index-city-v2.js` is also extended (`processHotelPublicPhotos`) so newly-indexed cities get hotel-public facts automatically — no separate backfill needed for London/NYC.
+- Idempotent: skips any `(hotel_id, photo_url)` that already has an `area_*` row.
+- 10 area fact keys: `area_lobby`, `area_pool`, `area_restaurant`, `area_bar`, `area_gym`, `area_spa`, `area_exterior`, `area_courtyard_garden`, `area_rooftop`, `area_meeting_room`.
+
+**Phase 2 — Auxiliary priors (folded into raw_score BEFORE adaptive remap)**
+- **Star prior (±0.10):** centred on 3-star. Only applied when `stayVibe ∈ {sleek_polished, classic_traditional}` (luxury-leaning vibes). Neutral otherwise so cozy/eclectic/moody scoring isn't biased by an unsolicited star preference.
+- **Guest prior (±0.06):** centred on 7.5/10. Applied universally — well-reviewed hotels are slightly preferred regardless of vibe.
+- **Photo-completeness penalty:** hotels with fewer than `HOTEL_VIBE_PHOTO_MIN` (default 6) indexed photos scale linearly toward 0. Prevents sparse-catalogue hotels with one strong photo from leapfrogging rich ones.
+
+**Adaptive remap → display 0..100**
+- `HOTEL_SIM_MAX = max(raw_score over result set)` (per-query adaptive ceiling).
+- `HOTEL_SIM_MIN = max(HOTEL_SIM_MAX - 0.30, 0)`.
+- `hotelScore = round(((raw_score - HOTEL_SIM_MIN) / span) × 100)`.
+
+**Ranking blend (primary sort)**
+- `primarySignal = (1 - HOTEL_VIBE_BLEND_WEIGHT) × topScore + HOTEL_VIBE_BLEND_WEIGHT × hotelVibePct`
+- `HOTEL_VIBE_BLEND_WEIGHT` env (default 0.20). Room match remains dominant; hotel vibe nudges ordering.
+- When `hotel_vibe_model="fallback_rating"` (empty soft_preferences), blend collapses to topScore-only.
+
+**Deterministic tiebreaker stack** (was bare `topScore` descending, causing ties at 100 with arbitrary insertion order):
+```
+primarySignal → hotelVibePct → guest_rating → star_rating → hotel_id alphabetical
+```
+
+### Env knobs
+
+| Var | Default | What it does |
+|---|---|---|
+| `HOTEL_VIBE_BLEND_WEIGHT`   | `0.20` | Weight of hotelVibe in the primary sort signal. 0 = display only. |
+| `HOTEL_VIBE_PUBLIC_WEIGHT`  | `5.0`  | One public photo counts as N room photos in combined coverage. |
+| `HOTEL_VIBE_STAR_PRIOR`     | `0.10` | ±range of star_rating prior (only fires on luxury stayVibes). |
+| `HOTEL_VIBE_GUEST_PRIOR`    | `0.06` | ±range of guest_rating prior (universal). |
+| `HOTEL_VIBE_PHOTO_MIN`      | `6`    | Below this photo count, score scales linearly toward 0. |
+| `HP_PHOTOS_PER_HOTEL`       | `12`   | Per-hotel cap in `classify-hotel-public.js`. |
+| `HP_PHOTO_CONCURRENCY`      | inherits `VS_PHOTO_CONCURRENCY` | Parallel Gemini calls in backfill. |
+| `HP_RATE_PER_MIN`           | inherits `VS_RATE_PER_MIN`      | Gemini call rate ceiling in backfill. |
+
+### Running the hotel-public backfill (Mexico City)
+
+```powershell
+# Local (faster — uses .env directly):
+node scripts/classify-hotel-public.js --city="Mexico City" --concurrency=24 --rate_per_min=1500
+
+# Or via admin endpoint:
+$body = '{"city":"Mexico City","secret":"roommatch-2026","concurrency":24,"rate_per_min":1500}'
+Invoke-RestMethod -Uri "https://roommatch-1fg5.onrender.com/api/v2/classify-hotel-public" -Method POST -ContentType "application/json" -Body $body
+```
+Cost: ~$1.06 for Mexico City (~28k photos × $0.000038). Runtime: ~35 min at concurrency=24 / rate=1500.
+
+After the run, `rebuild_v2_room_types_index_city` is auto-called so the `__hotel_public__` pseudo-rows materialise. Verify:
+```sql
+SELECT COUNT(DISTINCT hotel_id) FROM v2_room_inventory
+ WHERE city='Mexico City' AND room_name='__hotel_public__';
+
+SELECT fact_key, COUNT(DISTINCT hotel_id) AS hotels_with_yes
+  FROM v2_room_feature_facts
+ WHERE city='Mexico City' AND room_name='__hotel_public__'
+   AND fact_key LIKE 'area_%' AND fact_value=1
+ GROUP BY fact_key
+ ORDER BY 2 DESC;
+```
+
+### Phase 3 (deferred) — Semantic hotel-level embedding
+
+**Goal.** Layer a semantic similarity signal on top of the facts model so queries that don't map cleanly to facts ("art deco vibe", "Wes Anderson aesthetic", "feels like Berlin") still rank meaningfully.
+
+**Why deferred.**
+- Phase 1+2 already produces fine-grained continuous scores (0 hotels at vectorScore=100 in real result sets — the tie problem is solved).
+- Persisting hotel descriptions runs into LiteAPI licensing concerns; we'd have to synthesise hotel text from facts + neighbourhood + photo captions.
+- Phase 3 should be measured against Phase 1+2 quality, not against the broken fallback baseline.
+
+**Design sketch (when you build it).**
+1. **Synthesise a hotel vibe paragraph** per hotel from in-house signals only — no LiteAPI text. Inputs:
+   - Aggregated `visual_style_*` coverage at room + public level (Phase 1b output).
+   - Aggregated `area_*` presence (Phase 1b output).
+   - Top-N most-confirmed `feature_summary` lines from `v2_room_inventory` (already in-house, derived from photos — fine to use).
+   - `property_type` + `star_rating` + `guest_rating` from `v2_hotels_cache`.
+   - Primary neighbourhood `vibe_short` from `neighborhoods` table (our content).
+   - Result: a 100-200 word hotel-personality paragraph synthesised by Gemini, e.g.:
+     > "Mid-century modern boutique hotel in Roma Norte with warm-tone palette, layered textiles, and a leafy courtyard garden. Rooftop bar with city views. 4-star property with 8.7/10 guest rating."
+2. **Embed it** (`gemini-embedding-001`, 768-dim, RETRIEVAL_DOCUMENT) and store in a new `v2_hotel_vibe_index` table (NOT `hotel_profile_index` which is V1-shaped and dead).
+3. **Embed the user's `hotel_query`** the same way at search time (RETRIEVAL_QUERY).
+4. **Add a third signal** to the ranker: `semantic_score = cosine(hotel_vibe_embed, query_embed)`, adaptive-remap to 0..100, blend at e.g. 0.15 with Phase 1+2's hotelVibePct.
+5. **Trigger**: re-run when prompt changes, when index rebuilds, or on a slow weekly cadence — embeddings drift slowly.
+6. **Cost ballpark**: ~3500 hotels × 1 LLM call + 1 embed ≈ ~$0.50 one-shot for Mexico City. Re-embed weekly = ~$2/mo.
+
+**Tables we'd add (don't add until you actually build Phase 3):**
+```sql
+CREATE TABLE v2_hotel_vibe_index (
+  hotel_id        TEXT PRIMARY KEY,
+  city            TEXT NOT NULL,
+  country_code    TEXT,
+  vibe_paragraph  TEXT,                -- synthesised, NOT LiteAPI-sourced
+  embedding       vector(768),
+  generated_at    TIMESTAMPTZ DEFAULT NOW(),
+  prompt_version  TEXT
+);
+CREATE INDEX v2_hotel_vibe_city ON v2_hotel_vibe_index(city);
+CREATE INDEX v2_hotel_vibe_embed ON v2_hotel_vibe_index
+  USING ivfflat (embedding vector_cosine_ops) WITH (lists = 100);
+```
+
+**Wire point in search-v2.js:** Phase B parallel with the facts RPC; add `semantic_score` to the blend in `primarySignal()`. Keep the facts model authoritative; semantic is a tiebreaker / nudge.
+
+**Open questions for Phase 3:**
+- Do we synthesise the vibe paragraph deterministically (room/area coverage rules) or use Gemini freely? Deterministic is cheaper and more predictable; Gemini is richer.
+- Re-embed cadence: per-search live, per-day batch, or only on prompt change? Live is too expensive at query time; batch is fine.
+- Should `hotel_query` be a separate Boop input (advanced) or always derive from main query + Boop seeds?
 
 ---
 
@@ -629,7 +794,7 @@ Render rotates instances every ~1–3 hours, so most users hit a cold-cache inst
 
 0. **Neighbourhood vibe map module (built May 6 2026; top-match default May 7 2026)** — `#st-nbhd` renders a MapLibre GL map at the top of the page (above the card grid) with one rectangular vibe-% pill marker per neighbourhood + polygon shading when `polygon.ring` is available. Markers are colored by vibe-% tier (gold ≥85, amber ≥70, bronze ≥50, slate <50). **Default camera** is fitted to the top-match neighbourhood's bbox (highest `nbhdBoopVibeScore`, `maxZoom: 14`); the **"Show all"** button (formerly "Reset view") zooms back out to the full union of all neighbourhood bboxes (`_nbhdMapBounds`, `maxZoom: 15`). Click a marker (or polygon) → scroll the matching card into view + 1.3s gold flash highlight. Hover (desktop) is bidirectional between marker and card. Map lazy-loads MapLibre from CDN on first show and uses Maptiler `streets-v2` style when `MAPTILER_KEY` is set; falls back to OSM raster tiles otherwise. Module renders inside `#nbhd-map-module` (CSS in `client/styles.css` under "Neighbourhood map module"); core JS lives in `client/app.js` (`renderNbhdMap`, `_ensureMapLibre`, `_vibeColorForPct`, `resetNbhdMap`). Re-renders on every `fetchAndShowNeighborhoodsNew` call (city change or returning to step). **Action required: sign up at maptiler.com (free), set `MAPTILER_KEY` in `.env` and Render env, restrict by HTTP referrer in the Maptiler dashboard.**
 
-1. **Hotel-level vibe score** — TODO: The `hotel-match-badge` currently shows the best room's vectorScore as a proxy for "hotel match." This is slightly misleading. When hotel-level vibe scoring is built (as part of the neighborhood vibe phase), replace `hotelEffectiveScore(h)` with a true hotel-level embedding score separate from the room score. The badge label can then be changed to "Hotel Vibe X%". See `hotelHTML()` and `applyPricesInPlace()` in `client/index.html`.
+1. **Hotel-level vibe score — Phase 1a + 1b + 2 shipped (May 2026).** The legacy `hotel_vibe_model="fallback_rating"` log line (caused by the `hotel_profile_index` table being permanently empty) is gone. V2 search now produces a real hotel-level facts-coverage score via `score_hotels_facts_v2` (see "HOTEL VIBE MODEL" section below). The `hotelScore` field on every hotel response is 0-100 and is computed from `intent.soft_preferences` coverage across both ROOM photos and HOTEL PUBLIC photos (lobby/pool/bar/exterior — populated by `scripts/classify-hotel-public.js`). The `hotel-match-badge` in the UI reads this directly. Phase 3 (semantic hotel embedding) is the next layer; see design doc in "HOTEL VIBE MODEL" section.
 
 2. **Index London and NYC** — same flow as KL: trigger index-city, auto-rebuild happens after
    ```powershell
