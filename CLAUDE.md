@@ -50,6 +50,133 @@ PRICING PIPELINE:
 
 ---
 
+## V2 Architecture — Fact-Based Search (NEW)
+
+V2 replaces vector embeddings of photo captions with **structured boolean facts** extracted directly from photos by Gemini. This is the current default search mode (`SEARCH_VERSION_DEFAULT=v2`).
+
+### Key Difference vs V1
+
+| Dimension | V1 (legacy) | V2 (current) |
+|---|---|---|
+| Photo analysis | Gemini generates free-text caption → embed to 768-dim vector | Gemini answers ~80 YES/NO/UNKNOWN fields per photo |
+| Stored per photo | `caption`, `feature_summary`, `embedding vector(768)` | `v2_room_feature_facts` rows: one row per (photo, fact_key) |
+| Room-type index | `room_types_index` — avg embedding per (hotel, room, photo_type) | `v2_room_types_index` — confirmed JSONB facts per (hotel, room) |
+| Scoring | Cosine similarity between query embedding and room embedding | LLM-weighted fact match score: `scoreFactSet(facts, intent)` |
+| Search latency | Needs vector RPC scan | Reads pre-aggregated index; no vector math at search time |
+| Query routing | Regex detects feature flags | Gemini LLM maps query → weighted facts dict (cached in memory) |
+
+### V2 DB Tables
+
+**`v2_indexed_cities`** — tracks V2 indexing status per city (mirrors `indexed_cities`)
+
+**`v2_hotels_cache`** — stores hotel_id, city, country_code, lat, lng, hotel_photos (JSONB). **Does NOT store name/address/ratings** (ToS compliance — display metadata fetched live from LiteAPI at search time).
+
+**`v2_room_inventory`** — one row per photo: hotel_id, room_name, room_type_id, photo_url, photo_type, caption (raw Gemini output), feature_summary. Source of truth for what was indexed.
+
+**`v2_room_feature_facts`** — one row per (hotel_id, room_type_id, photo_url, fact_key):
+- `fact_value`: `1`=yes, `0`=no, `-1`=unknown
+- `confidence`: 0–1
+- `source`: `"vision_structured"` (from Gemini structured prompt)
+- `extractor_version`: `"v2-facts-1"`
+- UNIQUE on `(hotel_id, room_type_id, photo_url, fact_key)`
+
+**`v2_room_types_index`** — pre-aggregated confirmed facts per (hotel_id, room_name):
+- `facts JSONB` — `{fact_key: true|false}` for confirmed facts only (NULLs excluded)
+- `photo_count INT`
+- Rebuilt by `rebuild_v2_room_types_index_city(p_city)` after indexing
+- GIN index on `facts` for fast JSONB containment queries
+- UNIQUE on `(hotel_id, room_name)`
+
+### V2 Fact Catalog (`scripts/fact-catalog.js`)
+
+~100 structured facts across categories:
+- **Bathroom** (high priority): `double_sinks`, `soaking_tub`, `rainfall_shower`, `walk_in_shower`, `handheld_wand`, `glass_wall_bathroom`, `bidet_washlet`, `natural_light_bathroom`, `stone_surfaces`, `anti_fog_mirror`, `makeup_vanity`, `heated_towel_rack`, `tub_and_shower_separate`, `counter_space_generous`, `roll_in_shower`, `grab_bars`
+- **Bedroom/layout**: `king_bed`, `canopy_bed`, `floor_to_ceiling_windows`, `private_balcony`, `juliette_balcony`, `high_ceilings`, `open_plan`, `loft_layout`, `walk_in_closet`, `kitchenette`, `swim_up_access`, `sofa_bed`, `daybed_window_nook`, `dining_table_in_room`, `full_length_mirror`, `divided_seating`
+- **Flooring**: `hardwood_parquet`, `stone_tile_floor`, `polished_concrete`, `wall_to_wall_carpet`, `area_rugs`, `statement_wallpaper`, `exposed_brick`, `exposed_wood`
+- **Amenities**: `ergonomic_workspace`, `espresso_station`, `indoor_plants`, `cocktail_station`, `mini_fridge`, `microwave`, `laundry_in_room`, `record_player`, `smart_controls`, `individual_thermostat`, `ceiling_fan`
+- **Light/mood**: `high_natural_light`, `dimmable_lighting`, `warm_light_temp`, `accent_cove_lighting`, `floor_lamps`, `reading_lights`, `blackout_shutters`, `statement_fixture`, `romantic_lighting`
+- **Style**: `palette_minimalist`, `palette_moody`, `palette_earth`, `palette_vibrant`, `organic_wood_heavy`, `mid_century_modern`, `vintage_furniture`
+- **Views**: `skyline_view`, `water_view`, `green_view`, `courtyard_view`, `landmark_view`, `high_floor`, `street_level_view`, `balcony_furniture`, `privacy_sheers`
+- **Accessibility**: `step_free_access`, `roll_in_shower`, `grab_bars`, `elevator_access`, `wheelchair_clearance`
+- **Noise/quiet**: `soundproofing_high`, `quiet_street`, `nightlife_noise_risk`
+- **Work/connectivity**: `individual_thermostat`, `wifi_quality_high`, `desk_large_enough`, `video_call_friendly_lighting`, `bedside_outlets`, `desk_level_outlets`, `usb_c_ports`
+
+### V2 Indexing Pipeline (`scripts/index-city-v2.js`)
+
+Triggered via: `POST /api/v2/reindex-city {"city":"Mexico City","limit":200,"secret":"roommatch-2026"}`
+
+**Flow:**
+1. Paginate LiteAPI `/data/hotels` (up to 1000/page) for the city
+2. **Quality filter**: skip hotels where no room type has ≥2 photos
+3. For each hotel (BATCH_SIZE=25 concurrent): fetch `/data/hotel` detail
+4. Upsert to `v2_hotels_cache`: hotel_id, lat/lng, hotel_photos (8 hotel-level photos) — **no name/address/ratings stored**
+5. Collect up to 60 photos per hotel (deduplicated by URL across room types)
+6. For each photo (PHOTO_CONCURRENCY=3): call Gemini with structured YES/NO/UNKNOWN prompt (~80 fields)
+7. Parse response with `parseStructuredCaption()` → fact rows
+8. Upsert to `v2_room_inventory` (one row per photo) and `v2_room_feature_facts` (one row per fact)
+9. After all hotels: auto-call `rebuild_v2_room_types_index_city(city)` to aggregate facts
+10. Copy lat/lng to `hotels_cache` for neighbourhood matching
+
+**Quality filter:** Hotels where no room type has ≥2 photos are skipped (unreliable fact extraction from a single image).
+
+**Gemini prompt (v2):** Structured YES/NO/UNKNOWN format. ~80 fields, one per line. Includes strict rules to prevent false positives on high-ambiguity facts (e.g. DOUBLE_SINKS only if TWO separate sink basins with separate faucets clearly visible).
+
+**Rate limits:** CAPTION_RATE_PER_MIN=500. Retries: exponential backoff (3s, 12s, 27s, 48s, 60s cap) up to 5 retries on 429/503.
+
+### V2 Search Pipeline (`scripts/search-v2.js`)
+
+Called from `server.js` when `search_version=v2` (default). Same response shape as V1.
+
+**Phase A — Fact intent + room scoring:**
+1. **LLM NLP router**: `buildFactIntentLLM(query)` → calls Gemini to map query → weighted facts dict `{fact_key: weight}`. Falls back to `buildFactIntent()` (regex) on failure. Cached in memory (LRU, 2000 entries).
+2. Geo pre-filter: polygon (point-in-polygon test) or bbox → `hotelIdsByGeo` set
+3. Load `v2_hotels_cache` (all city hotel IDs) + `v2_room_types_index` (all room-type facts) in parallel
+4. Score each room type: `rawScore = 0.8 × scoreFactSet(facts, intent) + 0.2 × textScore`
+5. `scoreFactSet()`: `(0.55 × softRatio + 0.45 × hardRatio) × severePenalty - 0.25 × negPenalty`
+6. Hotel-level raw sim = MAX room rawScore across all room types
+7. **Soft flag coverage boost** (same V1 formula): `sBoosted = rawSim × (1 + covMult × coverage) × (1 − missPen × (1 − coverage))`
+8. Sort by sBoosted → top 250 hotels (GALLERY_LIMIT)
+
+**Phase B — Photos + hotel vibe score:**
+9. Load photos via `get_v2_room_photos` RPC (top 250 hotel IDs)
+10. Load hotel vibe score via `score_hotels` RPC (Gemini embedding of `hotel_query` vs hotel profile)
+11. Load primary neighbourhood via `get_primary_nbhds_for_hotels` RPC
+12. Load per-photo fact hits from `v2_room_feature_facts` for photo ordering
+13. Build hotel objects: mean-of-top-3 photo scores, photo-count penalty (<3 photos → ×len/3), adaptive SIM_MIN/MAX remapping, bathroom bias for photo ordering
+
+**Score display** (`vectorScore`): same adaptive remapping as V1 — `(rawScore - SIM_MIN) / simSpan × 100`
+
+**Hotel metadata** (name, address, star_rating, etc.): NOT stored in V2 — fetched live from LiteAPI in `fetchHotelMetaBatch()` after search.
+
+### V2 Confirmation Rules (`rebuild_v2_room_types_index_city`)
+
+Same spirit as V1, applied to fact votes instead of photo embeddings:
+
+- **HIGH_AMBIGUITY facts** (`double_sinks`, `soaking_tub`, `walk_in_shower`, `rainfall_shower`, `in_room_hot_tub`, `fireplace`, `private_plunge_pool`):
+  - confirmed=true if room yes_count ≥ 2
+  - confirmed=true if room yes_count ≥ 1 AND hotel-level yes_count ≥ 2
+  - confirmed=false if no_count ≥ 2
+
+- **Standard facts**: confirmed=true if yes_count ≥ 1 AND no_count < 2; confirmed=false if no_count ≥ 2
+
+### V2 API Endpoints
+
+| Endpoint | Description |
+|---|---|
+| POST /api/v2/reindex-city | Trigger V2 indexing (requires INDEX_SECRET) |
+| GET /api/v2/index-status?city | Check V2 indexing status |
+| POST /api/v2/rebuild-city-index | Rebuild v2_room_types_index without re-captioning |
+| GET /api/vsearch?query&city&search_version=v2 | V2 search (default) |
+
+### V2 Environment Variables
+
+```
+SEARCH_VERSION_DEFAULT — "v2" (default) or "v1"
+```
+All other env vars (Gemini, Supabase, LiteAPI) are shared with V1.
+
+---
+
 ## Tech Stack
 
 | Component | Technology |
@@ -234,10 +361,14 @@ ALTER ROLE authenticator SET pgrst.db_max_rows = '10000';
 NOTIFY pgrst, 'reload config';
 ```
 
-### Current Index Status
+### Current Index Status (V1 — legacy)
 - **Paris: 999 hotels, ~60,000+ photos** (full city indexed, structured captions, feature flags populated)
 - **Kuala Lumpur: 200 hotels, 9,258 photos** (indexed March 2026)
 - London, NYC: not yet indexed
+
+### V2 Index Status
+- **Mexico City: ~220+ hotels** (indexing May 2026, first V2 city)
+- Paris, KL: not yet re-indexed with V2 pipeline
 
 ### Feature flag counts (as of March 2026)
 | Feature | Paris hotels | KL hotels |
