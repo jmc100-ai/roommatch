@@ -56,8 +56,16 @@ RETURNS TABLE (
   total_public_photos int
 )
 LANGUAGE plpgsql
-STABLE
+-- VOLATILE (default) is required to use `SET LOCAL`. We previously marked this
+-- STABLE which read cleanly but threw at runtime: `0A000: SET is not allowed
+-- in a non-volatile function`. The function is effectively stable within a
+-- query — it only reads tables — but Postgres demands volatile for SET LOCAL.
+VOLATILE
 AS $function$
+-- The RETURNS TABLE OUT parameter `hotel_id` shadows CTE column names of the
+-- same name. Tell PL/pgSQL to prefer column references over the OUT variable
+-- inside SQL bodies (avoids "column reference \"hotel_id\" is ambiguous").
+#variable_conflict use_column
 DECLARE
   total_weight numeric;
 BEGIN
@@ -95,18 +103,18 @@ BEGIN
   ),
   fact_coverage AS (
     SELECT
-      hotel_id, fact_key, pool,
+      fc.hotel_id, fc.fact_key, fc.pool,
       CASE
         -- area_*: binary presence (any "yes" photo → 1.0; otherwise 0).
         -- See header note for rationale (mutex labels make fractions wrong).
-        WHEN fact_key LIKE 'area\_%' ESCAPE '\' THEN
-          CASE WHEN yes_count >= 1 THEN 1.0 ELSE 0.0 END
+        WHEN fc.fact_key LIKE 'area\_%' ESCAPE '\' THEN
+          CASE WHEN fc.yes_count >= 1 THEN 1.0 ELSE 0.0 END
         -- default: fraction-of-photos coverage (visual_style, etc.)
-        WHEN (yes_count + no_count) > 0 THEN
-          yes_count::double precision / (yes_count + no_count)::double precision
+        WHEN (fc.yes_count + fc.no_count) > 0 THEN
+          fc.yes_count::double precision / (fc.yes_count + fc.no_count)::double precision
         ELSE 0.0
       END AS coverage
-    FROM fact_counts
+    FROM fact_counts fc
   ),
   -- Per-pool total photo counts (denominator for the combined-coverage blend).
   pool_totals AS (
