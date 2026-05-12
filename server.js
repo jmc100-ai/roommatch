@@ -1282,6 +1282,13 @@ app.use(express.static(path.join(__dirname, "client"), {
       res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
       res.setHeader("Pragma", "no-cache");
       res.setHeader("Expires", "0");
+    } else if (process.env.NODE_ENV === "production") {
+      return;
+    } else if (/\.(?:js|css|mjs)$/i.test(filePath)) {
+      // Local dev: avoid stale /app.js after edits (browser aggressive caching).
+      res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+      res.setHeader("Pragma", "no-cache");
+      res.setHeader("Expires", "0");
     }
   },
 }));

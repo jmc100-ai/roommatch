@@ -276,6 +276,22 @@
           </div>
         </div>
 
+        <div class="city-group-pick" id="city-group-pick" aria-label="Who is traveling">
+          <div class="city-group-row">
+            <div class="city-group-row-main">
+              <span class="city-group-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+              </span>
+              <span class="city-group-title">Who's coming?</span>
+            </div>
+            <div class="city-group-pills" role="group" aria-label="Party size">
+              <button type="button" class="city-group-pill" data-city-group="solo" onclick="boopSetGroupSize('solo')">1 person</button>
+              <button type="button" class="city-group-pill active" data-city-group="couple" onclick="boopSetGroupSize('couple')">2 people</button>
+              <button type="button" class="city-group-pill" data-city-group="group" onclick="boopSetGroupSize('group')">3+ people</button>
+            </div>
+          </div>
+        </div>
+
         <div class="city-chips" id="city-chips">
           <!-- populated by buildCityChips() on load — capped to 5, single-row -->
         </div>
@@ -476,6 +492,26 @@
         <div class="cmd-seg" onclick="toggleDatesTray(event)">
           <div class="cmd-l">Dates</div>
           <div class="cmd-v ph" id="cv-dates">Add dates</div>
+        </div>
+        <div
+          class="cmd-seg cmd-mobile-visible cmd-party-wrap"
+          id="cmd-party-wrap"
+          onclick="toggleCmdPartyPopover(event)"
+          role="button"
+          tabindex="0"
+          aria-haspopup="menu"
+          aria-expanded="false"
+          aria-controls="cmd-party-pop"
+          onkeydown="if((event.key==='Enter'||event.key===' ')&&event.target===this){event.preventDefault();toggleCmdPartyPopover(event);}"
+        >
+          <div class="cmd-l">Who's coming</div>
+          <div class="cmd-v" id="cv-party">2 people</div>
+          <div class="cmd-party-pop" id="cmd-party-pop" role="menu" aria-hidden="true" onclick="event.stopPropagation()">
+            <div class="cmd-party-pop-title">Party size</div>
+            <button type="button" class="cmd-party-opt" role="menuitem" onclick="resultsSetPartySize('solo')">1 person</button>
+            <button type="button" class="cmd-party-opt" role="menuitem" onclick="resultsSetPartySize('couple')">2 people</button>
+            <button type="button" class="cmd-party-opt" role="menuitem" onclick="resultsSetPartySize('group')">3+ people</button>
+          </div>
         </div>
       </div>
       <div class="cmd-row-vibe" id="cmd-row-vibe">

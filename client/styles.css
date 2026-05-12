@@ -2653,6 +2653,7 @@
         font-size: 9px;
       }
       #st-results .cmd-seg { padding: 6px 10px; min-width: 0; overflow: hidden; }
+      #st-results .cmd-party-wrap { overflow: visible; }
       #st-results .cmd-row-vibe .vibe-row-label {
         font-size: 9px;
       }
@@ -3155,6 +3156,112 @@
     }
     @media (min-width:641px) {
       .city-dates { max-width:598px; }
+    }
+    .city-group-pick {
+      margin-top: 18px;
+      width: 100%;
+      max-width: 520px;
+      margin-left: auto;
+      margin-right: auto;
+      box-sizing: border-box;
+    }
+    @media (min-width:641px) {
+      .city-group-pick { max-width: 598px; }
+    }
+    .city-group-row {
+      width: min(calc(100% - 28px), 470px);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px 14px;
+      flex-wrap: wrap;
+      margin: 0 auto;
+      padding: 11px 14px;
+      border-radius: 15px;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      background: rgba(255, 255, 255, 0.045);
+      color: var(--text);
+      font-family: 'DM Sans', sans-serif;
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04), 0 10px 30px rgba(0, 0, 0, 0.14);
+      transition: border-color 0.18s, background 0.18s, box-shadow 0.18s;
+    }
+    .city-group-row:hover {
+      border-color: rgba(201, 169, 110, 0.45);
+      background: rgba(201, 169, 110, 0.065);
+      box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.05),
+        0 0 0 1px rgba(201, 169, 110, 0.1),
+        0 14px 38px rgba(0, 0, 0, 0.22);
+    }
+    .city-group-row-main {
+      display: flex;
+      align-items: center;
+      gap: 11px;
+      min-width: 0;
+      flex: 1 1 auto;
+    }
+    .city-group-icon {
+      width: 32px;
+      height: 32px;
+      border-radius: 10px;
+      display: grid;
+      place-items: center;
+      flex-shrink: 0;
+      background: rgba(201, 169, 110, 0.13);
+      color: var(--accent2);
+      border: 1px solid rgba(201, 169, 110, 0.2);
+    }
+    .city-group-icon svg {
+      width: 17px;
+      height: 17px;
+    }
+    .city-group-title {
+      font-size: 15px;
+      font-weight: 600;
+      color: rgba(232, 228, 220, 0.95);
+      letter-spacing: 0.01em;
+      white-space: nowrap;
+    }
+    .city-group-pills {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      flex-shrink: 0;
+      flex-wrap: nowrap;
+    }
+    .city-group-pill {
+      appearance: none;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      background: rgba(255, 255, 255, 0.04);
+      color: rgba(232, 228, 220, 0.88);
+      font-family: 'DM Sans', sans-serif;
+      font-size: 12px;
+      font-weight: 500;
+      padding: 7px 11px;
+      border-radius: 999px;
+      cursor: pointer;
+      transition: background 0.15s, border-color 0.15s, color 0.15s;
+      white-space: nowrap;
+    }
+    .city-group-pill:hover {
+      border-color: rgba(201, 169, 110, 0.35);
+      background: rgba(201, 169, 110, 0.08);
+      color: var(--text);
+    }
+    .city-group-pill.active {
+      border-color: var(--accent);
+      background: rgba(201, 169, 110, 0.12);
+      color: var(--accent2);
+    }
+    @media (max-width: 480px) {
+      .city-group-row {
+        width: calc(100% - 28px);
+        padding: 10px 12px;
+      }
+      .city-group-pill {
+        padding: 6px 8px;
+        font-size: 11px;
+      }
     }
     .city-date-trigger {
       width:min(calc(100% - 28px), 470px);
@@ -3703,9 +3810,9 @@
       color:#8bc4ad;
       line-height:1.35;
     }
-    /* Must-have hint: below Who's coming, above balcony / deal rows */
+    /* Must-have hint: below back/continue toolbar, above deal rows */
     .boop-musthave-instruction {
-      margin:8px auto 10px !important;
+      margin:14px auto 10px !important;
       max-width:min(900px, 100%);
       font-size:12px;
       color:#8bc4ad;
@@ -3758,8 +3865,6 @@
     /* Must-haves ("Pick what matters most"): fixed-height rows — thumb | text | check — same on all breakpoints */
     .boop-deal-list-shell { margin-top:8px; }
     .boop-deal-toolbar + .boop-deal-list-shell { margin-top:6px; }
-    /* Who's coming card sits below toolbar — gap after Continue / back row */
-    .boop-deal-toolbar + .boop-group-pick { margin-top: 18px; }
     @media(min-width:900px){
       .boop-wrap--deal .boop-deal-list-shell { min-height:0; }
     }
@@ -3985,8 +4090,7 @@
       background:rgba(201,169,110,.12); border-radius:10px; font-size:20px;
     }
     .boop-group-content { flex:1; min-width:0; }
-    .boop-group-label { font-size:15px; font-weight:600; color:var(--text); margin-bottom:4px; }
-    .boop-group-sub { font-size:12px; color:var(--muted); margin-bottom:14px; line-height:1.4; }
+    .boop-group-label { font-size:15px; font-weight:600; color:var(--text); margin-bottom:12px; }
     .boop-group-btns { display:flex; gap:8px; flex-wrap:wrap; }
     .boop-group-btn {
       display:flex; flex-direction:column; align-items:center; gap:4px;
@@ -4014,12 +4118,7 @@
         border-radius: 8px;
       }
       .boop-group-icon svg { width: 18px; height: 18px; }
-      .boop-group-label { font-size: 15px; margin-bottom: 3px; }
-      .boop-group-sub {
-        font-size: 12px;
-        line-height: 1.35;
-        margin-bottom: 12px;
-      }
+      .boop-group-label { font-size: 15px; margin-bottom: 10px; }
       .boop-group-btns {
         flex-wrap: nowrap;
         gap: 6px;
@@ -4684,6 +4783,57 @@
     .cmd-clear:hover { border-color:rgba(201,169,110,.55); color:var(--accent2); background:rgba(201,169,110,.12); }
     .cmd-clear.visible { display:inline-flex; }
     .cmd-seg.cmd-seg--dates-mobile-only { display: none !important; }
+    #st-results .cmd-party-wrap { position: relative; z-index: 1; }
+    #st-results .cmd-party-pop {
+      display: none;
+      position: absolute;
+      z-index: 600;
+      top: calc(100% + 8px);
+      bottom: auto;
+      left: 0;
+      right: auto;
+      transform: none;
+      min-width: 200px;
+      padding: 12px 10px;
+      border-radius: 14px;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      background: rgba(18, 18, 21, 0.98);
+      box-shadow: 0 18px 50px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(201, 169, 110, 0.08);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+    }
+    #st-results .cmd-party-wrap.cmd-party-open { z-index: 30; }
+    #st-results .cmd-party-wrap.cmd-party-open .cmd-party-pop { display: block; }
+    #st-results .cmd-party-pop-title {
+      font-size: 10px;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--muted);
+      padding: 0 8px 8px;
+      margin: 0;
+    }
+    #st-results .cmd-party-opt {
+      display: block;
+      width: 100%;
+      text-align: left;
+      margin: 0 0 4px;
+      padding: 10px 12px;
+      border-radius: 10px;
+      border: 1px solid transparent;
+      background: transparent;
+      font-family: 'DM Sans', sans-serif;
+      font-size: 14px;
+      font-weight: 500;
+      color: var(--text);
+      cursor: pointer;
+      transition: background 0.15s, border-color 0.15s, color 0.15s;
+    }
+    #st-results .cmd-party-opt:last-child { margin-bottom: 0; }
+    #st-results .cmd-party-opt:hover {
+      background: rgba(201, 169, 110, 0.12);
+      border-color: rgba(201, 169, 110, 0.35);
+      color: var(--accent2);
+    }
     /* City + Neighbourhood — a bit wider so labels do not clip (ellipsis if still too long) */
     .cmd-row-where > .cmd-seg:nth-child(1),
     .cmd-row-where > .cmd-seg:nth-child(2) {

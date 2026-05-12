@@ -627,6 +627,7 @@
       const showStory = id !== 'city' && id !== 'boop' && id !== 'review' && !(id === 'nbhd' && _nbhdBrowseFromResults);
       story.classList.toggle('show', showStory);
     }
+    if (id === 'city') syncCityStepGroupPickersUi();
     window.scrollTo({ top:0, behavior:'smooth' });
   }
 
@@ -1531,8 +1532,25 @@
     renderBoopQuestion();
   }
 
-  function boopSetGroupSize(size) {
+  function applyBoopGroupSizeAnswer(size) {
+    if (size !== 'solo' && size !== 'couple' && size !== 'group') return;
     BOOP.answers.group_size = size;
+  }
+
+  /** Home step (#city-group-pick) + keep in sync with command bar source of truth. */
+  function syncCityStepGroupPickersUi(gs) {
+    const size = gs
+      || (S.boopProfile && S.boopProfile.answers && S.boopProfile.answers.group_size)
+      || BOOP.answers.group_size
+      || 'couple';
+    document.querySelectorAll('[data-city-group]').forEach((btn) => {
+      btn.classList.toggle('active', btn.getAttribute('data-city-group') === size);
+    });
+  }
+
+  function boopSetGroupSize(size) {
+    applyBoopGroupSizeAnswer(size);
+    syncCityStepGroupPickersUi(size);
     renderBoopQuestion();
   }
 
@@ -1769,8 +1787,73 @@
     spacious: '🏠',
     work_desk: '💼',
   };
-  const GROUP_ICONS = { solo: '👤', couple: '👥', group: '👥' };
-  const GROUP_LABELS = { solo: 'Solo', couple: 'Couple', group: 'Group' };
+  /** Results command bar party-size labels + persisted profile. */
+  const PARTY_SIZE_LABELS = { solo: '1 person', couple: '2 people', group: '3+ people' };
+
+  let _cmdPartyOutsideCloseBound = false;
+  function bindCmdPartyOutsideClose() {
+    if (_cmdPartyOutsideCloseBound) return;
+    _cmdPartyOutsideCloseBound = true;
+    document.addEventListener('click', (e) => {
+      const w = document.getElementById('cmd-party-wrap');
+      if (!w || !w.classList.contains('cmd-party-open')) return;
+      if (!w.contains(e.target)) closeCmdPartyPopover();
+    });
+  }
+
+  function closeCmdPartyPopover() {
+    const w = document.getElementById('cmd-party-wrap');
+    const pop = document.getElementById('cmd-party-pop');
+    if (w) {
+      w.classList.remove('cmd-party-open');
+      w.setAttribute('aria-expanded', 'false');
+    }
+    if (pop) pop.setAttribute('aria-hidden', 'true');
+  }
+
+  function toggleCmdPartyPopover(ev) {
+    if (ev) {
+      ev.stopPropagation();
+      ev.preventDefault();
+    }
+    bindCmdPartyOutsideClose();
+    const w = document.getElementById('cmd-party-wrap');
+    const pop = document.getElementById('cmd-party-pop');
+    if (!w) return;
+    const tray = document.getElementById('cmd-tray');
+    if (tray && tray.classList.contains('open')) {
+      tray.classList.remove('open');
+      closeDateRangePicker('cmd');
+    }
+    const opening = !w.classList.contains('cmd-party-open');
+    w.classList.toggle('cmd-party-open', opening);
+    w.setAttribute('aria-expanded', opening ? 'true' : 'false');
+    if (pop) pop.setAttribute('aria-hidden', opening ? 'false' : 'true');
+  }
+
+  /**
+   * Results toolbar — updates persisted profile, refreshes ranking (group size
+   * affects V2 room-capacity scoring via boop_profile), mirrors date chip behaviour.
+   */
+  function resultsSetPartySize(size) {
+    if (size !== 'solo' && size !== 'couple' && size !== 'group') return;
+    const city = S.city;
+    if (!city) return;
+    applyBoopGroupSizeAnswer(size);
+    const base = S.boopProfile || loadBoopProfileForCity(city) || buildEphemeralDefaultBoopProfile();
+    const mergedAns = migrateBoopProfileAnswersIfNeeded({ ...(base.answers || {}), group_size: size });
+    const next = {
+      ...base,
+      answers: mergedAns,
+      updatedAt: Date.now(),
+    };
+    S.boopProfile = next;
+    saveBoopProfileForCity(city, next);
+    closeCmdPartyPopover();
+    syncCommandBarFromState();
+    renderVibeChips();
+    if (S.q) startSearch();
+  }
 
   function syncRequireFreeCancelFlag() {
     const db = S.boopProfile?.dealbreakers;
@@ -1814,24 +1897,22 @@
     const profile = _activeBoopProfileForChips() || {};
     const ans = profile.answers || {};
     const dealbreakers = new Set(Array.isArray(profile.dealbreakers) ? profile.dealbreakers : []);
-    const groupSize = ans.group_size || 'couple';
-
     const chips = [];
     for (const stepKey of VIBE_CHIP_STEPS) {
       if (stepKey === 'musthaves') {
         const mh = BOOP_QUESTIONS.find(q => q.id === 'musthaves');
         const pickedOpts = (mh?.options || []).filter(o => dealbreakers.has(o.id));
-        const groupIcon = GROUP_ICONS[groupSize] || '👥';
-        const groupLabel = GROUP_LABELS[groupSize] || 'Couple';
-        let text, icon = groupIcon;
         if (pickedOpts.length === 0) {
-          text = groupLabel;
-        } else if (pickedOpts.length === 1) {
-          icon = MUSTHAVE_ICONS[pickedOpts[0].id] || groupIcon;
-          text = `${groupLabel} · ${pickedOpts[0].label}`;
+          chips.push(_chipHtml(stepKey, '', _emptyChipLabelFor('musthaves'), true));
+          continue;
+        }
+        const mhIcon = MUSTHAVE_ICONS[pickedOpts[0].id] || '✓';
+        let text;
+        let icon = mhIcon;
+        if (pickedOpts.length === 1) {
+          text = pickedOpts[0].label;
         } else {
-          icon = MUSTHAVE_ICONS[pickedOpts[0].id] || groupIcon;
-          text = `${groupLabel} · ${pickedOpts.length} must-haves`;
+          text = `${pickedOpts.length} must-haves`;
         }
         chips.push(_chipHtml(stepKey, icon, text, false));
         continue;
@@ -1852,6 +1933,7 @@
     if (stepKey === 'trip') return '+ Trip';
     if (stepKey === 'stayVibe') return '+ Stay vibe';
     if (stepKey === 'nbhdScene') return '+ Neighbourhood';
+    if (stepKey === 'musthaves') return '+ Must-haves';
     return '+ Add';
   }
 
@@ -1918,7 +2000,14 @@
   // and let the .boop-overlay-mode body class gate behaviour.
   if (typeof document !== 'undefined') {
     document.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape' && document.body.classList.contains('boop-overlay-mode')) {
+      if (e.key !== 'Escape') return;
+      const pw = document.getElementById('cmd-party-wrap');
+      if (pw && pw.classList.contains('cmd-party-open')) {
+        e.preventDefault();
+        closeCmdPartyPopover();
+        return;
+      }
+      if (document.body.classList.contains('boop-overlay-mode')) {
         e.preventDefault();
         closeBoopOverlay();
       }
@@ -2041,31 +2130,6 @@
       const mustHaveInstruction = overlayMode
         ? 'Update what matters most, then re-run your search.'
         : 'Optional - pick any that matter.';
-      const gs = BOOP.answers.group_size || 'couple';
-      const groupPickHtml = `
-      <div class="boop-group-pick">
-        <div class="boop-group-icon">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" style="color:var(--accent)"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-        </div>
-        <div class="boop-group-content">
-          <div class="boop-group-label">Who's coming?</div>
-          <div class="boop-group-sub">This helps us show you the best fit for your group.</div>
-          <div class="boop-group-btns">
-            <button type="button" class="boop-group-btn ${gs==='solo'?'active':''}" onclick="boopSetGroupSize('solo')">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-              <span>1 person</span>
-            </button>
-            <button type="button" class="boop-group-btn ${gs==='couple'?'active':''}" onclick="boopSetGroupSize('couple')">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-              <span>2 people</span>
-            </button>
-            <button type="button" class="boop-group-btn ${gs==='group'?'active':''}" onclick="boopSetGroupSize('group')">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/><path d="M1 21v-2a4 4 0 0 1 3-3.87"/><path d="M8 3.13a4 4 0 0 0 0 7.75"/></svg>
-              <span>3+ people</span>
-            </button>
-          </div>
-        </div>
-      </div>`;
       const continueLabel = overlayMode ? 'Find hotels →' : 'Continue →';
       const continueHandler = overlayMode ? 'boopFinish()' : 'boopNext()';
       const backHandler = overlayMode ? 'closeBoopOverlay()' : 'boopBack()';
@@ -2076,7 +2140,6 @@
           <button type="button" class="boop-btn primary" onclick="${continueHandler}">${continueLabel}</button>
         </div>
       </div>
-      ${groupPickHtml}
       <p class="boop-note boop-musthave-instruction">${mustHaveInstruction}</p>
       <div class="boop-deal-list-shell"><div class="boop-deal-list">${q.options.map(o => `
         <button type="button" class="boop-deal-row ${BOOP.dealbreakers.has(o.id) ? 'active' : ''}" aria-pressed="${BOOP.dealbreakers.has(o.id) ? 'true' : 'false'}" aria-label="${escHtml(o.label)}${o.hint ? '. ' + escHtml(o.hint) : ''}" onclick="boopToggleDealbreaker('${o.id}')">
@@ -3761,6 +3824,14 @@
     }
     const mdClear = document.getElementById('cmd-mobile-dates-clear');
     if (mdClear) mdClear.classList.toggle('visible', !!(S.checkin && S.checkout));
+    const cp = document.getElementById('cv-party');
+    const gsParty = (S.boopProfile && S.boopProfile.answers && S.boopProfile.answers.group_size)
+      || BOOP.answers.group_size
+      || 'couple';
+    if (cp) {
+      cp.textContent = PARTY_SIZE_LABELS[gsParty] || PARTY_SIZE_LABELS.couple;
+    }
+    syncCityStepGroupPickersUi(gsParty);
     if (S.checkin) {
       const ct1 = document.getElementById('ct-ci');
       if (ct1) ct1.value = S.checkin;
@@ -3932,6 +4003,7 @@
 
   function toggleDatesTray(ev) {
     if (ev) ev.stopPropagation();
+    closeCmdPartyPopover();
     const tray = document.getElementById('cmd-tray');
     const opening = tray && !tray.classList.contains('open');
     tray.classList.toggle('open');
@@ -3948,6 +4020,7 @@
 
   function openMobileResultsDatePicker(ev) {
     if (ev) ev.stopPropagation();
+    closeCmdPartyPopover();
     const tray = document.getElementById('cmd-tray');
     if (tray) tray.classList.add('open');
     const ctCi = document.getElementById('ct-ci');
