@@ -602,21 +602,67 @@ function mergeStayVibeIntoIntent(intent, stayVibe) {
  * Minimal prompt for the visual_style classifier-only backfill script. Returns
  * a single label on its own line so the parser doesn't need to handle the full
  * structured-caption format. Used by scripts/classify-visual-style.js.
+ *
+ * Design goals (v2-vs-2):
+ *  - LEAN TOWARD `unknown`. The prior prompt (v2-vs-1) tagged ~67% of all MX
+ *    City hotels as sleek_polished because "neutral palette" and "modern"
+ *    were interpreted generously. The new prompt requires multiple positive
+ *    signals AND explicit exclusion criteria for the dominant bucket, and
+ *    says "unknown" is correct for plain/generic rooms.
+ *  - Each category lists what it IS plus what DISQUALIFIES it. This forces
+ *    real discrimination instead of "everything contemporary = sleek".
+ *  - One label per line, no prose. The parser only reads the first word.
  */
 function buildVisualStyleClassifierPrompt(photoContext = {}) {
   return [
-    "Classify this hotel room photo's primary visual style. Pick the SINGLE best fit.",
+    "Classify this hotel room photo's PRIMARY visual style. Lean toward `unknown` when in doubt.",
     "",
-    "Options (reply with EXACTLY ONE of these labels, nothing else):",
-    "- sleek_polished      — modern minimalist, clean lines, neutral palette, polished surfaces, contemporary, hotel-luxury aesthetic",
-    "- cozy_warm           — warm tones, soft textiles, comfortable, inviting, traditional homey decor",
-    "- vibrant_eclectic    — bold colours, playful patterns, mixed eras, artsy, distinctive personality",
-    "- moody_dark          — dark colours, dramatic lighting, rich textures, sultry, sophisticated speakeasy feel",
-    "- classic_traditional — formal classical decor, ornate, elegant, conventional, often dated heritage style",
+    "Reply with EXACTLY ONE of the labels below on its own. No explanation, no markdown.",
+    "",
+    "LABELS:",
+    "",
+    "sleek_polished — High-end modern hotel aesthetic. REQUIRES at least TWO of:",
+    "  • polished surfaces dominate (marble, stone, glass, gloss-painted millwork, mirror)",
+    "  • crisp architectural lines and an uncluttered, deliberately curated layout",
+    "  • monochrome / restrained palette (whites, greys, blacks, with at most one accent)",
+    "  • obviously contemporary, recent fit-out (post-2015 design language)",
+    "  DISQUALIFIES: visible warm-toned wood headboards or wardrobes dominating the frame,",
+    "  printed/colourful bedspreads, dated furniture, ornate trim, brown/beige earth-tone",
+    "  walls, plain budget-hotel rooms with bare painted walls and basic furniture.",
+    "",
+    "cozy_warm — Warm, traditional, lived-in feel. REQUIRES at least TWO of:",
+    "  • warm-tone palette dominates (brown / beige / cream / terracotta / honey wood)",
+    "  • soft layered textiles (throws, rugs, patterned cushions, upholstered headboard)",
+    "  • traditional or homey furnishings (curved wood furniture, table lamps, framed art)",
+    "  DISQUALIFIES: clinical or minimalist look, dark moody walls, bold saturated colours.",
+    "",
+    "vibrant_eclectic — Bold designer personality. REQUIRES at least ONE of:",
+    "  • saturated bold wall colour (teal, pink, mustard, emerald, etc.) on a primary wall",
+    "  • strong graphic pattern dominating (wallpaper, headboard, large statement art)",
+    "  • intentionally mixed eras / quirky designer furnishings",
+    "  DISQUALIFIES: subdued neutral schemes, generic budget rooms.",
+    "",
+    "moody_dark — Dark and dramatic. REQUIRES BOTH:",
+    "  • dominant dark walls or finishes (navy / charcoal / black / dark forest)",
+    "  • dim, dramatic, low-key lighting (not just a dark photo of a light room)",
+    "  DISQUALIFIES: light/white walls regardless of how the photo was lit.",
+    "",
+    "classic_traditional — Formal heritage / grand-hotel decor. REQUIRES at least TWO of:",
+    "  • ornate mouldings, cornicing, panelling, or chandelier-style fittings",
+    "  • antique-style furniture (carved wood, gilt accents, claw-foot legs)",
+    "  • brocade / damask / tufted upholstery, formal drapery",
+    "  DISQUALIFIES: contemporary minimalist look, modern bedside USB outlets dominant.",
+    "",
+    "unknown — REPLY THIS when the photo:",
+    "  • is not a room interior (exterior, lobby, map, food, amenity, plan view)",
+    "  • is a generic budget / 3-star room with plain painted walls and basic furniture",
+    "    that doesn't clearly satisfy the criteria above for ANY single label",
+    "  • is too cropped, too dark, or too low-quality to assess",
+    "  • shows multiple styles equally without a dominant aesthetic",
     "",
     `Context: room="${photoContext.roomName || "unknown"}" type="${photoContext.type || "other"}"`,
-    "If the photo is not a room interior (e.g. exterior, map, food) or you cannot tell, reply EXACTLY: unknown",
-    "Reply with one label only. No explanation, no markdown, no extra text.",
+    "",
+    "Reply with one label only.",
   ].join("\n");
 }
 

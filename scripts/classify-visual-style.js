@@ -46,7 +46,16 @@
 
 require("dotenv").config();
 const { createClient } = require("@supabase/supabase-js");
-const { buildVisualStyleClassifierPrompt, parseVisualStyleReply } = require("./fact-catalog");
+const {
+  buildVisualStyleClassifierPrompt,
+  parseVisualStyleReply,
+  VISUAL_STYLE_FACT_KEYS,
+} = require("./fact-catalog");
+
+// Bump this when prompt semantics change so old rows can be detected/replaced.
+// v2-vs-1: initial classifier (winner-only, lenient prompt)
+// v2-vs-2: symmetric 1-yes-4-no emission + stricter "lean toward unknown" prompt
+const EXTRACTOR_VERSION = "v2-vs-2";
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_ANON_KEY;
@@ -272,22 +281,32 @@ async function classifyVisualStyleForCity(city, opts = {}) {
       done++;
       if (winner) {
         classified++;
+        // Emit 1 yes + 4 no per photo so the room-level rebuild aggregation can
+        // enforce mutex (a room ends up with at most one visual_style_*=true
+        // when all photos agree; mixed-style rooms get NULL via the
+        // yes_count >= 1 AND no_count < 2 rule). Without the losers we lose
+        // the "no" signal and mixed rooms can end up with multiple styles
+        // true simultaneously.
         const dupes = dupesByPhoto.get(`${row.hotel_id}|${row.photo_url}`) || [row];
+        const stamp = new Date().toISOString();
         for (const d of dupes) {
-          pendingFacts.push({
-            hotel_id:      d.hotel_id,
-            room_type_id:  d.room_type_id || null,
-            city,
-            country_code: cc,
-            room_name:    d.room_name,
-            photo_url:    d.photo_url,
-            fact_key:     winner,
-            fact_value:   1,
-            confidence:   0.85,
-            source:       "vision_classifier",
-            extractor_version: "v2-vs-1",
-            updated_at:   new Date().toISOString(),
-          });
+          for (const styleKey of VISUAL_STYLE_FACT_KEYS) {
+            const isWinner = styleKey === winner;
+            pendingFacts.push({
+              hotel_id:      d.hotel_id,
+              room_type_id:  d.room_type_id || null,
+              city,
+              country_code: cc,
+              room_name:    d.room_name,
+              photo_url:    d.photo_url,
+              fact_key:     styleKey,
+              fact_value:   isWinner ? 1 : 0,
+              confidence:   0.85,
+              source:       "vision_classifier",
+              extractor_version: EXTRACTOR_VERSION,
+              updated_at:   stamp,
+            });
+          }
         }
       } else {
         unknown++;

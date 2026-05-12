@@ -536,7 +536,20 @@ These map 1:1 to the Boop wizard's `stayVibe` answer via `STAY_VIBE_TO_VISUAL_ST
 
 **Full indexer (`scripts/index-city-v2.js`):** Caption prompt includes 5 new `VISUAL_STYLE_*` lines with a `pick EXACTLY ONE as yes` instruction. New cities (London, NYC, etc.) get visual_style populated automatically. The 5 fact_key mappings are in `STRUCTURED_FIELD_TO_FACT` in `scripts/fact-catalog.js`, so the existing `parseStructuredCaption` handles them with no special logic.
 
-**Backfill for existing cities (`scripts/classify-visual-style.js`):** Incremental pass over already-indexed photos. Each photo gets one tiny Gemini call (single-label classifier prompt, ~5-token output) costing ~$0.000038. Mexico City (~63 329 unique photo URLs): **~$2.40, ~1 hour wall-clock** at default rates. Idempotent — checks `v2_room_feature_facts` for an existing `visual_style_*` row before calling Gemini. Photos shared across sibling room types fan one classification out to all duplicates so we never call Gemini twice for the same URL.
+**Backfill for existing cities (`scripts/classify-visual-style.js`):** Incremental pass over already-indexed photos. Each photo gets one tiny Gemini call (single-label classifier prompt, ~5-token output) costing ~$0.000038. Mexico City (~63 329 unique photo URLs): **~$2.40, ~2–3 hours wall-clock** at concurrency=24 / rate=1500/min. Idempotent — checks `v2_room_feature_facts` for an existing `visual_style_*` row before calling Gemini. Photos shared across sibling room types fan one classification out to all duplicates so we never call Gemini twice for the same URL.
+
+**Each classified photo writes 5 rows: 1 winner + 4 losers** (i.e., `visual_style_sleek_polished=1, visual_style_cozy_warm=0, visual_style_vibrant_eclectic=0, visual_style_moody_dark=0, visual_style_classic_traditional=0`). The `0` rows are required for the room-level aggregation in `rebuild_v2_room_types_index_city` to enforce mutex (`yes_count ≥ 1 AND no_count < 2` → true; ≥2 no's → false). Without the losers, mixed-style rooms can end up with multiple `visual_style_*=true` simultaneously.
+
+**Prompt versions (`extractor_version` in `v2_room_feature_facts`):**
+- `v2-vs-1` — initial prompt, winner-only write. Over-tagged `sleek_polished` (67 % of MX City hotels) because "neutral palette" and "modern" were interpreted generously. Deprecated.
+- `v2-vs-2` — current. Stricter per-bucket criteria with explicit "REQUIRES at least N of {…}" + "DISQUALIFIES" clauses. Explicitly leans toward `unknown` for plain generic budget rooms. Emits 1 yes + 4 no per photo.
+
+To re-classify a city after a prompt change: delete its `visual_style_*` rows from `v2_room_feature_facts` and re-trigger the classifier; the idempotency check will then re-classify everything.
+```sql
+DELETE FROM v2_room_feature_facts
+ WHERE city = 'Mexico City'
+   AND fact_key LIKE 'visual_style_%';
+```
 
 **Trigger (production):**
 ```powershell
@@ -552,9 +565,10 @@ node scripts/classify-visual-style.js --city="Mexico City"           # full pass
 node scripts/classify-visual-style.js --city="Mexico City" --limit=200  # quick smoke test
 ```
 
-**Env knobs** (rarely need tweaking):
-- `VS_PHOTO_CONCURRENCY` — parallel Gemini calls (default 8)
-- `VS_RATE_PER_MIN` — Gemini calls/min ceiling (default 1000; matches Flash Lite tier-2)
+**Env knobs / call params**:
+- `VS_PHOTO_CONCURRENCY` (env) or `concurrency` (POST body / `--concurrency=` CLI flag) — parallel Gemini calls. Default 8. Aggressive: 16. Max tested: 24 (Render Starter outbound bandwidth becomes the cap above this).
+- `VS_RATE_PER_MIN` (env) or `rate_per_min` (POST body / `--rate-per-min=` CLI flag) — Gemini calls/min ceiling. Default 1000; Flash Lite tier-2 limit is ~2000/min/key. Aggressive: 1500.
+- Setting both high (e.g. concurrency=24, rate_per_min=1500) typically lands at 6–8 r/s end-to-end because the bottleneck is Gemini's per-request latency (~500–800 ms cold).
 
 **Verification after run:**
 ```sql
