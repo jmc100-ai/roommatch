@@ -15,7 +15,12 @@ const {
 const HOTEL_PUBLIC_PHOTOS_PER_HOTEL = 12;
 // Extractor version stamp on hotel-public fact rows. Bump on prompt changes.
 const HOTEL_PUBLIC_EXTRACTOR_VERSION = "v2-hp-1";
-const HOTEL_PUBLIC_ROOM_NAME = "__hotel_public__";
+const HOTEL_PUBLIC_ROOM_NAME    = "__hotel_public__";
+// Non-NULL sentinel for room_type_id on the pseudo-room. See
+// scripts/classify-hotel-public.js for the rationale (Postgres treats NULLs
+// as distinct in unique constraints, so a NULL room_type_id breaks both the
+// ON CONFLICT spec and re-run idempotency).
+const HOTEL_PUBLIC_ROOM_TYPE_ID = "__public__";
 
 const LITEAPI_KEY = process.env.LITEAPI_PROD_KEY || process.env.LITEAPI_KEY || "";
 const GEMINI_KEY = process.env.GEMINI_KEY || "";
@@ -349,7 +354,7 @@ async function processHotelPublicPhotos(db, { hotelId, city, cc, hotelPhotoUrls 
       city,
       country_code:    cc,
       room_name:       HOTEL_PUBLIC_ROOM_NAME,
-      room_type_id:    null,
+      room_type_id:    HOTEL_PUBLIC_ROOM_TYPE_ID,
       photo_url:       url,
       photo_type:      dominantArea,
       caption:         null,
@@ -361,7 +366,7 @@ async function processHotelPublicPhotos(db, { hotelId, city, cc, hotelPhotoUrls 
     for (const areaKey of AREA_FACT_KEYS) {
       factRows.push({
         hotel_id:          hotelId,
-        room_type_id:      null,
+        room_type_id:      HOTEL_PUBLIC_ROOM_TYPE_ID,
         city,
         country_code:      cc,
         room_name:         HOTEL_PUBLIC_ROOM_NAME,
@@ -378,7 +383,7 @@ async function processHotelPublicPhotos(db, { hotelId, city, cc, hotelPhotoUrls 
       for (const styleKey of VISUAL_STYLE_FACT_KEYS) {
         factRows.push({
           hotel_id:          hotelId,
-          room_type_id:      null,
+          room_type_id:      HOTEL_PUBLIC_ROOM_TYPE_ID,
           city,
           country_code:      cc,
           room_name:         HOTEL_PUBLIC_ROOM_NAME,

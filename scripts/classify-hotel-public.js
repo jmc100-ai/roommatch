@@ -72,7 +72,16 @@ const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_ANON_KEY;
 const GEMINI_KEY   = process.env.GEMINI_KEY;
 
-const PUBLIC_ROOM_NAME = "__hotel_public__"; // sentinel; matches RPC + rebuild aggregation
+const PUBLIC_ROOM_NAME    = "__hotel_public__"; // sentinel; matches RPC + rebuild aggregation
+// Sentinel room_type_id for the pseudo-room. Must be non-NULL because the
+// existing UNIQUE indexes on v2_room_inventory and v2_room_feature_facts
+// include room_type_id, and Postgres treats NULLs as distinct in unique
+// constraints by default — so NULL room_type_id would (a) make ON CONFLICT
+// require an exact null-matching index that doesn't exist, and (b) silently
+// duplicate rows on idempotent re-runs. The score_hotels_facts_v2 RPC and
+// rebuild_v2_room_types_index_city aggregate by room_name, not room_type_id,
+// so any non-null sentinel is safe here.
+const PUBLIC_ROOM_TYPE_ID = "__public__";
 
 // Per-hotel cap. LiteAPI returns up to ~30 photos for some chains; the
 // first 12 cover lobby + restaurant + pool + facade with diminishing
@@ -236,7 +245,7 @@ function buildRowsForPhoto({ city, hotelId, countryCode, photoUrl, areas, visual
     city,
     country_code:    countryCode,
     room_name:       PUBLIC_ROOM_NAME,
-    room_type_id:    null,
+    room_type_id:    PUBLIC_ROOM_TYPE_ID,
     photo_url:       photoUrl,
     photo_type:      dominantArea,
     caption:         null,            // not needed; facts are the durable artifact
@@ -251,7 +260,7 @@ function buildRowsForPhoto({ city, hotelId, countryCode, photoUrl, areas, visual
     const isYes = areas.includes(areaKey);
     factRows.push({
       hotel_id:          hotelId,
-      room_type_id:      null,
+      room_type_id:      PUBLIC_ROOM_TYPE_ID,
       city,
       country_code:      countryCode,
       room_name:         PUBLIC_ROOM_NAME,
@@ -273,7 +282,7 @@ function buildRowsForPhoto({ city, hotelId, countryCode, photoUrl, areas, visual
       const isWinner = styleKey === visualStyle;
       factRows.push({
         hotel_id:          hotelId,
-        room_type_id:      null,
+        room_type_id:      PUBLIC_ROOM_TYPE_ID,
         city,
         country_code:      countryCode,
         room_name:         PUBLIC_ROOM_NAME,
@@ -293,16 +302,16 @@ function buildRowsForPhoto({ city, hotelId, countryCode, photoUrl, areas, visual
 
 async function upsertInventory(db, rows) {
   if (!rows.length) return;
-  // Dedupe to avoid "cannot affect row twice" on the unique (hotel_id, photo_url) index.
+  // Dedupe to avoid "cannot affect row twice" on the unique (hotel_id, room_type_id, photo_url) index.
   const seen = new Set();
   const deduped = rows.filter((r) => {
-    const k = `${r.hotel_id}|${r.photo_url}`;
+    const k = `${r.hotel_id}|${r.room_type_id || ""}|${r.photo_url}`;
     if (seen.has(k)) return false;
     seen.add(k);
     return true;
   });
   const { error } = await db.from("v2_room_inventory").upsert(deduped, {
-    onConflict: "hotel_id,photo_url",
+    onConflict: "hotel_id,room_type_id,photo_url",
   });
   if (error) throw error;
 }
