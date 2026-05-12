@@ -86,9 +86,9 @@ SITE_PASSWORD          — (not yet set) simple password gate for the frontend; 
 LITEAPI_WL_DOMAIN      — LiteAPI white-label domain WITHOUT scheme, e.g. `travelboop.nuitee.link`. Server prefixes `https://` and serves via `/api/config` AND injects into `window._WL_BASE_URL` in served HTML so `buildBookUrl()` in client/app.js has it on first render. Empty/unset → "Find & Book" buttons fall back to a Google search.
 MAPTILER_KEY           — Maptiler API key (free tier: 100k tile loads/month at maptiler.com). Powers the neighbourhood-vibe-page map module (MapLibre GL). Server exposes via `/api/config` AND injects into `window._MAPTILER_KEY` in served HTML so the map can boot before any /api/config fetch. **Must be restricted by HTTP referrer in the Maptiler dashboard** (Allowed origins: `travelboop.com`, `www.travelboop.com`, `roommatch-1fg5.onrender.com`, `localhost:*`). Unset → map falls back to OSM raster tiles (works but lower quality + against OSM tile usage policy at scale).
 META_SYNC_LIMIT        — top-N hotels for which `/api/vsearch` (V2 path) fetches LiteAPI metadata synchronously before sending the response. Default `30`. Lower = faster TTFB, more cards initially show with placeholder name until lazy-load arrives. The remainder are listed in `data.deferred_meta_ids` and lazy-fetched by the client via `/api/hotels-meta`. See "V2 Search Latency" section below.
-NLP_INTENT_TIMEOUT_MS  — `buildFactIntentLLM` (Gemini 2.5 flash-lite) call timeout in ms. Default `3000`. On timeout we fall back to the deterministic regex router (`v2-facts-1`); fine for most queries. Raise only if you see frequent `(router=v2-facts-1)` in logs and the regex is missing important facts.
+NLP_INTENT_TIMEOUT_MS  — `buildFactIntentLLM` (Gemini 2.5 flash-lite) call timeout in ms. Default `3000`. On timeout we fall back to the deterministic regex router (`v2-facts-1`); fine for most queries. Raise only if you see frequent `(router=v2-facts-1)` in logs and the regex is missing important facts. **Note (May 2026):** persistent `v2_intent_cache` table now means timeouts become a one-time event per unique query — the first successful LLM call seeds the cache and every subsequent search across all instances gets the high-quality LLM intent instantly. See "NLP intent cache" section below.
 HOTEL_VIBE_BLEND_WEIGHT — weight of the facts-based hotel-vibe score in V2's primary sort signal. Default `0.20` (80% room match + 20% hotel vibe). Set `0` to make hotelScore display-only. See "HOTEL VIBE MODEL" section.
-HOTEL_VIBE_PUBLIC_WEIGHT — one hotel-public photo (lobby/pool/bar) counts as N room photos in the combined coverage formula inside `score_hotels_facts_v2`. Default `5.0`.
+HOTEL_VIBE_PUBLIC_WEIGHT — one hotel-public photo (lobby/pool/bar) counts as N room photos in the combined coverage formula inside `score_hotels_facts_v2`. Default `1.0` (was `5.0` pre-2026-05-12; that was over-aggressive and let budget chains with uniform lobby aesthetics dominate luxury hotels with more diverse public spaces). Set higher when the public-area signal should outweigh the room-level signal — but verify ranking quality first.
 HOTEL_VIBE_STAR_PRIOR    — ±range of the star_rating prior applied to hotel raw_score. Default `0.10`. Only fires when stayVibe ∈ {sleek_polished, classic_traditional}.
 HOTEL_VIBE_GUEST_PRIOR   — ±range of the guest_rating prior applied to hotel raw_score. Default `0.06`. Universal.
 HOTEL_VIBE_PHOTO_MIN     — hotels with fewer than this many indexed photos scale linearly toward 0 in hotel_vibe. Default `6`.
@@ -364,14 +364,16 @@ vectorScore:   0..100              (room match, unchanged)
 ### Architecture
 
 **Phase 1a — Room facts coverage (rooms-only signal)**
-- `score_hotels_facts_v2(p_city, p_hotel_ids, p_fact_weights, p_public_weight=5.0)` SQL RPC.
-- For each hotel × each fact_key, computes:
-  - `room_coverage = yes_distinct_photos / (yes + no) distinct_photos`  (room photos, room_name != '__hotel_public__')
-  - `public_coverage = yes_distinct_photos / (yes + no) distinct_photos` (public photos, room_name = '__hotel_public__')
-  - `combined = (room_cov × n_room + W × pub_cov × n_pub) / (n_room + W × n_pub)`  where W = `p_public_weight`
+- `score_hotels_facts_v2(p_city, p_hotel_ids, p_fact_weights, p_public_weight=1.0)` SQL RPC.
+- For each hotel × each fact_key, computes per-pool coverage:
+  - **`area_*` facts → BINARY PRESENCE.** `1.0` if any photo for that hotel/pool has `fact_value=1`, else `0.0`. The hotel-public classifier writes mutex labels (1 yes + 9 no per photo), so a fractional coverage shrinks as a hotel adds more public photos — exactly the wrong direction for "does this hotel have a rooftop bar". Binary presence is the correct semantic for direct-match queries like "rooftop", "pool", "lobby".
+  - **All other facts (visual_style, palette, materials, ...) → FRACTION.** `yes_distinct_photos / (yes + no) distinct_photos` — reflects how consistently the hotel commits to that aesthetic.
+- `combined = (room_cov × n_room + W × pub_cov × n_pub) / (n_room + W × n_pub)`  where W = `p_public_weight`
 - `raw_score = Σ(weight × combined_cov) / Σ(weight)` — normalised 0..1.
 - Works directly from raw `v2_room_feature_facts` (not from `v2_room_types_index.facts`) so it can apply different aggregation semantics to mutex vs non-mutex facts in one query.
 - File: `supabase/score-hotels-facts-v2.sql`.
+
+**Aggregation rule fix (May 2026):** `rebuild_v2_room_types_index_city` was previously labelling almost every hotel as **NOT having** a rooftop / pool / bar because of the strict standard rule (`yes_count>=1 AND no_count<2 → true; no_count>=2 → false`) interacting with the mutex 1y+9n public-photo writes. Of 3,494 MX City hotels, only **25** had `area_rooftop=true`, **4** had `area_pool=true`, **2** had `area_bar=true`. The rebuild SQL now uses a third "PRESENCE" rule for keys matching `area_*`: `yes_count>=1 → true`, otherwise `NULL` (never confirm false). This is also what unblocks direct-match queries like "rooftop bar" — `area_rooftop` / `area_bar` now appear correctly in `v2_room_types_index.facts` for any hotel where at least one public photo shows those areas.
 
 **Phase 1b — Hotel public-area photo classification (lobby/pool/bar/...)**
 - `scripts/classify-hotel-public.js` — incremental backfill for existing cities. Reads photos from `v2_hotels_cache.hotel_photos` (LiteAPI-provided, never persisted as content beyond the URL) and calls a single Gemini 2.5 Flash Lite classifier that returns:
@@ -409,7 +411,7 @@ primarySignal → hotelVibePct → guest_rating → star_rating → hotel_id alp
 | Var | Default | What it does |
 |---|---|---|
 | `HOTEL_VIBE_BLEND_WEIGHT`   | `0.20` | Weight of hotelVibe in the primary sort signal. 0 = display only. |
-| `HOTEL_VIBE_PUBLIC_WEIGHT`  | `5.0`  | One public photo counts as N room photos in combined coverage. |
+| `HOTEL_VIBE_PUBLIC_WEIGHT`  | `1.0`  | One public photo counts as N room photos in combined coverage. (Was `5.0` until May 2026 — that over-weighted lobby aesthetics and let budget chains dominate luxury.) |
 | `HOTEL_VIBE_STAR_PRIOR`     | `0.10` | ±range of star_rating prior (only fires on luxury stayVibes). |
 | `HOTEL_VIBE_GUEST_PRIOR`    | `0.06` | ±range of guest_rating prior (universal). |
 | `HOTEL_VIBE_PHOTO_MIN`      | `6`    | Below this photo count, score scales linearly toward 0. |
@@ -698,6 +700,40 @@ SELECT
 These map 1:1 to the Boop wizard's `stayVibe` answer via `STAY_VIBE_TO_VISUAL_STYLE` in `scripts/fact-catalog.js`. The legacy `distinct_unique` wizard label maps to `visual_style_vibrant_eclectic`.
 
 **Search integration (`scripts/search-v2.js`):** After `intent` is resolved, `mergeStayVibeIntoIntent` injects a soft preference (weight 0.9) for the matching `visual_style_*` fact. This bypasses the LLM/regex query parser entirely — the parser deliberately skips style words because they were noisy; visual_style replaces that path. **Visual_style facts are hidden from the LLM router prompt** (`FACT_DESCRIPTIONS` filtered in `buildFactIntentLLM`) so the model can't double-pick from free text.
+
+**StayVibe supporting facts (May 2026):** When the LLM router falls back to regex (`v2-facts-1`) AND stayVibe is set, `mergeStayVibeIntoIntent` now ALSO injects a small bundle of style-implied supporting soft preferences (e.g. `sleek_polished` → `palette_minimalist 0.55`, `polished_concrete 0.40`, `floor_to_ceiling_windows 0.40`, `high_natural_light 0.40`, `hardwood_parquet 0.35`, `statement_fixture 0.30`). Mirrors what the LLM would normally emit for the same vibe. Lookup table: `STAY_VIBE_SUPPORTING_FACTS` in `scripts/fact-catalog.js`. Only fires when intent is "thin" (regex-router OR empty soft_preferences); LLM-router intents are passed through unchanged so we don't double up.
+
+### NLP intent cache (`v2_intent_cache`, May 2026)
+
+Two-tier cache for `buildFactIntentLLM` results:
+- **L1** — per-instance in-memory LRU (`_nlpCache`, 2000 entries) — sub-ms.
+- **L2** — Postgres `v2_intent_cache` table — shared across all Render instances, ~30-80ms.
+
+Both tiers are keyed by `lower(trim(query)) [+ "|mh:" + sorted_must_haves]`. On a hit at either tier we skip Gemini entirely. Gemini results are write-through to both tiers; **regex fallbacks are NOT cached** so the next attempt still tries LLM and may upgrade the intent.
+
+**Why this matters:** Gemini's 3s timeout means the same query non-deterministically returns 1-fact (regex fallback) vs 8-fact (LLM success) intents — ranking quality silently varied per request. With the L2 cache, that timeout becomes a one-time event per unique query.
+
+**Schema (file: `supabase/add-v2-intent-cache.sql`):**
+```sql
+v2_intent_cache (
+  cache_key       TEXT PRIMARY KEY,
+  intent          JSONB NOT NULL,
+  router_version  TEXT,            -- 'v2-llm-1' only (regex not persisted)
+  fact_count      INT,
+  hit_count       INT,             -- bumped via v2_intent_cache_touch RPC
+  created_at, updated_at
+)
+```
+
+**Operational:** the table grows organically with traffic (a few thousand rows for healthy usage). To inspect top queries:
+```sql
+SELECT cache_key, fact_count, hit_count, created_at
+FROM v2_intent_cache ORDER BY hit_count DESC LIMIT 20;
+```
+To clear (e.g. after fact catalogue changes):
+```sql
+TRUNCATE TABLE v2_intent_cache;  -- repopulates on next traffic
+```
 
 **Full indexer (`scripts/index-city-v2.js`):** Caption prompt includes 5 new `VISUAL_STYLE_*` lines with a `pick EXACTLY ONE as yes` instruction. New cities (London, NYC, etc.) get visual_style populated automatically. The 5 fact_key mappings are in `STRUCTURED_FIELD_TO_FACT` in `scripts/fact-catalog.js`, so the existing `parseStructuredCaption` handles them with no special logic.
 

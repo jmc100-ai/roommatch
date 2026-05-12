@@ -207,17 +207,76 @@ const FACT_DESCRIPTIONS = {
   family_suite_layout:     "family suite with multiple sleeping areas",
 };
 
-// Simple LRU cache for NLP routing results (max 2000 entries)
+// Two-tier cache for NLP routing results:
+//   L1 — per-instance in-memory LRU (`_nlpCache`)        — sub-ms
+//   L2 — Postgres `v2_intent_cache` (shared across fleet) — ~30-80ms
+// On a hit at either tier we return immediately and skip Gemini entirely.
+// Gemini results are written through to both tiers; regex fallbacks are NOT
+// cached (so the next attempt still tries LLM and may upgrade the intent).
 const _nlpCache = new Map();
 const NLP_CACHE_MAX = 2000;
+
+function _lruSet(key, value) {
+  if (_nlpCache.size >= NLP_CACHE_MAX) _nlpCache.delete(_nlpCache.keys().next().value);
+  _nlpCache.set(key, value);
+}
+
+// Read the cached intent for `cacheKey` from Postgres. Returns null on miss
+// or any error (we never let the cache lookup block the search). Fire-and-
+// forget `touch` increments hit_count for analytics.
+async function _readIntentFromDb(supabase, cacheKey) {
+  if (!supabase || !cacheKey) return null;
+  try {
+    const { data, error } = await supabase
+      .from("v2_intent_cache")
+      .select("intent, router_version")
+      .eq("cache_key", cacheKey)
+      .maybeSingle();
+    if (error || !data?.intent) return null;
+    // Fire-and-forget hit counter
+    supabase.rpc("v2_intent_cache_touch", { p_key: cacheKey }).then(() => {}, () => {});
+    // Ensure the cached intent carries the router_version we recorded.
+    return { ...data.intent, router_version: data.router_version || data.intent.router_version || "v2-llm-1" };
+  } catch (_) {
+    return null;
+  }
+}
+
+// Write-through: upsert intent into v2_intent_cache. Fire-and-forget; failures
+// are silent (the search has already returned by this point).
+function _writeIntentToDb(supabase, cacheKey, intent) {
+  if (!supabase || !cacheKey || !intent) return;
+  const factCount =
+    (intent.hard_filters?.length || 0) +
+    (intent.soft_preferences?.length || 0);
+  supabase
+    .from("v2_intent_cache")
+    .upsert(
+      {
+        cache_key:      cacheKey,
+        intent,
+        router_version: intent.router_version || "v2-llm-1",
+        fact_count:     factCount,
+        updated_at:     new Date().toISOString(),
+      },
+      { onConflict: "cache_key" }
+    )
+    .then(() => {}, () => {});
+}
 
 /**
  * Build fact intent using Gemini LLM to semantically map the query to
  * weighted facts. Falls back to regex-based buildFactIntent on failure.
- * Results are cached by normalised query string.
+ *
+ * Caching:
+ *  - L1 in-memory LRU (per Render instance)
+ *  - L2 Postgres `v2_intent_cache` (shared across fleet) — when `opts.supabase`
+ *    is provided. Cold-start LLM timeouts become a ONE-TIME event per unique
+ *    query: the first successful LLM call writes through to Postgres, and
+ *    every subsequent search anywhere in the fleet skips Gemini entirely.
  *
  * @param {string} query
- * @param {{ mustHaves?: string[] }} opts
+ * @param {{ mustHaves?: string[], supabase?: object }} opts
  * @param {string} geminiKey
  * @returns {Promise<object>} intent object compatible with scoreFactSet
  */
@@ -227,9 +286,19 @@ async function buildFactIntentLLM(query, opts = {}, geminiKey = "") {
   const sortedMH = [...(Array.isArray(opts.mustHaves) ? opts.mustHaves : [])].sort().join(",");
   const cacheKey = sortedMH ? `${queryNorm}|mh:${sortedMH}` : queryNorm;
 
+  // L1 — in-memory LRU
   if (_nlpCache.has(cacheKey)) return _nlpCache.get(cacheKey);
 
-  // Short or empty queries — skip LLM, use regex fallback
+  // L2 — Postgres-backed cache (shared across instances)
+  if (opts.supabase) {
+    const dbIntent = await _readIntentFromDb(opts.supabase, cacheKey);
+    if (dbIntent) {
+      _lruSet(cacheKey, dbIntent);
+      return dbIntent;
+    }
+  }
+
+  // Short or empty queries — skip LLM, use regex fallback (not persisted to L2)
   if (queryNorm.length < 4) return buildFactIntent(query, opts);
 
   // visual_style_* facts are injected by buildStayVibeIntent based on the boop
@@ -320,13 +389,17 @@ async function buildFactIntentLLM(query, opts = {}, geminiKey = "") {
       router_version:      "v2-llm-1",
     };
 
-    // Cache with simple LRU eviction
-    if (_nlpCache.size >= NLP_CACHE_MAX) _nlpCache.delete(_nlpCache.keys().next().value);
-    _nlpCache.set(cacheKey, intent);
+    // Write-through to both cache tiers. L1 is sync, L2 is fire-and-forget.
+    _lruSet(cacheKey, intent);
+    _writeIntentToDb(opts.supabase, cacheKey, intent);
     return intent;
 
   } catch (_err) {
-    // LLM failed — fall back to regex-based routing silently
+    // LLM failed — fall back to regex-based routing silently. We deliberately
+    // do NOT cache the regex result so the next call will retry the LLM. The
+    // search-time path also augments thin intents with stayVibe-implied
+    // supporting facts (see mergeStayVibeIntoIntent below) so the user still
+    // gets a multi-fact ranking even on a cold cache + LLM failure.
     return buildFactIntent(query, opts);
   }
 }
@@ -606,6 +679,61 @@ const STAY_VIBE_TO_VISUAL_STYLE = {
   classic_traditional: "visual_style_classic_traditional",
 };
 
+// Supporting facts to inject as soft preferences when intent is "thin" (e.g.
+// when the LLM router timed out and only the regex `area_*` / visual_style
+// facts came through). Mirrors what the LLM would normally emit for the same
+// stayVibe so users don't get a 1-fact ranking when Gemini is degraded.
+//
+// Weights are intentionally LOWER than the visual_style fact (0.9) so the
+// canonical style signal still dominates — these are supporting context,
+// not replacements. Selected to be facts that ARE present in v2_room_types_index
+// (i.e. confirmed via the indexer's caption analysis), not lab-only flags.
+const STAY_VIBE_SUPPORTING_FACTS = {
+  sleek_polished: [
+    { fact_key: "palette_minimalist",       weight: 0.55 },
+    { fact_key: "polished_concrete",        weight: 0.40 },
+    { fact_key: "floor_to_ceiling_windows", weight: 0.40 },
+    { fact_key: "high_natural_light",       weight: 0.40 },
+    { fact_key: "hardwood_parquet",         weight: 0.35 },
+    { fact_key: "statement_fixture",        weight: 0.30 },
+  ],
+  cozy_warm: [
+    { fact_key: "warm_light_temp",   weight: 0.55 },
+    { fact_key: "palette_earth",     weight: 0.50 },
+    { fact_key: "area_rugs",         weight: 0.45 },
+    { fact_key: "dimmable_lighting", weight: 0.35 },
+    { fact_key: "indoor_plants",     weight: 0.30 },
+  ],
+  vibrant_eclectic: [
+    { fact_key: "palette_vibrant",      weight: 0.55 },
+    { fact_key: "statement_wallpaper",  weight: 0.45 },
+    { fact_key: "vintage_furniture",    weight: 0.40 },
+    { fact_key: "mid_century_modern",   weight: 0.35 },
+    { fact_key: "textured_upholstery",  weight: 0.30 },
+  ],
+  distinct_unique: [
+    { fact_key: "palette_vibrant",      weight: 0.55 },
+    { fact_key: "statement_wallpaper",  weight: 0.45 },
+    { fact_key: "vintage_furniture",    weight: 0.40 },
+    { fact_key: "mid_century_modern",   weight: 0.35 },
+    { fact_key: "textured_upholstery",  weight: 0.30 },
+  ],
+  moody_dark: [
+    { fact_key: "palette_moody",         weight: 0.55 },
+    { fact_key: "accent_cove_lighting",  weight: 0.45 },
+    { fact_key: "romantic_lighting",     weight: 0.40 },
+    { fact_key: "blackout_shutters",     weight: 0.35 },
+    { fact_key: "exposed_brick",         weight: 0.30 },
+  ],
+  classic_traditional: [
+    { fact_key: "canopy_bed",          weight: 0.50 },
+    { fact_key: "vintage_furniture",   weight: 0.45 },
+    { fact_key: "palette_earth",       weight: 0.40 },
+    { fact_key: "stone_surfaces",      weight: 0.35 },
+    { fact_key: "high_ceilings",       weight: 0.30 },
+  ],
+};
+
 /**
  * Return an intent fragment expressing the user's stayVibe preference as a
  * strong soft preference for the matching visual_style fact. Returns null when
@@ -631,17 +759,53 @@ function buildStayVibeIntent(stayVibe) {
  * Merge a stayVibe-derived soft preference into an existing intent without
  * mutating callers' references. The new soft pref is appended; if the same
  * fact_key already exists, the higher weight wins.
+ *
+ * Also injects STAY_VIBE_SUPPORTING_FACTS when the intent is "thin" — i.e.
+ * came from the regex fallback router (no LLM-suggested facts) and would
+ * otherwise have only the single visual_style fact. This protects ranking
+ * quality when Gemini times out: users still get a multi-fact intent that
+ * approximates what the LLM would have emitted.
+ *
+ * Thinness is detected via `intent.router_version === 'v2-facts-1'` (the
+ * regex router's marker) OR an empty soft_preferences list. Supporting
+ * facts are only added when the slot is empty — existing weights win.
  */
 function mergeStayVibeIntoIntent(intent, stayVibe) {
   const frag = buildStayVibeIntent(stayVibe);
   if (!frag) return intent;
+
   const soft = [...(intent.soft_preferences || [])];
+
+  // 1) Inject (or upgrade) the canonical visual_style fact for this stayVibe.
   const existing = soft.findIndex((s) => s.fact_key === frag.fact_key);
   if (existing >= 0) {
     if ((frag.weight || 0) > (soft[existing].weight || 0)) soft[existing] = frag;
   } else {
     soft.push(frag);
   }
+
+  // 2) When intent is thin (regex fallback or near-empty), augment with
+  //    stayVibe-implied supporting facts so ranking has real signal even
+  //    when the LLM router missed.
+  const isThin =
+    (intent.router_version === "v2-facts-1") ||
+    ((intent.soft_preferences?.length || 0) === 0);
+  if (isThin) {
+    const supporting = STAY_VIBE_SUPPORTING_FACTS[String(stayVibe || "").toLowerCase()] || [];
+    const have = new Set(soft.map((s) => s.fact_key));
+    for (const sf of supporting) {
+      if (have.has(sf.fact_key)) continue;
+      if (!FACT_SET.has(sf.fact_key)) continue;
+      soft.push({
+        fact_key:  sf.fact_key,
+        weight:    sf.weight,
+        direction: "prefer",
+        source:    "boop_stayvibe_supporting",
+      });
+      have.add(sf.fact_key);
+    }
+  }
+
   return { ...intent, soft_preferences: soft };
 }
 

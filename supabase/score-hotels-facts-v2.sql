@@ -20,10 +20,18 @@
 --    from the aggregated `v2_room_types_index.facts` JSONB. Rationale:
 --      • The rebuild rule (`yes_count >= 1 AND no_count < 2`) is correct for
 --        per-ROOM facts (e.g. "does THIS room have double sinks") but not for
---        per-HOTEL presence facts like `area_pool` where the right semantics
---        is "fraction of public photos showing a pool".
+--        per-HOTEL presence facts like `area_pool`.
 --      • Working from raw facts lets us mix different aggregation semantics
---        (mutex visual_style vs non-mutex area_*) in one function.
+--        in one function:
+--          – area_*       → BINARY PRESENCE (1 if any photo shows it, else 0)
+--                           because the hotel-public classifier writes mutex
+--                           labels (1 yes + 9 no per photo), so a fractional
+--                           coverage shrinks as a hotel adds more public
+--                           photos — the wrong direction for "does this hotel
+--                           have a rooftop bar".
+--          – visual_style → FRACTION of photos for the style, reflecting how
+--                           consistently the hotel commits to that aesthetic.
+--          – default      → FRACTION (existing behaviour) for everything else.
 --
 -- 3. `raw_score` is weight-normalised: Σ(weight × coverage) / Σ(weight).
 --    Output range is therefore [0.0, 1.0]; the search-v2 ranker applies its
@@ -88,9 +96,15 @@ BEGIN
   fact_coverage AS (
     SELECT
       hotel_id, fact_key, pool,
-      CASE WHEN (yes_count + no_count) > 0
-           THEN yes_count::double precision / (yes_count + no_count)::double precision
-           ELSE 0.0
+      CASE
+        -- area_*: binary presence (any "yes" photo → 1.0; otherwise 0).
+        -- See header note for rationale (mutex labels make fractions wrong).
+        WHEN fact_key LIKE 'area\_%' ESCAPE '\' THEN
+          CASE WHEN yes_count >= 1 THEN 1.0 ELSE 0.0 END
+        -- default: fraction-of-photos coverage (visual_style, etc.)
+        WHEN (yes_count + no_count) > 0 THEN
+          yes_count::double precision / (yes_count + no_count)::double precision
+        ELSE 0.0
       END AS coverage
     FROM fact_counts
   ),

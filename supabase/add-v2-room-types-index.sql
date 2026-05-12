@@ -38,7 +38,16 @@ CREATE INDEX IF NOT EXISTS v2_rff_hotel_fact_val
 --     confirmed=true  IF room yes_count >= 2
 --                  OR (room yes_count >= 1 AND hotel-level yes_count >= 2)
 --     confirmed=false IF no_count >= 2
---   All other facts:
+--   PRESENCE facts (area_*):
+--     The hotel-public classifier writes 1-yes + 9-no per public photo (mutex
+--     labels across 10 area buckets). With even 4 public photos the dominant
+--     bucket has yes>=1 AND no>=2 → the strict standard rule labels the hotel
+--     as NOT having the area. That's incorrect: one photo of a rooftop = the
+--     hotel has a rooftop. Use presence semantics instead.
+--     confirmed=true  IF yes_count >= 1
+--     confirmed=NULL  otherwise  (never confirm false — absence of a yes is
+--                                  uninformative for binary-presence facts)
+--   All other facts (standard):
 --     confirmed=true  IF yes_count >= 1 AND no_count < 2
 --     confirmed=false IF no_count >= 2
 -- ─────────────────────────────────────────────────────────────────────────────
@@ -92,6 +101,13 @@ BEGIN
           THEN true
         WHEN rfc.fact_key = ANY(high_ambiguity) AND rfc.no_count >= 2
           THEN false
+        -- PRESENCE facts (area_*): one yes vote confirms; never confirm false.
+        -- See header comment for rationale (mutex symmetric writes from the
+        -- hotel-public classifier make no_count uninformative).
+        WHEN rfc.fact_key LIKE 'area\_%' ESCAPE '\' AND rfc.yes_count >= 1
+          THEN true
+        WHEN rfc.fact_key LIKE 'area\_%' ESCAPE '\'
+          THEN NULL
         -- Standard facts: 1 yes without being dominated by no
         WHEN rfc.fact_key != ALL(high_ambiguity) AND rfc.yes_count >= 1 AND rfc.no_count < 2
           THEN true

@@ -138,12 +138,18 @@ async function runV2Search({ req, supabase, supabaseAdmin, resolveCityName }) {
   // which is the first step that actually depends on `intent`. Cache hits return
   // synchronously (in-memory _nlpCache) so this is a no-op when warm.
   const _t0Intent  = Date.now();
-  const intentPromise = buildFactIntentLLM(query, { mustHaves }, process.env.GEMINI_KEY || "")
-    .then((i) => {
-      const dt = Date.now() - _t0Intent;
-      if (dt > 50) console.log(`[v2 perf] nlp intent: ${dt}ms (router=${i.router_version || "regex"})`);
-      return i;
-    });
+  // Pass the supabase client so buildFactIntentLLM can hit the shared
+  // `v2_intent_cache` table (L2 cache) — turns cold LLM timeouts into a
+  // one-time event per unique query instead of a per-request lottery.
+  const intentPromise = buildFactIntentLLM(
+    query,
+    { mustHaves, supabase: fetchClient },
+    process.env.GEMINI_KEY || ""
+  ).then((i) => {
+    const dt = Date.now() - _t0Intent;
+    if (dt > 50) console.log(`[v2 perf] nlp intent: ${dt}ms (router=${i.router_version || "regex"})`);
+    return i;
+  });
   const hotelQuery = String(req.query.hotel_query || query).trim();
   const tokens    = tokenize(query);
 
