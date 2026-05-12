@@ -400,6 +400,9 @@ vectorScore:   0..100              (room match, unchanged)
 - `primarySignal = (1 - HOTEL_VIBE_BLEND_WEIGHT) × topScore + HOTEL_VIBE_BLEND_WEIGHT × hotelVibePct`
 - `HOTEL_VIBE_BLEND_WEIGHT` env (default 0.20). Room match remains dominant; hotel vibe nudges ordering.
 - When `hotel_vibe_model="fallback_rating"` (empty soft_preferences), blend collapses to topScore-only.
+- **Unscored hotels under `v2_facts` model** (hotel sits outside `topHotelIds` so we don't have a `hotelVibePct` for it) get `primarySignal = (1 - HOTEL_VIBE_BLEND_WEIGHT) × topScore`, i.e. treated as zero coverage. Without this, unscored hotels with `topScore=100` would silently outrank scored hotels with `hVP<100` (`primarySignal=100` vs e.g. `97.8`) — the "9/10 placeholders in top 10" symptom. With it, unscored hotels with great room match can still appear but always sort below any scored hotel with non-trivial coverage. Trade-off: keeps the RPC scope bounded to `topHotelIds` (~250 hotels, ~1s) instead of scoring all 3500 ranked hotels (~24s; verified with `EXPLAIN ANALYZE`).
+
+**`topHotelIds` post-boop reshuffle.** When BOOP is active and `VSEARCH_NBHD_RANK_WEIGHT` is high (default `0.55` on Render), the final sort blends primary signal with `nbhd_fit_pct`. After `applyNbhdBoopRank` returns, search-v2 recomputes `topHotelIds` using the same blend so photo fetch, `score_hotels_facts_v2`, `get_primary_nbhds_for_hotels`, and `v2_room_feature_facts` photo-fact lookup all align with the hotels that will actually appear in the visible top. Log line: `[v2] nbhd_reshuffle: promoted=N demoted=M (top 250)`.
 
 **Deterministic tiebreaker stack** (was bare `topScore` descending, causing ties at 100 with arbitrary insertion order):
 ```
