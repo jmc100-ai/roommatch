@@ -796,7 +796,7 @@ async function runV2Search({ req, supabase, supabaseAdmin, resolveCityName }) {
     parseFloat(process.env.HOTEL_VIBE_BLEND_WEIGHT ?? "0.20")
   ));
   const allHotels = rankedHotels.map((h) => {
-    const { topScore } = hotelDisplayScores.get(h.hotel_id) || { topScore: 0 };
+    const { topScore, rankScore } = hotelDisplayScores.get(h.hotel_id) || { topScore: 0, rankScore: 0 };
     const rawHotelSim = hotelVibeRawMap.get(h.hotel_id);
     const hotelVibePct = rawHotelSim != null
       ? Math.max(0, Math.min(100, ((rawHotelSim - HOTEL_SIM_MIN) / hotelSimSpan) * 100))
@@ -805,9 +805,20 @@ async function runV2Search({ req, supabase, supabaseAdmin, resolveCityName }) {
     return {
       hotel_id:     h.hotel_id,
       topScore,
+      // rankScore is the pre-remap raw room score (sBoosted or photoMean).
+      // Used as a finer-grained tiebreaker than topScore which clamps at
+      // 100 for everyone above SIM_MAX.
+      rawRoom:      Number(rankScore) || 0,
       hotelVibePct,
+      // rawHotelVibe is the pre-remap, pre-clamp facts-coverage score
+      // (0..1). Two hotels can both have hotelVibePct=100 (both clamped)
+      // but differ on rawHotelVibe — this is the natural tiebreaker.
+      rawHotelVibe: rawHotelSim != null ? rawHotelSim : -1,
       sBoosted:     h.sBoosted,
       rawSim:       h.rawSim,
+      // guest_rating / star_rating come only from live LiteAPI (lazy fetch
+      // after sort) so they're 0 here. Kept for completeness / Phase 2
+      // priors that read hotelMeta separately.
       guest_rating: Number(meta.guest_rating) || 0,
       star_rating:  Number(meta.star_rating)  || 0,
     };
@@ -821,18 +832,22 @@ async function runV2Search({ req, supabase, supabaseAdmin, resolveCityName }) {
       : h.topScore;
   }
 
-  // Deterministic tiebreaker: primarySignal → hotelVibe → guest_rating
-  // → star_rating → hotel_id alphabetical. The hotel_id final fallback
-  // guarantees stable ordering across reloads even when every other
-  // signal is tied.
+  // Deterministic tiebreaker stack. The first two signals can clamp at
+  // their adaptive-remap ceiling so many hotels collide there; the raw
+  // pre-remap scores are the actual discriminators.
+  //   primarySignal (post-remap blended)
+  //   → rawHotelVibe (pre-remap facts coverage 0..1)
+  //   → rawRoom      (pre-remap room rankScore)
+  //   → guest_rating (0 unless persisted; placeholder for future)
+  //   → star_rating  (0 unless persisted)
+  //   → hotel_id alphabetical (stable across reloads).
   function compareHotels(a, b) {
     const sa = primarySignal(a);
     const sb = primarySignal(b);
     if (Math.abs(sb - sa) > 1e-6) return sb - sa;
 
-    const va = a.hotelVibePct ?? -1;
-    const vb = b.hotelVibePct ?? -1;
-    if (vb !== va) return vb - va;
+    if (Math.abs(b.rawHotelVibe - a.rawHotelVibe) > 1e-9) return b.rawHotelVibe - a.rawHotelVibe;
+    if (Math.abs(b.rawRoom      - a.rawRoom)      > 1e-9) return b.rawRoom      - a.rawRoom;
 
     if (b.guest_rating !== a.guest_rating) return b.guest_rating - a.guest_rating;
     if (b.star_rating  !== a.star_rating)  return b.star_rating  - a.star_rating;
@@ -855,16 +870,22 @@ async function runV2Search({ req, supabase, supabaseAdmin, resolveCityName }) {
   }
 
   // ── Build response payload ─────────────────────────────────────────────────
-  const hotels = allHotels.map(({ hotel_id: hotelId, topScore, hotelVibePct }) => {
+  const hotels = allHotels.map(({ hotel_id: hotelId, topScore, hotelVibePct, rawHotelVibe }) => {
     const meta       = hotelMeta.get(hotelId) || {};
     const score      = Math.round(topScore);
     const allPhotos  = photosByHotel.get(hotelId) || [];
     const hasPhotos  = allPhotos.length > 0;
 
-    // Hotel-level vibe score (0-100). null when no facts signal for this query
-    // (e.g. empty intent.soft_preferences). The UI's "Hotel Vibe %" badge reads
-    // this; client falls back to room match if null.
-    const hotelScore = hotelVibePct != null ? Math.round(hotelVibePct) : null;
+    // Hotel-level vibe score (0-100). Displays the RAW facts coverage so
+    // top hotels naturally differentiate (a 98% coverage hotel reads 98,
+    // not 100 from an adaptive-remap clamp). The SORT still blends the
+    // adaptive-remapped hotelVibePct with topScore via primarySignal so
+    // ranking quality is consistent across queries with different score
+    // distributions — but the displayed number is the honest absolute.
+    // null when no facts signal exists for this query.
+    const hotelScore = rawHotelVibe != null && rawHotelVibe >= 0
+      ? Math.round(Math.max(0, Math.min(1, rawHotelVibe)) * 100)
+      : null;
 
     const primaryNbhd = primaryNbhdMap.get(hotelId) || null;
     const nbhdFitPct  = nbhdFitByHotelId?.get(hotelId);
