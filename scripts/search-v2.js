@@ -567,10 +567,27 @@ async function runV2Search({ req, supabase, supabaseAdmin, resolveCityName }) {
     }
   }
   const hasHotelFactSignal = Object.keys(factWeightsRaw).length > 0;
-  const hotelVibePromise = (hasHotelFactSignal && topHotelIds.length)
+
+  // ── Hotel-vibe scoring scope: ALL ranked hotels, not just topHotelIds ─────
+  //
+  // The adaptive remap clamps `topScore=100` for every hotel whose sBoosted
+  // is ≥ SIM_MAX (the result-set maximum). With a typical SIM_MAX≈0.85 and a
+  // long-tail catalogue, far more than GALLERY_LIMIT hotels can clamp at
+  // topScore=100. Any of those NOT in topHotelIds gets `hotelVibePct=null`,
+  // which collapses primarySignal to topScore=100 — outranking real scored
+  // hotels whose primarySignal is pulled below 100 by their actual
+  // hotelVibePct<100. Symptom: 9/10 unscored hotels in the visible top 10.
+  //
+  // Fix: score every ranked hotel. score_hotels_facts_v2 is a cheap
+  // aggregation over v2_room_feature_facts (already filtered to the active
+  // fact_keys + city), so 250 → 3500 hotels is ~linear in row count but
+  // negligible vs total query latency. Photos / primary-nbhd / photo-facts
+  // remain bounded to topHotelIds (those are the expensive ops).
+  const vibeScoringIds = rankedHotels.map((h) => h.hotel_id);
+  const hotelVibePromise = (hasHotelFactSignal && vibeScoringIds.length)
     ? fetchClient.rpc("score_hotels_facts_v2", {
         p_city:          city,
-        p_hotel_ids:     topHotelIds,
+        p_hotel_ids:     vibeScoringIds,
         p_fact_weights:  factWeightsRaw,
         p_public_weight: Number(process.env.HOTEL_VIBE_PUBLIC_WEIGHT) || 5.0,
       })
