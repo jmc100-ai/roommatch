@@ -723,9 +723,12 @@ async function runV2Search({ req, supabase, supabaseAdmin, resolveCityName }) {
     }
   }
 
-  // Group photos by hotel, then by room
+  // Group photos by hotel, then by room — skip __hotel_public__ pseudo-rows
+  // (those are lobby/pool/bar photos used for hotel-vibe scoring only; they
+  // must never appear as a "room type" in the card photo strip).
   const photosByHotel = new Map(); // hotel_id → [photo rows]
   for (const p of (photosResult.data || [])) {
+    if (p.room_name === '__hotel_public__') continue;
     if (!photosByHotel.has(p.hotel_id)) photosByHotel.set(p.hotel_id, []);
     photosByHotel.get(p.hotel_id).push(p);
   }
@@ -941,8 +944,48 @@ async function runV2Search({ req, supabase, supabaseAdmin, resolveCityName }) {
     });
   }
 
+  // Phase B fetched room photos only for `topHotelIds` (pre-final-sort pick).
+  // Final ordering uses primarySignal + optional nbhd blend — different from
+  // the pre-sort nbhd reshuffle — so hotels can land in the top N visible
+  // results without ever receiving a photo RPC row → empty roomTypes while
+  // vectorScore still reflects index facts. Backfill photos for whoever sits
+  // in the final top GALLERY_LIMIT but is missing from photosByHotel.
+  const finalTopIds = allHotels.slice(0, GALLERY_LIMIT).map((h) => h.hotel_id);
+  const missingPhotoIds = finalTopIds.filter((id) => (photosByHotel.get(id) || []).length === 0);
+  if (missingPhotoIds.length) {
+    const extraResult = await fetchClient.rpc("get_v2_room_photos", {
+      p_hotel_ids:     missingPhotoIds,
+      p_city:          city,
+      p_max_per_hotel: 10,
+    });
+    if (extraResult.error) {
+      console.warn(`[v2] photo_backfill: ${extraResult.error.message}`);
+    } else {
+      for (const p of (extraResult.data || [])) {
+        if (p.room_name === '__hotel_public__') continue;
+        if (!photosByHotel.has(p.hotel_id)) photosByHotel.set(p.hotel_id, []);
+        photosByHotel.get(p.hotel_id).push(p);
+      }
+      if (hasFlags && missingPhotoIds.length) {
+        const { data: photoFacts, error: pfErr } = await fetchClient
+          .from("v2_room_feature_facts")
+          .select("hotel_id,photo_url,fact_key,fact_value")
+          .in("hotel_id", missingPhotoIds)
+          .in("fact_key", detectedFactKeys)
+          .eq("city", city)
+          .eq("fact_value", 1);
+        if (!pfErr) {
+          for (const pf of (photoFacts || [])) {
+            if (pf.photo_url) photoFactSet.add(`${pf.hotel_id}::${pf.photo_url}::${pf.fact_key}`);
+          }
+        }
+      }
+      console.log(`[v2] photo_backfill: ${missingPhotoIds.length} hotel(s) in final top ${GALLERY_LIMIT} had no Phase-B photos — merged ${(extraResult.data || []).length} rows`);
+    }
+  }
+
   // ── Build response payload ─────────────────────────────────────────────────
-  const hotels = allHotels.map(({ hotel_id: hotelId, topScore, hotelVibePct, rawHotelVibe }) => {
+  let hotels = allHotels.map(({ hotel_id: hotelId, topScore, hotelVibePct, rawHotelVibe }) => {
     const meta       = hotelMeta.get(hotelId) || {};
     const score      = Math.round(topScore);
     const allPhotos  = photosByHotel.get(hotelId) || [];
@@ -1093,6 +1136,18 @@ async function runV2Search({ req, supabase, supabaseAdmin, resolveCityName }) {
       },
     };
   });
+
+  const beforeDedupe = hotels.length;
+  const seenIds = new Set();
+  hotels = hotels.filter((h) => {
+    const id = String(h.id ?? "").trim();
+    if (!id || seenIds.has(id)) return false;
+    seenIds.add(id);
+    return true;
+  });
+  if (hotels.length !== beforeDedupe) {
+    console.warn(`[v2] deduped ${beforeDedupe - hotels.length} duplicate hotel_id row(s) in vsearch payload`);
+  }
 
   const nbhdBlendApplied = !!(nbhdFitByHotelId?.size > 0 && nbhdRankWeight > 0);
 

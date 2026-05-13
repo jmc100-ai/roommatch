@@ -978,6 +978,7 @@ const _rlAdmin  = rateLimit({ ..._rlOpts, windowMs: 60_000, max: 10 });   // /ap
 const _rlGeneric = rateLimit({ ..._rlOpts, windowMs: 60_000, max: 240 }); // everything else /api/*
 app.use("/api/vsearch",      _rlSearch);
 app.use("/api/rates",        _rlRates);
+app.use("/api/hotel-rates",  _rlRates);   // single-hotel rates, same budget as batch
 app.use("/api/hotels-meta",  _rlMeta);
 app.use("/api/hotel-rooms",  _rlMeta);
 app.use("/api/index-city",   _rlAdmin);
@@ -3308,6 +3309,56 @@ app.get("/api/rates", async (req, res) => {
   }
 });
 
+// ── Single-hotel rates endpoint ───────────────────────────────────────────────
+// GET /api/hotel-rates?hotelId=X&checkin=YYYY-MM-DD&checkout=YYYY-MM-DD
+//
+// Fetches rates for exactly ONE hotel. Because the batch is size=1, LiteAPI's
+// hidden per-batch cap doesn't apply — we get all available room rates (up to
+// maxRatesPerHotel). This is what powers the client-side per-hotel enrichment
+// pass that runs after /api/rates returns for the city.
+//
+// The batch /api/rates call only returns 3–5 rates per hotel for large cities
+// (LiteAPI caps at 1 rate/hotel when batch >= 50, detail pass recovers some
+// but large hotels like the Ritz (23 room types) still only get 3–5 back).
+// A single-hotel call returns all room types.
+app.get("/api/hotel-rates", async (req, res) => {
+  const hotelId = (req.query.hotelId || "").trim();
+  const { checkin } = req.query;
+  let { checkout } = req.query;
+  if (!hotelId || !checkin || !checkout) {
+    return res.status(400).json({ error: "hotelId, checkin, checkout required" });
+  }
+  // Normalise checkout: if same as checkin, add 1 night
+  if (checkout === checkin) {
+    const d = new Date(checkout);
+    d.setDate(d.getDate() + 1);
+    checkout = d.toISOString().slice(0, 10);
+  }
+  const nights = Math.max(1, Math.round((new Date(checkout) - new Date(checkin)) / 86400000));
+  try {
+    const ratesList = await liteRatesCall([hotelId], checkin, checkout);
+    const acc = { prices: {}, roomPrices: {}, roomNames: {}, offerIds: {}, roomFreeCancel: {}, hotelFreeCancel: {} };
+    const stats = mergeLiteRatesIntoMaps(ratesList, nights, acc);
+    const roomCount = acc.roomPrices[hotelId] ? Object.keys(acc.roomPrices[hotelId]).length : 0;
+    console.log(`[hotel-rates] ${hotelId}: ${roomCount} room rates, ${stats.totalRoomTypes} room types from LiteAPI`);
+    res.json({
+      hotelId,
+      price:         acc.prices[hotelId] ?? null,
+      roomPrices:    acc.roomPrices[hotelId] ?? {},
+      roomNames:     acc.roomNames[hotelId] ?? {},
+      offerIds:      acc.offerIds[hotelId] ?? {},
+      roomFreeCancel: acc.roomFreeCancel[hotelId] ?? {},
+      hotelFreeCancel: acc.hotelFreeCancel[hotelId] ?? false,
+      currency:      "EUR",
+      nights,
+    });
+  } catch (e) {
+    if (e.status === 429) return res.status(429).json({ error: "rate_limited" });
+    console.error("[hotel-rates]", e.message);
+    res.status(500).json({ error: "rates_error" });
+  }
+});
+
 // ── feature_summary extractor (mirrors index-city.js version) ────────────────
 // Keeps only POSITIVE/PRESENT values; drops FLOORING & DECOR section entirely.
 // Must stay in sync with extractFeatureSummary() in scripts/index-city.js.
@@ -4430,7 +4481,8 @@ app.get("/api/hotel-rooms", async (req, res) => {
       .select("hotel_id, room_name, room_type_id, photo_url, photo_type")
       .in("hotel_id", ids)
       .eq("city", city)
-      .limit(5000);
+      .neq("room_name", "__hotel_public__")   // exclude hotel-public pseudo-room
+      .limit(10000);
     if (error) {
       console.error("[hotel-rooms] db error:", error.message);
       return res.status(500).json({ error: error.message });

@@ -87,7 +87,7 @@
   let _deferResultsRenderUntilTourClose = false;
   /**
    * Date-aware first-render gating. When the user types dates AND the active
-   * default sort is price-dependent (match+price / match+price+rating / price),
+   * default sort is price-dependent (match+price / price),
    * we hold the FIRST render of the results list until /api/rates lands so the
    * list paints once with the final price-aware sort instead of paint-then-
    * reshuffle. The vibe tour acts as natural cover; by the time it closes,
@@ -270,7 +270,6 @@
   const SORT_LABELS = {
     match:                'Best Match',
     'match+price':        'Match + Price',
-    'match+price+rating': 'Best Value',
     price:                'Best Price',
     rating:               'Guest Rating',
     stars:                'Stars',
@@ -454,17 +453,16 @@
   // must-haves picker (each id matches a BOOP_QUESTIONS musthaves option).
   // `freetext` is optional prose appended to room + hotel HyDE seeds and used for light nbhd pref nudges.
   // `advancedKeywords` is an optional editable override for the auto-generated room HyDE seed
-  // surfaced on the Q5 (extras) screen as "Search keywords (advanced)".
+  // surfaced on the musthaves (Q4) screen as "Fine-tune room search text".
   const BOOP = { idx:0, prefs:{}, answers:{ group_size:'couple' }, dealbreakers:new Set(), slider:0, saved:null, freetext:'', advancedKeywords:'' };
   const BOOP_WIZARD_IMAGES = {}; // cityKey -> { questionId: { optionId: url } }
   const BOOP_WIZARD_CITY_FALLBACKS = {}; // cityKey -> { questionId: url }
   const BOOP_WIZARD_FETCHING = new Set();
-  // BOOP v5 wizard — 5 screens:
+  // BOOP v5 wizard — 4 screens:
   //   1. Trip context       (3 cards)
   //   2. Stay vibe          (4 cards; maps to roomStyle + hotelPersonality internally)
   //   3. Neighbourhood scene (5 cards — pace + location combined; see NBHD_SCENE_SEEDS)
-  //   4. Must-haves         (multi-select)
-  //   5. Optional free-text (room + hotel seeds; keyword nudges → prefs)
+  //   4. Must-haves + free-text  (multi-select chips + "your words" inline input)
   //
   // Weights accumulate into BOOP.prefs; trip / nbhdScene / stayVibe-derived
   // hotelPersonality + roomStyle drive HyDE seeds in buildBoopSeeds().
@@ -521,7 +519,7 @@
         { id:'scenic_open', emoji:'🌊', label:'Open & scenic', title:'Open & scenic', note:'Views, water or skyline — room to breathe.', image:'images/wizard/nbhd-scenic-open.png', weights:{ calm:14, green:12, iconic:16, walkability:8, central:6, local:6, nightlife:-10 } },
       ]
     },
-    // Screen 4 — room must-haves (multi-select).
+    // Screen 4 — room must-haves (multi-select) + "your words" freetext (merged from former screen 5).
     // These map to DB feature_flags that become must_haves[] on /api/vsearch.
     // "spa_bathroom" & "spacious" don't have single canonical flags — they're
     // handled via composite flags + HyDE seed nudges (see buildBoopSeeds).
@@ -538,14 +536,6 @@
         { id:'work_desk',    flag:'work_desk', label:'Work desk',          hint:'Proper desk to get a few hours done.',                                 image:'images/wizard/musthave-work-desk.png' },
       ]
     },
-    // Optional prose; merged into room + hotel seeds; keyword nudges merged into prefs for nbhd vibe %.
-    {
-      id:'extras',
-      label:'Your notes',
-      title:'Anything else we should know?',
-      sub:'Describe anything else you are looking for across your neighbourhood, hotel, and room vibe — street energy, character, views, or small details.',
-      type:'freetext',
-    }
   ];
 
   // nbhdScene tiles → legacy pace + location (HyDE snippets + trip vs area reconciliation).
@@ -1775,8 +1765,7 @@
   }
 
   // ── Vibe chips on results toolbar ────────────────────────────────
-  // Steps that surface as taps on the results-page chip strip. Q5 (extras) is
-  // exposed via the separate "Advanced search ▾" button next to the chips.
+  // Steps that surface as taps on the results-page chip strip.
   const VIBE_CHIP_STEPS = ['trip', 'stayVibe', 'nbhdScene', 'musthaves'];
 
   // Icon for the must-have chip. Mirrors the labels in BOOP_QUESTIONS musthaves.
@@ -1952,7 +1941,7 @@
   // so the look/feel matches the first-time flow.
   function openBoopFromChip(stepKey) {
     if (!S.city) { flashMsg('Pick a city first'); return; }
-    const allSteps = ['trip', 'stayVibe', 'nbhdScene', 'musthaves', 'extras'];
+    const allSteps = ['trip', 'stayVibe', 'nbhdScene', 'musthaves'];
     let idx = allSteps.indexOf(stepKey);
     if (idx < 0) idx = BOOP_QUESTIONS.findIndex(q => q.id === stepKey);
     if (idx < 0) idx = 0;
@@ -2047,8 +2036,7 @@
     const q = BOOP_QUESTIONS[BOOP.idx];
     if (!q) { boopFinish(); return; }
     wrap.className = 'boop-wrap'
-      + (q.type === 'chips' ? ' boop-wrap--deal' : '')
-      + (q.type === 'freetext' ? ' boop-wrap--freetext' : '');
+      + (q.type === 'chips' ? ' boop-wrap--deal' : '');
     const p = boopProgressPct();
     /* Saved vibe banner — restore to show Use saved / Retake on first screen when a profile exists
     const saved = loadBoopProfileForCity(S.city);
@@ -2130,15 +2118,35 @@
       const mustHaveInstruction = overlayMode
         ? 'Update what matters most, then re-run your search.'
         : 'Optional - pick any that matter.';
-      const continueLabel = overlayMode ? 'Find hotels →' : 'Continue →';
-      const continueHandler = overlayMode ? 'boopFinish()' : 'boopNext()';
+      const continueLabel = overlayMode ? 'Find hotels →' : 'Find hotels →';
+      const continueHandler = 'boopFinish()';
       const backHandler = overlayMode ? 'closeBoopOverlay()' : 'boopBack()';
       const backLabel = overlayMode ? 'Cancel' : '&lt; back';
+      // Build "Your words" freetext block (moved from former screen 5).
+      // Sits above the Free cancellation chip as the first input on this screen.
+      const previewProfile = {
+        answers: { ...(BOOP.answers || {}) },
+        prefs:   { ...(BOOP.prefs   || {}) },
+        dealbreakers: Array.from(BOOP.dealbreakers || []),
+        freetext: BOOP.freetext || '',
+      };
+      let autoKeywords = '';
+      try { autoKeywords = buildBoopSeeds(previewProfile).roomSeed || ''; } catch (_) { autoKeywords = ''; }
+      const kwValue = (BOOP.advancedKeywords && BOOP.advancedKeywords.trim()) ? BOOP.advancedKeywords : autoKeywords;
       body = `<div class="boop-deal-toolbar boop-deal-toolbar--compact">
         <div class="boop-deal-toolbar-actions">
           <a class="boop-deal-back-link" href="#" onclick="event.preventDefault();${backHandler};">${backLabel}</a>
           <button type="button" class="boop-btn primary" onclick="${continueHandler}">${continueLabel}</button>
         </div>
+      </div>
+      <div class="boop-deal-freetext boop-deal-freetext--inline">
+        <label for="boop-freetext-input" class="boop-deal-freetext-label">Anything else? <span class="boop-deal-freetext-opt">(optional)</span></label>
+        <p class="boop-deal-freetext-sub">Street energy, character, views, or small details — anything else we should factor in.</p>
+        <input id="boop-freetext-input" type="text" placeholder="e.g. quiet side street, small design hotel, dark moody suite, river views"
+               value="${escHtml(BOOP.freetext)}"
+               oninput="BOOP.freetext=this.value"
+               onkeydown="if(event.key==='Enter'){event.preventDefault();boopFinish();}"
+               class="boop-deal-freetext-input" />
       </div>
       <p class="boop-note boop-musthave-instruction">${mustHaveInstruction}</p>
       <div class="boop-deal-list-shell"><div class="boop-deal-list">${q.options.map(o => `
@@ -2153,48 +2161,19 @@
           </div>
           <div class="boop-deal-row-check" aria-hidden="true">${BOOP.dealbreakers.has(o.id) ? '✓' : '+'}</div>
         </button>
-      `).join('')}</div></div>`;
-    } else if (q.type === 'freetext') {
-      // Build the would-be auto-generated room HyDE seed from the live BOOP
-      // state so the user can see exactly what we're going to embed and tweak
-      // it if they want fine control (Q5 advanced search).
-      const previewProfile = {
-        answers: { ...(BOOP.answers || {}) },
-        prefs: { ...(BOOP.prefs || {}) },
-        dealbreakers: Array.from(BOOP.dealbreakers || []),
-        freetext: BOOP.freetext || '',
-      };
-      let autoKeywords = '';
-      try { autoKeywords = buildBoopSeeds(previewProfile).roomSeed || ''; } catch (_) { autoKeywords = ''; }
-      const kwValue = (BOOP.advancedKeywords && BOOP.advancedKeywords.trim()) ? BOOP.advancedKeywords : autoKeywords;
-      const backLabel = overlayMode ? 'Cancel' : 'Back';
-      const backHandler = overlayMode ? 'closeBoopOverlay()' : 'boopBack()';
-      body = `<div class="boop-freetext-block">
-        <div class="boop-deal-freetext" style="margin-top:0">
-          <label for="boop-freetext-input" class="boop-deal-freetext-label">Your words <span class="boop-deal-freetext-opt">(optional)</span></label>
-          <input id="boop-freetext-input" type="text" placeholder="e.g. quiet side street, small design hotel, dark moody suite, river views"
-                 value="${escHtml(BOOP.freetext)}"
-                 oninput="BOOP.freetext=this.value"
-                 onkeydown="if(event.key==='Enter'){event.preventDefault();boopFinish();}"
-                 class="boop-deal-freetext-input" />
+      `).join('')}</div></div>
+      <details class="boop-keywords-details">
+        <summary class="boop-keywords-summary">
+          <span class="boop-keywords-summary-label">Fine-tune room search text</span>
+          <span class="boop-keywords-summary-arr" aria-hidden="true">▸</span>
+        </summary>
+        <div class="boop-keywords-block">
+          <div class="boop-keywords-help">We build this line from your answers so room results stay on-theme — tweak it only if you want to nudge the wording.</div>
+          <textarea id="boop-keywords-input" class="boop-keywords-input"
+                    placeholder="Filled in from your answers"
+                    oninput="BOOP.advancedKeywords=this.value">${escHtml(kwValue)}</textarea>
         </div>
-        <details class="boop-keywords-details">
-          <summary class="boop-keywords-summary">
-            <span class="boop-keywords-summary-label">Fine-tune room search text</span>
-            <span class="boop-keywords-summary-arr" aria-hidden="true">▸</span>
-          </summary>
-          <div class="boop-keywords-block">
-            <div class="boop-keywords-help">We build this line from your answers so room results stay on-theme — tweak it only if you want to nudge the wording.</div>
-            <textarea id="boop-keywords-input" class="boop-keywords-input"
-                      placeholder="Filled in from your answers"
-                      oninput="BOOP.advancedKeywords=this.value">${escHtml(kwValue)}</textarea>
-          </div>
-        </details>
-      </div>
-      <div class="boop-freetext-actions">
-        <button type="button" class="boop-btn subtle" onclick="${backHandler}">${backLabel}</button>
-        <button type="button" class="boop-btn primary" onclick="boopFinish()">Find hotels →</button>
-      </div>`;
+      </details>`;
     } else {
       body = '';
     }
@@ -2432,6 +2411,28 @@
     if (n && !isPlaceholderHotelTitle(n, h.id)) return n;
     const city = String(h.city || S.city || '').trim();
     return city ? `Hotel in ${city}` : 'Hotel';
+  }
+
+  /** Property-type chips + "Serviced residences" when name says Residences but DB type is still hotel (distinct listing from same brand hotel). */
+  function propertyTypeChipsHTML(h, chipClass = 'property-type-chip') {
+    if (!h) return '';
+    const pt = h.property_type || 'hotel';
+    const name = String(h.name || '');
+    const c = chipClass;
+    const chips = [];
+    if (pt === 'apartment_rental' || pt === 'apartment') {
+      chips.push(`<span class="${c}">🏠 Apartment</span>`);
+    } else if (pt === 'hostel') {
+      chips.push(`<span class="${c}">🛏 Hostel</span>`);
+    } else if (pt === 'villa') {
+      chips.push(`<span class="${c}">🏡 Villa</span>`);
+    } else if (pt === 'vacation_home') {
+      chips.push(`<span class="${c}">🏠 Vacation rental</span>`);
+    }
+    if (/\bresidences\b/i.test(name) && pt === 'hotel') {
+      chips.push(`<span class="${c}">🏙 Serviced residences</span>`);
+    }
+    return chips.join('');
   }
 
   /** Hero / card `photo_credit` from API — source-aware attribution. */
@@ -3922,7 +3923,6 @@
   async function revealResultsWhenReady() {
     const priceDependentSort =
       _currentSort === 'match+price' ||
-      _currentSort === 'match+price+rating' ||
       _currentSort === 'price';
     const haveDates = !!(S.checkin && S.checkout);
     const needWait = haveDates && priceDependentSort && _fetchingPrices && !_pricesLoaded;
@@ -3994,7 +3994,7 @@
     if (!S.q) {
       // No query yet — funnel back into the wizard via Advanced search so the
       // user can build one (this should be rare; chip clicks already cover it).
-      openBoopFromChip('extras');
+      openBoopFromChip('musthaves');
       return;
     }
     if (!S.city) { flashMsg('Pick a city first'); return; }
@@ -4486,6 +4486,7 @@
 
     // Increment race ID — any in-flight rates response with an older ID will be discarded
     const reqId = ++_ratesReqId;
+    _fetchedStubIds = new Set();  // reset per-search cache for _fetchRoomsForRenderedStubs
 
     // Determine dates before vsearch so we know whether to fetch prices
     const checkin  = S.checkin  || '';
@@ -4557,6 +4558,7 @@
         if (Array.isArray(data.deferred_meta_ids) && data.deferred_meta_ids.length) {
           lazyFetchHotelMeta(data.deferred_meta_ids, reqId);
         }
+        lazyFetchVisibleStubPhotos(reqId);   // immediately fill stub cards with room photos
         if (hasDates) {
           fetchPrices(city, checkin, checkout, reqId);
         } else {
@@ -4647,15 +4649,27 @@
   function render(hotels, hasDates = false) {
     const resPre = document.getElementById('results');
     _lbRegistry.length = 0;  // reset photo registry for each new search result
-    _lastHotels     = hotels;
+    const seenIds = new Set();
+    const deduped = [];
+    for (const h of hotels || []) {
+      if (!h || h.id == null) continue;
+      const id = String(h.id).trim();
+      if (!id || seenIds.has(id)) continue;
+      seenIds.add(id);
+      deduped.push(h);
+    }
+    if ((hotels || []).length !== deduped.length) {
+      console.warn(`[results] dropped ${(hotels || []).length - deduped.length} duplicate hotel card(s) by id`);
+    }
+    _lastHotels = deduped;
     // Telemetry: each successful render is one "search executed" event from the
     // user's perspective. Properties stay coarse (no query text) so PostHog
     // never sees the search query itself.
     try {
-      const top = (hotels && hotels[0]) || null;
+      const top = deduped[0] || null;
       track('vsearch_executed', {
         city:           (S && S.city) || null,
-        result_count:   (hotels || []).length,
+        result_count:   deduped.length,
         has_dates:      !!hasDates,
         has_query:      !!(S && (S.q || S.query)),
         nbhd_filter:    !!(typeof selectedNeighborhood !== 'undefined' && selectedNeighborhood && selectedNeighborhood.name),
@@ -4665,26 +4679,18 @@
     } catch (_) {}
     // Prefetch street-view frames for the top hotel immediately — fire-and-forget so
     // the tour overlay shows with images already cached rather than waiting on-demand.
-    if (hotels?.length) {
-      const prefetchId = hotels[0]?.id;
+    if (deduped.length) {
+      const prefetchId = deduped[0]?.id;
       if (prefetchId && !Object.prototype.hasOwnProperty.call(_svFrameCache, prefetchId)) {
         fetchStreetViewFrames(prefetchId); // intentionally not awaited
       }
     }
-    const shouldOpenVibeTour = !!(_vibeTourPending && hotels?.length && S.boopProfile);
+    const shouldOpenVibeTour = !!(_vibeTourPending && deduped.length && S.boopProfile);
     _deferResultsRenderUntilTourClose = shouldOpenVibeTour;
     _vibeTourPending = false;
-    // Boop "price matters" only affected Match+Price before — default was always
-    // pure Match, so Ritz-type matches stayed on top. When this search is anchored
-    // by wizard hotel/must-have signals and the slider is not neutral, default to
-    // Match+Price (uses nightly rates when dates exist; server also star-nudges).
-    const pmForDefault = Number(S.boopProfile?.answers?.priceMatters);
-    const boopAnchoredSearch =
-      (typeof S.hotelQ === 'string' && S.hotelQ.trim().length > 0) ||
-      (Array.isArray(S.mustHaves) && S.mustHaves.length > 0);
-    const usePriceBlendDefault =
-      boopAnchoredSearch && Number.isFinite(pmForDefault) && pmForDefault !== 0;
-    _currentSort    = usePriceBlendDefault ? 'match+price' : 'match';
+    // Best Match now incorporates the Boop priceMatters signal as a secondary
+    // tiebreaker, so we always default to 'match'. No auto-switch needed.
+    _currentSort    = 'match';
     _sortReverse    = false;
     _displayedCount = 10;
     _nbhdFilter     = null;  // BOOP v4 — reset the top-nbhd refine strip filter
@@ -4706,7 +4712,7 @@
     const availFilter = document.getElementById('availFilter');
     if (availFilter) availFilter.style.display = 'none';
     // Show property-type dropdown when results include non-hotel property types (V2 cities)
-    const hasPropertyTypes = (hotels || []).some(h => h.property_type && h.property_type !== 'hotel');
+    const hasPropertyTypes = deduped.some(h => h.property_type && h.property_type !== 'hotel');
     const propTypeFilter = document.getElementById('propTypeFilter');
     if (propTypeFilter) propTypeFilter.style.display = hasPropertyTypes ? 'flex' : 'none';
     // Reset dropdown to current state
@@ -4743,7 +4749,7 @@
   }
 
   function _setPriceBtnsState(loaded) {
-    document.querySelectorAll('[data-sort="match+price"],[data-sort="match+price+rating"],[data-sort="price"]').forEach(b => {
+    document.querySelectorAll('[data-sort="match+price"],[data-sort="price"]').forEach(b => {
       b.disabled = !loaded;
       b.classList.toggle('loading', !loaded);
     });
@@ -4801,6 +4807,7 @@
       // card stops showing "rate-only" rows for rooms we actually have photos
       // for. Fire-and-forget so the rates path stays fast.
       lazyFetchStubRooms(reqId);
+      enrichHotelRates(reqId);    // per-hotel full rates for large-inventory hotels
     } catch (e) {
       console.warn('[prices]', e.message);
       if (reqId === _ratesReqId) {
@@ -4844,7 +4851,7 @@
       // --- twin vibe badges (effectiveScore changes once _pricesLoaded=true) ---
       const badgeWrap = document.getElementById(`hotel-badge-wrap-${h.id}`);
       if (badgeWrap) {
-        const roomVibe  = Math.round(hotelEffectiveScore(h) || 0);
+        const roomVibe  = roomVibeMatchDisplayPct(h);
         const hotelVibe = Math.round(h.hotelScore || 0);
         const nbhdVibe  = h.nbhd_fit_pct != null ? Math.round(h.nbhd_fit_pct) : computeNbhdVibe(h);
         badgeWrap.innerHTML = buildVibeTriplet(roomVibe, hotelVibe, nbhdVibe);
@@ -4887,15 +4894,90 @@
   // server endpoint cap so a Mexico-City-sized fill (~3500 ids) needs ~18
   // sequential calls rather than ~35 — cuts wall clock roughly in half.
   // ── Lazy stub-room fetch ───────────────────────────────────────────────────
-  // V2 search returns ALL hotels but only fetches photos+roomTypes for the
-  // top GALLERY_LIMIT (250). Beyond that, hotels come back as stubs with
-  // roomTypes: []. After /api/rates lands and shows which stubs are priced,
-  // this fetches their indexed room data via /api/hotel-rooms and merges it
+  // _fetchRoomsForRenderedStubs — called after every renderSorted().
+  //
+  // Scans the currently-displayed slice of _lastHotels for stubs (roomTypes=[]),
+  // skips any hotel already fetched this search session, and fires one
+  // /api/hotel-rooms request for the new stubs. Runs after the initial paint,
+  // after rates arrive (scroll re-renders), and after every infinite-scroll page.
+  // This is the primary mechanism for filling room photos; the legacy
+  // lazyFetchVisibleStubPhotos / lazyFetchStubRooms remain as complementary passes.
+  let _fetchedStubIds = new Set();
+  async function _fetchRoomsForRenderedStubs() {
+    if (!S.city || !_lastHotels.length) return;
+    const reqId = _ratesReqId;
+    // Scan the DISPLAYED hotels (after sort+filter), not _lastHotels positional slice.
+    // _displayedCount refers to display positions, so we must use getSortedHotelsForDisplay()
+    // to find the actual hotels on screen — their _lastHotels positions can be anywhere.
+    const displayedHotels = getSortedHotelsForDisplay().slice(0, _displayedCount);
+    const newStubs = [];
+    for (const h of displayedHotels) {
+      if (!h || !h.id) continue;
+      const sid = String(h.id);
+      if (_fetchedStubIds.has(sid)) continue;
+      if (!Array.isArray(h.roomTypes) || h.roomTypes.length > 0) continue;
+      newStubs.push(sid);
+    }
+    if (!newStubs.length) return;
+    if (newStubs.includes('lpfc697')) console.log(`[debug-h21] _fetchRoomsForRenderedStubs: fetching (displayedCount=${_displayedCount})`);
+    // Mark as fetched before the await so concurrent scroll calls don't re-fetch
+    newStubs.forEach(id => _fetchedStubIds.add(id));
+    try {
+      const params = new URLSearchParams({ ids: newStubs.join(','), city: S.city });
+      const r = await fetch(`${BACKEND}/api/hotel-rooms?` + params);
+      if (reqId !== _ratesReqId) return;  // new search started — discard
+      if (!r.ok) { newStubs.forEach(id => _fetchedStubIds.delete(id)); return; }
+      const d = await r.json();
+      if (reqId !== _ratesReqId) return;
+      if (d?.hotels) applyStubRoomsInPlace(d.hotels);
+    } catch (_e) {
+      // On error un-mark so the next renderSorted() can retry
+      newStubs.forEach(id => _fetchedStubIds.delete(id));
+    }
+  }
+
+  // Immediate room-photo prefetch for visible stub hotels.
+  //
+  // Stubs are hotels ranked beyond GALLERY_LIMIT (250) in Phase B — the server
+  // returns them with roomTypes:[] to keep TTFB fast. Without this, users see
+  // "room photos not in our visual index yet" for 2-3 seconds until BOTH
+  // /api/rates AND lazyFetchStubRooms have completed. This runs right after
+  // the initial search render (no rates needed) and fills room photos for the
+  // first MAX_PREFETCH stubs so the cards look populated immediately.
+  let _visibleStubReqId = 0;
+  async function lazyFetchVisibleStubPhotos(searchReqId) {
+    if (!S.city) { console.log('[stub-prefetch] skipped: no city'); return; }
+    const MAX_PREFETCH = 50;
+    const allStubs = _lastHotels.filter(h => h?.id && Array.isArray(h.roomTypes) && h.roomTypes.length === 0);
+    const targets = allStubs.slice(0, MAX_PREFETCH).map(h => String(h.id));
+    console.log(`[stub-prefetch] _lastHotels=${_lastHotels.length}, stubs=${allStubs.length}, prefetching=${targets.length}`);
+    if (!targets.length) return;
+    const ourReqId = ++_visibleStubReqId;
+    const t0 = Date.now();
+    try {
+      const params = new URLSearchParams({ ids: targets.join(','), city: S.city });
+      const url = `${BACKEND}/api/hotel-rooms?` + params;
+      console.log(`[stub-prefetch] fetching ${url.substring(0, 120)}...`);
+      const r = await fetch(url);
+      console.log(`[stub-prefetch] response status=${r.status} ok=${r.ok} in ${Date.now()-t0}ms`);
+      if (ourReqId !== _visibleStubReqId || searchReqId !== _ratesReqId) { console.log('[stub-prefetch] stale, bailing'); return; }
+      if (!r.ok) { console.warn(`[stub-prefetch] HTTP error ${r.status}`); return; }
+      const d = await r.json();
+      console.log(`[stub-prefetch] got hotels keys:`, Object.keys(d?.hotels || {}).length);
+      if (ourReqId !== _visibleStubReqId || searchReqId !== _ratesReqId) { console.log('[stub-prefetch] stale after json, bailing'); return; }
+      const merged = d?.hotels ? applyStubRoomsInPlace(d.hotels) : 0;
+      console.log(`[stub-prefetch] merged=${merged} in ${Date.now()-t0}ms total`);
+    } catch (e) { console.warn('[stub-prefetch] error:', e.message); }
+  }
+
   // in place so cards show real room rows (with photos) instead of "Queen
   // Room - rate-only" fallback rows. Bails if a newer search starts.
   let _stubRoomsLazyReqId = 0;
   async function lazyFetchStubRooms(searchReqId) {
-    if (!_hasDateSearch || !_pricesLoaded || !S.city) return;
+    if (!_hasDateSearch || !_pricesLoaded || !S.city) {
+      console.log(`[stub-rooms] skipped: hasDate=${_hasDateSearch} pricesLoaded=${_pricesLoaded} city=${S.city}`);
+      return;
+    }
     // Two cases trigger a lazy room fetch:
     //  A) Stub: ranked > GALLERY_LIMIT (no roomTypes) and LiteAPI priced
     //     at least one room — we need photos to render anything useful.
@@ -4925,10 +5007,11 @@
       if (!hasAnyPrice) continue;
       if (existing.length === 0 || hasMissing) targetIds.push(String(h.id));
     }
-    if (!targetIds.length) return;
+    if (!targetIds.length) { console.log('[stub-rooms] no targets (all stubs have no roomPrices)'); return; }
     const ourReqId = ++_stubRoomsLazyReqId;
     const t0 = Date.now();
-    const CHUNK = 100;  // matches server's 150-id cap with a safety margin
+    console.log(`[stub-rooms] ${targetIds.length} targets (stubs with prices)`);
+    const CHUNK = 40;  // keep well under 10k-row server limit; at ~50 photos/hotel, 40 hotels = ~2k rows
     let merged = 0;
     for (let i = 0; i < targetIds.length; i += CHUNK) {
       if (ourReqId !== _stubRoomsLazyReqId) return;
@@ -4937,14 +5020,114 @@
       try {
         const params = new URLSearchParams({ ids: slice.join(','), city: S.city });
         const r = await fetch(`${BACKEND}/api/hotel-rooms?` + params);
-        if (!r.ok) continue;
+        if (!r.ok) { console.warn(`[stub-rooms] chunk HTTP ${r.status}`); continue; }
         const d = await r.json();
+        console.log(`[stub-rooms] chunk ${i/CHUNK+1}: got ${Object.keys(d?.hotels||{}).length} hotels`);
         if (ourReqId !== _stubRoomsLazyReqId) return;
         if (searchReqId !== _ratesReqId) return;
         if (d?.hotels) merged += applyStubRoomsInPlace(d.hotels);
-      } catch (_) { /* non-fatal */ }
+      } catch (e) { console.warn('[stub-rooms] chunk error:', e.message); }
     }
     console.log(`[perf] lazy stub rooms: ${targetIds.length} targets, ${merged} hotels merged in ${Date.now() - t0}ms`);
+  }
+
+  // Per-hotel rates enrichment.
+  //
+  // LiteAPI's /hotels/rates batch API caps at ~1 rate/hotel when the batch is
+  // >= 50 hotels. The detail pass (chunks of 15) recovers 3–5 rates. But large
+  // hotels like the Ritz have 23+ room types — the batch cap still leaves most
+  // of them unpriced, which previously showed as "not available" in the UI even
+  // though those rooms ARE bookable on LiteAPI's site.
+  //
+  // Fix: after the city-wide rates land, fire individual single-hotel calls for
+  // the top hotels that look under-covered (< 50% of indexed rooms have a rate).
+  // A batch of 1 hotel has no cap — LiteAPI returns all available room rates.
+  // We parallel-fetch up to MAX_ENRICH targets then merge + re-render in place.
+  let _hotelRatesEnrichReqId = 0;
+  async function enrichHotelRates(searchReqId) {
+    if (!_hasDateSearch || !_pricesLoaded || !S.checkin || !S.checkout) return;
+
+    const MAX_ENRICH = 10;
+    const targets = _lastHotels.filter(h => {
+      if (!h?.id || h.price == null) return false;           // hotel not priced
+      const indexed = (h.roomTypes || []).filter(rt => rt.roomTypeId != null).length;
+      if (indexed < 4) return false;                         // small — already well-covered
+      const priced = Object.keys(h.roomPrices || {}).length;
+      return priced < indexed * 0.5;                        // < half of indexed rooms have a rate
+    }).slice(0, MAX_ENRICH);
+
+    if (!targets.length) return;
+    const ourReqId = ++_hotelRatesEnrichReqId;
+    const t0 = Date.now();
+
+    const results = await Promise.allSettled(targets.map(h => {
+      const params = new URLSearchParams({ hotelId: h.id, checkin: S.checkin, checkout: S.checkout });
+      return fetch(`${BACKEND}/api/hotel-rates?` + params).then(r => r.ok ? r.json() : null);
+    }));
+
+    if (ourReqId !== _hotelRatesEnrichReqId || searchReqId !== _ratesReqId) return;
+
+    let enriched = 0;
+    for (let i = 0; i < targets.length; i++) {
+      const res = results[i];
+      if (res.status !== 'fulfilled' || !res.value) continue;
+      const d = res.value;
+      const h = targets[i];
+      if (!d.roomPrices) continue;
+
+      if (!h.roomPrices) h.roomPrices = {};
+      if (!h.roomNames)  h.roomNames  = {};
+      if (!h.offerIds)   h.offerIds   = {};
+      if (!h.roomFreeCancel) h.roomFreeCancel = {};
+
+      let addedAny = false;
+      for (const [rid, price] of Object.entries(d.roomPrices)) {
+        // Never overwrite a lower price already known
+        if (h.roomPrices[rid] == null || price < h.roomPrices[rid]) {
+          h.roomPrices[rid] = price;
+          addedAny = true;
+        }
+        if (d.roomNames?.[rid])  h.roomNames[rid]  = d.roomNames[rid];
+        if (d.offerIds?.[rid])   h.offerIds[rid]   = d.offerIds[rid];
+        if (d.roomFreeCancel?.[rid] != null) h.roomFreeCancel[rid] = d.roomFreeCancel[rid];
+      }
+      if (d.hotelFreeCancel) h.hotelFreeCancel = true;
+      if (d.price != null && (h.price == null || d.price < h.price)) h.price = d.price;
+
+      if (!addedAny) continue;
+      enriched++;
+
+      // Re-render this hotel's rooms section in place
+      const roomsEl = document.getElementById(`hotel-rooms-${h.id}`);
+      if (!roomsEl) continue;
+
+      // Preserve any expanded compact row so it stays open after re-render
+      const openCompactIdx = (() => {
+        const rows = Array.from(roomsEl.querySelectorAll('.room-type-row'));
+        const openIdx = rows.slice(1).findIndex(r => r.classList.contains('open'));
+        return openIdx;
+      })();
+
+      const visibleRooms = sortRoomsForCard(h.roomTypes, h);
+      roomsEl.innerHTML = roomsSectionHTML(visibleRooms, h.vectorScore, h.roomPrices, _hasDateSearch, '', openCompactIdx, h);
+      bindFeaturedStripNavs(roomsEl);
+
+      // Update hotel-level price badge if it improved
+      const priceEl = document.getElementById(`hotel-price-${h.id}`);
+      if (priceEl && h.price != null) {
+        const sym = _priceCurrency === 'EUR' ? '€' : '$';
+        priceEl.innerHTML = `${sym}${h.price.toLocaleString()}<span class="price-per">/night</span>`;
+      }
+      // Update the vibe-triplet badge (room vibe % may shift when sort re-evaluates)
+      const badgeWrap = document.querySelector(`#hotel-card-${h.id} .hotel-vibe-badge-wrap`);
+      if (badgeWrap) {
+        const roomVibe = roomVibeMatchDisplayPct(h);
+        const hotelVibe = h.hotelScore != null ? Math.round(h.hotelScore) : 0;
+        const nbhdVibeRaw = h.nbhd_fit_pct != null ? Math.round(h.nbhd_fit_pct) : computeNbhdVibe(h);
+        badgeWrap.innerHTML = buildVibeTriplet(roomVibe, hotelVibe, Math.max(0, Math.round(nbhdVibeRaw || 0)));
+      }
+    }
+    console.log(`[perf] hotel-rates enrich: ${targets.length} targets, ${enriched} enriched, ${Date.now() - t0}ms`);
   }
 
   // Mirrors applyMetaInPlace pattern. For each hotel in roomsMap, mutate the
@@ -4957,6 +5140,8 @@
   // added, to avoid pointless DOM churn.
   function applyStubRoomsInPlace(roomsMap) {
     if (!roomsMap || typeof roomsMap !== 'object') return 0;
+    const responseIds = Object.keys(roomsMap);
+    console.log(`[stub-apply] roomsMap has ${responseIds.length} hotels:`, responseIds.slice(0,5).join(','));
     let mergedHotels = 0;
     for (const h of _lastHotels) {
       const sid = String(h.id);
@@ -4974,7 +5159,21 @@
       });
       if (additions.length === 0 && existing.length > 0) continue;
       h.roomTypes = existing.length === 0 ? entry.roomTypes : existing.concat(additions);
+      if (sid === 'lpfc697') console.log(`[debug-h21] applyStubRoomsInPlace: set roomTypes.length=${h.roomTypes.length}`);
       mergedHotels++;
+      // Refresh the hero badge now that roomTypes is populated. Stub hotels
+      // start with roomVibeMatchDisplayPct=vectorScore (placeholder); after
+      // lazy rooms arrive the pill updates to show the actual best-room score
+      // (all score=0 for lazily-fetched rooms since they're outside the Phase-B
+      // similarity window, so vectorScore fallback still applies — but the badge
+      // re-render keeps future re-renders consistent once rooms are present).
+      const badgeWrap = document.getElementById(`hotel-badge-wrap-${h.id}`);
+      if (badgeWrap) {
+        const roomVibe  = roomVibeMatchDisplayPct(h);
+        const hotelVibe = Math.round(h.hotelScore || 0);
+        const nbhdVibe  = h.nbhd_fit_pct != null ? Math.round(h.nbhd_fit_pct) : computeNbhdVibe(h);
+        badgeWrap.innerHTML = buildVibeTriplet(roomVibe, hotelVibe, nbhdVibe);
+      }
       const roomsEl = document.getElementById(`hotel-rooms-${h.id}`);
       if (!roomsEl) continue;
       const visibleRooms = sortRoomsForCard(h.roomTypes, h);
@@ -5032,9 +5231,7 @@
         const rating   = h.rating > 0
           ? `<button type="button" class="hotel-guest-score" data-hotel-id="${escHtml(String(h.id))}" onclick="event.stopPropagation();openHotelDetailPage(this.dataset.hotelId, { scrollTo: 'reviews' })" title="See guest reviews"><strong>${parseFloat(h.rating).toFixed(1)}</strong> guest score</button>`
           : '';
-        const propChip =
-          h.property_type === 'apartment_rental' ? '<span class="property-type-chip">🏠 Apartment</span>' :
-          h.property_type === 'hostel'           ? '<span class="property-type-chip">🛏 Hostel</span>'   : '';
+        const propChip = propertyTypeChipsHTML(h);
         metaEl.innerHTML =
           (stars ? `<span class="stars">${stars}</span>` : '') +
           (location ? `<span class="hotel-location">${location}</span>` : '') +
@@ -5126,7 +5323,7 @@
       updateFreeCancelHint();
       return;
     }
-    const priceDependentSort = _currentSort === 'match+price' || _currentSort === 'match+price+rating' || _currentSort === 'price';
+    const priceDependentSort = _currentSort === 'match+price' || _currentSort === 'price';
     // When "Available only" is on, prices arriving will remove cards (any hotel
     // LiteAPI didn't return rates for → hotelPassesAvailFilter returns false).
     // applyPricesInPlace only updates DOM text on already-rendered cards; it
@@ -5203,9 +5400,9 @@
   }
 
   function setSortBy(sort) {
-    // Match+Price / Best Value need nightly rates (or explicit no-dates path) before blend logic is meaningful.
+    // Match+Price needs nightly rates (or explicit no-dates path) before blend logic is meaningful.
     // "Best Price" must still run: otherwise a failed / slow rates fetch leaves clicks as no-ops forever.
-    if ((sort === 'match+price' || sort === 'match+price+rating') && !_pricesLoaded) return;
+    if (sort === 'match+price' && !_pricesLoaded) return;
     // Any user-initiated click on a sort control releases the vibe-tour pin so
     // the user is fully in control of the order from this point on. This covers
     // both "switch sort" and "toggle direction on the active sort" — without
@@ -5241,25 +5438,65 @@
     renderSorted();
   }
 
+  /**
+   * Max of indexed room-row `rt.score` values, optionally with hotel `vectorScore`
+   * when prices exist but no room rows match (sorting / ranking only).
+   * @param {{ roomTypes?: any[], roomPrices?: Record<string, unknown>, price?: number|null, vectorScore?: number }} h
+   * @param {{ vectorFallback?: boolean }} [opts]
+   */
+  function maxRoomRowScore(h, opts = {}) {
+    const vectorFallback = opts.vectorFallback !== false;
+    const allRooms = h.roomTypes || [];
+    const canFilter = _showAvailOnly && _hasDateSearch && _pricesLoaded;
+    if (canFilter) {
+      const availRooms = allRooms.filter(rt => rt.roomTypeId != null && h.roomPrices?.[rt.roomTypeId] != null);
+      if (availRooms.length > 0) return Math.max(0, ...availRooms.map(rt => rt.score || 0));
+      if (vectorFallback && h.price != null) {
+        // Hotel has a price but no priced room ID matches our indexed room types
+        // (common LiteAPI ID mismatch). Best room score is a better proxy than
+        // vectorScore (which is a blended server signal, not a pure room similarity).
+        const bestRoom = Math.max(0, ...allRooms.map(rt => rt.score || 0));
+        return bestRoom > 0 ? bestRoom : (h.vectorScore || 0);
+      }
+      return 0;
+    }
+    if (allRooms.length === 0) return 0;
+    return Math.max(0, ...allRooms.map(rt => rt.score || 0));
+  }
+
   // Returns the hotel's effective match score for sorting and badge display.
   // When the "available only" filter is active, uses only the scores of rooms
   // that have confirmed availability — so a hotel with one 20% available room
   // ranks as 20%, not as the 80% score of an unavailable room.
   function hotelEffectiveScore(h) {
-    const allRooms = h.roomTypes || [];
-    // When prices have loaded, any hotel absent from the rates response
-    // (h.roomPrices === undefined) is treated as fully unavailable → score 0.
-    const canFilter = _showAvailOnly && _hasDateSearch && _pricesLoaded;
-    if (canFilter) {
-      const availRooms = allRooms.filter(rt => rt.roomTypeId != null && h.roomPrices?.[rt.roomTypeId] != null);
-      if (availRooms.length > 0) return Math.max(0, ...availRooms.map(rt => rt.score || 0));
-      // Fall back to hotel-level availability: LiteAPI returned a price → hotel is bookable.
-      // Covers stubs (beyond GALLERY_LIMIT, roomTypes=[]) and hotels where mappedRoomId
-      // doesn't match our indexed room_type_id. Use vector score so they rank with peers.
-      if (h.price != null) return h.vectorScore || 0;
-      return 0;
-    }
-    return Math.max(0, ...allRooms.map(rt => rt.score || 0));
+    return maxRoomRowScore(h, { vectorFallback: true });
+  }
+
+  /**
+   * Card / list "ROOM VIBE" % — best-matching room in the hotel, regardless of
+   * availability filter. The pill is a hotel-level match indicator ("this hotel
+   * has a room scoring X%"); bookability is communicated separately by the
+   * row-level "not available" / "Free cancel" / pricing UI. Filter-independent
+   * so the pill doesn't jitter when prices load and the "Available only" filter
+   * activates, and so it stays visible when the top-scoring rooms are sold out
+   * for the user's dates but the hotel still genuinely matches the search.
+   *
+   * For stub hotels (ranked > GALLERY_LIMIT so roomTypes=[] in Phase B), falls
+   * back to vectorScore — the server's aggregate room-type similarity for that
+   * hotel. Stub rooms lazy-loaded later all score 0 (server has no per-photo
+   * score for them outside the top-250 window), so vectorScore is the only
+   * meaningful room-quality signal we have until the hotel is re-indexed.
+   *
+   * Sorting still uses `hotelEffectiveScore` (availability-aware) so ranking
+   * order continues to be driven by the best BOOKABLE matching room.
+   */
+  function roomVibeMatchDisplayPct(h) {
+    const allRooms = h?.roomTypes || [];
+    if (allRooms.length === 0) return Math.round(h?.vectorScore || 0);
+    const bestRoomScore = Math.max(0, ...allRooms.map(rt => rt.score || 0));
+    // Stub hotels lazy-load rooms with score=0 (outside Phase-B window).
+    // Fall back to vectorScore so the badge doesn't drop to 0 after rooms load.
+    return bestRoomScore > 0 ? Math.round(bestRoomScore) : Math.round(h?.vectorScore || 0);
   }
 
   // Re-render while suppressing the card entrance animation and preserving scroll.
@@ -5490,12 +5727,7 @@
     const nbhd = h.primary_nbhd || selectedNeighborhood || null;
     const room = topRoomForVibeTour(h);
     const roomPhoto = firstUsablePhoto(room?.photos) || h.mainPhoto || '';
-    const roomVibeBase = Number(hotelEffectiveScore(h));
-    const roomVibeFallback =
-      Number.isFinite(Number(h.vectorScore)) ? Number(h.vectorScore)
-      : Number.isFinite(Number(h.score)) ? Number(h.score)
-      : 0;
-    const roomVibe = Math.max(0, Math.round((Number.isFinite(roomVibeBase) && roomVibeBase > 0) ? roomVibeBase : roomVibeFallback));
+    const roomVibe = roomVibeMatchDisplayPct(h);
     const nbhdVibeRaw = h.nbhd_fit_pct != null ? Math.round(h.nbhd_fit_pct) : computeNbhdVibe(h);
     const nbhdVibe = Math.max(0, Math.round(nbhdVibeRaw || 0));
     const nbhdForBlend = nbhdVibe > 0 ? nbhdVibe : roomVibe;
@@ -6030,7 +6262,7 @@
 
   function hotelRowHTML(h) {
     const sym   = _priceCurrency === 'EUR' ? '€' : '$';
-    const score = hotelEffectiveScore(h);
+    const score = roomVibeMatchDisplayPct(h);
     const hotelIdAttr = escHtml(String(h.id));
     // Show every indexed room regardless of "Available only" — the toggle is
     // a hotel-level filter (see hotelPassesAvailFilter), not a room-level one.
@@ -6128,6 +6360,11 @@
   // The card-level "Lowest available" badge remains for hotels we keep; we're
   // just refusing to show ghost cards with no bookable row.
   function hotelPassesAvailFilter(h) {
+    // Always include the vibe-tour lead hotel so the user can see it in results
+    // even if LiteAPI didn't return rates for their selected dates. Without this,
+    // the tour shows hotel X but the filtered list silently hides it, confusing
+    // the user. It renders with "No rates found" — visible but clearly unavailable.
+    if (_vibeTourLeadId && String(h.id) === _vibeTourLeadId) return true;
     if (!(_showAvailOnly && _hasDateSearch && _pricesLoaded)) return true;
     // Pass when the card has at least one bookable row. Since rate-only
     // mappedRoomIds are now merged into OTHER ROOM TYPES (no separate
@@ -6205,21 +6442,16 @@
         return _sortReverse ? -tie : tie;
       });
     } else if (_currentSort === 'match+price') {
-      // Match tier first. Then blend match % with a price score shaped by Boop
-      // "price matters" slider (-100 less → +100 very). The ▲/▼ direction
-      // toggle FLIPS THE PRICE TIEBREAKER ONLY — it never reverses the match
-      // direction. Without this contract (i.e. the literal-reverse behaviour
-      // shipped pre-May 2026), ▲ would put low-match-cheap hotels above
-      // 100%-match polished hotels (observed lp24f0a "Hotel Century Reforma"
-      // at #1 with 67% match because user toggled ▲).
-      //
-      // Concretely:
-      //   ▼ pm=-100  → match-first, expensive-tiebreak (splurge)
-      //   ▲ pm=-100  → match-first, cheap-tiebreak     (still splurge user but cheap-first within ties)
-      //   ▼ pm=+100  → match-first, cheap-tiebreak     (value)
-      //   ▲ pm=+100  → match-first, expensive-tiebreak
-      //   pm=0       → ▲/▼ flip cheap vs expensive symmetrically
-      const tier = s => s >= 40 ? 0 : s >= 15 ? 1 : 2;
+      // Match tier first. Then blend match % with price. The tier gates
+      // hotels so a 0%-room-match cheap hotel can't leapfrog a 60%-match
+      // hotel via price alone. Tier uses BOTH blended score AND raw room
+      // score: hotels with essentially no room match (effectiveScore<5)
+      // are capped at tier 2 regardless of neighbourhood score, preventing
+      // pure neighbourhood+price wins over genuine room matches.
+      const tier = (blendedScore, effectiveScore) => {
+        if (effectiveScore < 5) return 2;
+        return blendedScore >= 40 ? 0 : blendedScore >= 15 ? 1 : 2;
+      };
       const hasRateContext = _hasDateSearch && _pricesLoaded;
       const priced = hotels.filter(h => h.price != null).map(h => h.price).sort((a, b) => a - b);
       let p10 = 0;
@@ -6240,17 +6472,13 @@
         if (!priced.length) return 50;
         return Math.max(0, Math.min(100, ((p - p10) / priceRange) * 100));
       };
-      const pmRaw = boopPriceMattersForSort();
-      const pm = Number.isFinite(pmRaw) ? Math.max(-100, Math.min(100, pmRaw)) : 0;
-      // gamma ∈ [0,1]: higher → more "premium $ / 5★" on the price axis.
-      // pm < 0 ("price less important"): full curve so Ritz-type can rank on match + splurge.
-      // pm >= 0 (neutral + "very important"): cap gamma so neutral never rewards ultra-luxury at the top.
-      let gamma;
-      if (pm < 0) {
-        gamma = Math.max(0, Math.min(1, (70 - pm) / 170));
-      } else {
-        gamma = Math.max(0, Math.min(0.07, ((100 - pm) / 100) * 0.07));
-      }
+      // Match+Price always uses pm=0: it's a dedicated price sort, decoupled from
+      // the Boop "price matters" slider. priceMatters now influences Best Match
+      // (secondary tiebreaker within close-score groups). Use ▲/▼ to flip
+      // cheap-first (default ▼, priceGamma=0.07) vs expensive-first (▲, 0.93).
+      const pm = 0;
+      // gamma capped at 0.07 so default sort is strongly cheap-first
+      const gamma = 0.07;
       // Direction toggle inverts the price-axis preference but leaves MATCH_W
       // (which drives whether match or price dominates) alone — so reversing
       // can never demote a 100% match below a 67% match.
@@ -6293,7 +6521,7 @@
       hotels.sort((a, b) => {
         const aScore = blendMatchSignal(a);
         const bScore = blendMatchSignal(b);
-        const tierDiff = tier(aScore) - tier(bScore);
+        const tierDiff = tier(aScore, hotelEffectiveScore(a)) - tier(bScore, hotelEffectiveScore(b));
         if (tierDiff !== 0) return tierDiff;
         if (hasRateContext) {
           const aP = a.price != null;
@@ -6325,63 +6553,56 @@
         if (b.price != null) return 1;
         return 0;
       });
-    } else if (_currentSort === 'match+price+rating') {
-      const tier = s => s >= 40 ? 0 : s >= 15 ? 1 : 2;
-      const hasRateContext = _hasDateSearch && _pricesLoaded;
-      const pricedHotels = hotels.filter(h => h.price != null).map(h => h.price).sort((a, b) => a - b);
-      const p10 = pricedHotels[Math.floor(pricedHotels.length * 0.10)] ?? pricedHotels[0] ?? 100;
-      const p90 = pricedHotels[Math.floor(pricedHotels.length * 0.90)] ?? pricedHotels[pricedHotels.length - 1] ?? 500;
-      const priceRange = Math.max(p90 - p10, 1);
-      const normPrice  = p => {
-        if (p == null) return hasRateContext ? 0 : 50;
-        return Math.max(0, Math.min(100, (p90 - p) / priceRange * 100));
-      };
-      const normRating = r => r > 0 ? (r / 10) * 100 : 60;
-      // Same neighbourhood blend as Match+Price — without it Best Value
-      // ignores nbhdScene preference and ranks low-nbhd cheap properties
-      // alongside high-nbhd hotels.
-      const wNbhd = typeof _lastVsearchStats?.nbhd_rank_weight === 'number' ? _lastVsearchStats.nbhd_rank_weight : 0;
-      const blendMatchSignal = h => {
-        const s = hotelEffectiveScore(h);
-        if (wNbhd <= 0 || h.nbhd_fit_pct == null) return s;
-        return (1 - wNbhd) * s + wNbhd * h.nbhd_fit_pct;
-      };
-      hotels.sort((a, b) => {
-        const aScore = blendMatchSignal(a);
-        const bScore = blendMatchSignal(b);
-        const tierDiff = tier(aScore) - tier(bScore);
-        if (tierDiff !== 0) return tierDiff;
-        if (hasRateContext) {
-          const aP = a.price != null;
-          const bP = b.price != null;
-          if (aP !== bP) return aP ? -1 : 1;
-        }
-        const scoreDiff = bScore - aScore;
-        let cmp = 0;
-        if (Math.abs(scoreDiff) > 3) cmp = scoreDiff;
-        else {
-          const aValue = 0.50 * normPrice(a.price) + 0.50 * normRating(a.rating);
-          const bValue = 0.50 * normPrice(b.price) + 0.50 * normRating(b.rating);
-          cmp = bValue - aValue;
-        }
-        return _sortReverse ? -cmp : cmp;
-      });
     } else if (_currentSort === 'match') {
       const wNbhd = typeof _lastVsearchStats?.nbhd_rank_weight === 'number' ? _lastVsearchStats.nbhd_rank_weight : 0;
       const canFilter = _showAvailOnly && _hasDateSearch && _pricesLoaded;
-      hotels.sort((a, b) => {
-        let cmp = 0;
-        if (wNbhd > 0 && a.nbhd_fit_pct != null && b.nbhd_fit_pct != null) {
-          // Use vectorScore (hotel-level, matches server sort basis) unless
-          // availability filtering is active (then room-level effective score is correct).
-          const ra = canFilter ? hotelEffectiveScore(a) / 100 : (a.vectorScore || 0) / 100;
-          const rb = canFilter ? hotelEffectiveScore(b) / 100 : (b.vectorScore || 0) / 100;
-          const ca = (1 - wNbhd) * ra + wNbhd * (a.nbhd_fit_pct / 100);
-          const cb = (1 - wNbhd) * rb + wNbhd * (b.nbhd_fit_pct / 100);
-          const d = cb - ca;
-          if (Math.abs(d) > 1e-9) cmp = d > 0 ? 1 : -1;
+      // Boop priceMatters (-100…+100) acts as a secondary tiebreaker within close-score
+      // groups (within 5 pts). pm < 0 = splurge (prefer expensive); pm > 0 = value (prefer cheap).
+      // Primary sort is always match quality — priceMatters never demotes a clearly better match.
+      const pmRaw = boopPriceMattersForSort();
+      const pm = Number.isFinite(pmRaw) ? pmRaw : 0;
+      let pricePercentiles = null;
+      if (pm !== 0 && _pricesLoaded && _hasDateSearch) {
+        const priced = hotels.filter(h => h.price != null).map(h => h.price).sort((a, b) => a - b);
+        if (priced.length >= 5) {
+          const p10 = priced[Math.floor(priced.length * 0.10)] ?? priced[0];
+          const p90 = priced[Math.floor(priced.length * 0.90)] ?? priced[priced.length - 1];
+          pricePercentiles = { p10, p90, range: Math.max(p90 - p10, 1) };
         }
-        if (cmp === 0) cmp = hotelEffectiveScore(b) - hotelEffectiveScore(a);
+      }
+      // blendedScore (0-100): combines room/hotel match with nbhd fit when active.
+      // Use vectorScore (server sort basis) unless availability filter is active.
+      const blendedScore = h => {
+        const raw = canFilter ? hotelEffectiveScore(h) : (h.vectorScore || 0);
+        if (wNbhd > 0 && h.nbhd_fit_pct != null) {
+          return (1 - wNbhd) * raw + wNbhd * h.nbhd_fit_pct;
+        }
+        return raw;
+      };
+      // normExpensive (0=cheapest, 100=most expensive in the result set)
+      const normExpensive = p => {
+        if (!pricePercentiles || p == null) return 50;
+        return Math.max(0, Math.min(100, ((p - pricePercentiles.p10) / pricePercentiles.range) * 100));
+      };
+      hotels.sort((a, b) => {
+        const aScore = blendedScore(a);
+        const bScore = blendedScore(b);
+        const matchDiff = bScore - aScore; // positive → b ranks higher
+        // More than 5 pts apart: match quality wins outright, price is irrelevant.
+        if (Math.abs(matchDiff) > 5) {
+          const cmp = matchDiff > 0 ? 1 : -1;
+          return _sortReverse ? -cmp : cmp;
+        }
+        // Within 5 pts: apply price tiebreaker from priceMatters.
+        // pm < 0 (splurge): expensive hotels rank first; pm > 0 (value): cheap hotels first.
+        if (pricePercentiles) {
+          const aExp = normExpensive(a.price);
+          const bExp = normExpensive(b.price);
+          const priceCmp = pm < 0 ? bExp - aExp : aExp - bExp;
+          if (Math.abs(priceCmp) > 2) return _sortReverse ? -priceCmp : priceCmp;
+        }
+        // Pure match tiebreak
+        const cmp = matchDiff > 0 ? 1 : (matchDiff < 0 ? -1 : 0);
         return _sortReverse ? -cmp : cmp;
       });
     }
@@ -6433,7 +6654,10 @@
     renderNbhdRefineStrip(hotels);
 
     _lbRegistry.length = 0;
-    let html = toShow.map(_viewMode === 'rows' ? hotelRowHTML : hotelHTML).join('');
+    let html = toShow.map(h => {
+      if (h && String(h.id) === 'lpfc697') console.log(`[debug-h21] renderSorted: roomTypes.length=${(h.roomTypes||[]).length} showAvailOnly=${_showAvailOnly} pricesLoaded=${_pricesLoaded}`);
+      return (_viewMode === 'rows' ? hotelRowHTML : hotelHTML)(h);
+    }).join('');
 
     // Sentinel triggers loading more
     if (remaining > 0) {
@@ -6445,6 +6669,11 @@
 
     resultsEl.innerHTML = html;
     bindFeaturedStripNavs(resultsEl);
+
+    // Fetch room photos for any newly-rendered stub hotels (roomTypes=[]).
+    // Runs after every renderSorted() — initial paint, rate arrival, and scroll —
+    // so hotels entering the DOM always get photos filled in quickly.
+    _fetchRoomsForRenderedStubs();
 
     if (remaining > 0) {
       const sentinel = document.getElementById('scroll-sentinel');
@@ -6554,22 +6783,35 @@
       ${othersSection}`;
   }
 
-  // When the user has "Available only" on, push bookable indexed rooms to the
-  // front so the featured ("BEST MATCHING ROOM") slot lands on something they
-  // can actually book. Within each group (bookable / not) preserve the
-  // server's vibe-score ordering. When the filter is off, leave the list as-is.
+  // When the user has "Available only" on, push bookable scored rooms to the
+  // front so the featured ("BEST MATCHING ROOM") slot shows something with a
+  // real vibe score that's also bookable. Priority order:
+  //   1. scored + priced   — best of both worlds
+  //   2. scored + unpriced — has vibe match (better than a 0-score bookable room)
+  //   3. unscored + priced — bookable but no vibe score (e.g. enrichHotelRates rooms)
+  //   4. unscored + unpriced — not useful; goes last
+  // When filter is off, sort all rooms by score descending.
   function sortRoomsForCard(rooms, hotel) {
     if (!rooms || rooms.length === 0) return rooms || [];
+
+    const scoredFirst = [...rooms].sort((a, b) => (b.score || 0) - (a.score || 0));
+
     const filterActive = _showAvailOnly && _hasDateSearch && _pricesLoaded;
-    if (!filterActive) return rooms;
-    const priced = [];
-    const unpriced = [];
-    for (const rt of rooms) {
-      const has = rt && rt.roomTypeId != null && hotel?.roomPrices?.[rt.roomTypeId] != null;
-      (has ? priced : unpriced).push(rt);
+    if (!filterActive) return scoredFirst;
+
+    const scoredPriced   = [];
+    const scoredUnpriced = [];
+    const unscoredPriced = [];
+    const unscoredUnpriced = [];
+    for (const rt of scoredFirst) {
+      const hasPrice = rt && rt.roomTypeId != null && hotel?.roomPrices?.[rt.roomTypeId] != null;
+      const hasScore = (rt.score || 0) > 0;
+      if (hasPrice && hasScore)  scoredPriced.push(rt);
+      else if (hasScore)         scoredUnpriced.push(rt);
+      else if (hasPrice)         unscoredPriced.push(rt);
+      else                       unscoredUnpriced.push(rt);
     }
-    if (priced.length === 0 || unpriced.length === 0) return rooms;
-    return [...priced, ...unpriced];
+    return [...scoredPriced, ...scoredUnpriced, ...unscoredPriced, ...unscoredUnpriced];
   }
 
   // ── Rate-only row ─────────────────────────────────────────────────────────
@@ -6831,7 +7073,7 @@
 
   function buildVibeTriplet(room, hotel, nbhd) {
     const pills = [];
-    if (room  > 0) pills.push(`<span class="vibe-pill ${_vibeClass(room)}"  title="Room Vibe — how this hotel's rooms match your room vibe"><b>${room}%</b><i>Room</i></span>`);
+    if (room  > 0) pills.push(`<span class="vibe-pill ${_vibeClass(room)}"  title="Room vibe — how well this hotel's rooms match your room search"><b>${room}%</b><i>Room vibe</i></span>`);
     if (hotel > 0) pills.push(`<span class="vibe-pill ${_vibeClass(hotel)}" title="Hotel Vibe — how the hotel's lobby, bar, amenities match your trip vibe"><b>${hotel}%</b><i>Hotel</i></span>`);
     if (nbhd  > 0) pills.push(`<span class="vibe-pill ${_vibeClass(nbhd)}"  title="Neighbourhood Vibe — how this area matches your trip preferences"><b>${nbhd}%</b><i>Nbhd</i></span>`);
     if (!pills.length) return '';
@@ -7095,9 +7337,10 @@
         <div class="hp-lb-counter" id="hp-lb-counter"></div>
       </div>` : '';
 
-    const propChip = d.property_type === 'apartment_rental'
-      ? `<span class="hp-proptype-chip">🏠 Apartment</span>`
-      : d.property_type === 'hostel' ? `<span class="hp-proptype-chip">🛏 Hostel</span>` : '';
+    const propChip = propertyTypeChipsHTML(
+      { property_type: d.property_type, name: d.name },
+      'hp-proptype-chip'
+    );
     const nbhdName = d.primary_nbhd?.name || '';
     const nbhdChip = nbhdName
       ? `<button class="hp-nbhd-chip" onclick="closeHotelDetailPage();goToStep('nbhd')" title="Explore this neighbourhood">📍 ${escHtml(nbhdName)}</button>` : '';
@@ -7554,11 +7797,11 @@
     const hotelIdAttr = escHtml(String(h.id));
 
     // BOOP v4 — three vibe % scores on every card:
-    //   roomVibe = h.vectorScore        (set by score_room_types + HyDE room seed)
+    //   roomVibe  = best-matching indexed room in the hotel (filter-independent;
+    //               sort still uses availability-aware hotelEffectiveScore)
     //   hotelVibe = h.hotelScore        (set by score_hotels + hotel_query seed)
     //   nbhdVibe = same % as neighbourhood picker when cache hit (vibe_elements + prefs + 45–95 spread); else prefs × primary_nbhd.attributes
-    const effectiveScore = hotelEffectiveScore(h);
-    const roomVibe  = Math.round(effectiveScore || 0);
+    const roomVibe  = roomVibeMatchDisplayPct(h);
     const hotelVibe = Math.round(h.hotelScore || 0);
     // Prefer server nbhd % (same value used for ranking blend) when present.
     const nbhdVibe  = h.nbhd_fit_pct != null ? Math.round(h.nbhd_fit_pct) : computeNbhdVibe(h);
@@ -7640,8 +7883,7 @@
               ${stars ? `<span class="stars">${stars}</span>` : ''}
               ${location ? `<span class="hotel-location">${location}</span>` : ''}
               ${rating}${clipBadge}
-              ${h.property_type === 'apartment_rental' ? '<span class="property-type-chip">🏠 Apartment</span>' : ''}
-              ${h.property_type === 'hostel' ? '<span class="property-type-chip">🛏 Hostel</span>' : ''}
+              ${propertyTypeChipsHTML(h)}
             </div>
           </div>
           <div class="hotel-header-right">
@@ -7667,7 +7909,13 @@
     const bedsHTML = rt.beds ? `<span class="room-beds">${rt.beds}</span>` : '';
 
     const hasPrice  = rt.roomTypeId != null && hotelRoomPrices?.[rt.roomTypeId] != null;
-    const isUnavail = hasDateSearch && hotelRoomPrices != null && rt.roomTypeId != null && !hasPrice;
+    // Never show "not available" on individual room rows. LiteAPI's batch rate API
+    // only returns 3–5 rates per hotel even for large inventories (Ritz has 23+
+    // room types). Absence of a per-room rate means the batch cap dropped it —
+    // not that the room is sold out. Hotel-level availability is already shown in
+    // the card header (€xxx/night vs "No rates found"). Rooms without a price
+    // just render with no price badge; user goes to Find & Book to see all options.
+    const isUnavail = false;
     const rid = rt.roomTypeId;
     const fcMap = hotel?.roomFreeCancel;
     const showFc = hasPrice && fcMap && (fcMap[rid] === true || fcMap[String(rid)] === true);
@@ -7690,11 +7938,12 @@
       : '';
 
     // ── Featured variant (top match room — scrollable strip, same indices as lightbox) ──
-    if (variant === 'featured') {
-      const vibeOverlay = rt.score > 0
-        ? `<span class="room-featured-vibe-badge">Room vibe - ${rt.score}% match</span>`
-        : (isTopMatch && hotelScore === 0 && _currentSort === 'match'
-            ? `<span class="room-featured-vibe-badge room-featured-vibe-badge--low">Room vibe - browse</span>` : '');
+  if (variant === 'featured') {
+    const fromRoom = Math.round(Number(rt.score) || 0) || Math.round(Number(hotel?.vectorScore) || 0);
+    const vibeOverlay = fromRoom > 0
+      ? `<span class="room-featured-vibe-badge">Room vibe - ${fromRoom}% match</span>`
+      : (isTopMatch && _currentSort === 'match'
+          ? `<span class="room-featured-vibe-badge room-featured-vibe-badge--low">Room vibe - browse</span>` : '');
 
       const toShow = photos.length > 0 ? photos.slice(0, 10) : [null];
       const stripCells = toShow.map((url, pi) => {
@@ -7707,7 +7956,7 @@
         return `<div class="room-photo-cell${heroCls}" onclick="${lbClick}">
           ${overlay}
           <img src="${url}" alt="${rt.name}" loading="lazy"
-               onerror="this.parentElement.innerHTML='<div class=no-photo>🛏</div>'">
+               onerror="this.style.display='none';if(!this.parentElement.querySelector('.no-photo')){this.insertAdjacentHTML('afterend','<div class=no-photo>🛏</div>')}">
           <div class="zoom-hint">⤢</div>
         </div>`;
       }).join('');
