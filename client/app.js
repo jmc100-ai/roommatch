@@ -286,7 +286,31 @@
   let _showAvailOnly  = true;   // toggle: only show available rooms (default on when dates entered)
   let _requireFreeCancel = false; // Boop "Free cancellation" must-have: filter using /api/rates policies
   let _propTypeFilter = 'all'; // dropdown: all | hotel | apartment | vacation_home | villa | hostel
-  let _priceCurrency  = 'EUR';  // currency returned by rates API
+  const RATES_CURRENCIES = ['USD', 'EUR', 'GBP', 'CAD', 'AUD', 'MXN'];
+  const RM_CURRENCY_KEY = 'rm_rates_currency';
+  function getRatesCurrencyPref() {
+    try {
+      const v = (localStorage.getItem(RM_CURRENCY_KEY) || 'USD').trim().toUpperCase();
+      return RATES_CURRENCIES.includes(v) ? v : 'USD';
+    } catch (_) { return 'USD'; }
+  }
+  function normalizeRatesCurrencyClient(c) {
+    const u = String(c || '').trim().toUpperCase();
+    return RATES_CURRENCIES.includes(u) ? u : 'USD';
+  }
+  /** Compact symbol prefix for card prices (LiteAPI returns totals in requested currency). */
+  function ratesCurrencySymbol(code) {
+    switch (normalizeRatesCurrencyClient(code)) {
+      case 'EUR': return '\u20AC';
+      case 'USD': return '$';
+      case 'GBP': return '\u00A3';
+      case 'CAD': return 'CA$';
+      case 'AUD': return 'A$';
+      case 'MXN': return 'MX$';
+      default: return '';
+    }
+  }
+  let _priceCurrency = getRatesCurrencyPref();
   // Debug-only search version controls (set in console):
   // localStorage.setItem('searchVersion','v2')
   // localStorage.setItem('searchCompare','1')
@@ -4782,7 +4806,7 @@
       }
     };
     try {
-      const params = new URLSearchParams({ city, checkin, checkout });
+      const params = new URLSearchParams({ city, checkin, checkout, currency: getRatesCurrencyPref() });
       if (hotelIds.length > 0) params.set('hotelIds', hotelIds.join(','));
       const resp = await fetch(`${BACKEND}/api/rates?` + params);
       if (reqId !== _ratesReqId) { _signalRatesArrived(); return; }  // stale — a new search was started
@@ -4798,7 +4822,7 @@
       const data = await resp.json();
       if (reqId !== _ratesReqId) { _signalRatesArrived(); return; }
       _fetchingPrices = false;
-      applyPrices(data.prices || {}, data.roomPrices || {}, data.currency || 'EUR', data.pricedCount || 0, data);
+      applyPrices(data.prices || {}, data.roomPrices || {}, data.currency || getRatesCurrencyPref(), data.pricedCount || 0, data);
       _signalRatesArrived();
       // V2 search only fetches photos for the top GALLERY_LIMIT (250) hotels.
       // For ~3500-hotel cities like Mexico City, hotels ranked > 250 come back
@@ -4848,14 +4872,7 @@
           : `<div class="hotel-row-price-per" style="margin-top:4px">No rates</div>`;
       }
 
-      // --- twin vibe badges (effectiveScore changes once _pricesLoaded=true) ---
-      const badgeWrap = document.getElementById(`hotel-badge-wrap-${h.id}`);
-      if (badgeWrap) {
-        const roomVibe  = roomVibeMatchDisplayPct(h);
-        const hotelVibe = Math.round(h.hotelScore || 0);
-        const nbhdVibe  = h.nbhd_fit_pct != null ? Math.round(h.nbhd_fit_pct) : computeNbhdVibe(h);
-        badgeWrap.innerHTML = buildVibeTriplet(roomVibe, hotelVibe, nbhdVibe);
-      }
+      updateHotelVibeChipOnCard(h);
 
       // --- room rows: rebuild and inject using roomsSectionHTML ---
       const roomsEl = document.getElementById(`hotel-rooms-${h.id}`);
@@ -5061,7 +5078,12 @@
     const t0 = Date.now();
 
     const results = await Promise.allSettled(targets.map(h => {
-      const params = new URLSearchParams({ hotelId: h.id, checkin: S.checkin, checkout: S.checkout });
+      const params = new URLSearchParams({
+        hotelId: h.id,
+        checkin: S.checkin,
+        checkout: S.checkout,
+        currency: getRatesCurrencyPref(),
+      });
       return fetch(`${BACKEND}/api/hotel-rates?` + params).then(r => r.ok ? r.json() : null);
     }));
 
@@ -5115,17 +5137,10 @@
       // Update hotel-level price badge if it improved
       const priceEl = document.getElementById(`hotel-price-${h.id}`);
       if (priceEl && h.price != null) {
-        const sym = _priceCurrency === 'EUR' ? '€' : '$';
+        const sym = ratesCurrencySymbol(_priceCurrency);
         priceEl.innerHTML = `${sym}${h.price.toLocaleString()}<span class="price-per">/night</span>`;
       }
-      // Update the vibe-triplet badge (room vibe % may shift when sort re-evaluates)
-      const badgeWrap = document.querySelector(`#hotel-card-${h.id} .hotel-vibe-badge-wrap`);
-      if (badgeWrap) {
-        const roomVibe = roomVibeMatchDisplayPct(h);
-        const hotelVibe = h.hotelScore != null ? Math.round(h.hotelScore) : 0;
-        const nbhdVibeRaw = h.nbhd_fit_pct != null ? Math.round(h.nbhd_fit_pct) : computeNbhdVibe(h);
-        badgeWrap.innerHTML = buildVibeTriplet(roomVibe, hotelVibe, Math.max(0, Math.round(nbhdVibeRaw || 0)));
-      }
+      updateHotelVibeChipOnCard(h);
     }
     console.log(`[perf] hotel-rates enrich: ${targets.length} targets, ${enriched} enriched, ${Date.now() - t0}ms`);
   }
@@ -5161,19 +5176,6 @@
       h.roomTypes = existing.length === 0 ? entry.roomTypes : existing.concat(additions);
       if (sid === 'lpfc697') console.log(`[debug-h21] applyStubRoomsInPlace: set roomTypes.length=${h.roomTypes.length}`);
       mergedHotels++;
-      // Refresh the hero badge now that roomTypes is populated. Stub hotels
-      // start with roomVibeMatchDisplayPct=vectorScore (placeholder); after
-      // lazy rooms arrive the pill updates to show the actual best-room score
-      // (all score=0 for lazily-fetched rooms since they're outside the Phase-B
-      // similarity window, so vectorScore fallback still applies — but the badge
-      // re-render keeps future re-renders consistent once rooms are present).
-      const badgeWrap = document.getElementById(`hotel-badge-wrap-${h.id}`);
-      if (badgeWrap) {
-        const roomVibe  = roomVibeMatchDisplayPct(h);
-        const hotelVibe = Math.round(h.hotelScore || 0);
-        const nbhdVibe  = h.nbhd_fit_pct != null ? Math.round(h.nbhd_fit_pct) : computeNbhdVibe(h);
-        badgeWrap.innerHTML = buildVibeTriplet(roomVibe, hotelVibe, nbhdVibe);
-      }
       const roomsEl = document.getElementById(`hotel-rooms-${h.id}`);
       if (!roomsEl) continue;
       const visibleRooms = sortRoomsForCard(h.roomTypes, h);
@@ -5262,8 +5264,9 @@
   }
 
   function applyPrices(priceMap, roomPriceMap, currency, pricedCount, ratesData = {}) {
-    const sym = currency === 'EUR' ? '€' : '$';
-    _priceCurrency = currency;
+    const cur = normalizeRatesCurrencyClient(currency);
+    const sym = ratesCurrencySymbol(cur);
+    _priceCurrency = cur;
 
     // Merge hotel-level and per-room prices + offerIds onto hotel objects for re-render persistence
     let roomPricedRooms = 0;
@@ -5334,7 +5337,7 @@
     if (priceDependentSort || _requireFreeCancel || availFilterActive) {
       renderSortedSmooth();
     } else {
-      applyPricesInPlace(sym, pricedCount);
+      applyPricesInPlace(sym);
     }
     updateFreeCancelHint();
 
@@ -6261,7 +6264,7 @@
   }
 
   function hotelRowHTML(h) {
-    const sym   = _priceCurrency === 'EUR' ? '€' : '$';
+    const sym   = ratesCurrencySymbol(_priceCurrency);
     const score = roomVibeMatchDisplayPct(h);
     const hotelIdAttr = escHtml(String(h.id));
     // Show every indexed room regardless of "Available only" — the toggle is
@@ -6821,6 +6824,7 @@
   // header needed. Visually distinguished by a placeholder thumb (the dashed
   // 🛏 box) instead of a photo. Non-collapsible (no chevron, no photo strip).
   function extraRateRowHTML(rateId, hotel, isHidden = false) {
+    const sym = ratesCurrencySymbol(_priceCurrency);
     const perNight = hotel.roomPrices?.[rateId];
     if (perNight == null) return '';
     const rawName = hotel.roomNames?.[rateId] || 'Available rate';
@@ -6838,7 +6842,7 @@
           <div class="room-thumb room-thumb--placeholder" aria-hidden="true">🛏</div>
           <div class="room-type-left">
             <span class="room-type-name">${escHtml(rawName)}</span>
-            <span class="room-rate">€${perNight.toLocaleString()}<span class="room-rate-per">/night</span></span>
+            <span class="room-rate">${sym}${perNight.toLocaleString()}<span class="room-rate-per">/night</span></span>
             ${fcBadge}
           </div>
           ${bookHTML}
@@ -7071,13 +7075,34 @@
     return 'vbp-vlow';
   }
 
-  function buildVibeTriplet(room, hotel, nbhd) {
-    const pills = [];
-    if (room  > 0) pills.push(`<span class="vibe-pill ${_vibeClass(room)}"  title="Room vibe — how well this hotel's rooms match your room search"><b>${room}%</b><i>Room vibe</i></span>`);
-    if (hotel > 0) pills.push(`<span class="vibe-pill ${_vibeClass(hotel)}" title="Hotel Vibe — how the hotel's lobby, bar, amenities match your trip vibe"><b>${hotel}%</b><i>Hotel</i></span>`);
-    if (nbhd  > 0) pills.push(`<span class="vibe-pill ${_vibeClass(nbhd)}"  title="Neighbourhood Vibe — how this area matches your trip preferences"><b>${nbhd}%</b><i>Nbhd</i></span>`);
-    if (!pills.length) return '';
-    return `<div class="vibe-triplet">${pills.join('')}</div>`;
+  function hotelVibeChipHTML(hotelId, hotelVibe) {
+    const id = escHtml(String(hotelId));
+    const v = Math.round(Number(hotelVibe) || 0);
+    if (v <= 0) {
+      return `<span class="hotel-hotelvibe-chip hotel-hotelvibe-chip--hidden" id="hotel-hotelvibe-${id}" hidden></span>`;
+    }
+    const cls = _vibeClass(v);
+    const title = 'Hotel vibe — how the hotel\'s public spaces and amenities match your trip';
+    return `<span class="hotel-hotelvibe-chip vibe-pill ${cls}" id="hotel-hotelvibe-${id}" title="${escHtml(title)}"><b>${v}%</b></span>`;
+  }
+
+  function updateHotelVibeChipOnCard(h) {
+    if (!h || h.id == null) return;
+    const el = document.getElementById(`hotel-hotelvibe-${h.id}`);
+    if (!el) return;
+    const v = Math.round(h.hotelScore || 0);
+    if (v <= 0) {
+      el.hidden = true;
+      el.className = 'hotel-hotelvibe-chip hotel-hotelvibe-chip--hidden';
+      el.removeAttribute('title');
+      el.innerHTML = '';
+      return;
+    }
+    el.hidden = false;
+    const cls = _vibeClass(v);
+    el.className = `hotel-hotelvibe-chip vibe-pill ${cls}`;
+    el.title = 'Hotel vibe — how the hotel\'s public spaces and amenities match your trip';
+    el.innerHTML = `<b>${v}%</b>`;
   }
 
   // ── Hotel Details — full page (replaces the legacy slide-out panel) ────────
@@ -7796,20 +7821,12 @@
     const clipBadge = h.clipScore > 0 ? `<span class="clip-score-badge">&#9889; ${h.clipScore}% photo match</span>` : '';
     const hotelIdAttr = escHtml(String(h.id));
 
-    // BOOP v4 — three vibe % scores on every card:
-    //   roomVibe  = best-matching indexed room in the hotel (filter-independent;
-    //               sort still uses availability-aware hotelEffectiveScore)
-    //   hotelVibe = h.hotelScore        (set by score_hotels + hotel_query seed)
-    //   nbhdVibe = same % as neighbourhood picker when cache hit (vibe_elements + prefs + 45–95 spread); else prefs × primary_nbhd.attributes
-    const roomVibe  = roomVibeMatchDisplayPct(h);
     const hotelVibe = Math.round(h.hotelScore || 0);
-    // Prefer server nbhd % (same value used for ranking blend) when present.
-    const nbhdVibe  = h.nbhd_fit_pct != null ? Math.round(h.nbhd_fit_pct) : computeNbhdVibe(h);
-    const tripletHTML = buildVibeTriplet(roomVibe, hotelVibe, nbhdVibe);
-    const matchBadgeWrap = `<span class="hotel-hero-badge-wrap hotel-hero-badge-triplet" id="hotel-badge-wrap-${h.id}">${tripletHTML}</span>`;
+    const hotelVibeChip = hotelVibeChipHTML(h.id, hotelVibe);
 
     // Neighbourhood pill — top-left of hero, click refocuses the results by nbhd.
     const nbhd     = h.primary_nbhd;
+    const nbhdVibe  = h.nbhd_fit_pct != null ? Math.round(h.nbhd_fit_pct) : computeNbhdVibe(h);
     const nbhdPill = nbhd?.name
       ? `<button class="hotel-nbhd-pill" type="button"
                  onclick="event.stopPropagation();goToStep('nbhd')"
@@ -7860,11 +7877,12 @@
     const heroInner = heroCount > 0
       ? `<div class="hotel-hero hotel-hero--clickable ${heroClass}" ${heroOnClick}>${heroImgs}</div>`
       : `<div class="hotel-hero hotel-hero--clickable hero-1" ${heroOnClick}><div class="hotel-hero-img hotel-hero-blank"></div></div>`;
-    const heroStrip = `<div class="hotel-hero-wrap">${nbhdPill}${matchBadgeWrap}${heroInner}</div>`;
+    const heroStrip = `<div class="hotel-hero-wrap">${nbhdPill}${heroInner}</div>`;
 
     // ── Price display ────────────────────────────────────────────────────────
+    const curSym = ratesCurrencySymbol(_priceCurrency);
     const priceDisplay = h.price != null
-      ? `€${h.price.toLocaleString()}<span class="price-per">/night</span>`
+      ? `${curSym}${h.price.toLocaleString()}<span class="price-per">/night</span>`
       : _fetchingPrices
         ? `<span class="price-skeleton"></span>`
         : `--<span class="price-per">/night</span>`;
@@ -7878,7 +7896,10 @@
         ${heroStrip}
         <div class="hotel-header">
           <div class="hotel-header-left">
-            <div class="hotel-name" id="hotel-name-${h.id}">${escHtml(hotelDisplayTitle(h))}</div>
+            <div class="hotel-name-row">
+              <div class="hotel-name" id="hotel-name-${h.id}">${escHtml(hotelDisplayTitle(h))}</div>
+              ${hotelVibeChip}
+            </div>
             <div class="hotel-meta" id="hotel-meta-${h.id}">
               ${stars ? `<span class="stars">${stars}</span>` : ''}
               ${location ? `<span class="hotel-location">${location}</span>` : ''}
@@ -7894,7 +7915,7 @@
               </div>
               <button type="button" class="hotel-tour-link" data-hotel-id="${hotelIdAttr}" onclick="openVibeTourForHotel(this.dataset.hotelId)">Vibe tour</button>
               <button type="button" class="hotel-details-btn" data-hotel-id="${hotelIdAttr}" onclick="openHotelDetailPage(this.dataset.hotelId)">Details</button>
-              <a class="book-btn" href="${bookUrl}" target="_blank" rel="noopener">Find &amp; Book →</a>
+              <a class="book-btn" href="${bookUrl}" target="_blank" rel="noopener">Book →</a>
             </div>
           </div>
         </div>
@@ -7905,6 +7926,7 @@
   }
 
   function roomTypeHTML(rt, isTopMatch, hotelScore, hotelRoomPrices, hasDateSearch, variant = 'compact', isHidden = false, hotel = null) {
+    const curSym = ratesCurrencySymbol(_priceCurrency);
     const sizeHTML = rt.size ? `<span class="room-size">${rt.size}</span>` : '';
     const bedsHTML = rt.beds ? `<span class="room-beds">${rt.beds}</span>` : '';
 
@@ -7913,8 +7935,8 @@
     // only returns 3–5 rates per hotel even for large inventories (Ritz has 23+
     // room types). Absence of a per-room rate means the batch cap dropped it —
     // not that the room is sold out. Hotel-level availability is already shown in
-    // the card header (€xxx/night vs "No rates found"). Rooms without a price
-    // just render with no price badge; user goes to Find & Book to see all options.
+    // the card header (priced /night vs "No rates found"). Rooms without a price
+    // just render with no price badge; user goes to Book to see all options.
     const isUnavail = false;
     const rid = rt.roomTypeId;
     const fcMap = hotel?.roomFreeCancel;
@@ -7926,7 +7948,7 @@
     _lbRegistry.push({ photos, name: rt.name, score: rt.score });
 
     const priceHTML = hasPrice
-      ? `<span class="room-rate">€${hotelRoomPrices[rt.roomTypeId].toLocaleString()}<span class="room-rate-per">/night</span></span>${fcBadge}`
+      ? `<span class="room-rate">${curSym}${hotelRoomPrices[rt.roomTypeId].toLocaleString()}<span class="room-rate-per">/night</span></span>${fcBadge}`
       : isUnavail
         ? `<span class="room-unavail-badge">not available</span>`
         : '';
@@ -8768,6 +8790,24 @@
   document.addEventListener('DOMContentLoaded', () => {
     initBetaInstrumentation();
     initBetaBanner();
+    const curSel = document.getElementById('topnav-currency-select');
+    if (curSel) {
+      curSel.value = getRatesCurrencyPref();
+      _priceCurrency = getRatesCurrencyPref();
+      curSel.addEventListener('change', () => {
+        const v = normalizeRatesCurrencyClient(curSel.value);
+        try { localStorage.setItem(RM_CURRENCY_KEY, v); } catch (_) {}
+        _priceCurrency = v;
+        if (S.city && S.checkin && S.checkout && S.checkin < S.checkout && _lastHotels && _lastHotels.length) {
+          const reqId = ++_ratesReqId;
+          _fetchingPrices = true;
+          _pricesLoaded = false;
+          _setPriceBtnsState(false);
+          _setRatesStatus('loading', 'Refreshing rates…');
+          fetchPrices(S.city, S.checkin, S.checkout, reqId);
+        }
+      });
+    }
     // Reveal the feedback FAB once the app is up.
     const fab = document.getElementById('beta-feedback-fab');
     if (fab) fab.hidden = false;

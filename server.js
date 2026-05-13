@@ -224,6 +224,12 @@ const IS_PROD     = !!process.env.LITEAPI_PROD_KEY;
 // Clamped 10-300 as a guardrail.
 const LITEAPI_MAX_RATES_PER_HOTEL = Math.max(10, Math.min(300,
   Number(process.env.LITEAPI_MAX_RATES_PER_HOTEL) || 60));
+/** ISO 4217 codes accepted for GET /api/rates and /api/hotel-rates ?currency= */
+const RATES_CURRENCY_ALLOW = new Set(["EUR", "USD", "GBP", "CAD", "AUD", "MXN"]);
+function sanitizeRatesCurrency(q) {
+  const c = String(q || "").trim().toUpperCase();
+  return RATES_CURRENCY_ALLOW.has(c) ? c : "USD";
+}
 const PORT        = process.env.PORT || 3000;
 
 // Keep health check fast and dependency-free for Render startup probes.
@@ -1339,12 +1345,13 @@ app.get("/api/debug-rates", async (req, res) => {
   const { hotelId, checkin, checkout } = req.query;
   if (!hotelId || !checkin || !checkout) return res.status(400).json({ error: "hotelId, checkin, checkout required" });
   const nights = Math.round((new Date(checkout) - new Date(checkin)) / 86400000);
+  const dbgCur = sanitizeRatesCurrency(req.query.currency);
 
   // 1) /hotels/rates — what's bookable
   const ratesRes = await fetch("https://api.liteapi.travel/v3.0/hotels/rates", {
     method: "POST",
     headers: { "X-API-Key": LITEAPI_KEY, "Content-Type": "application/json", "accept": "application/json" },
-    body: JSON.stringify({ hotelIds: [hotelId], checkin, checkout, currency: "EUR", guestNationality: "US",
+    body: JSON.stringify({ hotelIds: [hotelId], checkin, checkout, currency: dbgCur, guestNationality: "US",
       occupancies: [{ adults: 2 }], maxRatesPerHotel: LITEAPI_MAX_RATES_PER_HOTEL, roomMapping: true, timeout: 22 }),
   });
   const ratesJson = await ratesRes.json();
@@ -3047,7 +3054,8 @@ function liteRateHasFreeCancellation(rate) {
 // cheapest prices (drives "Available rooms only" filter + price sort), then
 // fans out smaller chunks (<=48) for the top-N ranked-and-priced hotels to
 // recover the missing per-room rates for cards users actually see.
-async function liteRatesCall(hotelIds, checkin, checkout) {
+async function liteRatesCall(hotelIds, checkin, checkout, currency = "USD") {
+  const cur = sanitizeRatesCurrency(currency);
   const liteRes = await fetch("https://api.liteapi.travel/v3.0/hotels/rates", {
     method: "POST",
     headers: { "X-API-Key": LITEAPI_KEY, "Content-Type": "application/json", "accept": "application/json" },
@@ -3055,7 +3063,7 @@ async function liteRatesCall(hotelIds, checkin, checkout) {
       hotelIds,
       checkin,
       checkout,
-      currency: "EUR",
+      currency: cur,
       guestNationality: "US",
       occupancies: [{ adults: 2 }],
       maxRatesPerHotel: LITEAPI_MAX_RATES_PER_HOTEL,
@@ -3146,6 +3154,7 @@ app.get("/api/rates", async (req, res) => {
   const cityInput = (req.query.city || "").trim();
   const { checkin } = req.query;
   let { checkout } = req.query;
+  const currency = sanitizeRatesCurrency(req.query.currency);
   if (!cityInput || !checkin || !checkout) {
     return res.status(400).json({ error: "city, checkin and checkout required" });
   }
@@ -3179,7 +3188,7 @@ app.get("/api/rates", async (req, res) => {
     offerIds: acc.offerIds,
     roomFreeCancel: acc.roomFreeCancel,
     hotelFreeCancel: acc.hotelFreeCancel,
-    currency: "EUR",
+    currency,
     nights,
     pricedCount: Object.keys(acc.prices).length,
     ...extra,
@@ -3192,7 +3201,7 @@ app.get("/api/rates", async (req, res) => {
     const rawIds = req.query.hotelIds;
     if (rawIds && typeof rawIds === 'string' && rawIds.length > 0) {
       hotelIds = rawIds.split(',').map(s => s.trim()).filter(Boolean).slice(0, 200);
-      console.log(`[rates] ${city}: using ${hotelIds.length} ranked hotel IDs from client, ${checkin}→${checkout}`);
+      console.log(`[rates] ${city}: using ${hotelIds.length} ranked hotel IDs from client, ${checkin}→${checkout}, currency=${currency}`);
     } else {
       const fc = supabaseAdmin || supabase;
       const { data: hotelRows, error: dbErr } = await fc
@@ -3200,7 +3209,7 @@ app.get("/api/rates", async (req, res) => {
       if (dbErr) throw new Error("DB: " + dbErr.message);
       if (!hotelRows?.length) return res.json(emptyResponse());
       hotelIds = hotelRows.map(h => h.hotel_id);
-      console.log(`[rates] ${city}: fetching rates for ${hotelIds.length} hotels from DB, ${checkin}→${checkout}`);
+      console.log(`[rates] ${city}: fetching rates for ${hotelIds.length} hotels from DB, ${checkin}→${checkout}, currency=${currency}`);
     }
 
     // ── Main batched call. Drives hotel-level prices for sorting/filtering.
@@ -3208,7 +3217,7 @@ app.get("/api/rates", async (req, res) => {
     //    is large; the detail pass below recovers the rest for top-N hotels.
     let ratesList;
     try {
-      ratesList = await liteRatesCall(hotelIds, checkin, checkout);
+      ratesList = await liteRatesCall(hotelIds, checkin, checkout, currency);
     } catch (e) {
       if (e.status === 429) {
         console.warn("[rates] LiteAPI rate limited");
@@ -3266,7 +3275,7 @@ app.get("/api/rates", async (req, res) => {
         }
         const t0 = Date.now();
         const results = await Promise.allSettled(
-          chunks.map(ids => liteRatesCall(ids, checkin, checkout))
+          chunks.map(ids => liteRatesCall(ids, checkin, checkout, currency))
         );
         let newRoomRates = 0, callsOk = 0, callsFail = 0;
         for (const r of results) {
@@ -3299,9 +3308,9 @@ app.get("/api/rates", async (req, res) => {
       else if (n <= 5) bucketsHist['4-5']++;
       else bucketsHist['6+']++;
     }
-    console.log(`[rates] ${city}: ${pricedCount}/${hotelIds.length} hotels priced, ${roomPricedCount} room type rates, maxRates=${LITEAPI_MAX_RATES_PER_HOTEL}, detailTopN=${RATES_DETAIL_TOPN}`);
+    console.log(`[rates] ${city}: ${pricedCount}/${hotelIds.length} hotels priced, ${roomPricedCount} room type rates, currency=${currency}, maxRates=${LITEAPI_MAX_RATES_PER_HOTEL}, detailTopN=${RATES_DETAIL_TOPN}`);
     console.log(`[rates] distinct-rooms histogram: 0:${bucketsHist['0']} 1:${bucketsHist['1']} 2-3:${bucketsHist['2-3']} 4-5:${bucketsHist['4-5']} 6+:${bucketsHist['6+']}`);
-    res.json({ prices, roomPrices, roomNames, offerIds, roomFreeCancel, hotelFreeCancel, currency: "EUR", nights, pricedCount });
+    res.json({ prices, roomPrices, roomNames, offerIds, roomFreeCancel, hotelFreeCancel, currency, nights, pricedCount });
 
   } catch (err) {
     console.error("[rates]", err.message);
@@ -3325,6 +3334,7 @@ app.get("/api/hotel-rates", async (req, res) => {
   const hotelId = (req.query.hotelId || "").trim();
   const { checkin } = req.query;
   let { checkout } = req.query;
+  const currency = sanitizeRatesCurrency(req.query.currency);
   if (!hotelId || !checkin || !checkout) {
     return res.status(400).json({ error: "hotelId, checkin, checkout required" });
   }
@@ -3336,7 +3346,7 @@ app.get("/api/hotel-rates", async (req, res) => {
   }
   const nights = Math.max(1, Math.round((new Date(checkout) - new Date(checkin)) / 86400000));
   try {
-    const ratesList = await liteRatesCall([hotelId], checkin, checkout);
+    const ratesList = await liteRatesCall([hotelId], checkin, checkout, currency);
     const acc = { prices: {}, roomPrices: {}, roomNames: {}, offerIds: {}, roomFreeCancel: {}, hotelFreeCancel: {} };
     const stats = mergeLiteRatesIntoMaps(ratesList, nights, acc);
     const roomCount = acc.roomPrices[hotelId] ? Object.keys(acc.roomPrices[hotelId]).length : 0;
@@ -3349,7 +3359,7 @@ app.get("/api/hotel-rates", async (req, res) => {
       offerIds:      acc.offerIds[hotelId] ?? {},
       roomFreeCancel: acc.roomFreeCancel[hotelId] ?? {},
       hotelFreeCancel: acc.hotelFreeCancel[hotelId] ?? false,
-      currency:      "EUR",
+      currency,
       nights,
     });
   } catch (e) {

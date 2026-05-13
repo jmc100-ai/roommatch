@@ -103,6 +103,44 @@
     }
     .tnl:hover { color: var(--text); background: rgba(255,255,255,.05); }
     .topnav-right { margin-left: auto; display: flex; align-items: center; gap: 12px; flex-shrink: 0; }
+    .topnav-currency {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      flex-shrink: 0;
+    }
+    .topnav-currency-label {
+      font-size: 10px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--muted);
+      font-weight: 500;
+      white-space: nowrap;
+    }
+    .topnav-currency-select {
+      appearance: none;
+      -webkit-appearance: none;
+      font-family: 'DM Sans', sans-serif;
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--text);
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      border-radius: 8px;
+      padding: 5px 28px 5px 10px;
+      cursor: pointer;
+      min-width: 76px;
+      background-color: rgba(255, 255, 255, 0.06);
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath fill='%23a8a4a0' d='M0 0l5 6 5-6z'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 9px center;
+    }
+    .topnav-currency-select:hover {
+      border-color: rgba(201, 169, 110, 0.4);
+    }
+    .topnav-currency-select:focus-visible {
+      outline: 2px solid rgba(201, 169, 110, 0.55);
+      outline-offset: 2px;
+    }
     .topnav-beta {
       font-size: 10px;
       letter-spacing: .1em;
@@ -153,6 +191,12 @@
         order: 2;
         margin-left: 0;
         flex-shrink: 0;
+      }
+      .topnav-currency-label {
+        display: none;
+      }
+      .topnav-currency {
+        gap: 0;
       }
       .topnav-links {
         order: 10;
@@ -909,39 +953,8 @@
       padding: 5px 7px 0 7px;
       background: #070707;
     }
-    .hotel-hero-badge-wrap {
-      position: absolute;
-      z-index: 5;
-      top: calc(5px + 10px);
-      right: calc(7px + 10px);
-      left: auto;
-      pointer-events: none;
-      max-width: min(58%, 340px);
-      text-align: right;
-    }
-    .hotel-hero-badge-wrap:empty { display: none; }
-    .hotel-hero-badge-wrap .hotel-match-badge {
-      backdrop-filter: blur(10px);
-      -webkit-backdrop-filter: blur(10px);
-      background: rgba(10, 9, 7, 0.78);
-      border-color: rgba(201, 169, 110, 0.5);
-      box-shadow: 0 4px 18px rgba(0, 0, 0, 0.45);
-    }
-    .hotel-hero-badge-wrap .hotel-match-badge--low {
-      background: rgba(10, 9, 7, 0.72);
-    }
 
-    /* ── BOOP v4 — Twin/triple vibe pills on hero (top-right) ─────────────── */
-    .hotel-hero-badge-triplet { pointer-events:none; }
-    .vibe-triplet {
-      display:flex; gap:6px; pointer-events:auto; justify-content:flex-end; flex-wrap:wrap;
-      backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
-      background: rgba(10, 9, 7, 0.72);
-      border:1px solid rgba(201,169,110,.35);
-      border-radius:100px;
-      padding:4px 4px;
-      box-shadow: 0 4px 18px rgba(0,0,0,0.45);
-    }
+    /* Shared pill look — hotel vibe % chip in card header reuses these tiers */
     .vibe-pill {
       display:inline-flex; align-items:center; gap:4px;
       padding:4px 10px;
@@ -1888,12 +1901,6 @@
     .hotel-hero.hero-2 .hotel-hero-img:first-child { grid-row: 1; }
     @media(max-width:640px){
       .hotel-hero-wrap { padding: 4px 5px 0 5px; }
-      .hotel-hero-badge-wrap {
-        top: calc(4px + 8px);
-        right: calc(5px + 8px);
-        left: auto;
-        max-width: min(62%, 300px);
-      }
       /* Swipeable full-width slides (3 photos); desktop grid unchanged above */
       .hotel-hero,
       .hotel-hero.hero-1,
@@ -1935,7 +1942,25 @@
     }
     .hotel-header-left { min-width: 0; display: flex; flex-direction: column; gap: 5px; flex: 1; }
     .hotel-header-right { display: flex; flex-direction: column; align-items: flex-end; gap: 9px; flex-shrink: 0; }
-    .hotel-name-row { display: flex; align-items: center; gap: 10px; min-width: 0; }
+    .hotel-name-row {
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 8px 10px;
+      min-width: 0;
+    }
+    .hotel-name-row .hotel-hotelvibe-chip--hidden {
+      display: none !important;
+    }
+    .hotel-name-row .hotel-hotelvibe-chip.vibe-pill {
+      flex-shrink: 0;
+      pointer-events: none;
+      padding: 3px 9px;
+      font-size: 10px;
+    }
+    .hotel-name-row .hotel-hotelvibe-chip.vibe-pill b {
+      font-size: 11px;
+    }
     .hotel-name {
       font-family: 'Cormorant Garamond', serif; font-size: 24px; font-weight: 600;
       color: #f7f4ee; letter-spacing: 0.01em;
@@ -3137,26 +3162,6 @@
       box-sizing:border-box;
       position:relative;
     }
-    /* Gold hairline between dates row and recent city chips — slightly narrower than city-box */
-    .city-dates::after {
-      content:'';
-      display:block;
-      width:calc(100% - 44px);
-      height:1px;
-      margin:16px auto 0;
-      border-radius:1px;
-      background:linear-gradient(
-        90deg,
-        transparent,
-        rgba(201,169,110,.22) 12%,
-        rgba(201,169,110,.42) 50%,
-        rgba(201,169,110,.22) 88%,
-        transparent
-      );
-    }
-    @media (max-width:640px) {
-      .city-dates::after { width:calc(100% - 32px); }
-    }
     @media (min-width:641px) {
       .city-dates { max-width:598px; }
     }
@@ -3889,8 +3894,16 @@
     }
     /* Inline variant used on the must-haves screen (above chip list) */
     .boop-deal-freetext--inline {
-      margin-top:0;
       margin-bottom:14px;
+    }
+    /* Space below Find hotels → before Anything else? */
+    .boop-wrap--deal .boop-deal-freetext--inline {
+      margin-top: 18px;
+    }
+    @media (max-width: 760px) {
+      .boop-wrap--deal .boop-deal-freetext--inline {
+        margin-top: 28px;
+      }
     }
     .boop-deal-freetext-sub {
       font-size:12px;
