@@ -1275,7 +1275,34 @@ All others already exist.
 
 ---
 
+## Neighbourhood “Green Streets” scoring (May 2026)
+
+Per-hood **vibe_elements** (including **greenery**) are computed in `scripts/neighborhood-vibe-data.js` and refreshed by `recomputeNeighborhoodVibes` in `scripts/neighborhood-generator.js` (`POST /api/backfill-neighborhood-vibes`).
+
+### Street-scale trees vs raw OSM
+
+- Overpass still counts all `natural=tree` nodes as **`trees`** (raw).
+- **`trees_street`**: same trees, minus any whose coordinates fall **inside** a large green polygon from the same green-area Overpass fetch (parks, `natural=wood`, `landuse=forest`, etc.) with area ≥ **`MIN_GREEN_AREA_SQ_M`** (2000 m²). Relation members use a smaller floor (`max(500, 0.25 × minSqM)`) when the relation’s total area clears the bar.
+- **Greenery scoring** (cap, `poiCountToScore`, city-wide p90 ceiling) uses **`trees_street`**, falling back to **`trees`** only when `trees_street` is absent (legacy `poi_counts` JSON).
+- **`computeCityMaxCounts`** uses the same density source for the `trees` bucket so city normalisation matches what greenery scores.
+
+### Gemini–OSM blend (disagreement-aware)
+
+- `green_spaces` **`lots`**: OSM weight **0.22**; floor so final greenery ≥ `greenAttr + greeneryTag − 10` (stops park-tree noise from beating “lots” hoods).
+- **`some`**: OSM **0.40**; **`minimal`**: OSM **0.50**; unknown → **0.40**.
+- **`catScore`** lowercases string attributes so `Some` / `Lots` map correctly.
+- **`green` tag +6** only when `green_spaces` is `lots` or `some`.
+- **`minimal`**: ceiling `greenAttr + 12` so OSM cannot invent a jungle where Gemini said minimal green.
+
+### Versioning
+
+- Successful vibe recompute sets **`vibe_data_version`** to **`v2`** in `neighborhood-generator.js` (generate + recompute DB update paths).
+
+---
+
 ## Workflow
+
+**Commit and push before neighbourhood backfills:** Any change to `neighborhood-vibe-data.js`, `neighborhood-generator.js`, or related scoring must be **committed and pushed**, and **Render must deploy** that commit, **before** calling `POST /api/backfill-neighborhood-vibes` (or similar). Otherwise the live job runs **old** code and you get misleading results. See `.cursor/rules/push-before-remote-ops.mdc`.
 
 **Trigger indexing (new city or re-index):**
 ```powershell

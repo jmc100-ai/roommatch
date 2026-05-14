@@ -11,6 +11,8 @@ alwaysApply: true
 2. **`git push`** to `origin` (typically `main`) so GitHub matches the worktree.
 3. **Remind the user** that Render (or other hosts) must **deploy** the new commit; DB migrations may already be applied separately.
 
+**Neighbourhood vibe backfills:** Do **not** trigger `POST /api/backfill-neighborhood-vibes` (or rely on its async recompute) until the scoring / Overpass changes above are **committed, pushed, and deployed**. A backfill on Render always runs whatever code that instance loaded at startup.
+
 Do **not** run production API jobs, regeneration scripts, or assume “latest code is live” on Render until the user confirms deploy—or verify the deployed commit if possible.
 
 ## After the user says deploy is done

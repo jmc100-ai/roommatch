@@ -326,12 +326,18 @@ function placeInsideNeighborhoodFence(lat, lng, bbox, polygonRing) {
  *
  * Works identically for any city — no city-specific constants needed.
  */
+function treeCountForDensity(counts) {
+  if (!counts) return 0;
+  if (counts.trees_street != null) return Number(counts.trees_street) || 0;
+  return Number(counts.trees) || 0;
+}
+
 function computeCityMaxCounts(allNeighbourhoodData) {
   const cityMax = {};
   for (const cat of POI_CATEGORIES) {
     const densities = allNeighbourhoodData
       .map(({ counts, areaKm2 }) => {
-        const count = counts?.[cat] || 0;
+        const count = cat === "trees" ? treeCountForDensity(counts) : (counts?.[cat] || 0);
         const area  = areaKm2 && areaKm2 > 0 ? areaKm2 : 1;
         return count / area;
       })
@@ -480,6 +486,46 @@ function countGreenAreasMinSqM(elements, minSqM, polygonRing) {
 }
 
 /**
+ * Large green polygons (parks, woods, forest) for excluding OSM `natural=tree` nodes
+ * that sit in park/forest interiors rather than on walkable streets. No centroid
+ * filter — any qualifying polygon in the expanded bbox can exclude trees inside it.
+ */
+function collectGreenExclusionRings(elements, minSqM) {
+  const rings = [];
+  const minMemberSqM = Math.max(500, minSqM * 0.25);
+
+  const ringToLonCoords = (ring) =>
+    (ring || []).map((p) => ({ lat: p.lat, lon: p.lng })).filter((c) => Number.isFinite(c.lat) && Number.isFinite(c.lon));
+
+  for (const el of elements || []) {
+    const t = el.tags || {};
+    if (!isGreenElement(t)) continue;
+
+    if (el.type === "way" && el.geometry?.length) {
+      const ring = normalizePolygonRing(el.geometry.map((p) => ({ lat: p.lat, lng: p.lon ?? p.lng })));
+      if (ring?.length < 4) continue;
+      const area = polygonAreaSqM(ringToLonCoords(ring));
+      if (area < minSqM) continue;
+      rings.push(ring);
+    } else if (el.type === "relation" && el.members?.length) {
+      let total = 0;
+      const memberRings = [];
+      for (const m of el.members) {
+        if (m.role === "inner" || !m.geometry?.length) continue;
+        const ring = normalizePolygonRing(m.geometry.map((p) => ({ lat: p.lat, lng: p.lon ?? p.lng })));
+        if (ring?.length < 4) continue;
+        const a = polygonAreaSqM(ringToLonCoords(ring));
+        total += a;
+        if (a >= minMemberSqM) memberRings.push(ring);
+      }
+      if (total < minSqM) continue;
+      for (const r of memberRings) rings.push(r);
+    }
+  }
+  return rings;
+}
+
+/**
  * Fetch park/garden/green-space polygons with geometry and filter by area in Node.
  * Falls back to a lightweight "out count" query when the geometry query times out
  * (e.g. for large neighbourhoods like Polanco whose bbox spans several km²).
@@ -487,8 +533,11 @@ function countGreenAreasMinSqM(elements, minSqM, polygonRing) {
  * The Overpass query bbox is expanded by PARK_BBOX_EXPAND_DEG in all directions so
  * parks whose centroid is just outside the original bbox are still returned with full
  * geometry for area + centroid calculation.
+ *
+ * Returns `{ count, exclusionRings }` — rings exclude park/wood tree nodes from
+ * street-scale greenery scoring.
  */
-async function fetchOverpassGreenCount(bbox, minSqM, polygonRing = null) {
+async function fetchOverpassGreenData(bbox, minSqM, polygonRing = null) {
   const { lat_min, lat_max, lon_min, lon_max } = bbox || {};
 
   // Slightly expanded bbox for the Overpass fetch so boundary parks are returned.
@@ -535,7 +584,10 @@ out count;`;
 
   if (res.ok) {
     const data = await res.json();
-    return countGreenAreasMinSqM(data.elements, minSqM, polygonRing);
+    const elements = data.elements || [];
+    const count = countGreenAreasMinSqM(elements, minSqM, polygonRing);
+    const exclusionRings = collectGreenExclusionRings(elements, minSqM);
+    return { count, exclusionRings };
   }
 
   // Geometry query failed — try the lightweight count-only fallback.
@@ -556,7 +608,7 @@ out count;`;
     const total = d?.elements?.[0]?.tags?.total;
     if (total != null) {
       console.warn(`[overpass] count-only fallback returned ${total} (no area filter)`);
-      return parseInt(total, 10);
+      return { count: parseInt(total, 10), exclusionRings: [] };
     }
   }
 
@@ -580,9 +632,14 @@ async function fetchOverpassPOIs(bbox, polygonRing = null) {
   if (lat_min == null) return null;
 
   let parksFiltered = null;   // null = fetch failed → fall back to old park+garden count
+  let exclusionRings = [];
   try {
-    parksFiltered = await fetchOverpassGreenCount(bbox, MIN_GREEN_AREA_SQ_M, polygonRing);
-    console.log(`[overpass] green spaces (≥${MIN_GREEN_AREA_SQ_M} m²): ${parksFiltered}`);
+    const green = await fetchOverpassGreenData(bbox, MIN_GREEN_AREA_SQ_M, polygonRing);
+    parksFiltered = green.count;
+    exclusionRings = green.exclusionRings || [];
+    console.log(
+      `[overpass] green spaces (≥${MIN_GREEN_AREA_SQ_M} m²): ${parksFiltered} | exclusion polygons=${exclusionRings.length}`,
+    );
   } catch (e) {
     console.warn(`[overpass] green count failed (${e.message}); falling back to unfiltered park+garden`);
   }
@@ -590,7 +647,7 @@ async function fetchOverpassPOIs(bbox, polygonRing = null) {
   // Pause between green query and main union — gives Overpass time to recover.
   await new Promise((r) => setTimeout(r, 15000));
 
-  // Main union (no park/garden — those are in fetchOverpassGreenCount).
+  // Main union (no park/garden — those are in fetchOverpassGreenData).
   //
   // Icon spots: captures named attractions, viewpoints, significant monuments,
   // and landmark buildings (cathedrals, palaces, archaeological sites).
@@ -648,6 +705,7 @@ out tags center;`;
     shops: 0,
     icon_spots: 0,
     trees: 0,
+    trees_street: 0,
   };
 
   const polyActive = polygonRing?.length >= 4;
@@ -678,10 +736,21 @@ out tags center;`;
       counts.icon_spots++;
     } else if (t.natural === "tree") {
       counts.trees++;
+      const pt = overpassElementLatLng(el);
+      let inBigGreen = false;
+      if (pt && exclusionRings.length) {
+        for (const ring of exclusionRings) {
+          if (pointInPolygon(pt.lat, pt.lng, ring)) {
+            inBigGreen = true;
+            break;
+          }
+        }
+      }
+      if (pt && !inBigGreen) counts.trees_street++;
     }
   }
 
-  console.log(`[overpass] final counts: parks=${counts.parks ?? "null(failed)"} restaurants=${counts.restaurants} cafes=${counts.cafes} museums=${counts.museums} shops=${counts.shops} icon_spots=${counts.icon_spots} trees=${counts.trees}`);
+  console.log(`[overpass] final counts: parks=${counts.parks ?? "null(failed)"} restaurants=${counts.restaurants} cafes=${counts.cafes} museums=${counts.museums} shops=${counts.shops} icon_spots=${counts.icon_spots} trees=${counts.trees} trees_street=${counts.trees_street}`);
 
   return counts;
 }
@@ -697,7 +766,9 @@ function hasTag(tags, key) {
 }
 
 function catScore(value, map) {
-  return map[value] ?? 50;
+  if (value == null || value === "") return map[""] ?? 50;
+  const k = String(value).trim().toLowerCase();
+  return map[k] ?? 50;
 }
 
 /**
@@ -842,12 +913,11 @@ function computeElementScores(attributes = {}, tags = [], vibeLong = "", poiCoun
   const greenAttr = catScore(attributes.green_spaces, { lots: 88, some: 62, minimal: 35 });
 
   if (hasRealCounts) {
-    // greenery blends OSM tree density (objective) with Gemini green_spaces (holistic).
-    // Even with 0 mapped trees the Gemini attribute provides a floor, so a well-known
-    // leafy neighbourhood isn't penalised in cities with sparse OSM tree coverage.
-    const treesForGreenery = capTreeCountForGreeneryScore(poiCounts.trees || 0, areaKm2);
-    // Normalise capped street-tree signal against a fixed ceiling so one bbox's
-    // park woodlot cannot set the whole city's scale to 100 for everyone else.
+    // Greenery: street-scale OSM trees (park/wood interiors excluded) + Gemini green_spaces,
+    // with OSM weight gated by Gemini so `lots` hoods are not steamrolled by park-tree noise.
+    const streetTreeCount =
+      poiCounts.trees_street != null ? poiCounts.trees_street : (poiCounts.trees || 0);
+    const treesForGreenery = capTreeCountForGreeneryScore(streetTreeCount, areaKm2);
     const treeNormMax = Math.min(cityMaxCounts?.trees || 120, 120);
     const treeScore = poiCountToScore(treesForGreenery, "trees", areaKm2, {
       ...(cityMaxCounts || {}),
@@ -860,16 +930,30 @@ function computeElementScores(attributes = {}, tags = [], vibeLong = "", poiCoun
     // the same green_spaces signal used for greenery when Gemini is not "lots".
     const parksFromPoi = poiCountToScore(poiCounts.parks, "parks", areaKm2, cityMaxCounts);
     let parksBlended = parksFromPoi;
-    const gs = (attributes.green_spaces || "").toLowerCase();
+    const gs = String(attributes.green_spaces || "").trim().toLowerCase();
     if (gs === "some") {
       parksBlended = clamp(Math.round(parksFromPoi * 0.22 + greenAttr * 0.78));
     } else if (gs === "minimal") {
       parksBlended = clamp(Math.round(parksFromPoi * 0.14 + greenAttr * 0.86));
     }
-    const greeneryTag = hasTag(tags, "green") ? 6 : 0;
+    const greenKey = gs === "lots" || gs === "some" || gs === "minimal" ? gs : null;
+    const osmWeightByGreen = { lots: 0.22, some: 0.40, minimal: 0.50 };
+    const wOsm = greenKey ? osmWeightByGreen[greenKey] : 0.40;
+    const wGem = 1 - wOsm;
+    const greeneryTag =
+      (greenKey === "lots" || greenKey === "some") && hasTag(tags, "green") ? 6 : 0;
+
+    let greeneryScore = clamp(Math.round(treeScore * wOsm + greenAttr * wGem + greeneryTag));
+    if (greenKey === "lots") {
+      greeneryScore = Math.max(greeneryScore, clamp(greenAttr + greeneryTag - 10, 0, 100));
+    }
+    if (greenKey === "minimal") {
+      greeneryScore = Math.min(greeneryScore, clamp(greenAttr + 12, 0, 100));
+    }
+
     scores = {
       parks:       parksBlended,
-      greenery:    clamp(Math.round(treeScore * 0.48 + greenAttr * 0.52 + greeneryTag)),
+      greenery:    greeneryScore,
       restaurants: poiCountToScore(poiCounts.restaurants, "restaurants", areaKm2, cityMaxCounts),
       cafes:       poiCountToScore(poiCounts.cafes,       "cafes",       areaKm2, cityMaxCounts),
       museums:     poiCountToScore(poiCounts.museums,     "museums",     areaKm2, cityMaxCounts),
@@ -916,11 +1000,14 @@ function elementFacts(elementKey, score, hotelCount, shopsSubscores = null, poiC
     `${Math.max(4, Math.round((100 - score) / 14))}-${Math.max(8, Math.round((100 - score) / 10))} min walk to larger green spaces`,
     `Morning calm profile: ${Math.max(38, Math.round(score * 0.84))}%`,
   ];
-  if (elementKey === "greenery") return [
-    poiCounts?.trees != null ? `${poiCounts.trees} street trees mapped in the area` : `${score >= 80 ? "Very leafy" : score >= 60 ? "Tree-lined" : "Some tree canopy"} street character`,
-    `Green canopy coverage: ${score}%`,
-    `Summer shade & walkability: ${Math.max(30, Math.round(score * 0.9))}%`,
-  ];
+  if (elementKey === "greenery") {
+    const n = poiCounts?.trees_street != null ? poiCounts.trees_street : poiCounts?.trees;
+    return [
+      n != null ? `${n} street-scale trees mapped in the area (large park & wood interiors excluded)` : `${score >= 80 ? "Very leafy" : score >= 60 ? "Tree-lined" : "Some tree canopy"} street character`,
+      `Green canopy coverage: ${score}%`,
+      `Summer shade & walkability: ${Math.max(30, Math.round(score * 0.9))}%`,
+    ];
+  }
   if (elementKey === "restaurants") return [
     real != null ? `${real} restaurants, bars & eateries` : `${Math.round(score / 8 + hotelCount / 6)} dining venues per km² (estimated)`,
     `${Math.max(3, Math.round(score / 18))}-${Math.max(7, Math.round(score / 11))} min walk to dense food streets`,
