@@ -101,7 +101,23 @@ const FALLBACK_PHOTOS = {
 
 // ── Overpass API ──────────────────────────────────────────────────────────────
 
-const OVERPASS_URL = "https://overpass-api.de/api/interpreter";
+// Round-robin across public mirrors so a single IP block / 406 doesn't stall
+// the whole backfill. Can be overridden with OVERPASS_URL env var.
+const OVERPASS_MIRRORS = process.env.OVERPASS_URL
+  ? [process.env.OVERPASS_URL]
+  : [
+      "https://overpass-api.de/api/interpreter",
+      "https://overpass.kumi.systems/api/interpreter",
+      "https://maps.mail.ru/osm/tools/overpass/api/interpreter",
+    ];
+let _overpassIdx = 0;
+function nextOverpassURL() {
+  const url = OVERPASS_MIRRORS[_overpassIdx % OVERPASS_MIRRORS.length];
+  _overpassIdx++;
+  return url;
+}
+// Legacy constant kept so any direct references elsewhere still compile.
+const OVERPASS_URL = OVERPASS_MIRRORS[0];
 
 /** Drop micro-polygons smaller than this.
  * 2000 m² ≈ 45 m × 45 m — eliminates boulevard median strips and tiny
@@ -568,18 +584,20 @@ out geom;`;
 );
 out count;`;
 
-  const doFetch = (query, timeoutMs) => fetch(OVERPASS_URL, {
+  const doFetch = (query, timeoutMs, url) => fetch(url || nextOverpassURL(), {
     method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    headers: { "Content-Type": "application/x-www-form-urlencoded", "User-Agent": "TravelBoop/1.0 (neighbourhood-vibe-data)" },
     body: `data=${encodeURIComponent(query)}`,
     signal: AbortSignal.timeout(timeoutMs),
   });
 
-  // Try geometry query with a single 20s back-off retry on rate-limit or timeout.
+  // Try geometry query; on 406/429/504 retry once on the next mirror.
   let res = await doFetch(qGeom, 45000);
-  if (res.status === 429 || res.status === 504 || res.status === 429) {
-    await new Promise((r) => setTimeout(r, 20_000));
-    res = await doFetch(qGeom, 45000);
+  if (res.status === 429 || res.status === 504 || res.status === 406) {
+    const nextUrl = nextOverpassURL();
+    console.warn(`[overpass] green query ${res.status} on primary mirror — retrying on ${nextUrl}`);
+    await new Promise((r) => setTimeout(r, 5_000));
+    res = await doFetch(qGeom, 45000, nextUrl);
   }
 
   if (res.ok) {
@@ -679,19 +697,21 @@ async function fetchOverpassPOIs(bbox, polygonRing = null) {
 );
 out tags center;`;
 
-  const doFetch = () => fetch(OVERPASS_URL, {
+  const doFetch = (url) => fetch(url || nextOverpassURL(), {
     method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    headers: { "Content-Type": "application/x-www-form-urlencoded", "User-Agent": "TravelBoop/1.0 (neighbourhood-vibe-data)" },
     body: `data=${encodeURIComponent(q)}`,
     signal: AbortSignal.timeout(30000),
   });
 
   let res = await doFetch();
 
-  // Single retry after back-off on rate-limit or gateway timeout
-  if (res.status === 429 || res.status === 504) {
-    await new Promise((r) => setTimeout(r, 10000));
-    res = await doFetch();
+  // On 406/429/504 retry once on the next mirror after a short back-off.
+  if (res.status === 429 || res.status === 504 || res.status === 406) {
+    const nextUrl = nextOverpassURL();
+    console.warn(`[overpass] POI query ${res.status} on primary mirror — retrying on ${nextUrl}`);
+    await new Promise((r) => setTimeout(r, 5000));
+    res = await doFetch(nextUrl);
   }
 
   if (!res.ok) throw new Error(`Overpass API ${res.status}`);
