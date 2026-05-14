@@ -1294,9 +1294,7 @@ Per-hood **vibe_elements** (including **greenery**) are computed in `scripts/nei
 - **`green` tag +6** only when `green_spaces` is `lots` or `some`.
 - **`minimal`**: ceiling `greenAttr + 12` so OSM cannot invent a jungle where Gemini said minimal green.
 
-### Versioning
-
-- Successful vibe recompute sets **`vibe_data_version`** to **`v2`** in `neighborhood-generator.js` (generate + recompute DB update paths).
+The **`vibe_data_version`** column remains **`v1`** for all rows (schema default). It is not used for branching logic; use **`vibe_last_computed_at`** and **`attributes.poi_counts`** (e.g. presence of `trees_street`) to reason about payload age.
 
 ---
 

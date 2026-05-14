@@ -895,13 +895,13 @@ async function generateNeighborhoods(city, db, geminiKey, unsplashKey, googlePla
       });
       row.vibe_elements = vibeData.vibeElements;
       row.vibe_photos   = sanitizeVibePhotos(vibeData.vibePhotos, row.name);
-      row.vibe_data_version    = "v2";
+      row.vibe_data_version    = "v1";
       row.vibe_last_computed_at = new Date().toISOString();
     } catch (e) {
       console.warn(`[neighborhoods] vibe data generation failed for ${city}/${row.name}: ${e.message}`);
       row.vibe_elements = {};
       row.vibe_photos   = {};
-      row.vibe_data_version    = "v2";
+      row.vibe_data_version    = "v1";
       row.vibe_last_computed_at = new Date().toISOString();
     }
 
@@ -1179,7 +1179,7 @@ async function recomputeNeighborhoodVibes(city, db, unsplashKey, googlePlacesKey
     const updatePayload = {
       vibe_elements: vibeData.vibeElements,
       vibe_photos:   mergedVibePhotos,
-      vibe_data_version:    "v2",
+      vibe_data_version:    "v1",
       vibe_last_computed_at: new Date().toISOString(),
       photo_url:    heroPick?.url    || row.photo_url || null,
       photo_credit: heroPick ? packPhotoCredit(heroPick) : (row.photo_credit || null),
