@@ -21,6 +21,13 @@ const {
   isParkLikePlaceName,
 } = require("./neighborhood-vibe-data");
 
+try {
+  // One line per process — confirms which file Node resolved (stale deploy / duplicate path).
+  console.log(`[neighborhood-generator] neighborhood-vibe-data → ${require.resolve("./neighborhood-vibe-data")}`);
+} catch (e) {
+  console.warn("[neighborhood-generator] require.resolve(neighborhood-vibe-data) failed:", e.message);
+}
+
 async function triggerUnsplashDownload(unsplashKey, photo) {
   const loc = photo?.links?.download_location;
   if (!unsplashKey || !loc) return;
@@ -1074,6 +1081,15 @@ async function recomputeNeighborhoodVibes(city, db, unsplashKey, googlePlacesKey
           console.warn(`[recompute] ${row.name}: green query failed — keeping stored parks=${oldParks ?? "none"}`);
         }
         console.log(`[recompute] Overpass ${row.name}: cafes=${fetched.cafes} restaurants=${fetched.restaurants} parks=${fetched.parks} shops=${fetched.shops} museums=${fetched.museums} icon_spots=${fetched.icon_spots}`);
+        const keys = Object.keys(fetched);
+        console.log(
+          `[recompute] ${row.name}: poi_counts keys=[${keys.join(",")}] trees=${fetched.trees} trees_street=${fetched.trees_street}`,
+        );
+        if (!("trees_street" in fetched) && typeof fetched.trees === "number") {
+          console.warn(
+            `[recompute] ${row.name}: fetchOverpassPOIs returned trees= but no trees_street key — bundle may be stale or wrong module`,
+          );
+        }
         const updatedAttrs = { ...(row.attributes || {}), poi_counts: fetched };
         await db.from("neighborhoods").update({ attributes: updatedAttrs }).eq("id", row.id);
         row.attributes = updatedAttrs;
