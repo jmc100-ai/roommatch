@@ -688,6 +688,11 @@
       border: 1px solid rgba(143, 212, 168, 0.35); border-radius: 4px; padding: 2px 6px;
       vertical-align: middle;
     }
+    .hotel-fc-badge {
+      font-size: 10px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase;
+      color: #8fd4a8; border: 1px solid rgba(143, 212, 168, 0.35); border-radius: 4px;
+      padding: 2px 6px; white-space: nowrap; margin-top: 3px;
+    }
     @keyframes spin { to { transform: rotate(360deg); } }
 
     /* ── Availability filter toggle ── */

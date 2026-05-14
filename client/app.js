@@ -74,6 +74,9 @@
   let _vibeTourPending = false;
   let _vibeTourVisible = false;
   let _vibeTourLastHotels = [];
+  /** When dates are set, tour opening is deferred until prices load so we pick
+   *  the correct available hotel instead of the raw semantic-match top hotel. */
+  let _vibeTourAwaitingPrices = false;
   let _vibeTourScene = 0;
   let _vibeTourSceneCount = 3;
   let _vibeTourTimer = null;
@@ -4756,16 +4759,21 @@
     syncSortDirectionIndicators();
     if (shouldOpenVibeTour) {
       if (resPre) resPre.classList.add('no-anim');
-      const sortedHotels = getSortedHotelsForDisplay();
-      const topForTour = sortedHotels[0] || hotels[0];
-      // Pin the tour hero to position 0 of the eventual results render so the
-      // card stays #1 even if rates arrive mid-tour and the price-aware sort
-      // (Match+Price with non-neutral pm) would otherwise promote a different
-      // hotel above it. Cleared in startVectorSearch (new search) and
-      // setSortBy (user-initiated sort change).
-      _vibeTourLeadId = topForTour?.id != null ? String(topForTour.id) : null;
       updateFreeCancelHint();
-      setTimeout(() => openVibeTourWithStreetView(topForTour ? [topForTour] : hotels), 120);
+      if (hasDates && _ratesArrivalPromise) {
+        // Dates are set: wait for prices before choosing the vibe-tour hotel so
+        // we always show an available (and free-cancel-if-required) hotel.
+        // Results remain deferred via _deferResultsRenderUntilTourClose.
+        _vibeTourAwaitingPrices = true;
+        _vibeTourLeadId = null;
+        _openVibeTourAfterPrices(_ratesReqId, deduped);
+        return;
+      }
+      // No dates: open immediately with the top semantic-match hotel.
+      const sortedHotels = getSortedHotelsForDisplay();
+      const topForTour = sortedHotels[0] || deduped[0];
+      _vibeTourLeadId = topForTour?.id != null ? String(topForTour.id) : null;
+      setTimeout(() => openVibeTourWithStreetView(topForTour ? [topForTour] : deduped), 120);
       return;
     }
     _vibeTourLeadId = null;
@@ -4862,6 +4870,10 @@
       const noteEl = document.getElementById(`hotel-price-note-${h.id}`);
       if (noteEl) {
         noteEl.textContent = h.price != null ? 'Lowest available' : 'No rates found';
+      }
+      const fcBadgeEl = document.getElementById(`hotel-fc-badge-${h.id}`);
+      if (fcBadgeEl) {
+        fcBadgeEl.style.display = h.hotelFreeCancel ? '' : 'none';
       }
 
       // --- row view price (list mode) ---
@@ -5998,6 +6010,38 @@
     startVibeTourAutoAdvance();
   }
 
+  /** Deferred vibe-tour opener used when dates are set.
+   *  Awaits price data, then picks the top hotel that passes all active filters
+   *  (availability, free-cancel) before opening the tour.  */
+  async function _openVibeTourAfterPrices(capturedReqId, fallbackHotels) {
+    try {
+      await Promise.race([
+        _ratesArrivalPromise || Promise.resolve(),
+        new Promise(r => setTimeout(r, RATES_GATE_TIMEOUT_MS)),
+      ]);
+    } catch (_) {}
+
+    _vibeTourAwaitingPrices = false;
+
+    // Stale-search guard: a new search started while we were waiting.
+    if (capturedReqId !== _ratesReqId) return;
+    // Tour was already dismissed (e.g. user navigated away).
+    if (!_deferResultsRenderUntilTourClose) return;
+
+    // Prices are now in; pick the top hotel that passes all active filters.
+    const sortedHotels = getSortedHotelsForDisplay();
+    const topForTour = sortedHotels[0] || fallbackHotels[0];
+    _vibeTourLeadId = topForTour?.id != null ? String(topForTour.id) : null;
+
+    if (topForTour) {
+      openVibeTourWithStreetView([topForTour]);
+    } else {
+      // No hotels pass filters (e.g. no availability at all) — skip tour.
+      _deferResultsRenderUntilTourClose = false;
+      revealResultsWhenReady();
+    }
+  }
+
   async function openVibeTourWithStreetView(hotels) {
     if (!hotels?.length) return;
     const hotelId = hotels[0]?.id;
@@ -6060,6 +6104,7 @@
     _vibeTourPseudoFullscreen = false;
     _vibeTourVisible = false;
     _vibeTourPending = false;
+    _vibeTourAwaitingPrices = false;
     if (_vibeTourTimer) clearTimeout(_vibeTourTimer);
     _vibeTourTimer = null;
     if (_vibeTourLoadWaitTimer) clearTimeout(_vibeTourLoadWaitTimer);
@@ -6365,8 +6410,9 @@
   function hotelPassesAvailFilter(h) {
     // Always include the vibe-tour lead hotel so the user can see it in results
     // even if LiteAPI didn't return rates for their selected dates. Without this,
-    // the tour shows hotel X but the filtered list silently hides it, confusing
-    // the user. It renders with "No rates found" — visible but clearly unavailable.
+    // the tour shows hotel X but the filtered list silently hides it entirely.
+    // The pin logic (getSortedHotelsForDisplay) will NOT promote it to #1 when
+    // it has no rates — it renders wherever the sort naturally places it.
     if (_vibeTourLeadId && String(h.id) === _vibeTourLeadId) return true;
     if (!(_showAvailOnly && _hasDateSearch && _pricesLoaded)) return true;
     // Pass when the card has at least one bookable row. Since rate-only
@@ -6384,6 +6430,11 @@
 
   function hotelPassesFreeCancelFilter(h) {
     if (!_requireFreeCancel) return true;
+    // Always include the vibe-tour lead hotel so it stays visible even if it
+    // lacks free-cancel rates. Without this, the tour shows hotel X but the
+    // filtered list silently removes it (pin idx=-1), and a lower-ranked hotel
+    // with free cancel floats to #1. Mirrors the same exception in hotelPassesAvailFilter.
+    if (_vibeTourLeadId && String(h.id) === _vibeTourLeadId) return true;
     if (!_hasDateSearch || !_pricesLoaded) return true;
     if (h.hotelFreeCancel === true) return true;
     const rfc = h.roomFreeCancel;
@@ -6616,11 +6667,24 @@
     // filtered/sorted set; if it has been filtered out (e.g. nbhd or property
     // filter), we let the natural sort win. Pin is cleared by setSortBy and at
     // the start of every new search.
+    //
+    // Exception: do NOT pin to #1 when the hotel has no rates and the
+    // availability filter is active. The avail-filter exception keeps it
+    // visible in the list so the user can find it, but it should not be
+    // forced above bookable hotels — that would show "No rates found" at #1.
     if (_vibeTourLeadId) {
       const idx = hotels.findIndex((h) => h && String(h.id) === _vibeTourLeadId);
       if (idx > 0) {
-        const lead = hotels.splice(idx, 1)[0];
-        hotels.unshift(lead);
+        const lead = hotels[idx];
+        const availFilterActive = _showAvailOnly && _hasDateSearch && _pricesLoaded;
+        const leadHasRates = lead && (
+          lead.price != null ||
+          (lead.roomPrices && Object.keys(lead.roomPrices).length > 0)
+        );
+        if (!availFilterActive || leadHasRates) {
+          hotels.splice(idx, 1);
+          hotels.unshift(lead);
+        }
       }
     }
     return hotels;
@@ -6756,10 +6820,20 @@
     let othersSection = '';
     const totalOthers = others.length + extraIds.length;
     if (totalOthers > 0) {
-      // Build a unified entries array, then split into visible/hidden.
+      // Build a unified entries array: priced indexed rooms first, then extra
+      // rate-only rows (have prices but no indexed photos), then unpriced indexed
+      // rooms. This ensures the user always sees bookable options in the first
+      // COMPACT_SHOW slots even when most indexed rooms lack a price match.
       const entries = [];
-      others.forEach((rt, i) => entries.push({ kind: 'indexed', rt, indexedIdx: i }));
+      const pricedIndexed = [];
+      const unpricedIndexed = [];
+      others.forEach((rt, i) => {
+        const hasP = rt.roomTypeId != null && roomPrices?.[rt.roomTypeId] != null;
+        (hasP ? pricedIndexed : unpricedIndexed).push({ kind: 'indexed', rt, indexedIdx: i });
+      });
+      pricedIndexed.forEach(e => entries.push(e));
       extraIds.forEach(id => entries.push({ kind: 'rate', id }));
+      unpricedIndexed.forEach(e => entries.push(e));
 
       const visibleEntries = entries.slice(0, COMPACT_SHOW);
       const hiddenEntries  = entries.slice(COMPACT_SHOW);
@@ -7912,6 +7986,7 @@
               <div class="hotel-price">
                 <span class="price-value" id="hotel-price-${h.id}">${priceDisplay}</span>
                 <span class="price-note" id="hotel-price-note-${h.id}">${priceNote}</span>
+                <span class="hotel-fc-badge" id="hotel-fc-badge-${h.id}" style="display:none">✓ Free cancel</span>
               </div>
               <button type="button" class="hotel-tour-link" data-hotel-id="${hotelIdAttr}" onclick="openVibeTourForHotel(this.dataset.hotelId)">Vibe tour</button>
               <button type="button" class="hotel-details-btn" data-hotel-id="${hotelIdAttr}" onclick="openHotelDetailPage(this.dataset.hotelId)">Details</button>
@@ -7940,7 +8015,10 @@
     const isUnavail = false;
     const rid = rt.roomTypeId;
     const fcMap = hotel?.roomFreeCancel;
-    const showFc = hasPrice && fcMap && (fcMap[rid] === true || fcMap[String(rid)] === true);
+    const showFc = hasPrice && (
+      (fcMap && (fcMap[rid] === true || fcMap[String(rid)] === true)) ||
+      hotel?.hotelFreeCancel === true
+    );
     const fcBadge = showFc ? '<span class="room-fc-badge">Free cancel</span>' : '';
 
     const photos  = rt.photos || [];
@@ -7953,8 +8031,12 @@
         ? `<span class="room-unavail-badge">not available</span>`
         : '';
 
-    // Per-room Book button: show when there's a price (has offerId → direct checkout; else hotel page)
-    const roomBookUrl = hasPrice && hotel ? buildBookUrl(hotel, rt.roomTypeId) : null;
+    // Featured room always gets a Book button (hotel page with dates if no specific
+    // room price). Compact rows get one only when there's a matched price so the
+    // collapsed list row isn't cluttered with buttons on unpriced rooms.
+    const roomBookUrl = (variant === 'featured' || hasPrice) && hotel
+      ? buildBookUrl(hotel, rt.roomTypeId)
+      : null;
     const roomBookHTML = roomBookUrl
       ? `<a class="book-btn book-btn--room" href="${roomBookUrl}" target="_blank" rel="noopener" onclick="event.stopPropagation()">Book →</a>`
       : '';
@@ -7964,8 +8046,7 @@
     const fromRoom = Math.round(Number(rt.score) || 0) || Math.round(Number(hotel?.vectorScore) || 0);
     const vibeOverlay = fromRoom > 0
       ? `<span class="room-featured-vibe-badge">Room vibe - ${fromRoom}% match</span>`
-      : (isTopMatch && _currentSort === 'match'
-          ? `<span class="room-featured-vibe-badge room-featured-vibe-badge--low">Room vibe - browse</span>` : '');
+      : `<span class="room-featured-vibe-badge room-featured-vibe-badge--low">Room vibe - browse</span>`;
 
       const toShow = photos.length > 0 ? photos.slice(0, 10) : [null];
       const stripCells = toShow.map((url, pi) => {
@@ -8035,6 +8116,7 @@
             ${scoreBadge}
             ${priceHTML}
           </div>
+          ${roomBookHTML}
           <span class="chevron">▼</span>
         </div>
         <div class="photo-strip-wrap">
