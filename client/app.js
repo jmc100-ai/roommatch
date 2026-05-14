@@ -210,6 +210,7 @@
     return JSON.stringify({
       prefs,
       dealbreakers: p?.dealbreakers || [],
+      nbhdScene: p?.answers?.nbhdScene || null,
     });
   }
 
@@ -542,7 +543,7 @@
         { id:'buzz_central', emoji:'🌆', label:'Icons & energy', title:'Icons & energy', note:'Sights, crowds, movement — stay in the thick of it.', image:'images/wizard/vibrant-busy.png', weights:{ nightlife:14, central:22, iconic:10, walkability:12, calm:-8, local:-4 } },
         { id:'calm_central', emoji:'🏙️', label:'Calm & central', title:'Calm & central', note:'Easy access without a party outside your window.', image:'images/wizard/nbhd-central.png', weights:{ calm:18, central:20, iconic:10, walkability:8, nightlife:-8, green:6, local:4 } },
         { id:'hip_local', emoji:'🧭', label:'Hip & local', title:'Hip & local', note:'Neighbourhood buzz — cafés and small shops away from postcard corners.', image:'images/wizard/nbhd-trendy.png', weights:{ nightlife:16, local:24, cafes:14, restaurants:14, walkability:12, central:-14, calm:-2, iconic:-18, touristy:-18, luxury:-6 } },
-        { id:'leafy_local', emoji:'🌿', label:'Leafy & residential', title:'Leafy & residential', note:'Quiet streets, trees, everyday local pace.', image:'images/wizard/quiet-residential.png', weights:{ calm:18, green:10, local:20, nightlife:-10, cafes:6 } },
+        { id:'leafy_local', emoji:'🌿', label:'Leafy & residential', title:'Leafy & residential', note:'Quiet streets, trees, everyday local pace.', image:'images/wizard/quiet-residential.png', weights:{ calm:18, green:22, local:12, nightlife:-10, cafes:6 } },
         { id:'scenic_open', emoji:'🌊', label:'Open & scenic', title:'Open & scenic', note:'Views, water or skyline — room to breathe.', image:'images/wizard/nbhd-scenic-open.png', weights:{ calm:14, green:12, iconic:16, walkability:8, central:6, local:6, nightlife:-10 } },
       ]
     },
@@ -2319,12 +2320,16 @@
     return raw;
   }
 
-  function deriveNbhdSignals(h) {
+  /** @param {string|null|undefined} nbhdScene When `leafy_local`, green axis favours greenery over parks (sync lib/nbhd-vibe-rank.js). */
+  function deriveNbhdSignals(h, nbhdScene) {
     const e = h.vibe_elements || {};
     const v = k => Number(e[k]?.score || 0);
     const vp = () => effectiveNbhdParksScore(h);
     const tags = (h.tags || []).map(t => String(t).toLowerCase());
     const txt = `${h.vibe_short || ''} ${h.vibe_long || ''}`.toLowerCase();
+    const leafyGreen = nbhdScene === 'leafy_local';
+    const greenParkW = leafyGreen ? 0.18 : 0.38;
+    const greenStreetW = leafyGreen ? 0.76 : 0.52;
     const poi = h.attributes?.poi_counts || {};
     const cafeCount = Number(poi.cafes || 0);
     const restaurantCount = Number(poi.restaurants || 0);
@@ -2335,8 +2340,8 @@
     const s = {
       walkability: Math.round((v('street_feel') * 0.55) + (v('cafes') * 0.20) + (vp() * 0.25)),
       // Boulevards can max OSM "parks" from median strips; green streets uses tree OSM.
-      // Blend so Boop "leafy / quiet" does not treat a lively corridor as a park haven.
-      green:       Math.round(vp() * 0.38 + v('greenery') * 0.52 + natureBonus),
+      // For "Leafy & residential" tilt toward greenery vs park polygons (lib/nbhd-vibe-rank.js).
+      green:       Math.round(vp() * greenParkW + v('greenery') * greenStreetW + natureBonus),
       cafes:       Math.round((v('cafes') * 0.45) + (cafeDensity * 0.55) + (tags.includes('foodie') ? 6 : 0)),
       restaurants: Math.round((v('restaurants') * 0.45) + (restaurantDensity * 0.55) + (tags.includes('foodie') ? 6 : 0)),
       foodie:      Math.round((v('restaurants') * 0.65) + (v('cafes') * 0.35)),
@@ -2356,10 +2361,10 @@
     return s;
   }
 
-  function normalizeSignalsByCity(hoods) {
+  function normalizeSignalsByCity(hoods, nbhdScene) {
     if (!hoods?.length) return {};
     const dims = ['walkability','green','cafes','restaurants','foodie','culture','shopping','nightlife','calm','central','local','iconic','luxury','touristy'];
-    const raw = hoods.map(h => ({ name: h.name, s: deriveNbhdSignals(h) }));
+    const raw = hoods.map(h => ({ name: h.name, s: deriveNbhdSignals(h, nbhdScene) }));
     const minMax = {};
     dims.forEach(d => {
       const vals = raw.map(r => r.s[d]);
@@ -2379,7 +2384,8 @@
 
   function computeBoopMatch(h, profile, normByName) {
     if (!profile || !profile.prefs) return null;
-    const sig = normByName[h.name] || deriveNbhdSignals(h);
+    const scene = profile?.answers?.nbhdScene || null;
+    const sig = normByName[h.name] || deriveNbhdSignals(h, scene);
     const prefs = profile.prefs || {};
 
     // Weighted fit in [0..1]: positive weights want higher signal, negative weights want lower.
@@ -2412,7 +2418,8 @@
     const profile = getEffectiveBoopProfileForScoring();
     const mergedPrefs = mergeBoopFreetextIntoPrefs(profile?.prefs || {}, profile?.freetext || '');
     const profileForMatch = { ...profile, prefs: mergedPrefs };
-    const norm = normalizeSignalsByCity(hoods);
+    const nbhdScene = profile?.answers?.nbhdScene || null;
+    const norm = normalizeSignalsByCity(hoods, nbhdScene);
     const ranked = [...hoods].map(h => ({ ...h, _boop_raw: computeBoopMatch(h, profileForMatch, norm) }));
 
     // City-relative spread: convert raw fits into a readable 45..95 range.
