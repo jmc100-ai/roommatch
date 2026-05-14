@@ -806,6 +806,22 @@ function poiCountToScore(count, category, areaKm2 = null, cityMaxDensities = nul
 }
 
 /**
+ * OSM `natural=tree` counts every node in woods and large parks, so a bbox that
+ * clips Chapultepec or a big median forest (e.g. Colonia Juárez next to Reforma)
+ * gets thousands of "trees" unrelated to walkable street canopy. Cap total trees
+ * used for **greenery** scoring to ~45/km² — still very leafy streets, above that
+ * is almost always non-street green infrastructure in dense cities.
+ */
+function capTreeCountForGreeneryScore(treeCount, areaKm2) {
+  const n = Number(treeCount || 0);
+  if (n <= 0) return 0;
+  if (!areaKm2 || areaKm2 <= 0) return n;
+  const maxTotal = Math.round(areaKm2 * 45);
+  const cap = Math.max(80, maxTotal);
+  return Math.min(n, cap);
+}
+
+/**
  * computeElementScores — returns per-element 0–100 scores.
  *
  * When poiCounts + cityMaxCounts are provided (real Overpass data), scores for
@@ -829,7 +845,14 @@ function computeElementScores(attributes = {}, tags = [], vibeLong = "", poiCoun
     // greenery blends OSM tree density (objective) with Gemini green_spaces (holistic).
     // Even with 0 mapped trees the Gemini attribute provides a floor, so a well-known
     // leafy neighbourhood isn't penalised in cities with sparse OSM tree coverage.
-    const treeScore = poiCountToScore(poiCounts.trees || 0, "trees", areaKm2, cityMaxCounts);
+    const treesForGreenery = capTreeCountForGreeneryScore(poiCounts.trees || 0, areaKm2);
+    // Normalise capped street-tree signal against a fixed ceiling so one bbox's
+    // park woodlot cannot set the whole city's scale to 100 for everyone else.
+    const treeNormMax = Math.min(cityMaxCounts?.trees || 120, 120);
+    const treeScore = poiCountToScore(treesForGreenery, "trees", areaKm2, {
+      ...(cityMaxCounts || {}),
+      trees: treeNormMax,
+    });
     // Parks from OSM alone can hit 100% on long, thin bboxes (e.g. Paseo de la Reforma):
     // many separate leisure=park / garden polygons (medians, traffic islands) inflate
     // density while Gemini still says green_spaces is only "some" and the street is
@@ -843,9 +866,10 @@ function computeElementScores(attributes = {}, tags = [], vibeLong = "", poiCoun
     } else if (gs === "minimal") {
       parksBlended = clamp(Math.round(parksFromPoi * 0.14 + greenAttr * 0.86));
     }
+    const greeneryTag = hasTag(tags, "green") ? 6 : 0;
     scores = {
       parks:       parksBlended,
-      greenery:    clamp(Math.round(treeScore * 0.55 + greenAttr * 0.45)),
+      greenery:    clamp(Math.round(treeScore * 0.48 + greenAttr * 0.52 + greeneryTag)),
       restaurants: poiCountToScore(poiCounts.restaurants, "restaurants", areaKm2, cityMaxCounts),
       cafes:       poiCountToScore(poiCounts.cafes,       "cafes",       areaKm2, cityMaxCounts),
       museums:     poiCountToScore(poiCounts.museums,     "museums",     areaKm2, cityMaxCounts),
