@@ -864,6 +864,10 @@ async function generateNeighborhoods(city, db, geminiKey, unsplashKey, googlePla
   // neighborhood gets a unique primary hero across the city.
   const assignedHeroUrls = new Set();
 
+  // One Set for the whole city batch: first neighbourhood to claim a URL wins;
+  // later rows skip it (fixes Condesa/Juárez/Roma sharing identical Flickr pools).
+  const cityWidePhotoDedupeSet = new Set();
+
   // Compute per-element vibe payloads and photos, then derive hero from top elements.
   // Sequential to avoid hammering Google Places.
   for (const row of rows) {
@@ -885,6 +889,7 @@ async function generateNeighborhoods(city, db, geminiKey, unsplashKey, googlePla
         photoQueries: row.photo_queries || null,
         pexelsKey,
         flickrKey,
+        cityWidePhotoDedupeSet,
       });
       row.vibe_elements = vibeData.vibeElements;
       row.vibe_photos   = sanitizeVibePhotos(vibeData.vibePhotos, row.name);
@@ -1093,6 +1098,8 @@ async function recomputeNeighborhoodVibes(city, db, unsplashKey, googlePlacesKey
   // neighborhood gets a unique primary hero across the city.
   const assignedHeroUrls = new Set(rows.map(r => r.photo_url).filter(Boolean));
 
+  const cityWidePhotoDedupeSet = new Set();
+
   for (const row of rows) {
     const poiCounts = row.attributes?.poi_counts || null;
 
@@ -1113,6 +1120,7 @@ async function recomputeNeighborhoodVibes(city, db, unsplashKey, googlePlacesKey
       geminiKey,
       pexelsKey,
       flickrKey,
+      cityWidePhotoDedupeSet,
     });
     const freshVibePhotos = sanitizeVibePhotos(vibeData.vibePhotos, row.name);
     // Merge fresh + stored photos (only override categories with real fresh results).
@@ -1228,6 +1236,7 @@ async function backfillPhotoQueries(city, db, geminiKey, unsplashKey, googlePlac
   if (!rows?.length) return 0;
 
   let updated = 0;
+  const cityWidePhotoDedupeSet = new Set();
   for (const row of rows) {
     // Skip rows that already have photo_queries populated
     const alreadyHas = row.photo_queries && Object.keys(row.photo_queries).length > 0;
@@ -1305,6 +1314,7 @@ Example output format:
         photoQueries,
         pexelsKey,
         flickrKey,
+        cityWidePhotoDedupeSet,
       });
       const cleaned = sanitizeVibePhotos(vibeData.vibePhotos, row.name);
       await db.from("neighborhoods").update({

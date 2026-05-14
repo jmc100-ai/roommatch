@@ -830,8 +830,21 @@ function computeElementScores(attributes = {}, tags = [], vibeLong = "", poiCoun
     // Even with 0 mapped trees the Gemini attribute provides a floor, so a well-known
     // leafy neighbourhood isn't penalised in cities with sparse OSM tree coverage.
     const treeScore = poiCountToScore(poiCounts.trees || 0, "trees", areaKm2, cityMaxCounts);
+    // Parks from OSM alone can hit 100% on long, thin bboxes (e.g. Paseo de la Reforma):
+    // many separate leisure=park / garden polygons (medians, traffic islands) inflate
+    // density while Gemini still says green_spaces is only "some" and the street is
+    // lively — wrong visitor semantics for "park destination". Anchor parks score with
+    // the same green_spaces signal used for greenery when Gemini is not "lots".
+    const parksFromPoi = poiCountToScore(poiCounts.parks, "parks", areaKm2, cityMaxCounts);
+    let parksBlended = parksFromPoi;
+    const gs = (attributes.green_spaces || "").toLowerCase();
+    if (gs === "some") {
+      parksBlended = clamp(Math.round(parksFromPoi * 0.22 + greenAttr * 0.78));
+    } else if (gs === "minimal") {
+      parksBlended = clamp(Math.round(parksFromPoi * 0.14 + greenAttr * 0.86));
+    }
     scores = {
-      parks:       poiCountToScore(poiCounts.parks,       "parks",       areaKm2, cityMaxCounts),
+      parks:       parksBlended,
       greenery:    clamp(Math.round(treeScore * 0.55 + greenAttr * 0.45)),
       restaurants: poiCountToScore(poiCounts.restaurants, "restaurants", areaKm2, cityMaxCounts),
       cafes:       poiCountToScore(poiCounts.cafes,       "cafes",       areaKm2, cityMaxCounts),
@@ -1701,11 +1714,34 @@ function rankParkUnsplashResults(results) {
  *   taken inside the neighbourhood — permanently URL-stable and legally cacheable.
  * sharedDedupeSet: Set shared across all category calls for one neighbourhood so
  *   the same photo cannot appear in two categories (e.g. cafes AND shops).
+ * cityWidePhotoDedupeSet: optional Set of normalised URLs (no query string) already
+ *   used by another neighbourhood in the same city during a batch backfill — prevents
+ *   Condesa/Juárez/Roma from sharing identical Flickr assets across cards.
  */
-async function fetchElementPhotos(city, neighborhoodName, elementKey, unsplashKey, bbox = null, googlePlacesKey = null, polygonRing = null, geminiKey = null, photoQueries = null, pexelsKey = null, flickrKey = null, sharedDedupeSet = null) {
+/** One Wikimedia upload series (e.g. El Capricho -03 … -07) → one carousel slot. */
+function wikimediaSeriesDedupeKey(url) {
+  const raw = String(url || "").split("?")[0];
+  if (!raw.includes("upload.wikimedia.org/wikipedia")) return null;
+  try {
+    const path = new URL(raw).pathname;
+    const segs = path.split("/").filter(Boolean);
+    const ti = segs.indexOf("thumb");
+    if (ti === -1 || ti + 3 >= segs.length) return null;
+    const fileEnc = segs[ti + 3];
+    if (!/\.(jpe?g|png|webp)$/i.test(fileEnc)) return null;
+    let name = decodeURIComponent(fileEnc);
+    name = name.replace(/(?:_-_\d{1,3}|-\d{1,3})(\.(?:jpe?g|png|webp))$/i, "$1");
+    return name.toLowerCase();
+  } catch {
+    return null;
+  }
+}
+
+async function fetchElementPhotos(city, neighborhoodName, elementKey, unsplashKey, bbox = null, googlePlacesKey = null, polygonRing = null, geminiKey = null, photoQueries = null, pexelsKey = null, flickrKey = null, sharedDedupeSet = null, cityWidePhotoDedupeSet = null) {
   // Local dedupe tracks URLs within this call; sharedDedupeSet tracks URLs
   // across all category calls for the same neighbourhood.
   const localDedupe = new Set();
+  const seenWikimediaSeries = new Set();
   const picks = [];
 
   const addPick = (obj, isOutdoor = true) => {
@@ -1713,8 +1749,18 @@ async function fetchElementPhotos(city, neighborhoodName, elementKey, unsplashKe
     const key = obj.url.split("?")[0];
     if (localDedupe.has(key)) return;
     if (sharedDedupeSet?.has(key)) return;
+    if (cityWidePhotoDedupeSet?.has(key)) return;
+    const wikiSeries = wikimediaSeriesDedupeKey(obj.url);
+    if (
+      wikiSeries &&
+      (elementKey === "parks" || elementKey === "museums" || elementKey === "icon_spots")
+    ) {
+      if (seenWikimediaSeries.has(wikiSeries)) return;
+      seenWikimediaSeries.add(wikiSeries);
+    }
     localDedupe.add(key);
     sharedDedupeSet?.add(key);
+    cityWidePhotoDedupeSet?.add(key);
     picks.push(obj);
   };
 
@@ -1863,8 +1909,11 @@ async function fetchElementPhotos(city, neighborhoodName, elementKey, unsplashKe
  * poiCounts (optional): real counts from fetchOverpassPOIs. When provided,
  * scores for all elements except street_feel are derived from real OSM data.
  * Falls back to Gemini-attribute formula when null.
+ *
+ * cityWidePhotoDedupeSet: optional Set (same city, one batch run). When set, any
+ *   photo URL already present is skipped so adjacent colonias do not clone assets.
  */
-async function buildNeighborhoodVibeData({ city, neighborhoodName, attributes, tags, vibeLong, hotelCount, unsplashKey, poiCounts = null, cityMaxCounts = null, bbox = null, polygon = null, googlePlacesKey = null, geminiKey = null, photoQueries = null, pexelsKey = null, flickrKey = null }) {
+async function buildNeighborhoodVibeData({ city, neighborhoodName, attributes, tags, vibeLong, hotelCount, unsplashKey, poiCounts = null, cityMaxCounts = null, bbox = null, polygon = null, googlePlacesKey = null, geminiKey = null, photoQueries = null, pexelsKey = null, flickrKey = null, cityWidePhotoDedupeSet = null }) {
   const ring = normalizePolygonRing(polygon);
   const areaKm2 = ring?.length >= 4 ? (ringAreaKm2(ring) ?? bboxAreaKm2(bbox)) : bboxAreaKm2(bbox);
   const { scores, shopsSubscores } = computeElementScores(attributes, tags, vibeLong, poiCounts, cityMaxCounts, areaKm2);
@@ -1891,7 +1940,7 @@ async function buildNeighborhoodVibeData({ city, neighborhoodName, attributes, t
     );
     // Per-element photo queries from Gemini (specific named places)
     const elementPhotoQueries = (photoQueries && photoQueries[key]) ? photoQueries[key] : null;
-    vibePhotos[key] = await fetchElementPhotos(city, neighborhoodName, key, unsplashKey, bbox, googlePlacesKey, ring, geminiKey, elementPhotoQueries, pexelsKey, flickrKey, sharedDedupeSet);
+    vibePhotos[key] = await fetchElementPhotos(city, neighborhoodName, key, unsplashKey, bbox, googlePlacesKey, ring, geminiKey, elementPhotoQueries, pexelsKey, flickrKey, sharedDedupeSet, cityWidePhotoDedupeSet);
   }
 
   return { vibeElements, vibePhotos };

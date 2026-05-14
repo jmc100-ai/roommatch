@@ -2309,9 +2309,20 @@
   }
 
   // Derive explicit comparable signals from neighborhood data.
+  function effectiveNbhdParksScore(h) {
+    const raw = Number(h.vibe_elements?.parks?.score || 0);
+    const gs = String(h.attributes?.green_spaces || '').toLowerCase();
+    const greenAttr = { lots: 88, some: 62, minimal: 35 }[gs];
+    if (greenAttr == null || gs === 'lots') return raw;
+    if (gs === 'some') return Math.min(raw, Math.round(raw * 0.22 + greenAttr * 0.78));
+    if (gs === 'minimal') return Math.min(raw, Math.round(raw * 0.14 + greenAttr * 0.86));
+    return raw;
+  }
+
   function deriveNbhdSignals(h) {
     const e = h.vibe_elements || {};
     const v = k => Number(e[k]?.score || 0);
+    const vp = () => effectiveNbhdParksScore(h);
     const tags = (h.tags || []).map(t => String(t).toLowerCase());
     const txt = `${h.vibe_short || ''} ${h.vibe_long || ''}`.toLowerCase();
     const poi = h.attributes?.poi_counts || {};
@@ -2320,16 +2331,21 @@
     const cafeDensity = Math.min(100, Math.round((Math.min(cafeCount, 120) / 120) * 100));
     const restaurantDensity = Math.min(100, Math.round((Math.min(restaurantCount, 400) / 400) * 100));
 
+    const natureBonus = tags.includes('nature') ? 12 : 0;
     const s = {
-      walkability: Math.round((v('street_feel') * 0.55) + (v('cafes') * 0.20) + (v('parks') * 0.25)),
-      green:       Math.round(v('parks') * 0.9 + (tags.includes('nature') ? 15 : 0)),
+      walkability: Math.round((v('street_feel') * 0.55) + (v('cafes') * 0.20) + (vp() * 0.25)),
+      // Boulevards can max OSM "parks" from median strips; green streets uses tree OSM.
+      // Blend so Boop "leafy / quiet" does not treat a lively corridor as a park haven.
+      green:       Math.round(vp() * 0.38 + v('greenery') * 0.52 + natureBonus),
       cafes:       Math.round((v('cafes') * 0.45) + (cafeDensity * 0.55) + (tags.includes('foodie') ? 6 : 0)),
       restaurants: Math.round((v('restaurants') * 0.45) + (restaurantDensity * 0.55) + (tags.includes('foodie') ? 6 : 0)),
       foodie:      Math.round((v('restaurants') * 0.65) + (v('cafes') * 0.35)),
       culture:     Math.round((v('museums') * 0.55) + (v('icon_spots') * 0.45)),
       shopping:    Math.round(v('shops') * 0.9 + (tags.includes('shopping') ? 12 : 0)),
       nightlife:   Math.round((v('street_feel') * 0.40) + (v('restaurants') * 0.35) + (tags.includes('nightlife') ? 18 : 0)),
-      calm:        Math.round((v('parks') * 0.50) + (v('cafes') * 0.25) + ((100 - v('street_feel')) * 0.25)),
+      calm:        Math.round(
+        v('greenery') * 0.42 + vp() * 0.18 + (100 - v('street_feel')) * 0.32 + v('cafes') * 0.08
+      ),
       central:     Math.round((v('icon_spots') * 0.55) + (v('street_feel') * 0.25) + (textHasAny(txt, ['central', 'heart', 'iconic']) ? 14 : 0)),
       local:       Math.round((v('cafes') * 0.35) + (v('street_feel') * 0.35) + (v('restaurants') * 0.30) + (tags.includes('returning') ? 10 : 0)),
       iconic:      Math.round(v('icon_spots') * 0.9 + (textHasAny(txt, ['iconic', 'landmark']) ? 10 : 0)),
@@ -2844,7 +2860,10 @@
     const firstEl = nbhdFirstElementKey(h);
     const tabs = NBHD_ELEMENT_ORDER
       .filter(e => (h.vibe_elements || {})[e.key])
-      .map(e => `<button class="nbhd-el-tab ${e.key===firstEl?'active':''}" data-card="${cardId}" data-key="${e.key}" onclick="setNbhdElement('${cardId}','${e.key}',event)">${e.label} - ${(h.vibe_elements[e.key]?.score ?? 0)}%</button>`)
+      .map(e => {
+        const sc = e.key === 'parks' ? effectiveNbhdParksScore(h) : (h.vibe_elements[e.key]?.score ?? 0);
+        return `<button class="nbhd-el-tab ${e.key===firstEl?'active':''}" data-card="${cardId}" data-key="${e.key}" onclick="setNbhdElement('${cardId}','${e.key}',event)">${e.label} - ${sc}%</button>`;
+      })
       .join('');
     // Hero slideshow controls — only shown when multiple photos available
     const heroControls = heroPhotos.length > 1 ? `
