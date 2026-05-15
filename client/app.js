@@ -540,11 +540,11 @@
       sub:'Pick the street energy and location that feel right — one gut choice.',
       type:'cards',
       options:[
-        { id:'buzz_central', emoji:'🌆', label:'Icons & energy', title:'Icons & energy', note:'Sights, crowds, movement — stay in the thick of it.', image:'images/wizard/vibrant-busy.png', weights:{ nightlife:14, central:22, iconic:10, walkability:12, calm:-8, local:-4 } },
-        { id:'calm_central', emoji:'🏙️', label:'Calm & central', title:'Calm & central', note:'Easy access without a party outside your window.', image:'images/wizard/nbhd-central.png', weights:{ calm:18, central:20, iconic:10, walkability:8, nightlife:-8, green:6, local:4 } },
-        { id:'hip_local', emoji:'🧭', label:'Hip & local', title:'Hip & local', note:'Neighbourhood buzz — cafés and small shops away from postcard corners.', image:'images/wizard/nbhd-trendy.png', weights:{ nightlife:16, local:24, cafes:14, restaurants:14, walkability:12, central:-14, calm:-2, iconic:-18, touristy:-18, luxury:-6 } },
-        { id:'leafy_local', emoji:'🌿', label:'Leafy & residential', title:'Leafy & residential', note:'Quiet streets, trees, everyday local pace.', image:'images/wizard/quiet-residential.png', weights:{ calm:18, green:22, local:12, nightlife:-10, cafes:6 } },
-        { id:'scenic_open', emoji:'🌊', label:'Open & scenic', title:'Open & scenic', note:'Views, water or skyline — room to breathe.', image:'images/wizard/nbhd-scenic-open.png', weights:{ calm:14, green:12, iconic:16, walkability:8, central:6, local:6, nightlife:-10 } },
+        { id:'buzz_central', emoji:'🏛️', label:'Historic & energetic', title:'Historic & energetic', note:'Big sights, busy streets, classic city energy — landmarks right outside.', image:'images/wizard/vibrant-busy.png', weights:{ iconic:18, culture:14, central:20, nightlife:12, walkability:10, calm:-10, local:-2, luxury:-8 } },
+        { id:'calm_central', emoji:'🏙️', label:'Upscale & polished', title:'Upscale & polished', note:'Modern, comfortable, and refined — great restaurants and shopping, quieter nights.', image:'images/wizard/nbhd-central.png', weights:{ luxury:22, shopping:12, calm:12, central:14, walkability:10, nightlife:-12, iconic:4, local:2 } },
+        { id:'hip_local', emoji:'🌿', label:'Trendy & café-filled', title:'Trendy & café-filled', note:'Stylish, walkable streets — cafés, parks, bars, and local creative buzz.', image:'images/wizard/nbhd-trendy.png', weights:{ local:26, cafes:16, restaurants:12, nightlife:14, walkability:12, central:-12, calm:-2, iconic:-18, touristy:-18, luxury:-10 } },
+        { id:'leafy_local', emoji:'🌲', label:'Quiet & residential', title:'Quiet & residential', note:'Slower pace, leafy streets, everyday local life away from the crowds.', image:'images/wizard/quiet-residential.png', weights:{ calm:22, green:22, local:14, nightlife:-14, cafes:4, iconic:-6 } },
+        { id:'scenic_open', emoji:'🌆', label:'Central & connected', title:'Central & connected', note:'Easy access to everything — transit, business, balanced city feel.', image:'images/wizard/nbhd-scenic-open.png', weights:{ central:20, walkability:16, calm:8, iconic:10, green:4, nightlife:-4 } },
       ]
     },
     // Screen 4 — room must-haves (multi-select) + "your words" freetext (merged from former screen 5).
@@ -568,11 +568,11 @@
 
   // nbhdScene tiles → legacy pace + location (HyDE snippets + trip vs area reconciliation).
   const NBHD_SCENE_SEEDS = {
-    buzz_central:  { pace: 'vibrant', location: 'central' },
-    calm_central:  { pace: 'quiet',   location: 'central' },
-    hip_local:     { pace: 'vibrant', location: 'trendy' },
-    leafy_local:   { pace: 'quiet',   location: 'trendy' },
-    scenic_open:   { pace: 'quiet',   location: 'scenic' },
+    buzz_central:  { pace: 'vibrant', location: 'central' },   // Historic & energetic
+    calm_central:  { pace: 'quiet',   location: 'upscale' },   // Upscale & polished
+    hip_local:     { pace: 'vibrant', location: 'trendy' },    // Trendy & café-filled
+    leafy_local:   { pace: 'quiet',   location: 'residential' }, // Quiet & residential
+    scenic_open:   { pace: 'moderate', location: 'central' },  // Central & connected
   };
 
   function resolveNbhdScene(answers) {
@@ -2337,6 +2337,7 @@
     const restaurantDensity = Math.min(100, Math.round((Math.min(restaurantCount, 400) / 400) * 100));
 
     const natureBonus = tags.includes('nature') ? 12 : 0;
+    const centralTextBonus = (textHasAny(txt, ['central', 'heart', 'iconic', 'boulevard']) || tags.includes('central')) ? 14 : 0;
     const s = {
       walkability: Math.round((v('street_feel') * 0.55) + (v('cafes') * 0.20) + (vp() * 0.25)),
       // Boulevards can max OSM "parks" from median strips; green streets uses tree OSM.
@@ -2345,16 +2346,16 @@
       cafes:       Math.round((v('cafes') * 0.45) + (cafeDensity * 0.55) + (tags.includes('foodie') ? 6 : 0)),
       restaurants: Math.round((v('restaurants') * 0.45) + (restaurantDensity * 0.55) + (tags.includes('foodie') ? 6 : 0)),
       foodie:      Math.round((v('restaurants') * 0.65) + (v('cafes') * 0.35)),
-      culture:     Math.round((v('museums') * 0.55) + (v('icon_spots') * 0.45)),
+      culture:     Math.round((v('museums') * 0.55) + (v('icon_spots') * 0.45) + (tags.includes('culture') ? 16 : 0)),
       shopping:    Math.round(v('shops') * 0.9 + (tags.includes('shopping') ? 12 : 0)),
       nightlife:   Math.round((v('street_feel') * 0.40) + (v('restaurants') * 0.35) + (tags.includes('nightlife') ? 18 : 0)),
       calm:        Math.round(
         v('greenery') * 0.42 + vp() * 0.18 + (100 - v('street_feel')) * 0.32 + v('cafes') * 0.08
       ),
-      central:     Math.round((v('icon_spots') * 0.55) + (v('street_feel') * 0.25) + (textHasAny(txt, ['central', 'heart', 'iconic']) ? 14 : 0)),
+      central:     Math.round((v('icon_spots') * 0.55) + (v('street_feel') * 0.25) + centralTextBonus),
       local:       Math.round((v('cafes') * 0.35) + (v('street_feel') * 0.35) + (v('restaurants') * 0.30) + (tags.includes('returning') ? 10 : 0)),
       iconic:      Math.round(v('icon_spots') * 0.9 + (textHasAny(txt, ['iconic', 'landmark']) ? 10 : 0)),
-      luxury:      Math.round(v('shops') * 0.55 + (tags.includes('luxury') ? 28 : 0)),
+      luxury:      Math.round(v('shops') * 0.55 + ((tags.includes('luxury') || tags.includes('upscale')) ? 30 : 0)),
       touristy:    Math.round((v('icon_spots') * 0.55) + (textHasAny(txt, ['touristy', 'tourist']) ? 18 : 0)),
     };
     Object.keys(s).forEach(k => { s[k] = Math.max(0, Math.min(100, s[k])); });
