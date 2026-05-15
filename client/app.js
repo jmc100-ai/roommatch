@@ -4751,6 +4751,15 @@
     const shouldOpenVibeTour = !!(_vibeTourPending && deduped.length && S.boopProfile);
     _deferResultsRenderUntilTourClose = shouldOpenVibeTour;
     _vibeTourPending = false;
+    // Clear any stale vibe-tour pin from a previous search BEFORE the sort
+    // runs. Without this, when the user redoes Boop with different answers
+    // (e.g. nbhdScene leafy_local → buzz_central), the previous tour's lead
+    // id stays set, and the very first getSortedHotelsForDisplay() call
+    // below (used to pick the new tour's lead) finds the stale id at its
+    // natural rank ~300 and PINS it to #0 — which then becomes the "new"
+    // _vibeTourLeadId, self-perpetuating across reloads. Symptom: a Condesa
+    // hotel keeps showing as #1 for a "Historic & energetic" search.
+    _vibeTourLeadId = null;
     // Best Match now incorporates the Boop priceMatters signal as a secondary
     // tiebreaker, so we always default to 'match'. No auto-switch needed.
     _currentSort    = 'match';
