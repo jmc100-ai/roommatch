@@ -113,8 +113,8 @@ Each item must follow this exact structure:
   ]},
   "vibe_short": "Historic, artsy, buzzing café scene",
   "vibe_long": "One of Paris's most atmospheric quarters, Le Marais blends medieval architecture with cutting-edge galleries and some of the city's best falafel. Ideal for first-timers who want to feel immersed in Parisian street life without venturing far from the Louvre.",
-  "visitor_type": "first-timer",
-  "tags": ["walkable", "historic", "artsy", "nightlife"],
+  "visitor_type": "first-timers",
+  "tags": ["walkable", "historic", "artsy", "first-timers", "culture"],
   "walkability_dining": "excellent",
   "walkability_tourist_spots": "excellent",
   "green_spaces": "some",
@@ -141,9 +141,32 @@ Field rules:
   Vertices use "lat" and "lng" (WGS84). Follow real street boundaries, waterways, railway lines, or park edges.
 - vibe_short: max 6 words, comma-separated — punchy and vivid (no more than 6 words total)
 - vibe_long: exactly 2 sentences — first describes character, second says who it's ideal for
-- visitor_type: "first-timer" | "returning" | "both"
-- tags: 3-5 values from: walkable, nightlife, historic, artsy, family, luxury, local-feel,
-  beachfront, business, quiet, green, romantic, foodie, shopping
+- visitor_type: "first-timers" | "returning" | "both"
+  ("first-timers" = dominated by tourist sights and landmarks;
+   "returning" = rewards deeper exploration, café culture, local life;
+   "both" = broadly appealing to either)
+- tags: 3-6 values chosen from this EXACT list (use the exact strings):
+    walkable, nightlife, historic, artsy, culture, family,
+    luxury, upscale, local, returning, first-timers,
+    beachfront, business, quiet, green, nature, central,
+    romantic, foodie, shopping
+  Tag meanings (pick what genuinely fits):
+    local      — authentic neighbourhood feel, away from postcard corners
+    returning  — better for repeat visitors, rewards deeper exploration
+    first-timers — near major sights or landmarks tourists prioritise
+    culture    — notable museums, galleries, or historic monuments density
+    upscale    — premium / polished feel (use with luxury)
+    central    — well-connected hub, easy transit access to whole city
+    luxury     — designer shopping, 5-star hotels, high-end dining
+    nightlife  — active bar/club/late-night scene
+    green      — leafy streets, parks, notable street canopy
+    nature     — significant parks, forests, or waterfront nearby
+    quiet      — residential pace, little nightlife, calm streets
+    business   — offices, corporate district, conference hotels
+    historic   — significant historic architecture or heritage streetscapes
+    artsy      — galleries, street art, creative/bohemian atmosphere
+    foodie     — exceptional restaurant and café density
+    walkable   — very pedestrian-friendly, most things reachable on foot
 - walkability_dining: "excellent" | "good" | "limited"
 - walkability_tourist_spots: "excellent" | "good" | "limited"
 - green_spaces: "lots" | "some" | "minimal"
@@ -151,7 +174,7 @@ Field rules:
    "lots" = neighbourhood famously defined by leafy streets, boulevard trees, jacarandas, canopied avenues.
    "some" = a mix of tree-lined and open streets. "minimal" = mostly open/concrete streets.)
 - skyline_character: "low-rise historic" | "modern high-rise" | "mixed" | "tree-lined"
-- street_energy: "lively" | "moderate" | "quiet"
+- street_energy: "very lively" | "lively" | "moderate" | "quiet"
 - photo_queries: object — 2 specific Unsplash search strings per element key.
   Keys must be exactly: parks, restaurants, cafes, street_feel, icon_spots, museums, shops, greenery.
   Each value is an array of 2 strings. Use NAMED real places, streets, or landmarks — NOT
@@ -214,19 +237,26 @@ function vibeVisualTerms(vibeShort = "", maxWords = 3) {
 const TAG_VISUAL = {
   walkable:   "pedestrian street promenade",
   artsy:      "street art mural gallery",
-  historic:   "historic architecture buildings",
-  green:      "urban park trees grass",
-  foodie:     "restaurant terrace outdoor dining",
-  nightlife:  "bar nightlife neon",
-  shopping:   "boutique shops street",
-  romantic:   "romantic cobblestone evening",
-  luxury:     "luxury upscale elegant",
-  quiet:      "quiet residential street",
-  "local-feel": "local market street life",
+  historic:      "historic architecture buildings",
+  green:         "urban park trees grass",
+  nature:        "nature park forest greenery",
+  foodie:        "restaurant terrace outdoor dining",
+  nightlife:     "bar nightlife neon",
+  shopping:      "boutique shops street",
+  romantic:      "romantic cobblestone evening",
+  luxury:        "luxury upscale elegant",
+  upscale:       "upscale polished neighborhood street",
+  quiet:         "quiet residential street",
+  local:         "local market street life",
+  "local-feel":  "local market street life", // legacy alias — keep for old DB rows
+  returning:     "local neighbourhood everyday life",
+  "first-timers":"landmark tourist sights city",
+  culture:       "museum gallery cultural building",
+  central:       "city centre transit hub urban",
   // Avoid "playground" — Unsplash skews to play structures, not leafy parks.
-  family:     "family friendly walkable neighborhood",
-  business:   "modern office district",
-  beachfront: "beach waterfront seaside",
+  family:        "family friendly walkable neighborhood",
+  business:      "modern office district",
+  beachfront:    "beach waterfront seaside",
 };
 
 const PLACES_SEARCH_TEXT_URL = "https://places.googleapis.com/v1/places:searchText";
@@ -803,6 +833,20 @@ async function generateNeighborhoods(city, db, geminiKey, unsplashKey, googlePla
       console.log(`[neighborhoods] photo_queries for "${item.name}": ${Object.keys(photoQueries).join(", ")}`);
     }
 
+    // Ensure visitor_type is reflected in the tags array so signal derivation
+    // (which checks tags.includes("returning") / tags.includes("first-timers"))
+    // works correctly for any city Gemini generates.
+    const rawTags = Array.isArray(item.tags) ? [...item.tags] : [];
+    const vt = (item.visitor_type || "").toLowerCase().replace("-", "");
+    if ((vt === "returning" || vt === "both") && !rawTags.includes("returning")) {
+      rawTags.push("returning");
+    }
+    if ((vt === "firsttimers" || vt === "first-timers" || vt === "both") && !rawTags.includes("first-timers")) {
+      rawTags.push("first-timers");
+    }
+    // Normalise legacy "local-feel" → "local"
+    const normalisedTags = rawTags.map(t => t === "local-feel" ? "local" : t);
+
     rows.push({
       city,
       name:          item.name,
@@ -810,7 +854,7 @@ async function generateNeighborhoods(city, db, geminiKey, unsplashKey, googlePla
       polygon:       polygonRing ? { ring: polygonRing } : null,
       vibe_short:    item.vibe_short,
       vibe_long:     item.vibe_long,
-      tags:          item.tags || [],
+      tags:          normalisedTags,
       visitor_type:  item.visitor_type,
       attributes,
       photo_queries: photoQueries,
