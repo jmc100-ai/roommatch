@@ -243,7 +243,13 @@ async function runV2Search({ req, supabase, supabaseAdmin, resolveCityName }) {
   const covMult = parseFloat(process.env.SOFT_FLAG_COVERAGE_MULT   || "0.28");
   const missPen = parseFloat(process.env.SOFT_FLAG_MISS_PENALTY    || "0.08");
   const rawNbhdW = parseFloat(process.env.VSEARCH_NBHD_RANK_WEIGHT || "0");
-  const nbhdRankWeight = Number.isFinite(rawNbhdW) && rawNbhdW > 0 ? rawNbhdW : 0;
+  // `let` not `const`: when the user expressed an explicit nbhdScene preference
+  // in Boop, we boost this 1.25× (capped at 0.72) below — same rule V1 applies
+  // in server.js line ~2625. Without the boost, room match dominates so heavily
+  // that a 100% room match in a 85% nbhd-fit area beats a 82% room match in a
+  // 95% nbhd-fit area, even when the user explicitly told us neighbourhood
+  // matters. See commit msg for math (Hilton vs Ritz at MX City buzz_central).
+  let nbhdRankWeight = Number.isFinite(rawNbhdW) && rawNbhdW > 0 ? rawNbhdW : 0;
 
   // ── Geo pre-filter (polygon preferred, then bbox) ─────────────────────────
   let hotelIdsByGeo = null;
@@ -479,6 +485,21 @@ async function runV2Search({ req, supabase, supabaseAdmin, resolveCityName }) {
   if (nbhdRankWeight > 0 && boopParam && rankedHotels.length) {
     try {
       const boopProfileForNbhd = JSON.parse(boopParam);
+
+      // nbhdScene-aware boost (mirrors V1 server.js ~line 2625). When the user
+      // picked an explicit neighbourhood scene (buzz_central, calm_central,
+      // hip_local, leafy_local, scenic_open), they told us neighbourhood matters
+      // — bump the blend weight by 25% so a hotel in their preferred area can
+      // outrank a hotel with marginally better room match in a different area.
+      // Capped at 0.72 to avoid an all-or-nothing nbhd dictatorship.
+      if (boopProfileForNbhd?.answers?.nbhdScene) {
+        const boosted = Math.min(0.72, nbhdRankWeight * 1.25);
+        if (boosted > nbhdRankWeight) {
+          console.log(`[v2] nbhd_rank_weight boost: ${nbhdRankWeight.toFixed(3)} → ${boosted.toFixed(3)} (nbhdScene=${boopProfileForNbhd.answers.nbhdScene})`);
+          nbhdRankWeight = boosted;
+        }
+      }
+
       // Pass similarity values as V1 expects (0-1 range)
       const rankedLite = rankedHotels.map((r) => ({
         hotel_id:   r.hotel_id,
