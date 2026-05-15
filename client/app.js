@@ -541,9 +541,9 @@
       type:'cards',
       options:[
         { id:'buzz_central', emoji:'🏛️', label:'Historic & energetic', title:'Historic & energetic', note:'Big sights, busy streets, classic city energy — landmarks right outside.', image:'images/wizard/vibrant-busy.png', weights:{ iconic:18, culture:14, central:20, nightlife:12, walkability:10, calm:-10, local:-2, luxury:-8 } },
-        { id:'calm_central', emoji:'🏙️', label:'Upscale & polished', title:'Upscale & polished', note:'Modern, comfortable, and refined — great restaurants and shopping, quieter nights.', image:'images/wizard/nbhd-central.png', weights:{ luxury:22, shopping:12, calm:12, central:14, walkability:10, nightlife:-12, iconic:4, local:2 } },
+        { id:'calm_central', emoji:'🏙️', label:'Upscale & polished', title:'Upscale & polished', note:'Modern, comfortable, and refined — great restaurants and shopping, quieter nights.', image:'images/wizard/nbhd-central.png', weights:{ luxury:28, shopping:14, calm:14, central:4, walkability:10, nightlife:-14, iconic:2, local:2 } },
         { id:'hip_local', emoji:'🌿', label:'Trendy & café-filled', title:'Trendy & café-filled', note:'Stylish, walkable streets — cafés, parks, bars, and local creative buzz.', image:'images/wizard/nbhd-trendy.png', weights:{ local:26, cafes:16, restaurants:12, nightlife:14, walkability:12, central:-12, calm:-2, iconic:-18, touristy:-18, luxury:-10 } },
-        { id:'leafy_local', emoji:'🌲', label:'Quiet & residential', title:'Quiet & residential', note:'Slower pace, leafy streets, everyday local life away from the crowds.', image:'images/wizard/quiet-residential.png', weights:{ calm:24, green:24, local:8, nightlife:-18, iconic:-20, central:-18, cafes:2 } },
+        { id:'leafy_local', emoji:'🌲', label:'Quiet & residential', title:'Quiet & residential', note:'Slower pace, leafy streets, everyday local life away from the crowds.', image:'images/wizard/quiet-residential.png', weights:{ calm:24, green:24, local:20, nightlife:-18, iconic:-18, central:-16, cafes:10, walkability:6 } },
         { id:'scenic_open', emoji:'🌆', label:'Central & connected', title:'Central & connected', note:'Easy access to everything — transit, business, balanced city feel.', image:'images/wizard/nbhd-scenic-open.png', weights:{ central:20, walkability:16, calm:8, iconic:10, green:4, nightlife:-4 } },
       ]
     },
@@ -2335,6 +2335,11 @@
     const restaurantCount = Number(poi.restaurants || 0);
     const cafeDensity = Math.min(100, Math.round((Math.min(cafeCount, 120) / 120) * 100));
     const restaurantDensity = Math.min(100, Math.round((Math.min(restaurantCount, 400) / 400) * 100));
+    // Use raw poi_counts.icon_spots (landmark count) for iconic/central/calm.
+    // vibe_elements.icon_spots.score is a *landmark accessibility* metric, NOT a count —
+    // Juárez scores 99 there despite only having 6 mapped landmarks, which causes it to
+    // rank as "iconic" and "central" when it shouldn't. Mirror the server's pRaw() approach.
+    const iconCount = Number(poi.icon_spots || 0);
 
     const natureBonus = tags.includes('nature') ? 12 : 0;
     const centralTextBonus = (textHasAny(txt, ['central', 'heart', 'iconic', 'boulevard']) || tags.includes('central')) ? 14 : 0;
@@ -2346,17 +2351,21 @@
       cafes:       Math.round((v('cafes') * 0.45) + (cafeDensity * 0.55) + (tags.includes('foodie') ? 6 : 0)),
       restaurants: Math.round((v('restaurants') * 0.45) + (restaurantDensity * 0.55) + (tags.includes('foodie') ? 6 : 0)),
       foodie:      Math.round((v('restaurants') * 0.65) + (v('cafes') * 0.35)),
-      culture:     Math.round((v('museums') * 0.55) + (v('icon_spots') * 0.45) + (tags.includes('culture') ? 16 : 0)),
+      culture:     Math.round((v('museums') * 0.55) + (iconCount * 0.45) + (tags.includes('culture') ? 16 : 0)),
       shopping:    Math.round(v('shops') * 0.9 + (tags.includes('shopping') ? 12 : 0)),
       nightlife:   Math.round((v('street_feel') * 0.40) + (v('restaurants') * 0.35) + (tags.includes('nightlife') ? 18 : 0)),
+      // calm: penalise iconic/busy places so grand boulevards don't appear calm (mirrors server).
       calm:        Math.round(
         v('greenery') * 0.42 + vp() * 0.18 + (100 - v('street_feel')) * 0.32 + v('cafes') * 0.08
+        - iconCount * 0.12
       ),
-      central:     Math.round((v('icon_spots') * 0.55) + (v('street_feel') * 0.25) + centralTextBonus),
+      // central + iconic: use raw landmark COUNT (poi_counts.icon_spots), not the accessibility
+      // score in vibe_elements (which inflates Juárez / Aeropuerto). Mirrors lib/nbhd-vibe-rank.js.
+      central:     Math.round((iconCount * 0.55) + (v('street_feel') * 0.25) + centralTextBonus),
       local:       Math.round((v('cafes') * 0.35) + (v('street_feel') * 0.35) + (v('restaurants') * 0.30) + (tags.includes('returning') ? 10 : 0)),
-      iconic:      Math.round(v('icon_spots') * 0.9 + (textHasAny(txt, ['iconic', 'landmark']) ? 10 : 0)),
+      iconic:      Math.round(iconCount * 0.9 + (textHasAny(txt, ['iconic', 'landmark']) ? 10 : 0)),
       luxury:      Math.round(v('shops') * 0.55 + ((tags.includes('luxury') || tags.includes('upscale')) ? 30 : 0)),
-      touristy:    Math.round((v('icon_spots') * 0.55) + (textHasAny(txt, ['touristy', 'tourist']) ? 18 : 0)),
+      touristy:    Math.round((iconCount * 0.55) + (textHasAny(txt, ['touristy', 'tourist']) ? 18 : 0)),
     };
     Object.keys(s).forEach(k => { s[k] = Math.max(0, Math.min(100, s[k])); });
     return s;
