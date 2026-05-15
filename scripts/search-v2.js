@@ -769,9 +769,22 @@ async function runV2Search({ req, supabase, supabaseAdmin, resolveCityName }) {
   //      contributes R.rawScore. The per-room photo budget is photo_type_counts
   //      [intentType] when an intent type was detected (e.g. bathroom); falls
   //      back to total photo_count if no room has any intent-type photo.
-  //   3. rankScore: when soft/hard fact flags are present, use h.sBoosted (the
-  //      coverage-boosted hotel sim) so the soft-flag coverage semantics still
-  //      apply. Otherwise use the photo-aware mean directly.
+  //   3. rankScore = photoMeanScore (always). Pre-May-2026 we used h.sBoosted
+  //      when soft/hard fact flags were present, but sBoosted is the
+  //      coverage-boosted MAX room rawScore — once a hotel's best room hits
+  //      rawSim ≥ ~0.64 with full coverage (×1.28), the boost lifts sBoosted
+  //      above SIM_MAX so EVERY such hotel clamps to topScore=100. That
+  //      flattens the per-hotel room-match signal: a hotel with 5 rooms at
+  //      sim=0.75 (all relevant) and a hotel with 1 room at sim=0.67 + 4
+  //      irrelevant rooms both showed topScore=100, then ranking devolved to
+  //      the 1-pt HOTEL_VIBE_BLEND_WEIGHT delta. photoMeanScore actually
+  //      differentiates room-match breadth (the 27-pt gap above is restored).
+  //      Soft-flag coverage signal is preserved via (a) hotelVibePct (which
+  //      explicitly scores facts coverage at hotel level, blended at 0.20),
+  //      (b) sBoosted is still used at line ~454 to pick the top GALLERY_LIMIT
+  //      hotels into Phase B so coverage-rich hotels still get photo-loaded,
+  //      and (c) the user's HyDE-derived query embedding already encodes the
+  //      facts (high_natural_light, palette_minimalist, etc.) into rawScore.
   //   4. Photo-count penalty: if total indexed photos for the hotel < 3, scale
   //      topScore by totalPhotos/3 (applied to all hotels uniformly now).
   const hotelDisplayScores = new Map();
@@ -805,7 +818,10 @@ async function runV2Search({ req, supabase, supabaseAdmin, resolveCityName }) {
       if (taken > 0) photoMeanScore = sum / taken;
     }
 
-    const rankScore = hasFlags ? h.sBoosted : photoMeanScore;
+    // Always use photoMeanScore. sBoosted's coverage boost saturates the
+    // remap ceiling for any hotel with ≥0.64 rawSim and full coverage, killing
+    // room-match differentiation. See comment block above.
+    const rankScore = photoMeanScore;
     let topScore = remap(rankScore);
 
     if (totalAll < 3) {
@@ -857,9 +873,9 @@ async function runV2Search({ req, supabase, supabaseAdmin, resolveCityName }) {
     return {
       hotel_id:     h.hotel_id,
       topScore,
-      // rankScore is the pre-remap raw room score (sBoosted or photoMean).
-      // Used as a finer-grained tiebreaker than topScore which clamps at
-      // 100 for everyone above SIM_MAX.
+      // rawRoom is the pre-remap raw room score (= photoMeanScore — top-3
+      // photo-aware mean of room rawScores). Used as a finer-grained
+      // tiebreaker when topScore clamps at 100 for hotels at or above SIM_MAX.
       rawRoom:      Number(rankScore) || 0,
       hotelVibePct,
       // rawHotelVibe is the pre-remap, pre-clamp facts-coverage score
