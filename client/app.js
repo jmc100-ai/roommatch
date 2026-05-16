@@ -6716,6 +6716,32 @@
         const cmp = matchDiff > 0 ? 1 : (matchDiff < 0 ? -1 : 0);
         return _sortReverse ? -cmp : cmp;
       });
+
+      // ── DEBUG: client-side match sort top-15 (temporary) ────────────────
+      // Mirrors the server-side [v2-rank-debug] log so we can spot client/
+      // server ranking divergence (eg. stale vibe-tour pin, vectorScore vs
+      // server primarySignal mismatch). Grep "[client-rank-debug]".
+      try {
+        const dbg = hotels.slice(0, 15).map((h, i) => {
+          const top  = h.roomTypes && h.roomTypes.length
+            ? Math.max(...h.roomTypes.map(rt => rt.score || 0))
+            : 0;
+          return `  #${String(i + 1).padStart(2)} ${String(h.id).padEnd(12)} `
+            + `vec=${(h.vectorScore || 0).toString().padStart(3)} `
+            + `topRoom=${String(top).padStart(3)} `
+            + `hotelV=${(h.hotelScore == null ? "—" : String(h.hotelScore)).padStart(3)} `
+            + `nbhd=${(h.nbhd_fit_pct == null ? "—" : String(Math.round(h.nbhd_fit_pct))).padStart(3)} `
+            + `blended=${blendedScore(h).toFixed(2).padStart(6)} `
+            + `nb="${h.primary_nbhd || "—"}" `
+            + `nm="${(h.name || "").slice(0, 32)}"`;
+        });
+        console.log(
+          `[client-rank-debug] match-sort top-15 (wNbhd=${wNbhd.toFixed(3)} `
+          + `pin=${_vibeTourLeadId || "—"}):\n` + dbg.join("\n")
+        );
+      } catch (e) {
+        console.log(`[client-rank-debug] log failed: ${e.message}`);
+      }
     }
 
     // Vibe-tour pin: keep the hotel the user just saw in the tour at #1 even if
@@ -6739,9 +6765,16 @@
           (lead.roomPrices && Object.keys(lead.roomPrices).length > 0)
         );
         if (!availFilterActive || leadHasRates) {
+          console.log(`[client-rank-debug] PIN APPLIED: moved id=${_vibeTourLeadId} from idx=${idx} → #0 (name="${lead?.name || ""}")`);
           hotels.splice(idx, 1);
           hotels.unshift(lead);
+        } else {
+          console.log(`[client-rank-debug] PIN SKIPPED: id=${_vibeTourLeadId} at idx=${idx} (avail filter blocking, no rates)`);
         }
+      } else if (idx === 0) {
+        console.log(`[client-rank-debug] PIN ALREADY AT #0: id=${_vibeTourLeadId}`);
+      } else {
+        console.log(`[client-rank-debug] PIN NOT FOUND in hotels: id=${_vibeTourLeadId}`);
       }
     }
     return hotels;

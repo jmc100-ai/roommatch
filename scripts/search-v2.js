@@ -981,6 +981,41 @@ async function runV2Search({ req, supabase, supabaseAdmin, resolveCityName }) {
     });
   }
 
+  // ── DEBUG: top-15 ranking dump (temporary) ──────────────────────────────
+  // Logs the exact components that drive the final hotel ordering so we can
+  // diagnose "hotel A ranks above hotel B even though room/hotel/nbhd scores
+  // suggest the opposite". Fires only for the visible top so the log stays
+  // small. Grep "[v2-rank-debug]" to find.
+  try {
+    const wDbg = (nbhdFitByHotelId?.size > 0 && nbhdRankWeight > 0) ? nbhdRankWeight : 0;
+    const HVB  = HOTEL_VIBE_BLEND_WEIGHT;
+    const dbgRows = allHotels.slice(0, 15).map((h, i) => {
+      const nb        = nbhdFitByHotelId?.get(h.hotel_id);
+      const ps        = primarySignal(h);
+      const blended   = wDbg > 0
+        ? ((1 - wDbg) * (ps / 100) + wDbg * ((nb ?? 62) / 100)) * 100
+        : ps;
+      const primaryNbhd = primaryNbhdMap.get(h.hotel_id) || "—";
+      return `  #${String(i + 1).padStart(2)} ${h.hotel_id.padEnd(12)} `
+        + `top=${h.topScore.toFixed(1).padStart(5)} `
+        + `hVP=${h.hotelVibePct == null ? " null" : h.hotelVibePct.toFixed(1).padStart(5)} `
+        + `primary=${ps.toFixed(2).padStart(6)} `
+        + `nbhd_fit=${(nb == null ? "—" : nb.toFixed(1).padStart(5))} `
+        + `blended=${blended.toFixed(2).padStart(6)} `
+        + `rawRoom=${(h.rawRoom || 0).toFixed(4)} `
+        + `rawHV=${h.rawHotelVibe.toFixed(4)} `
+        + `nbhd="${primaryNbhd}"`;
+    });
+    console.log(
+      `[v2-rank-debug] final-sort top-15 (HVB=${HVB.toFixed(2)} nbhdW=${wDbg.toFixed(3)} `
+      + `SIM_MAX=${SIM_MAX.toFixed(4)} SIM_MIN=${SIM_MIN.toFixed(4)} `
+      + `HOTEL_SIM_MAX=${HOTEL_SIM_MAX.toFixed(4)} HOTEL_SIM_MIN=${HOTEL_SIM_MIN.toFixed(4)}):\n`
+      + dbgRows.join("\n")
+    );
+  } catch (e) {
+    console.log(`[v2-rank-debug] log failed: ${e.message}`);
+  }
+
   // Phase B fetched room photos only for `topHotelIds` (pre-final-sort pick).
   // Final ordering uses primarySignal + optional nbhd blend — different from
   // the pre-sort nbhd reshuffle — so hotels can land in the top N visible
