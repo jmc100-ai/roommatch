@@ -776,38 +776,44 @@ async function runV2Search({ req, supabase, supabaseAdmin, resolveCityName }) {
   }
 
   // ── Unified hotel display scoring ──────────────────────────────────────────
-  // Single photo-aware aggregation applied to EVERY hotel (3500+) instead of
-  // the previous split where top-250 used mean-of-top-3 photo sims while the
-  // tail used MAX room rawScore. The split caused stub hotels (rank > 250, no
-  // photos loaded) to leapfrog photo hotels because their topScore was computed
-  // on a kinder scale (MAX vs mean). Both groups now use the same metric, fed
-  // by index data only — no extra DB calls.
+  // topScore is the MAX effective per-room display score, defined to match
+  // exactly what the user sees on the room cards below (roomEntries):
   //
-  // Algorithm per hotel:
-  //   1. Sort the hotel's rooms by rawScore DESC.
-  //   2. Compute a weighted top-3 mean by walking the sorted rooms and
-  //      "consuming" up to 3 photos worth of contribution. Each photo of room R
-  //      contributes R.rawScore. The per-room photo budget is photo_type_counts
-  //      [intentType] when an intent type was detected (e.g. bathroom); falls
-  //      back to total photo_count if no room has any intent-type photo.
-  //   3. rankScore = photoMeanScore (always). Pre-May-2026 we used h.sBoosted
-  //      when soft/hard fact flags were present, but sBoosted is the
-  //      coverage-boosted MAX room rawScore — once a hotel's best room hits
-  //      rawSim ≥ ~0.64 with full coverage (×1.28), the boost lifts sBoosted
-  //      above SIM_MAX so EVERY such hotel clamps to topScore=100. That
-  //      flattens the per-hotel room-match signal: a hotel with 5 rooms at
-  //      sim=0.75 (all relevant) and a hotel with 1 room at sim=0.67 + 4
-  //      irrelevant rooms both showed topScore=100, then ranking devolved to
-  //      the 1-pt HOTEL_VIBE_BLEND_WEIGHT delta. photoMeanScore actually
-  //      differentiates room-match breadth (the 27-pt gap above is restored).
-  //      Soft-flag coverage signal is preserved via (a) hotelVibePct (which
-  //      explicitly scores facts coverage at hotel level, blended at 0.20),
-  //      (b) sBoosted is still used at line ~454 to pick the top GALLERY_LIMIT
-  //      hotels into Phase B so coverage-rich hotels still get photo-loaded,
-  //      and (c) the user's HyDE-derived query embedding already encodes the
-  //      facts (high_natural_light, palette_minimalist, etc.) into rawScore.
-  //   4. Photo-count penalty: if total indexed photos for the hotel < 3, scale
-  //      topScore by totalPhotos/3 (applied to all hotels uniformly now).
+  //   effective_room_score = remap(r.rawScore) × (photos<3 ? photos/3 : 1)
+  //   topScore = max(effective_room_score) over all rooms in the hotel
+  //
+  // History / why this formula:
+  //
+  //   Pre-May-2026 we used h.sBoosted (coverage-boosted MAX rawScore). Once
+  //   a hotel's best room hit rawSim ≥ ~0.64 with full coverage (×1.28),
+  //   sBoosted lifted above SIM_MAX so dozens of hotels clamped at
+  //   topScore=100, and ranking devolved to the 1-pt HOTEL_VIBE_BLEND_WEIGHT
+  //   delta — Casa Independencia (50% room) outranking Casa Herrmann (77%).
+  //
+  //   The first fix (e7456fd) switched to photoMeanScore (mean of top-3
+  //   photo-weighted rawScores, walked across rooms sorted by rawScore).
+  //   That solved the saturation but introduced a new asymmetry: the
+  //   per-room display applies a photo-count penalty (×photos/3 when <3),
+  //   but photoMeanScore did NOT — so a hotel with one BEST room of 2
+  //   high-similarity photos got vec=81 while the room itself displayed
+  //   only 67% (penalised). That ranked El Diplomatico (King Room 67%, 2
+  //   photos) above Novotel (best room 90%, 3+ photos) in the same
+  //   neighbourhood, contradicting what the user could see on screen.
+  //
+  //   This formula collapses both display & ranking onto the SAME number
+  //   the user reads off the best-matching room card. No more "vec=81 but
+  //   topRoom=67" disconnect. Hotels with sparse top rooms are correctly
+  //   penalised at the hotel level; hotels with deep, high-scoring top
+  //   rooms (Novotel) ride their per-room display score directly into rank.
+  //
+  // rankScore (raw, 0..1) = the rawScore of the room that won the max — used
+  // as a tiebreaker downstream when topScore clamps at 100.
+  //
+  // Soft-flag coverage signal is preserved via (a) hotelVibePct (explicit
+  // facts coverage at hotel level, blended at 0.20), (b) sBoosted is still
+  // used at line ~454 to pick the top GALLERY_LIMIT hotels into Phase B so
+  // coverage-rich hotels still get photo-loaded, and (c) the user's
+  // HyDE-derived query embedding already encodes facts into rawScore.
   const hotelDisplayScores = new Map();
 
   let penalisedCount = 0;
@@ -821,32 +827,47 @@ async function runV2Search({ req, supabase, supabaseAdmin, resolveCityName }) {
     }
     const useIntent = !!intentType && totalIntent > 0;
 
-    let photoMeanScore = h.rawSim || 0;
-    if ((useIntent ? totalIntent : totalAll) > 0) {
+    // Find the best room by EFFECTIVE per-room display score (mirrors the
+    // exact formula in roomEntries below). Walk in rawScore-descending order
+    // so the first room that produces a non-penalised effective score wins,
+    // but penalised candidates can still take the lead over weaker rooms
+    // with no penalty.
+    let bestEffective = 0;
+    let bestRoomRaw = h.rawSim || 0;
+    let bestRoomPhotos = 0;
+    if (totalAll > 0) {
       const sortedRooms = rooms.slice().sort((a, b) => (b.rawScore || 0) - (a.rawScore || 0));
-      let remaining = 3, sum = 0, taken = 0;
       for (const r of sortedRooms) {
-        if (remaining === 0) break;
-        const cnt = useIntent
-          ? (r.photo_type_counts?.[intentType] || 0)
-          : (r.photo_count || 0);
-        if (cnt === 0) continue;
-        const take = Math.min(cnt, remaining);
-        sum += (r.rawScore || 0) * take;
-        taken += take;
-        remaining -= take;
+        // Penalty uses TOTAL photo_count, matching roomEntries' use of
+        // entry.photos.length (which is total photos for the room, not
+        // intent-filtered). useIntent only affects the SKIP filter so we
+        // don't pick a room with 0 intent-type photos as the best.
+        const totalPhotos = r.photo_count || 0;
+        if (totalPhotos === 0) continue;
+        if (useIntent) {
+          const intentPhotos = r.photo_type_counts?.[intentType] || 0;
+          if (intentPhotos === 0) continue;
+        }
+        const photoMul = totalPhotos < 3 ? (totalPhotos / 3) : 1;
+        const effective = remap(r.rawScore || 0) * photoMul;
+        if (effective > bestEffective) {
+          bestEffective = effective;
+          bestRoomRaw = r.rawScore || 0;
+          bestRoomPhotos = totalPhotos;
+        }
       }
-      if (taken > 0) photoMeanScore = sum / taken;
     }
 
-    // Always use photoMeanScore. sBoosted's coverage boost saturates the
-    // remap ceiling for any hotel with ≥0.64 rawSim and full coverage, killing
-    // room-match differentiation. See comment block above.
-    const rankScore = photoMeanScore;
-    let topScore = remap(rankScore);
+    // rankScore stays in raw space (0..1) for tiebreaker compatibility.
+    const rankScore = bestRoomRaw;
+    let topScore = bestEffective;
 
-    if (totalAll < 3) {
-      topScore *= totalAll / 3;
+    // The per-room photo-count penalty applied above already covers sparse-
+    // top-room hotels, so we only fall back to a hotel-wide totalAll<3
+    // penalty when NO room produced an effective score (eg. all rooms had
+    // 0 photo_count due to a stale index). In that case bestEffective=0
+    // and the penalty is a no-op anyway, so this is purely defensive.
+    if (totalAll < 3 && bestEffective === 0) {
       penalisedCount++;
     }
 
@@ -894,9 +915,10 @@ async function runV2Search({ req, supabase, supabaseAdmin, resolveCityName }) {
     return {
       hotel_id:     h.hotel_id,
       topScore,
-      // rawRoom is the pre-remap raw room score (= photoMeanScore — top-3
-      // photo-aware mean of room rawScores). Used as a finer-grained
-      // tiebreaker when topScore clamps at 100 for hotels at or above SIM_MAX.
+      // rawRoom is the pre-remap, pre-penalty rawScore of the room that
+      // produced the hotel's max effective per-room display score. Used as a
+      // finer-grained tiebreaker when topScore clamps at 100 for multiple
+      // hotels at or above SIM_MAX.
       rawRoom:      Number(rankScore) || 0,
       hotelVibePct,
       // rawHotelVibe is the pre-remap, pre-clamp facts-coverage score
@@ -995,7 +1017,8 @@ async function runV2Search({ req, supabase, supabaseAdmin, resolveCityName }) {
       const blended   = wDbg > 0
         ? ((1 - wDbg) * (ps / 100) + wDbg * ((nb ?? 62) / 100)) * 100
         : ps;
-      const primaryNbhd = primaryNbhdMap.get(h.hotel_id) || "—";
+      const primaryNbhdObj = primaryNbhdMap.get(h.hotel_id);
+      const primaryNbhd = primaryNbhdObj?.name || "—";
       return `  #${String(i + 1).padStart(2)} ${h.hotel_id.padEnd(12)} `
         + `top=${h.topScore.toFixed(1).padStart(5)} `
         + `hVP=${h.hotelVibePct == null ? " null" : h.hotelVibePct.toFixed(1).padStart(5)} `

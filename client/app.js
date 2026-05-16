@@ -6732,7 +6732,7 @@
             + `hotelV=${(h.hotelScore == null ? "—" : String(h.hotelScore)).padStart(3)} `
             + `nbhd=${(h.nbhd_fit_pct == null ? "—" : String(Math.round(h.nbhd_fit_pct))).padStart(3)} `
             + `blended=${blendedScore(h).toFixed(2).padStart(6)} `
-            + `nb="${h.primary_nbhd || "—"}" `
+            + `nb="${(h.primary_nbhd && h.primary_nbhd.name) || h.primary_nbhd || "—"}" `
             + `nm="${(h.name || "").slice(0, 32)}"`;
         });
         console.log(
