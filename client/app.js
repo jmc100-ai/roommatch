@@ -516,6 +516,21 @@
     },
     // Screen 2 — stay vibe. One UX choice writes both roomStyle + hotelPersonality
     // so room photo search and hotel-profile search keep their separate signals.
+    //
+    // NO `weights` on these options (intentional, May 2026): stayVibe describes
+    // ROOM and HOTEL vibe, not NEIGHBOURHOOD vibe. The user's explicit
+    // neighbourhood preference comes from Q3 (nbhdScene). When stayVibe
+    // weights bled into BOOP.prefs (the nbhd-only signal), they routinely
+    // overrode the user's explicit nbhdScene answer — e.g. picking
+    // "Sleek & polished" injected luxury:+14, calm:+8, central:+4 which
+    // CANCELLED buzz_central's luxury:-8 and calm:-10, making Paseo de la
+    // Reforma (luxury+calm area) outrank Centro Histórico (energetic) for
+    // a "Historic & energetic" search. stayVibe still drives:
+    //   - roomStyle / hotelPersonality (HyDE seeds for room/hotel search)
+    //   - visual_style_* fact_key (mergeStayVibeIntoIntent → soft_preferences)
+    //   - hotel_vibe model (server-side facts coverage scoring)
+    //   - property-type penalty (hostel vs hotel vs apartment for sleek_polished)
+    // None of those use BOOP.prefs, so removing the weights is safe.
     {
       id:'stayVibe',
       label:'Stay style',
@@ -523,13 +538,10 @@
       sub:'This steers both the room look and the hotel personality we search for.',
       type:'cards',
       options:[
-        { id:'sleek_polished', emoji:'✨', title:'Sleek & polished', note:'Clean modern rooms, refined service, calm luxury.', image:'images/wizard/sleek-polished.png', weights:{ luxury:14, central:4, calm:8 } },
-        { id:'cozy_warm', emoji:'🕯️', title:'Warm & cozy', note:'Warm lighting, texture, comfort, and a relaxed feel.', image:'images/wizard/warm-cozy.png',
-          weights:{ calm:14, local:12, culture:6, green:6, cafes:6, iconic:-8, central:-6, luxury:-2, nightlife:2 } },
-        { id:'distinct_unique', emoji:'🎨', title:'Distinct & characterful', note:'Boutique, design-led, expressive, or one-of-a-kind.', image:'images/wizard/distinct-characterful.png',
-          weights:{ culture:14, local:14, luxury:6, iconic:2 } },
-        { id:'simple_value', emoji:'💡', title:'Simple & good value', note:'Clean, functional, practical, and well-priced.', image:'https://images.pexels.com/photos/18201945/pexels-photo-18201945.jpeg?auto=compress&cs=tinysrgb&w=1200',
-          weights:{ luxury:-16, iconic:-8, shopping:-8, nightlife:-6, local:8, calm:6 } },
+        { id:'sleek_polished', emoji:'✨', title:'Sleek & polished', note:'Clean modern rooms, refined service, calm luxury.', image:'images/wizard/sleek-polished.png' },
+        { id:'cozy_warm', emoji:'🕯️', title:'Warm & cozy', note:'Warm lighting, texture, comfort, and a relaxed feel.', image:'images/wizard/warm-cozy.png' },
+        { id:'distinct_unique', emoji:'🎨', title:'Distinct & characterful', note:'Boutique, design-led, expressive, or one-of-a-kind.', image:'images/wizard/distinct-characterful.png' },
+        { id:'simple_value', emoji:'💡', title:'Simple & good value', note:'Clean, functional, practical, and well-priced.', image:'https://images.pexels.com/photos/18201945/pexels-photo-18201945.jpeg?auto=compress&cs=tinysrgb&w=1200' },
       ]
     },
     // Screen 3 — neighbourhood pace + location in one pick (maps to legacy pace + location for seeds).
