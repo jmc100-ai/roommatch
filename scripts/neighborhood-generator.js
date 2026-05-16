@@ -608,12 +608,45 @@ function osmSimplifyRing(coords, maxPts) {
   return out;
 }
 
+/** Closed octagonal ring from axis-aligned bbox — OSM miss fallback (≥6 unique verts). */
+function bboxToOctagonRing(bbox) {
+  const { lat_min, lat_max, lon_min, lon_max } = bbox;
+  const latMid = (lat_min + lat_max) / 2;
+  const lonMid = (lon_min + lon_max) / 2;
+  return [
+    { lat: lat_min, lng: lon_min },
+    { lat: lat_min, lng: lonMid },
+    { lat: lat_min, lng: lon_max },
+    { lat: latMid, lng: lon_max },
+    { lat: lat_max, lng: lon_max },
+    { lat: lat_max, lng: lonMid },
+    { lat: lat_max, lng: lon_min },
+    { lat: latMid, lng: lon_min },
+    { lat: lat_min, lng: lon_min },
+  ];
+}
+
 /**
  * fetchOsmBoundary — query Nominatim for the real OSM administrative/neighbourhood polygon.
  * Returns a normalised ring [{lat, lng}, ...] (closed) or null if not found / no match.
  * Nominatim ToS: User-Agent required, max 1 req/sec. Callers must space invocations.
  */
 async function fetchOsmBoundary(name, city, hintBbox = null) {
+  // Tiny bbox hints (bad Gemini/OSM failures) make the size-overlap filters reject the
+  // real colonia boundary — treat as no hint so Nominatim can return the full polygon.
+  let hint = hintBbox;
+  if (hint?.lat_min != null) {
+    const latSpan = hint.lat_max - hint.lat_min;
+    const lonSpan = hint.lon_max - hint.lon_min;
+    const MIN_HINT_SPAN = 0.012; // ~1.3 km per axis
+    if (latSpan < MIN_HINT_SPAN || lonSpan < MIN_HINT_SPAN) {
+      console.log(
+        `[osm-boundary] "${name}": hint bbox span too small (${latSpan.toFixed(4)}×${lonSpan.toFixed(4)}°) — ignoring hint`,
+      );
+      hint = null;
+    }
+  }
+
   const q = encodeURIComponent(`${name}, ${city}`);
   const url = `https://nominatim.openstreetmap.org/search?q=${q}&format=json&polygon_geojson=1&limit=5&addressdetails=0`;
   let res;
@@ -642,22 +675,22 @@ async function fetchOsmBoundary(name, city, hintBbox = null) {
   const MAX_AREA_RATIO = 4; // OSM bbox must not exceed 4× hint bbox in either lat or lon span
 
   // Compute hint spans once
-  const hintLatSpan = hintBbox?.lat_min != null ? (hintBbox.lat_max - hintBbox.lat_min) : null;
-  const hintLonSpan = hintBbox?.lat_min != null ? (hintBbox.lon_max - hintBbox.lon_min) : null;
+  const hintLatSpan = hint?.lat_min != null ? (hint.lat_max - hint.lat_min) : null;
+  const hintLonSpan = hint?.lat_min != null ? (hint.lon_max - hint.lon_min) : null;
 
   let best = null;
   for (const r of results) {
     if (!r.geojson) continue;
     if (!["Polygon", "MultiPolygon"].includes(r.geojson.type)) continue;
 
-    if (hintBbox?.lat_min != null && r.boundingbox) {
+    if (hint?.lat_min != null && r.boundingbox) {
       const bb = r.boundingbox; // Nominatim: ["lat_min","lat_max","lon_min","lon_max"]
       const ob = { lat_min: +bb[0], lat_max: +bb[1], lon_min: +bb[2], lon_max: +bb[3] };
       const tol = 0.05;
 
       // Overlap check
-      if (ob.lat_max < hintBbox.lat_min - tol || ob.lat_min > hintBbox.lat_max + tol ||
-          ob.lon_max < hintBbox.lon_min - tol || ob.lon_min > hintBbox.lon_max + tol) {
+      if (ob.lat_max < hint.lat_min - tol || ob.lat_min > hint.lat_max + tol ||
+          ob.lon_max < hint.lon_min - tol || ob.lon_min > hint.lon_max + tol) {
         console.log(`[osm-boundary] "${name}" candidate rejected: bbox no overlap`);
         continue;
       }
@@ -1425,12 +1458,21 @@ async function backfillNeighborhoodPolygons(city, db, force = false) {
       continue;
     }
 
-    // If already has an OSM-quality ring (≥20 vertices) and not forcing, skip
-    if (!force && existingRing?.length >= 20) {
+    const bb = row.bbox;
+    const latSpan = bb?.lat_min != null ? bb.lat_max - bb.lat_min : 0;
+    const lonSpan = bb?.lat_min != null ? bb.lon_max - bb.lon_min : 0;
+    const degenerateBbox = !bb || bb.lat_min == null || latSpan < 0.012 || lonSpan < 0.012;
+
+    // If already has an OSM-quality ring (≥20 vertices) and not forcing, skip — unless
+    // the row bbox is degenerate (bad prior import): those polygons are often wrong.
+    if (!force && existingRing?.length >= 20 && !degenerateBbox) {
       console.log(`[poly-backfill] "${row.name}" already has ${existingRing.length - 1}-vertex polygon — skipping`);
       skipped++;
       await new Promise(r => setTimeout(r, 300));
       continue;
+    }
+    if (degenerateBbox && existingRing?.length >= 4) {
+      console.log(`[poly-backfill] "${row.name}": degenerate bbox — re-fetching OSM polygon`);
     }
 
     // Nominatim 1 req/sec ToS gap
@@ -1444,9 +1486,18 @@ async function backfillNeighborhoodPolygons(city, db, force = false) {
     }
 
     if (!osmRing) {
-      console.log(`[poly-backfill] No OSM boundary found for "${row.name}" — keeping existing`);
-      skipped++;
-      continue;
+      const canBboxFallback =
+        row.bbox?.lat_min != null &&
+        !degenerateBbox &&
+        (!existingRing || existingRing.length < 4);
+      if (canBboxFallback) {
+        osmRing = bboxToOctagonRing(row.bbox);
+        console.log(`[poly-backfill] "${row.name}": OSM miss — using bbox-derived fence (${osmRing.length - 1} verts)`);
+      } else {
+        console.log(`[poly-backfill] No OSM boundary found for "${row.name}" — keeping existing`);
+        skipped++;
+        continue;
+      }
     }
 
     const newBbox = bboxFromRing(osmRing);
