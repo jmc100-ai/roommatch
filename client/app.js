@@ -510,8 +510,8 @@
       type:'cards',
       options:[
         { id:'first',  emoji:'🗺️', title:'First time',        note:'Central, iconic, easy to navigate.', image:'https://images.unsplash.com/photo-1521216774850-01bc1c5fe0da?auto=format&fit=crop&w=1200&q=80', weights:{ central:20, iconic:18, calm:8, local:-6 } },
-        { id:'repeat', emoji:'🔍', title:'Been before',       note:'Something new each visit.',         image:'https://images.unsplash.com/photo-1539037116277-4db20889f2d4?auto=format&fit=crop&w=1200&q=80', weights:{ local:18, culture:8, central:-3 } },
-        { id:'expert', emoji:'🧭', title:'I know it well',    note:'Neighbourhood streets, cafés, trees.', image:'https://images.unsplash.com/photo-1449824913935-59a10b8d2000?auto=format&fit=crop&w=1200&q=80', weights:{ local:20, calm:6, central:-8, iconic:-5 } },
+        { id:'repeat', emoji:'🔍', title:'Been before',       note:'Something new each visit.',         image:'images/wizard/trip-been-before.png', weights:{ local:18, culture:8, central:-3 } },
+        { id:'expert', emoji:'🧭', title:'I know it well',    note:'Neighbourhood streets, cafés, trees.', image:'images/wizard/trip-know-well.png', weights:{ local:20, calm:6, central:-8, iconic:-5 } },
       ]
     },
     // Screen 2 — stay vibe. One UX choice writes both roomStyle + hotelPersonality
@@ -540,11 +540,11 @@
       sub:'Pick the street energy and location that feel right — one gut choice.',
       type:'cards',
       options:[
-        { id:'buzz_central', emoji:'🏛️', label:'Historic & energetic', title:'Historic & energetic', note:'Big sights, busy streets, classic city energy — landmarks right outside.', image:'images/wizard/vibrant-busy.png', weights:{ iconic:18, culture:14, central:20, nightlife:12, walkability:10, calm:-10, local:-2, luxury:-8 } },
-        { id:'calm_central', emoji:'🏙️', label:'Upscale & polished', title:'Upscale & polished', note:'Modern, comfortable, and refined — great restaurants and shopping, quieter nights.', image:'images/wizard/nbhd-central.png', weights:{ luxury:28, shopping:14, calm:14, central:4, walkability:10, nightlife:-14, iconic:2, local:2 } },
-        { id:'hip_local', emoji:'🌿', label:'Trendy & café-filled', title:'Trendy & café-filled', note:'Stylish, walkable streets — cafés, parks, bars, and local creative buzz.', image:'images/wizard/nbhd-trendy.png', weights:{ local:26, cafes:16, restaurants:12, nightlife:14, walkability:12, central:-12, calm:-2, iconic:-18, touristy:-18, luxury:-10 } },
-        { id:'leafy_local', emoji:'🌲', label:'Quiet & residential', title:'Quiet & residential', note:'Slower pace, leafy streets, everyday local life away from the crowds.', image:'images/wizard/quiet-residential.png', weights:{ calm:24, green:24, local:20, nightlife:-18, iconic:-18, central:-16, cafes:10, walkability:6 } },
-        { id:'scenic_open', emoji:'🌆', label:'Central & connected', title:'Central & connected', note:'Easy access to everything — transit, business, balanced city feel.', image:'images/wizard/nbhd-scenic-open.png', weights:{ central:20, walkability:16, calm:8, iconic:10, green:4, nightlife:-4 } },
+        { id:'buzz_central', emoji:'🏛️', label:'Historic & energetic', title:'Historic & energetic', note:'Big sights, busy streets, classic city energy — landmarks right outside.', image:'images/wizard/historic-energetic.png', weights:{ iconic:18, culture:14, central:20, nightlife:12, walkability:10, calm:-10, local:-2, luxury:-8 } },
+        { id:'calm_central', emoji:'🏙️', label:'Upscale & polished', title:'Upscale & polished', note:'Modern, comfortable, and refined — great restaurants and shopping, quieter nights.', image:'images/wizard/upscale-polished.png', weights:{ luxury:28, shopping:14, calm:14, central:4, walkability:10, nightlife:-14, iconic:2, local:2 } },
+        { id:'hip_local', emoji:'🌿', label:'Trendy & café-filled', title:'Trendy & café-filled', note:'Stylish, walkable streets — cafés, parks, bars, and local creative buzz.', image:'images/wizard/trendy-cafe-filled.png', weights:{ local:26, cafes:16, restaurants:12, nightlife:14, walkability:12, central:-12, calm:-2, iconic:-18, touristy:-18, luxury:-10 } },
+        { id:'leafy_local', emoji:'🌲', label:'Quiet & residential', title:'Quiet & residential', note:'Slower pace, leafy streets, everyday local life away from the crowds.', image:'images/wizard/quiet-residential-street.png', weights:{ calm:24, green:24, local:20, nightlife:-18, iconic:-18, central:-16, cafes:10, walkability:6 } },
+        { id:'scenic_open', emoji:'🌆', label:'Central & connected', title:'Central & connected', note:'Easy access to everything — transit, business, balanced city feel.', image:'images/wizard/central-connected.png', weights:{ central:20, walkability:16, calm:8, iconic:10, green:4, nightlife:-4 } },
       ]
     },
     // Screen 4 — room must-haves (multi-select) + "your words" freetext (merged from former screen 5).
