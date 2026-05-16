@@ -1265,9 +1265,16 @@ async function recomputeNeighborhoodVibes(city, db, unsplashKey, googlePlacesKey
 
     if (heroPick?.url) assignedHeroUrls.add(heroPick.url);
 
-    // Refresh hotel_count in the same update pass.
-    const pr = normalizePolygonRing(row.polygon);
-    const freshHotelCount = await getHotelCountForFence(row.city, row.bbox || {}, pr, db);
+    // DB bbox/polygon may have been repaired while this long job runs — re-read
+    // before hotel_count so we never persist a stale 0 from an old in-memory row.
+    const { data: geoRow } = await db
+      .from("neighborhoods")
+      .select("bbox, polygon")
+      .eq("id", row.id)
+      .maybeSingle();
+    const bboxForCount = geoRow?.bbox?.lat_min != null ? geoRow.bbox : row.bbox;
+    const pr = normalizePolygonRing(geoRow?.polygon ?? row.polygon);
+    const freshHotelCount = await getHotelCountForFence(row.city, bboxForCount || {}, pr, db);
 
     const updatePayload = {
       vibe_elements: vibeData.vibeElements,
