@@ -153,7 +153,7 @@ const HOODS = [
 
 const BOOP_OPTIONS = {
   buzz_central:  { label:'Historic & energetic',  weights:{ iconic:18, culture:14, central:20, nightlife:12, walkability:10, calm:-10, local:-2, luxury:-8 } },
-  calm_central:  { label:'Upscale & polished',    weights:{ luxury:28, shopping:14, calm:14, central:4, walkability:10, nightlife:-14, iconic:2, local:2 } },
+  calm_central:  { label:'Upscale & Refined',    weights:{ luxury:28, shopping:14, calm:14, central:4, walkability:10, nightlife:-14, iconic:2, local:2 } },
   hip_local:     { label:'Trendy & café-filled',  weights:{ local:26, cafes:16, restaurants:12, nightlife:14, walkability:12, central:-12, calm:-2, iconic:-18, touristy:-18, luxury:-10 } },
   leafy_local:   { label:'Quiet & residential',   weights:{ calm:24, green:24, local:20, nightlife:-18, iconic:-18, central:-16, cafes:10, walkability:6 } },
   scenic_open:   { label:'Central & connected',   weights:{ central:20, walkability:16, calm:8, iconic:10, green:4, nightlife:-4 } },

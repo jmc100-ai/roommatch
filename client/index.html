@@ -525,16 +525,21 @@
           </div>
         </div>
       </div>
-      <div class="cmd-row-vibe" id="cmd-row-vibe">
+      <button type="button" class="cmd-trip-summary" id="cmd-trip-summary" onclick="openCmdTripSheet(event)" aria-haspopup="dialog" aria-controls="cmd-trip-sheet" aria-expanded="false">
+        <span class="cmd-trip-summary-line" id="cmd-trip-summary-line">—</span>
+        <span class="cmd-trip-summary-edit">Edit</span>
+      </button>
+      <!-- Revert 2-row mobile chips: remove class vibe-chips-mobile-2row below -->
+      <div class="cmd-row-vibe vibe-chips-mobile-2row" id="cmd-row-vibe">
         <span class="vibe-row-label">Your vibe</span>
-        <div class="vibe-chip-row" id="vibe-chip-row"></div>
-        <button type="button" class="advanced-search-btn" onclick="openBoopFromChip('extras')">
-          Anything else? <span class="advanced-search-arr">▾</span>
-        </button>
-        <span class="vibe-row-spacer"></span>
-        <button type="button" class="vibe-search-btn" onclick="cmdSearch()" title="Re-run the current search">
-          <span class="vibe-search-icon" aria-hidden="true">↻</span> Search
-        </button>
+        <div class="vibe-row-main">
+          <div class="vibe-chip-row" id="vibe-chip-row"></div>
+          <div class="vibe-row-actions">
+            <button type="button" class="vibe-search-btn" onclick="cmdSearch()" title="Re-run the current search">
+              <span class="vibe-search-icon" aria-hidden="true">↻</span> Search
+            </button>
+          </div>
+        </div>
       </div>
     </div>
     <div class="cmd-tray" id="cmd-tray">
@@ -680,6 +685,42 @@
 
   </div><!-- /.results-inner -->
 </div><!-- /#st-results -->
+
+<!-- Mobile edit-trip sheet (direct body child — sticky cmd + backdrop-filter break position:fixed inside .cmd) -->
+<div class="cmd-trip-sheet-host" id="cmd-trip-sheet-host" hidden aria-hidden="true">
+  <div class="cmd-trip-sheet-backdrop" onclick="closeCmdTripSheet(event)" aria-hidden="true"></div>
+  <div class="cmd-trip-sheet" id="cmd-trip-sheet" role="dialog" aria-modal="true" aria-labelledby="cmd-trip-sheet-title" onclick="event.stopPropagation()">
+    <div class="cmd-trip-sheet-hdr">
+      <h2 class="cmd-trip-sheet-title" id="cmd-trip-sheet-title">Edit trip</h2>
+      <button type="button" class="cmd-trip-sheet-close" onclick="closeCmdTripSheet(event)" aria-label="Close">×</button>
+    </div>
+    <div class="cmd-trip-sheet-fields">
+      <button type="button" class="cmd-trip-field" onclick="cmdTripSheetPickCity(event)">
+        <span class="cmd-trip-field-l">City</span>
+        <span class="cmd-trip-field-v" id="cmd-trip-field-city">—</span>
+      </button>
+      <button type="button" class="cmd-trip-field" onclick="cmdTripSheetPickNbhd(event)">
+        <span class="cmd-trip-field-l">Neighbourhood</span>
+        <span class="cmd-trip-field-v" id="cmd-trip-field-nbhd">—</span>
+      </button>
+      <button type="button" class="cmd-trip-field" onclick="cmdTripSheetPickDates(event)">
+        <span class="cmd-trip-field-l">Dates</span>
+        <span class="cmd-trip-field-v" id="cmd-trip-field-dates">Add dates</span>
+      </button>
+      <div class="cmd-trip-field cmd-trip-field--party">
+        <span class="cmd-trip-field-l">Who's coming</span>
+        <div class="cmd-trip-party-pills" role="group" aria-label="Party size">
+          <button type="button" class="cmd-trip-party-pill" data-size="solo" onclick="cmdTripSheetSetParty('solo', event)">1</button>
+          <button type="button" class="cmd-trip-party-pill" data-size="couple" onclick="cmdTripSheetSetParty('couple', event)">2</button>
+          <button type="button" class="cmd-trip-party-pill" data-size="group" onclick="cmdTripSheetSetParty('group', event)">3+</button>
+        </div>
+      </div>
+    </div>
+    <div class="cmd-trip-sheet-ft">
+      <button type="button" class="cmd-trip-sheet-apply" onclick="cmdApplyTripSheet(event)">Update results</button>
+    </div>
+  </div>
+</div>
 
 <script src="/app.js" defer></script>
 

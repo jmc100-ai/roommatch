@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Mobile trip summary — design prototype</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@600&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet" />
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'DM Sans', system-ui, sans-serif;
+      background: #1a1a1e;
+      color: #e8e4dc;
+      padding: 24px 16px 48px;
+      line-height: 1.45;
+    }
+    h1 { font-size: 22px; margin-bottom: 8px; }
+    .lead { color: #9a9590; font-size: 14px; max-width: 56ch; margin-bottom: 24px; }
+    code { font-size: 12px; color: #e8d5b0; }
+    .tabs { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 20px; }
+    .tabs button {
+      font: inherit; font-size: 13px; padding: 8px 14px; border-radius: 999px;
+      border: 1px solid rgba(255,255,255,.12); background: rgba(255,255,255,.04);
+      color: #e8e4dc; cursor: pointer;
+    }
+    .tabs button.active {
+      border-color: rgba(201,169,110,.5); color: #e8d5b0;
+      background: rgba(201,169,110,.12);
+    }
+    .layout { display: flex; flex-wrap: wrap; gap: 28px; align-items: flex-start; }
+    .phone-wrap { flex: 0 0 auto; }
+    .phone-label { font-size: 12px; color: #9a9590; margin-bottom: 8px; max-width: 390px; }
+    .phone {
+      width: 390px; max-width: 100%;
+      border-radius: 28px;
+      border: 2px solid rgba(255,255,255,.12);
+      background: #0c0c0e;
+      overflow: hidden;
+      position: relative;
+    }
+    .hdr {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 10px 14px; border-bottom: 1px solid rgba(255,255,255,.08);
+    }
+    .logo { font-family: 'Cormorant Garamond', serif; font-size: 17px; color: #c9a96e; font-weight: 600; }
+    .pill { font-size: 11px; padding: 4px 8px; border-radius: 999px; border: 1px solid rgba(255,255,255,.12); color: #9a9590; }
+    .trip-bar {
+      display: flex; align-items: center; gap: 10px;
+      margin: 10px 12px; padding: 11px 12px; border-radius: 12px;
+      border: 1px solid rgba(255,255,255,.1); background: rgba(255,255,255,.04);
+      cursor: pointer; width: calc(100% - 24px); text-align: left; font: inherit; color: inherit;
+    }
+    .trip-bar .kicker { font-size: 9px; letter-spacing: .12em; text-transform: uppercase; color: #9a9590; flex-shrink: 0; }
+    .trip-bar .line { flex: 1; min-width: 0; font-size: 13px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .trip-bar .edit { font-size: 13px; font-weight: 600; color: #e8d5b0; flex-shrink: 0; }
+    .legacy-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; padding: 0 12px 10px; }
+    .legacy-cell {
+      padding: 8px 10px; border-radius: 10px;
+      border: 1px solid rgba(255,255,255,.1); background: rgba(255,255,255,.04);
+    }
+    .legacy-cell .l { font-size: 9px; letter-spacing: .1em; text-transform: uppercase; color: #9a9590; margin-bottom: 3px; }
+    .legacy-cell .v { font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .vibe-row { display: flex; align-items: center; gap: 6px; padding: 4px 12px 8px; overflow: hidden; }
+    .vibe-row .kicker { font-size: 9px; letter-spacing: .12em; text-transform: uppercase; color: #9a9590; }
+    .chip { font-size: 12px; padding: 6px 11px; border-radius: 999px; border: 1px solid rgba(255,255,255,.1); white-space: nowrap; }
+    .sort { padding: 8px 12px; border-top: 1px solid rgba(255,255,255,.08); font-size: 12px; color: #9a9590; }
+    .card-stub { margin: 8px 12px; height: 100px; border-radius: 14px; border: 1px solid rgba(255,255,255,.08); background: #18181c; }
+    .sheet-host { position: relative; min-height: 480px; }
+    .sheet-host.dim > .phone-content { filter: blur(1px); opacity: .35; pointer-events: none; }
+    .overlay { display: none; position: absolute; inset: 0; background: rgba(0,0,0,.72); }
+    .sheet-host.open .overlay { display: block; }
+    .sheet {
+      display: none; position: absolute; left: 0; right: 0; bottom: 0;
+      max-height: 88%; background: #131316;
+      border-top: 1px solid rgba(255,255,255,.12);
+      border-radius: 20px 20px 0 0; flex-direction: column;
+    }
+    .sheet-host.open .sheet { display: flex; }
+    .sheet-hdr {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 14px 16px; border-bottom: 1px solid rgba(255,255,255,.08);
+    }
+    .sheet-hdr h2 { font-size: 17px; font-weight: 600; }
+    .sheet-hdr button {
+      width: 32px; height: 32px; border-radius: 8px; border: 1px solid rgba(255,255,255,.12);
+      background: rgba(255,255,255,.04); color: #9a9590; font-size: 18px; cursor: pointer;
+    }
+    .sheet-body { padding: 16px; overflow: auto; flex: 1; display: flex; flex-direction: column; gap: 10px; }
+    .field {
+      width: 100%; text-align: left; padding: 14px; border-radius: 12px;
+      border: 1px solid rgba(255,255,255,.1); background: rgba(255,255,255,.04);
+      font: inherit; color: inherit; cursor: pointer;
+    }
+    .field .l { font-size: 10px; letter-spacing: .12em; text-transform: uppercase; color: #9a9590; margin-bottom: 6px; }
+    .field .v { font-size: 16px; font-weight: 500; }
+    .field .h { font-size: 11px; color: #9a9590; margin-top: 4px; }
+    .note {
+      font-size: 12px; color: #9a9590; padding: 10px 12px; border-radius: 10px;
+      border: 1px solid rgba(201,169,110,.25); background: rgba(201,169,110,.08);
+    }
+    .sheet-ft { padding: 12px 16px 20px; border-top: 1px solid rgba(255,255,255,.08); }
+    .btn-primary {
+      width: 100%; padding: 13px; border: none; border-radius: 12px;
+      background: #c9a96e; color: #0c0c0e; font: inherit; font-size: 15px; font-weight: 600; cursor: pointer;
+    }
+    .btn-ghost {
+      width: 100%; padding: 10px; margin-top: 8px; border: none; background: transparent;
+      color: #9a9590; font: inherit; font-size: 14px; cursor: pointer;
+    }
+    .spec { flex: 1; min-width: 280px; max-width: 440px; }
+    .spec h2 { font-size: 16px; margin: 16px 0 8px; }
+    .spec p, .spec ul { color: #9a9590; font-size: 13px; }
+    .spec ul { padding-left: 18px; margin-top: 8px; }
+    .spec li { margin-bottom: 6px; }
+    .path { word-break: break-all; display: block; margin: 8px 0; }
+    .hidden { display: none !important; }
+  </style>
+</head>
+<body>
+  <h1>Mobile trip summary — design prototype</h1>
+  <p class="lead">
+    Design only (not in production). Open this file in any browser.
+    Path: <code>client/prototypes/mobile-trip-summary-prototype.html</code>
+  </p>
+
+  <div class="tabs" id="tabs">
+    <button type="button" class="active" data-view="summary">A — Summary bar</button>
+    <button type="button" data-view="sheet">B — Edit sheet</button>
+    <button type="button" data-view="compare">C — Today vs proposed</button>
+    <button type="button" data-view="interactive">Interactive</button>
+  </div>
+
+  <div class="layout">
+    <div class="phone-wrap">
+      <p class="phone-label" id="viewCaption">Screen A — condensed trip bar (default).</p>
+      <div class="phone sheet-host" id="phoneHost">
+        <div class="phone-content">
+          <div class="hdr"><span class="logo">TravelBoop</span><span class="pill">USD · BETA</span></div>
+          <div id="viewSummary">
+            <button type="button" class="trip-bar" id="openSheet">
+              <span class="kicker">Trip</span>
+              <span class="line">Mexico City · All areas · May 8–12 · 2 guests</span>
+              <span class="edit">Edit</span>
+            </button>
+          </div>
+          <div id="viewLegacy" class="legacy-grid hidden">
+            <div class="legacy-cell"><div class="l">City</div><div class="v">Mexico…</div></div>
+            <div class="legacy-cell"><div class="l">Neighbour…</div><div class="v">—</div></div>
+            <div class="legacy-cell"><div class="l">Dates</div><div class="v">May…</div></div>
+            <div class="legacy-cell"><div class="l">Who's…</div><div class="v">2 people</div></div>
+          </div>
+          <div class="vibe-row">
+            <span class="kicker">Your vibe</span>
+            <span class="chip">First time</span>
+            <span class="chip">Sleek & polished</span>
+          </div>
+          <div class="sort">Sort · Best Match · Showing 10 of 424 hotels</div>
+          <div class="card-stub"></div>
+        </div>
+        <div class="overlay" id="overlay"></div>
+        <div class="sheet" id="sheet">
+          <div class="sheet-hdr">
+            <h2>Edit trip</h2>
+            <button type="button" id="closeSheet" aria-label="Close">×</button>
+          </div>
+          <div class="sheet-body">
+            <button type="button" class="field"><div class="l">City</div><div class="v">Mexico City</div><div class="h">Opens city search</div></button>
+            <button type="button" class="field"><div class="l">Neighbourhood</div><div class="v">All areas</div><div class="h">Neighbourhood vibe picker</div></button>
+            <button type="button" class="field"><div class="l">Dates</div><div class="v">May 8 – May 12, 2026</div><div class="h">Opens calendar</div></button>
+            <button type="button" class="field"><div class="l">Who's coming</div><div class="v">2 people</div><div class="h">Solo · couple · group</div></button>
+            <p class="note">Your vibe chips stay on the results page.</p>
+          </div>
+          <div class="sheet-ft">
+            <button type="button" class="btn-primary" id="applySheet">Update results</button>
+            <button type="button" class="btn-ghost" id="cancelSheet">Cancel</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="spec">
+      <h2>Easy to find (in this repo)</h2>
+      <p>Double-click or drag into Chrome:</p>
+      <code class="path">roommatch/client/prototypes/mobile-trip-summary-prototype.html</code>
+
+      <h2>Cursor Canvas (optional)</h2>
+      <p>Also saved outside the git folder:</p>
+      <code class="path">C:\Users\jmc10\.cursor\projects\c-Users-jmc10-roommatch\canvases\mobile-cmd-trip-summary.canvas.tsx</code>
+      <p style="margin-top:8px">Ctrl+P → paste path → open → Canvas panel beside chat.</p>
+
+      <h2>Interaction spec</h2>
+      <ul>
+        <li>One trip summary line; tap to edit.</li>
+        <li>Bottom sheet with large fields.</li>
+        <li>Update results re-runs search.</li>
+      </ul>
+    </div>
+  </div>
+
+  <script>
+    const host = document.getElementById('phoneHost');
+    const openBtn = document.getElementById('openSheet');
+    ['closeSheet', 'cancelSheet', 'applySheet', 'overlay'].forEach(id => {
+      document.getElementById(id).addEventListener('click', () => {
+        host.classList.remove('open', 'dim');
+      });
+    });
+    openBtn.addEventListener('click', () => host.classList.add('open', 'dim'));
+
+    document.getElementById('tabs').addEventListener('click', (e) => {
+      const btn = e.target.closest('button[data-view]');
+      if (!btn) return;
+      document.querySelectorAll('.tabs button').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      const v = btn.dataset.view;
+      host.classList.remove('open', 'dim');
+      document.getElementById('viewSummary').classList.toggle('hidden', v === 'compare');
+      document.getElementById('viewLegacy').classList.toggle('hidden', v !== 'compare');
+      openBtn.style.pointerEvents = v === 'interactive' ? 'auto' : 'none';
+      if (v === 'sheet') host.classList.add('open', 'dim');
+      const caps = {
+        summary: 'Screen A — condensed trip bar (default).',
+        sheet: 'Screen B — edit sheet open.',
+        compare: 'Screen C — today’s 2×2 grid vs proposed summary.',
+        interactive: 'Tap the trip bar to open/close the sheet.',
+      };
+      document.getElementById('viewCaption').textContent = caps[v] || '';
+    });
+  </script>
+</body>
+</html>

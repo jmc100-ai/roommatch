@@ -50,6 +50,15 @@ function parseBbox(raw) {
   return { lat_min, lat_max, lon_min, lon_max };
 }
 
+function parseBoopProfile(req) {
+  try {
+    if (!req.query.boop_profile) return null;
+    return JSON.parse(req.query.boop_profile);
+  } catch {
+    return null;
+  }
+}
+
 function parsePolygon(raw) {
   if (!raw) return null;
   try {
@@ -160,13 +169,19 @@ async function runV2Search({ req, supabase, supabaseAdmin, resolveCityName }) {
   // queries because rooms tie at sim_max and there's no tiebreaker).
   let groupSize = "couple";
   let stayVibe  = null;
-  try {
-    const bp = req.query.boop_profile ? JSON.parse(req.query.boop_profile) : null;
-    const gs = bp?.answers?.group_size;
+  let priceMatters = 0;
+  let luxuryPref = 0;
+  const boopProfile = parseBoopProfile(req);
+  if (boopProfile) {
+    const gs = boopProfile.answers?.group_size;
     if (gs === "solo" || gs === "couple" || gs === "group") groupSize = gs;
-    const sv = bp?.answers?.stayVibe;
+    const sv = boopProfile.answers?.stayVibe;
     if (typeof sv === "string" && sv.length > 0) stayVibe = sv;
-  } catch (_) {}
+    const pm = Number(boopProfile.answers?.priceMatters);
+    if (Number.isFinite(pm)) priceMatters = Math.max(-100, Math.min(100, Math.round(pm)));
+    const lp = Number(boopProfile.prefs?.luxury);
+    if (Number.isFinite(lp)) luxuryPref = lp;
+  }
 
   // Hotel-level property-type fit. Multiplicative penalty applied to topScore
   // so the polished/luxury preference from BOOP actually downranks hostels +
@@ -637,8 +652,11 @@ async function runV2Search({ req, supabase, supabaseAdmin, resolveCityName }) {
     //               linear penalty up to ×0.5. Mirrors the room-scoring
     //               photo-count penalty so sparse catalogue hotels can't
     //               leapfrog rich ones on a strong single fact.
+    // When price matters is important, do not nudge 5★ up via star prior — it
+    // fights the value-seeking penalty applied to display scores below.
     const wantsLuxuryPrior =
-      stayVibe === "sleek_polished" || stayVibe === "classic_traditional";
+      priceMatters < 30 &&
+      (stayVibe === "sleek_polished" || stayVibe === "classic_traditional");
 
     const STAR_PRIOR_W   = parseFloat(process.env.HOTEL_VIBE_STAR_PRIOR   ?? "0.10");
     const GUEST_PRIOR_W  = parseFloat(process.env.HOTEL_VIBE_GUEST_PRIOR  ?? "0.06");
@@ -1281,6 +1299,9 @@ async function runV2Search({ req, supabase, supabaseAdmin, resolveCityName }) {
         nbhd_rank_weight_config:  Number.isFinite(rawNbhdW) ? rawNbhdW : undefined,
         nbhd_rank_weight_active:  nbhdRankWeight,
         nbhd_blend_applied:       nbhdBlendApplied,
+        price_matters:            priceMatters,
+        luxury_pref:              luxuryPref,
+        price_matters_star_penalty_applied: false,
         ...(nbhdBlendApplied ? { nbhd_rank_weight: nbhdRankWeight } : {}),
         ...(String(req.query.compare || "") === "1"
           ? { compare: { enabled: true, v2_top_ids: hotels.slice(0, 20).map((h) => h.id) } }

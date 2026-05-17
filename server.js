@@ -405,6 +405,78 @@ function prefetchHotelMetaBackground(hotelIds) {
     .catch(e => console.warn(`[hotel-meta] background warm failed: ${e.message}`));
 }
 
+/** Matches client `boopPriceMattersCaption`: Neutral when |pm| <= 32; active at ±33+. */
+const BOOP_PRICE_MATTERS_NEUTRAL_BAND = 32;
+/** Same band as client Best Match sort (`app.js` match sort). */
+const BOOP_VALUE_TIE_BAND_PTS = 5;
+const BOOP_VALUE_LUXURY_PREF_BLOCK = 15;
+
+function boopPriceMattersActive(pm) {
+  return Number.isFinite(pm) && Math.abs(pm) > BOOP_PRICE_MATTERS_NEUTRAL_BAND;
+}
+
+function parseBoopProfileFromQuery(query) {
+  try {
+    const raw = query?.boop_profile;
+    if (!raw) return null;
+    return JSON.parse(decodeURIComponent(raw));
+  } catch {
+    return null;
+  }
+}
+
+function boopValueNudgeBlocked(profile) {
+  if (!profile?.answers) return true;
+  const a = profile.answers;
+  if (a.hotelPersonality === "polished") return true;
+  const sv = a.stayVibe;
+  if (sv === "sleek_polished" || sv === "classic_traditional") return true;
+  const luxury = Number(profile.prefs?.luxury ?? 0);
+  return Number.isFinite(luxury) && luxury > BOOP_VALUE_LUXURY_PREF_BLOCK;
+}
+
+/** Extra LiteAPI meta sync only when star class is needed for ranking tweaks. */
+function needsBoopStarMetaForRanking(profile) {
+  if (!profile?.answers) return false;
+  const luxuryPref = Number(profile.prefs?.luxury ?? 0);
+  if (Number.isFinite(luxuryPref) && luxuryPref < -5) return true;
+  const pm = Number(profile.answers.priceMatters);
+  if (!boopPriceMattersActive(pm)) return false;
+  if (pm > 0 && boopValueNudgeBlocked(profile)) return false;
+  return true;
+}
+
+function v2BlendedSortScore(h, nbhdWeight) {
+  const raw = h.vectorScore || 0;
+  if (nbhdWeight > 0 && h.nbhd_fit_pct != null) {
+    return (1 - nbhdWeight) * raw + nbhdWeight * h.nbhd_fit_pct;
+  }
+  return raw;
+}
+
+function sortV2HotelsDefault(hotels, nbhdWeight) {
+  hotels.sort((a, b) => {
+    const sa = v2BlendedSortScore(a, nbhdWeight);
+    const sb = v2BlendedSortScore(b, nbhdWeight);
+    if (Math.abs(sb - sa) > 1e-6) return sb - sa;
+    return (b.vectorScore || 0) - (a.vectorScore || 0);
+  });
+}
+
+/** Within tie band, star tiebreak by slider sign (pm>0 value, pm<0 splurge). */
+function sortV2HotelsPriceTieband(hotels, nbhdWeight, pm) {
+  const preferCheap = pm > 0;
+  hotels.sort((a, b) => {
+    const sa = v2BlendedSortScore(a, nbhdWeight);
+    const sb = v2BlendedSortScore(b, nbhdWeight);
+    if (Math.abs(sb - sa) > BOOP_VALUE_TIE_BAND_PTS) return sb - sa;
+    const starA = a.starRating > 0 ? a.starRating : 3;
+    const starB = b.starRating > 0 ? b.starRating : 3;
+    if (starA !== starB) return preferCheap ? starA - starB : starB - starA;
+    return (b.vectorScore || 0) - (a.vectorScore || 0);
+  });
+}
+
 const CITY_COORDS = {
   "new york": [40.7128, -74.006], "new york city": [40.7128, -74.006],
   "nyc": [40.7128, -74.006], "manhattan": [40.758, -73.9855],
@@ -2186,13 +2258,23 @@ app.get("/api/vsearch", async (req, res) => {
       // address. Without this, stubs would render as "Hotel in {city}" forever.
       const META_SYNC_LIMIT = parseInt(process.env.META_SYNC_LIMIT || "30", 10);
       const allIds       = v2.body.hotels.map((h) => String(h.id).trim()).filter(Boolean);
-      const syncIds      = allIds.slice(0, META_SYNC_LIMIT);
-      const deferredIds  = allIds.slice(META_SYNC_LIMIT);
+      const boopProfileForMeta = parseBoopProfileFromQuery(req.query);
+      const needsStarPenaltyMeta = needsBoopStarMetaForRanking(boopProfileForMeta);
+      const STAR_PENALTY_META_TOPN = parseInt(process.env.STAR_PENALTY_META_TOPN || "150", 10);
+      const metaFetchTopN = needsStarPenaltyMeta
+        ? Math.min(allIds.length, Math.max(META_SYNC_LIMIT, STAR_PENALTY_META_TOPN))
+        : META_SYNC_LIMIT;
+      const syncIds      = allIds.slice(0, metaFetchTopN);
+      const deferredIds  = allIds.slice(metaFetchTopN);
       const photoHotels  = v2.body.hotels.filter(h => h.roomTypes?.length > 0).length;
       const t0meta = Date.now();
       const liveMeta = await fetchHotelMetaBatch(syncIds);
       const filled = Object.values(liveMeta).filter(Boolean).length;
-      console.log(`[v2-meta] sync fetched ${filled}/${syncIds.length} hotels in ${Date.now()-t0meta}ms (deferred ${deferredIds.length}, total ${allIds.length}, with_photos ${photoHotels})`);
+      console.log(
+        `[v2-meta] sync fetched ${filled}/${syncIds.length} hotels in ${Date.now()-t0meta}ms` +
+        ` (deferred ${deferredIds.length}, total ${allIds.length}, with_photos ${photoHotels}` +
+        `${needsStarPenaltyMeta ? ", star_penalty_meta=1" : ""})`
+      );
       for (const h of v2.body.hotels) {
         const sid = String(h.id).trim();
         const m = liveMeta[sid];
@@ -2211,70 +2293,49 @@ app.get("/api/vsearch", async (req, res) => {
       // Warm cache in the background — finishes ~1–3s after response is sent.
       prefetchHotelMetaBackground(deferredIds);
 
-      // ── Star-rating penalty for value-seeking boop profiles ────────────────
-      // hotel_profile_index embeddings don't reliably discriminate luxury vs
-      // value (photo embeddings compress into a narrow cosine range). Use star
-      // rating as a reliable proxy: penalise 4-5★ hotels when luxury_pref < -5.
-      // This adjusts vectorScore (visible to client) so the display score and
-      // sort order both reflect the penalty consistently.
+      // ── Boop star-class ranking tweaks (no live rates) ─────────────────────
       try {
-        const boopRaw = req.query.boop_profile;
-        if (boopRaw) {
-          const boopProfile = JSON.parse(decodeURIComponent(boopRaw));
+        const boopProfile = boopProfileForMeta || parseBoopProfileFromQuery(req.query);
+        if (boopProfile) {
           const luxuryPref  = Number(boopProfile?.prefs?.luxury ?? 0);
           const priceMatters = Number(boopProfile?.answers?.priceMatters);
-          // Only apply boop-derived ranking tweaks when this request is actually
-          // using wizard hotel/must-have signals — otherwise a stale saved profile
-          // could still ride along on a free-text-only search.
           const hasBoopTailoredQuery = !!(
             String(req.query.hotel_query || "").trim() ||
-            String(req.query.must_haves || "").trim()
+            String(req.query.must_haves || "").trim() ||
+            String(req.query.query || "").trim()
           );
           const nbhdWeight = v2.body.stats?.nbhd_rank_weight ?? 0;
-          const v2ResortHotels = () => {
-            v2.body.hotels.sort((a, b) => {
-              const ca = (1 - nbhdWeight) * (a.vectorScore || 0) / 100 + nbhdWeight * ((a.nbhd_fit_pct ?? 62) / 100);
-              const cb = (1 - nbhdWeight) * (b.vectorScore || 0) / 100 + nbhdWeight * ((b.nbhd_fit_pct ?? 62) / 100);
-              if (Math.abs(cb - ca) > 1e-6) return cb - ca;
-              return (b.vectorScore || 0) - (a.vectorScore || 0);
-            });
-          };
           if (luxuryPref < -5) {
-            // Max penalty: 25% for luxury=-16, scales linearly. At luxury=-5 ≈ 8%.
             const luxPenFactor = Math.min(0.30, Math.abs(luxuryPref) / 50);
             for (const h of v2.body.hotels) {
               const stars = h.starRating || 3;
               if (stars > 3) {
-                // penalty grows linearly above 3★: 4★→0.5×factor, 5★→1×factor
                 const penalty = luxPenFactor * Math.min(1, (stars - 3) / 2);
                 h.vectorScore = Math.max(0, Math.round(h.vectorScore * (1 - penalty)));
               }
             }
-            v2ResortHotels();
+            sortV2HotelsDefault(v2.body.hotels, nbhdWeight);
             v2.body.stats.luxury_star_penalty_applied = true;
             v2.body.stats.luxury_pref = luxuryPref;
           }
-          // Wizard slider "price matters" (answers): cosine scores barely separate
-          // luxury from value. Neutral (0) and "very important" (+): nudge 4–5★ down
-          // so Ritz-type does not own the top on match alone. "Less important" (−):
-          // skip — user explicitly allows splurge / premium to surface.
-          if (
-            hasBoopTailoredQuery &&
-            Number.isFinite(priceMatters) &&
-            priceMatters >= 0
-          ) {
-            const clampPm = Math.min(100, Math.max(0, priceMatters));
-            const pmPenFactor = Math.min(0.28, 0.08 + (clampPm / 100) * 0.22);
-            for (const h of v2.body.hotels) {
-              const stars = h.starRating || 3;
-              if (stars > 3) {
-                const penalty = pmPenFactor * Math.min(1, (stars - 3) / 2);
-                h.vectorScore = Math.max(0, Math.round(h.vectorScore * (1 - penalty)));
-              }
+          // Any non-neutral slider (|pm| >= 1): tie-band only (±5 blended pts).
+          // pm > 0 → cheaper stars/rates; pm < 0 → splurge. Value side skipped when
+          // profile is upscale (polished personality or luxury pref > 15).
+          v2.body.stats.price_matters_ranking_active = false;
+          if (hasBoopTailoredQuery && boopPriceMattersActive(priceMatters)) {
+            v2.body.stats.price_matters = priceMatters;
+            if (priceMatters > 0 && boopValueNudgeBlocked(boopProfile)) {
+              v2.body.stats.price_matters_value_nudge = "blocked";
+            } else {
+              v2.body.stats.price_matters_ranking_active = true;
+              sortV2HotelsPriceTieband(v2.body.hotels, nbhdWeight, priceMatters);
+              v2.body.stats.price_matters_star_penalty_applied = true;
+              v2.body.stats.price_matters_value_nudge =
+                priceMatters > 0 ? "tieband_value" : "tieband_splurge";
+              console.log(
+                `[v2] price_matters tieband: pm=${priceMatters} band=${BOOP_VALUE_TIE_BAND_PTS}pts`
+              );
             }
-            v2ResortHotels();
-            v2.body.stats.price_matters_star_penalty_applied = true;
-            v2.body.stats.price_matters = clampPm;
           }
         }
       } catch (e) {

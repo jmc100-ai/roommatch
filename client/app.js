@@ -192,6 +192,76 @@
   let NEIGHBORHOOD_FLOW_ROWS = []; // indexed rows for fetchAndShowNeighborhoods → selectNeighborhoodFlow
   /** True when neighbourhood grid was opened from hotel results (change area) — different chrome + Choose returns to results. */
   let _nbhdBrowseFromResults = false;
+  /** Mobile edit-trip sheet: subflows (city/nbhd/dates) update state then return to sheet — search waits for Update results. */
+  let _returnToCmdTripSheet = false;
+
+  function isMobileCmdTripUi() {
+    return typeof window.matchMedia !== 'undefined'
+      && window.matchMedia('(max-width: 640px)').matches;
+  }
+
+  function beginCmdTripSheetSubflow() {
+    if (!isMobileCmdTripUi()) return false;
+    _returnToCmdTripSheet = true;
+    return true;
+  }
+
+  function returnToResultsCmdTripSheet(opts = {}) {
+    const reopenSheet = opts.reopenSheet !== false;
+    const discovery = document.getElementById('discovery-flow');
+    const results = document.getElementById('st-results');
+    if (discovery) discovery.style.display = 'none';
+    if (results) results.style.display = 'block';
+    document.body.classList.add('has-results');
+    const story = document.getElementById('story');
+    if (story) story.classList.remove('show');
+    _nbhdBrowseFromResults = false;
+    syncCommandBarFromState();
+    syncTripSummaryBar();
+    syncCityTripSheetBackUi();
+    if (reopenSheet) {
+      requestAnimationFrame(() => openCmdTripSheet());
+    }
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  function finishCmdTripSheetSubflow(msg) {
+    if (!_returnToCmdTripSheet || !isMobileCmdTripUi()) return false;
+    _returnToCmdTripSheet = false;
+    if (msg) flashMsg(msg);
+    returnToResultsCmdTripSheet({ reopenSheet: true });
+    return true;
+  }
+
+  function exitCityEditToTripSheet() {
+    if (!_returnToCmdTripSheet || !isMobileCmdTripUi()) return;
+    _returnToCmdTripSheet = false;
+    returnToResultsCmdTripSheet({ reopenSheet: true });
+  }
+
+  function syncCityTripSheetBackUi() {
+    const inner = document.querySelector('#st-city .city-chapter-inner');
+    if (!inner) return;
+    let btn = document.getElementById('city-trip-sheet-back');
+    const show = _returnToCmdTripSheet && isMobileCmdTripUi();
+    if (!show) {
+      if (btn) btn.hidden = true;
+      return;
+    }
+    if (!btn) {
+      btn = document.createElement('button');
+      btn.id = 'city-trip-sheet-back';
+      btn.type = 'button';
+      btn.className = 'back-btn city-trip-sheet-back';
+      btn.innerHTML = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 3L5 8l5 5"/></svg> Back to edit trip';
+      btn.onclick = (e) => {
+        e.preventDefault();
+        exitCityEditToTripSheet();
+      };
+      inner.insertBefore(btn, inner.firstChild);
+    }
+    btn.hidden = false;
+  }
 
   /**
    * Maps primary_nbhd → neighbourhood vibe % using the SAME pipeline as the nbhd picker
@@ -553,7 +623,7 @@
       type:'cards',
       options:[
         { id:'buzz_central', emoji:'🏛️', label:'Historic & energetic', title:'Historic & energetic', note:'Big sights, busy streets, classic city energy — landmarks right outside.', image:'images/wizard/historic-energetic.png', weights:{ iconic:18, culture:14, central:20, nightlife:12, walkability:10, calm:-10, local:-2, luxury:-8 } },
-        { id:'calm_central', emoji:'🏙️', label:'Upscale & polished', title:'Upscale & polished', note:'Modern, comfortable, and refined — great restaurants and shopping, quieter nights.', image:'images/wizard/upscale-polished.png', weights:{ luxury:28, shopping:14, calm:14, central:4, walkability:10, nightlife:-14, iconic:2, local:2 } },
+        { id:'calm_central', emoji:'🏙️', label:'Upscale & Refined', title:'Upscale & Refined', note:'Modern, comfortable, and refined — great restaurants and shopping, quieter nights.', image:'images/wizard/upscale-polished.png', weights:{ luxury:28, shopping:14, calm:14, central:4, walkability:10, nightlife:-14, iconic:2, local:2 } },
         { id:'hip_local', emoji:'🌿', label:'Trendy & café-filled', title:'Trendy & café-filled', note:'Stylish, walkable streets — cafés, parks, bars, and local creative buzz.', image:'images/wizard/trendy-cafe-filled.png', weights:{ local:26, cafes:16, restaurants:12, nightlife:14, walkability:12, central:-12, calm:-2, iconic:-18, touristy:-18, luxury:-10 } },
         { id:'leafy_local', emoji:'🌲', label:'Quiet & residential', title:'Quiet & residential', note:'Slower pace, leafy streets, everyday local life away from the crowds.', image:'images/wizard/quiet-residential-street.png', weights:{ calm:24, green:24, local:20, nightlife:-18, iconic:-18, central:-16, cafes:10, walkability:6 } },
         { id:'scenic_open', emoji:'🌆', label:'Central & connected', title:'Central & connected', note:'Easy access to everything — transit, business, balanced city feel.', image:'images/wizard/central-connected.png', weights:{ central:20, walkability:16, calm:8, iconic:10, green:4, nightlife:-4 } },
@@ -581,7 +651,7 @@
   // nbhdScene tiles → legacy pace + location (HyDE snippets + trip vs area reconciliation).
   const NBHD_SCENE_SEEDS = {
     buzz_central:  { pace: 'vibrant', location: 'central' },   // Historic & energetic
-    calm_central:  { pace: 'quiet',   location: 'upscale' },   // Upscale & polished
+    calm_central:  { pace: 'quiet',   location: 'upscale' },   // Upscale & Refined
     hip_local:     { pace: 'vibrant', location: 'trendy' },    // Trendy & café-filled
     leafy_local:   { pace: 'quiet',   location: 'residential' }, // Quiet & residential
     scenic_open:   { pace: 'moderate', location: 'central' },  // Central & connected
@@ -670,7 +740,12 @@
       document.getElementById('st-results').style.display     = 'none';
       document.getElementById('discovery-flow').style.display = '';
     }
-    if (id === 'city')  { document.getElementById('story').classList.remove('show'); showFlowStep('city'); return; }
+    if (id === 'city')  {
+      document.getElementById('story').classList.remove('show');
+      showFlowStep('city');
+      syncCityTripSheetBackUi();
+      return;
+    }
     if (id === 'boop'  && !S.city)  return;
     if (id === 'nbhd'  && !S.city)  return;
     if (id === 'style' && !S.nbhd)  { flashMsg('Choose a neighbourhood first'); return; }
@@ -698,6 +773,10 @@
 
   function exitNbhdBrowseToResults() {
     _nbhdBrowseFromResults = false;
+    if (_returnToCmdTripSheet && isMobileCmdTripUi()) {
+      returnToResultsCmdTripSheet({ reopenSheet: true });
+      return;
+    }
     document.getElementById('discovery-flow').style.display = 'none';
     document.getElementById('st-results').style.display     = 'block';
     document.body.classList.add('has-results');
@@ -1807,6 +1886,8 @@
   // ── Vibe chips on results toolbar ────────────────────────────────
   // Steps that surface as taps on the results-page chip strip.
   const VIBE_CHIP_STEPS = ['trip', 'stayVibe', 'nbhdScene', 'musthaves'];
+  /** Card steps opened from results vibe chips (not must-haves). */
+  const BOOP_CHIP_OVERLAY_CARD_STEPS = ['trip', 'stayVibe', 'nbhdScene'];
 
   // Icon for the must-have chip. Mirrors the labels in BOOP_QUESTIONS musthaves.
   const MUSTHAVE_ICONS = {
@@ -1909,6 +1990,7 @@
       return;
     }
     el.textContent = '';
+    syncVibeSearchAlignment();
   }
 
   function _activeBoopProfileForChips() {
@@ -1976,6 +2058,16 @@
     return `<button type="button" class="vibe-chip" onclick="openBoopFromChip('${safeStep}')" aria-label="Edit ${safeLabel}">${iconHtml}<span class="vibe-chip-text">${safeLabel}</span><span class="vibe-chip-pencil" aria-hidden="true">✎</span></button>`;
   }
 
+  /** Clear legacy inline margin from old resultCount alignment (removed — caused overlap). */
+  function syncVibeSearchAlignment() {
+    const actions = document.querySelector('#cmd-row-vibe .vibe-row-actions');
+    if (actions) actions.style.marginRight = '';
+  }
+
+  function ensureVibeSearchAlignWatch() {
+    syncVibeSearchAlignment();
+  }
+
   // Open the existing Boop wizard at a specific question, rendered as a modal
   // overlay over the results screen. Reuses #st-boop markup + renderBoopQuestion
   // so the look/feel matches the first-time flow.
@@ -2030,6 +2122,12 @@
   if (typeof document !== 'undefined') {
     document.addEventListener('keydown', (e) => {
       if (e.key !== 'Escape') return;
+      const tripSheet = document.getElementById('cmd-trip-sheet-host');
+      if (tripSheet && tripSheet.classList.contains('is-open')) {
+        e.preventDefault();
+        closeCmdTripSheet();
+        return;
+      }
       const pw = document.getElementById('cmd-party-wrap');
       if (pw && pw.classList.contains('cmd-party-open')) {
         e.preventDefault();
@@ -2075,8 +2173,11 @@
     if (!wrap) return;
     const q = BOOP_QUESTIONS[BOOP.idx];
     if (!q) { boopFinish(); return; }
+    const overlayMode = !!S.boopReentryFromChip;
+    const isChipCardOverlay = overlayMode && q.type === 'cards' && BOOP_CHIP_OVERLAY_CARD_STEPS.includes(q.id);
     wrap.className = 'boop-wrap'
-      + (q.type === 'chips' ? ' boop-wrap--deal' : '');
+      + (q.type === 'chips' ? ' boop-wrap--deal' : '')
+      + (isChipCardOverlay ? ' boop-wrap--chip-cards' : '');
     const p = boopProgressPct();
     /* Saved vibe banner — restore to show Use saved / Retake on first screen when a profile exists
     const saved = loadBoopProfileForCity(S.city);
@@ -2087,7 +2188,6 @@
     */
     const savedUi = '';
 
-    const overlayMode = !!S.boopReentryFromChip;
     let body = '';
     if (q.type === 'cards') {
       const gridClass = (q.options && q.options.length === 4)
@@ -2113,7 +2213,7 @@
           <div class="boop-price-matter-cur" id="boop-price-matter-cur">${escHtml(pmCaption)}</div>
         </div>`;
       }
-      body = `${priceMatterBlock}<div class="boop-grid${gridClass}">${q.options.map((o, cardIdx) => {
+      const gridHtml = `<div class="boop-grid${gridClass}">${q.options.map((o, cardIdx) => {
         const isCurrent = overlayMode && o.id === currentPick;
         return `
         <button class="boop-card${isCurrent ? ' boop-card--current' : ''}" onclick="boopChoose('${q.id}','${o.id}')">
@@ -2131,11 +2231,16 @@
       }).join('')}</div>`;
       // Overlay re-entry from a chip: surface an explicit "Find hotels" button
       // so the user can commit the (re-)pick without auto-advancing.
-      if (overlayMode) {
-        body += `<div class="boop-actions" style="margin-top:18px">
+      const overlayFindHtml = overlayMode
+        ? `<div class="boop-actions boop-overlay-find">
           <button type="button" class="boop-btn subtle" onclick="closeBoopOverlay()">Cancel</button>
           <button type="button" class="boop-btn primary" onclick="boopFinish()">Find hotels →</button>
-        </div>`;
+        </div>`
+        : '';
+      if (isChipCardOverlay) {
+        body = `<div class="boop-card-screen">${priceMatterBlock}${gridHtml}${overlayFindHtml}</div>`;
+      } else {
+        body = `${priceMatterBlock}${gridHtml}${overlayFindHtml}`;
       }
     } else if (q.type === 'slider') {
       const blend = boopBlend(BOOP.slider);
@@ -2252,6 +2357,24 @@
   // ── CITY ─────────────────────────────────────────────
   function pickCity(name) {
     const city = normalizeCityName(name);
+    if (_returnToCmdTripSheet && isMobileCmdTripUi()) {
+      const prevCity = S.city;
+      S.city = city;
+      document.getElementById('cityInput').value = city;
+      document.getElementById('sv-city').textContent = city.length > 20 ? city.slice(0, 18) + '…' : city;
+      writeHistory(CITY_HISTORY_KEY, city);
+      buildCityChips();
+      if (prevCity !== city) {
+        S.nbhd = null;
+        S.nbhdBbox = null;
+        selectedNeighborhood = null;
+        clearNbhdPickerMatchCache();
+        const saved = loadBoopProfileForCity(city);
+        if (saved) S.boopProfile = saved;
+      }
+      finishCmdTripSheetSubflow(prevCity !== city ? `✓ ${city}` : undefined);
+      return;
+    }
     S.city = city;
     document.getElementById('cityInput').value = city;
     document.getElementById('sv-city').textContent = city.length > 20 ? city.slice(0,18)+'…' : city;
@@ -3366,6 +3489,12 @@
       : null;
     if (_nbhdBrowseFromResults) {
       const isAll = name.startsWith('All of');
+      if (_returnToCmdTripSheet && isMobileCmdTripUi()) {
+        finishCmdTripSheetSubflow(isAll
+          ? '📍 All areas — tap Update results when ready'
+          : '✓ ' + name + ' — tap Update results when ready');
+        return;
+      }
       flashMsg(isAll ? '📍 Searching all of ' + S.city + ' — updating results…'
                      : '✓ ' + name + ' — updating results…');
       completeNbhdBrowseSelection();
@@ -3861,6 +3990,161 @@
     startSearch();
   }
 
+  // ── Mobile results: condensed trip summary + edit sheet (≤640px) ──
+  function tripSummaryNeighborhoodLabel() {
+    if (!S.nbhd || String(S.nbhd).startsWith('All of')) return 'All areas';
+    const n = String(S.nbhd);
+    return n.length > 28 ? n.slice(0, 26) + '…' : n;
+  }
+
+  function tripSummaryDatesLabel() {
+    if (S.checkin && S.checkout) return fmtDate(S.checkin) + ' – ' + fmtDate(S.checkout);
+    return 'Add dates';
+  }
+
+  function tripSummaryPartyLabel() {
+    const gs = (S.boopProfile && S.boopProfile.answers && S.boopProfile.answers.group_size)
+      || BOOP.answers.group_size
+      || 'couple';
+    return PARTY_SIZE_LABELS[gs] || PARTY_SIZE_LABELS.couple;
+  }
+
+  function buildTripSummaryLine() {
+    const city = S.city || 'Pick city';
+    return [city, tripSummaryNeighborhoodLabel(), tripSummaryDatesLabel(), tripSummaryPartyLabel()]
+      .join(' · ');
+  }
+
+  function syncTripSheetPartyPills() {
+    const gs = (S.boopProfile && S.boopProfile.answers && S.boopProfile.answers.group_size)
+      || BOOP.answers.group_size
+      || 'couple';
+    document.querySelectorAll('.cmd-trip-party-pill').forEach(btn => {
+      btn.classList.toggle('is-active', btn.dataset.size === gs);
+    });
+  }
+
+  function syncTripSheetFields() {
+    const cityEl = document.getElementById('cmd-trip-field-city');
+    const nbhdEl = document.getElementById('cmd-trip-field-nbhd');
+    const datesEl = document.getElementById('cmd-trip-field-dates');
+    if (cityEl) cityEl.textContent = S.city || '—';
+    if (nbhdEl) nbhdEl.textContent = tripSummaryNeighborhoodLabel();
+    if (datesEl) {
+      const hasDates = !!(S.checkin && S.checkout);
+      datesEl.textContent = tripSummaryDatesLabel();
+      datesEl.classList.toggle('ph', !hasDates);
+    }
+    syncTripSheetPartyPills();
+  }
+
+  function syncTripSummaryBar() {
+    const line = document.getElementById('cmd-trip-summary-line');
+    if (line) line.textContent = buildTripSummaryLine();
+    syncTripSheetFields();
+  }
+
+  function ensureCmdTripSheetHost() {
+    const host = document.getElementById('cmd-trip-sheet-host');
+    if (host && host.parentElement !== document.body) {
+      document.body.appendChild(host);
+    }
+    return host;
+  }
+
+  function openCmdTripSheet(ev) {
+    if (ev) {
+      ev.stopPropagation();
+      ev.preventDefault();
+    }
+    closeCmdPartyPopover();
+    const host = ensureCmdTripSheetHost();
+    const btn = document.getElementById('cmd-trip-summary');
+    if (!host) return;
+    syncTripSheetFields();
+    host.hidden = false;
+    host.classList.add('is-open');
+    host.setAttribute('aria-hidden', 'false');
+    if (btn) btn.setAttribute('aria-expanded', 'true');
+    document.body.classList.add('cmd-trip-sheet-open');
+  }
+
+  function closeCmdTripSheet(ev, opts) {
+    if (ev) {
+      ev.stopPropagation();
+      ev.preventDefault();
+    }
+    const host = document.getElementById('cmd-trip-sheet-host');
+    const btn = document.getElementById('cmd-trip-summary');
+    if (host) {
+      host.classList.remove('is-open');
+      host.hidden = true;
+      host.setAttribute('aria-hidden', 'true');
+    }
+    if (btn) btn.setAttribute('aria-expanded', 'false');
+    document.body.classList.remove('cmd-trip-sheet-open');
+    if (!opts || !opts.keepSubflow) {
+      _returnToCmdTripSheet = false;
+      syncCityTripSheetBackUi();
+    }
+  }
+
+  function cmdTripSheetPickCity(ev) {
+    if (ev) ev.stopPropagation();
+    beginCmdTripSheetSubflow();
+    closeCmdTripSheet(ev, { keepSubflow: true });
+    goToStep('city');
+  }
+
+  function cmdTripSheetPickNbhd(ev) {
+    if (ev) ev.stopPropagation();
+    beginCmdTripSheetSubflow();
+    closeCmdTripSheet(ev, { keepSubflow: true });
+    goToStep('nbhd');
+  }
+
+  function cmdTripSheetPickDates(ev) {
+    if (ev) ev.stopPropagation();
+    beginCmdTripSheetSubflow();
+    closeCmdTripSheet(ev, { keepSubflow: true });
+    openMobileResultsDatePicker();
+  }
+
+  function cmdTripSheetSetParty(size, ev) {
+    if (ev) {
+      ev.stopPropagation();
+      ev.preventDefault();
+    }
+    if (size !== 'solo' && size !== 'couple' && size !== 'group') return;
+    const city = S.city;
+    if (!city) return;
+    applyBoopGroupSizeAnswer(size);
+    const base = S.boopProfile || loadBoopProfileForCity(city) || buildEphemeralDefaultBoopProfile();
+    const mergedAns = migrateBoopProfileAnswersIfNeeded({ ...(base.answers || {}), group_size: size });
+    const next = {
+      ...base,
+      answers: mergedAns,
+      updatedAt: Date.now(),
+    };
+    S.boopProfile = next;
+    saveBoopProfileForCity(city, next);
+    syncTripSummaryBar();
+    const cp = document.getElementById('cv-party');
+    if (cp) cp.textContent = PARTY_SIZE_LABELS[size] || PARTY_SIZE_LABELS.couple;
+    syncCityStepGroupPickersUi(size);
+    renderVibeChips();
+  }
+
+  function cmdApplyTripSheet(ev) {
+    if (ev) {
+      ev.stopPropagation();
+      ev.preventDefault();
+    }
+    _returnToCmdTripSheet = false;
+    closeCmdTripSheet();
+    cmdSearch();
+  }
+
   // ── SEARCH ───────────────────────────────────────────
   function syncCommandBarFromState() {
     const cv = document.getElementById('cv-city');
@@ -3916,6 +4200,9 @@
       const ct2 = document.getElementById('ct-co');
       if (ct2) ct2.value = S.checkout;
     }
+    syncTripSummaryBar();
+    ensureVibeSearchAlignWatch();
+    syncVibeSearchAlignment();
   }
 
   function buildResultsSkeletonCardsHTML(count) {
@@ -4132,6 +4419,7 @@
     closeDateRangePicker('cmd');
     document.getElementById('cmd-tray').classList.remove('open');
     syncCommandBarFromState();
+    if (finishCmdTripSheetSubflow('Dates updated — tap Update results when ready')) return;
     startSearch();
   }
 
@@ -4352,6 +4640,7 @@
     });
   }
   document.addEventListener('DOMContentLoaded', () => {
+    ensureCmdTripSheetHost();
     initTopnavMenuAndStatic();
     scheduleSyncAvailFilterMount();
     // Restore property-type filter from sessionStorage
@@ -4803,6 +5092,7 @@
     const propTypeSelect = document.getElementById('propTypeSelect');
     if (propTypeSelect) propTypeSelect.value = _propTypeFilter;
     scheduleSyncAvailFilterMount();
+    syncVibeSearchAlignment();
     _setRatesStatus('', '');
     document.body.classList.add('has-results');
     document.getElementById('discovery-flow').style.display = 'none';
@@ -5427,6 +5717,7 @@
     if (countEl) countEl.textContent = remaining > 0
       ? `Showing ${showing} of ${total} hotels${pricedNote}`
       : `${total} hotel${total !== 1 ? 's' : ''}${pricedNote}`;
+    syncVibeSearchAlignment();
   }
 
   function closeSortMorePop() {
@@ -6511,6 +6802,32 @@
     return Math.max(-100, Math.min(100, pm));
   }
 
+  /** Mirrors server: skip value nudge when user asked for polished / high luxury. */
+  function boopValueNudgeBlocked() {
+    const ans = S.boopProfile?.answers;
+    if (!ans) return true;
+    if (ans.hotelPersonality === 'polished') return true;
+    if (ans.stayVibe === 'sleek_polished' || ans.stayVibe === 'classic_traditional') return true;
+    const luxury = Number(S.boopProfile?.prefs?.luxury ?? 0);
+    return Number.isFinite(luxury) && luxury > 15;
+  }
+
+  /** Same band as `boopPriceMattersCaption` ("Neutral" when |pm| <= 32). */
+  const BOOP_PM_NEUTRAL_BAND = 32;
+
+  function boopPriceMattersSplurge(pm) {
+    return Number.isFinite(pm) && pm <= -33;
+  }
+
+  function boopPriceMattersValue(pm) {
+    return Number.isFinite(pm) && pm >= 33 && !boopValueNudgeBlocked();
+  }
+
+  function boopPriceMattersStrength(pm) {
+    if (!Number.isFinite(pm) || Math.abs(pm) <= BOOP_PM_NEUTRAL_BAND) return 0;
+    return Math.min(1, (Math.abs(pm) - 33) / (100 - 33));
+  }
+
   function getSortedHotelsForDisplay() {
     let hotels = [..._lastHotels].filter(hotelPassesAvailFilter).filter(hotelPassesFreeCancelFilter);
     if (_nbhdFilter) {
@@ -6667,13 +6984,15 @@
     } else if (_currentSort === 'match') {
       const wNbhd = typeof _lastVsearchStats?.nbhd_rank_weight === 'number' ? _lastVsearchStats.nbhd_rank_weight : 0;
       const canFilter = _showAvailOnly && _hasDateSearch && _pricesLoaded;
-      // Boop priceMatters (-100…+100) acts as a secondary tiebreaker within close-score
-      // groups (within 5 pts). pm < 0 = splurge (prefer expensive); pm > 0 = value (prefer cheap).
-      // Primary sort is always match quality — priceMatters never demotes a clearly better match.
+      // Boop priceMatters: tiebreaker only at slider extremes (|pm| >= 33), within 5 pts.
       const pmRaw = boopPriceMattersForSort();
       const pm = Number.isFinite(pmRaw) ? pmRaw : 0;
+      const pmSplurge = boopPriceMattersSplurge(pm);
+      const pmValue = boopPriceMattersValue(pm);
+      const pmActive = pmSplurge || pmValue;
+      const pmStrength = boopPriceMattersStrength(pm);
       let pricePercentiles = null;
-      if (pm !== 0 && _pricesLoaded && _hasDateSearch) {
+      if (pmActive && _pricesLoaded && _hasDateSearch) {
         const priced = hotels.filter(h => h.price != null).map(h => h.price).sort((a, b) => a - b);
         if (priced.length >= 5) {
           const p10 = priced[Math.floor(priced.length * 0.10)] ?? priced[0];
@@ -6695,6 +7014,16 @@
         if (!pricePercentiles || p == null) return 50;
         return Math.max(0, Math.min(100, ((p - pricePercentiles.p10) / pricePercentiles.range) * 100));
       };
+      const normStarCheap = h => {
+        const s = Number(h.starRating);
+        if (!Number.isFinite(s) || s <= 0) return 50;
+        return Math.max(0, Math.min(100, ((5 - Math.min(s, 5)) / 5) * 100));
+      };
+      const normStarExpensive = h => {
+        const s = Number(h.starRating);
+        if (!Number.isFinite(s) || s <= 0) return 50;
+        return Math.max(0, Math.min(100, (Math.min(s, 5) / 5) * 100));
+      };
       hotels.sort((a, b) => {
         const aScore = blendedScore(a);
         const bScore = blendedScore(b);
@@ -6704,12 +7033,11 @@
           const cmp = matchDiff > 0 ? 1 : -1;
           return _sortReverse ? -cmp : cmp;
         }
-        // Within 5 pts: apply price tiebreaker from priceMatters.
-        // pm < 0 (splurge): expensive hotels rank first; pm > 0 (value): cheap hotels first.
-        if (pricePercentiles) {
-          const aExp = normExpensive(a.price);
-          const bExp = normExpensive(b.price);
-          const priceCmp = pm < 0 ? bExp - aExp : aExp - bExp;
+        // Within 5 pts: price tiebreaker when slider off center (stronger as |pm| grows).
+        if (pmActive) {
+          const aExp = pricePercentiles ? normExpensive(a.price) : normStarExpensive(a);
+          const bExp = pricePercentiles ? normExpensive(b.price) : normStarExpensive(b);
+          const priceCmp = (pmSplurge ? bExp - aExp : aExp - bExp) * pmStrength;
           if (Math.abs(priceCmp) > 2) return _sortReverse ? -priceCmp : priceCmp;
         }
         // Pure match tiebreak
@@ -6803,6 +7131,7 @@
       remaining > 0 ? `Showing ${showing} of ${total} hotels${nbhdSuffix}${pricedSuffix}` : `${total} hotel${total !== 1 ? 's' : ''}${nbhdSuffix}${pricedSuffix}`;
     const dbgBtn = document.getElementById('debugCopyBtn');
     if (dbgBtn) dbgBtn.style.display = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' ? '' : 'none';
+    syncVibeSearchAlignment();
 
     const resultsEl = document.getElementById('results');
     resultsEl.classList.toggle('results-rows', _viewMode === 'rows');
@@ -7134,7 +7463,7 @@
     strip.innerHTML = `
       <div class="nbhd-refine-inner">
         <div class="nbhd-refine-toprow">
-          <span class="nbhd-refine-label">Top neighbourhoods</span>
+          <button type="button" class="nbhd-refine-label nbhd-refine-label--link" onclick="goToStep('nbhd')" title="Browse neighbourhood vibes">Top neighbourhoods</button>
           <div class="nbhd-refine-avail-slot" id="nbhd-refine-avail-slot"></div>
         </div>
         <div class="nbhd-refine-main">
