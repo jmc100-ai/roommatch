@@ -7637,6 +7637,7 @@
   let _hpCarouselIdx  = 0;
   let _hpLightboxIdx  = 0;
   let _hpLightboxUrls = [];
+  let _hpDetailPhotos = [];
   // Reviews UI state — purely in-memory, never persisted client-side either.
   // (We rely on the server for caching; this just tracks pagination + IO observer.)
   const _hpReviewsState = { hotelId: null, offset: 0, limit: 10, total: null, loading: false, observer: null };
@@ -7813,15 +7814,110 @@
     if (id) openHotelDetailPage(id);
   });
 
+  function _hpGoogleMapsUrl(d) {
+    if (d.lat != null && d.lng != null && !Number.isNaN(+d.lat) && !Number.isNaN(+d.lng)) {
+      return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${d.lat},${d.lng}`)}`;
+    }
+    const q = [d.address, d.city, d.country_code].filter(Boolean).join(', ').trim();
+    return q ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(q)}` : '';
+  }
+
+  function _hpAddressRowHTML(d) {
+    const addr = (d.address || '').trim();
+    const cityPart = [d.city, d.country_code].filter(Boolean).join(', ');
+    const line = addr || cityPart;
+    if (!line) return '';
+    const mapUrl = _hpGoogleMapsUrl(d);
+    const mapLink = mapUrl
+      ? ` <a class="hp-map-link" href="${escHtml(mapUrl)}" target="_blank" rel="noopener">Show map</a>`
+      : '';
+    return `<div class="hp-address-row"><span class="hp-address-pin" aria-hidden="true">📍</span><span class="hp-address-text">${escHtml(line)}</span>${mapLink}</div>`;
+  }
+
+  function _hpMosaicCellHTML(url, idx, extraClass, showAllBtn) {
+    if (!url) return `<div class="hp-mosaic-cell hp-mosaic-empty ${extraClass || ''}" aria-hidden="true"></div>`;
+    const showAll = showAllBtn
+      ? `<span class="hp-mosaic-show-all" onclick="event.stopPropagation();openHpLightbox(0)">Show all pictures</span>`
+      : '';
+    return `<button type="button" class="hp-mosaic-cell ${extraClass || ''}" onclick="openHpLightbox(${idx})" aria-label="View photo ${idx + 1}">
+      <img src="${escHtml(url)}" alt="" loading="${idx === 0 ? 'eager' : 'lazy'}" onerror="this.parentElement.classList.add('hp-mosaic-empty')">
+      ${showAll}
+    </button>`;
+  }
+
+  function hotelDetailCarouselHTML(allPhotos) {
+    const photoCount = allPhotos.length;
+    if (!photoCount) return `<div class="hp-hero-placeholder"></div>`;
+    const carouselImgs = allPhotos.map((url, i) =>
+      `<img class="hp-carousel-img${i === 0 ? ' active' : ''}" src="${escHtml(url)}" data-idx="${i}" alt="" loading="${i === 0 ? 'eager' : 'lazy'}" onerror="this.remove();hpCarouselReindex()">`
+    ).join('');
+    return `
+      <div class="hp-carousel" id="hp-carousel">
+        <div class="hp-carousel-track" id="hp-carousel-track">${carouselImgs}</div>
+        ${photoCount > 1 ? `
+        <button class="hp-carousel-btn hp-carousel-prev" onclick="hpCarouselStep(-1)" aria-label="Previous photo">‹</button>
+        <button class="hp-carousel-btn hp-carousel-next" onclick="hpCarouselStep(1)" aria-label="Next photo">›</button>
+        <div class="hp-carousel-dots" id="hp-carousel-dots">${allPhotos.map((_, i) => `<span class="hp-dot${i === 0 ? ' active' : ''}" onclick="hpCarouselGo(${i})"></span>`).join('')}</div>
+        ` : ''}
+      </div>`;
+  }
+
+  function hotelDetailMosaicHTML(allPhotos) {
+    const n = allPhotos.length;
+    if (!n) return `<div class="hp-hero-placeholder"></div>`;
+    const countClass = `hp-mosaic--count-${Math.min(n, 5)}`;
+    const showAllOnLast = n > 1;
+    if (n === 1) {
+      return `<div class="hp-mosaic ${countClass}">${_hpMosaicCellHTML(allPhotos[0], 0, 'hp-mosaic-main', false)}</div>`;
+    }
+    return `<div class="hp-mosaic ${countClass}">
+      ${_hpMosaicCellHTML(allPhotos[0], 0, 'hp-mosaic-main', false)}
+      ${_hpMosaicCellHTML(allPhotos[1], 1, 'hp-mosaic-sub hp-mosaic-sub--a', false)}
+      ${_hpMosaicCellHTML(allPhotos[2], 2, 'hp-mosaic-sub hp-mosaic-sub--b', false)}
+      ${_hpMosaicCellHTML(allPhotos[3], 3, 'hp-mosaic-sub hp-mosaic-sub--c', false)}
+      ${_hpMosaicCellHTML(allPhotos[4], 4, 'hp-mosaic-sub hp-mosaic-sub--d', showAllOnLast)}
+    </div>`;
+  }
+
+  function hotelDetailLightboxHTML(allPhotos) {
+    if (!allPhotos.length) return '';
+    const thumbs = allPhotos.map((url, i) =>
+      `<button type="button" class="hp-lb-thumb${i === 0 ? ' active' : ''}" data-idx="${i}" onclick="event.stopPropagation();hpLightboxGo(${i})" aria-label="Photo ${i + 1}">
+        <img src="${escHtml(url)}" alt="">
+      </button>`
+    ).join('');
+    return `
+      <div class="hp-lightbox" id="hp-lightbox" onclick="closeHpLightbox(event)">
+        <div class="hp-lb-stage" onclick="event.stopPropagation()">
+          <button type="button" class="hp-lb-close" onclick="closeHpLightbox()" aria-label="Close gallery">✕</button>
+          <button type="button" class="hp-lb-prev" onclick="hpLightboxStep(-1)" aria-label="Previous photo">‹</button>
+          <img class="hp-lb-img" id="hp-lb-img" src="" alt="">
+          <button type="button" class="hp-lb-next" onclick="hpLightboxStep(1)" aria-label="Next photo">›</button>
+          <div class="hp-lb-counter" id="hp-lb-counter" aria-live="polite"></div>
+        </div>
+        <div class="hp-lb-strip" id="hp-lb-strip" onclick="event.stopPropagation()">${thumbs}</div>
+      </div>`;
+  }
+
+  function _hpMetaSubRowHTML(stars, ratingBadge, nbhdChip, propChip) {
+    return `<div class="hp-sub">
+      ${stars ? `<span class="hp-stars">${stars}</span>` : ''}
+      ${ratingBadge}
+      ${nbhdChip}
+      ${propChip}
+    </div>`;
+  }
+
   function hotelDetailPageSkeletonHTML() {
     return `
       <div class="hpage-topbar">
         <button class="hpage-back" onclick="closeHotelDetailPage()" aria-label="Back">‹ Back</button>
       </div>
+      <header class="hpage-head hpage-head--desktop hp-skeleton" style="height:88px;margin:16px 24px 0;border-radius:8px"></header>
       <div class="hpage-hero hp-skeleton"></div>
       <div class="hpage-grid">
         <div class="hpage-content">
-          <div class="hp-meta">
+          <div class="hp-meta hp-meta--mobile">
             <div class="hp-skeleton" style="height:24px;width:60%;margin-bottom:8px;border-radius:6px"></div>
             <div class="hp-skeleton" style="height:14px;width:40%;border-radius:6px"></div>
           </div>
@@ -7852,31 +7948,12 @@
       }
       if (allPhotos.length >= 30) break;
     }
-    const photoCount = allPhotos.length;
+    _hpDetailPhotos = allPhotos.slice();
 
-    // Photo carousel
-    const carouselImgs = allPhotos.map((url, i) =>
-      `<img class="hp-carousel-img${i === 0 ? ' active' : ''}" src="${escHtml(url)}" data-idx="${i}" alt="" loading="${i === 0 ? 'eager' : 'lazy'}" onerror="this.closest('.hp-carousel-slide')?.remove();hpCarouselReindex()" onclick="openHpLightbox(${i})">`
-    ).join('');
-    const carouselHTML = photoCount > 0 ? `
-      <div class="hp-carousel" id="hp-carousel">
-        <div class="hp-carousel-track" id="hp-carousel-track">${carouselImgs}</div>
-        ${photoCount > 1 ? `
-        <button class="hp-carousel-btn hp-carousel-prev" onclick="hpCarouselStep(-1)" aria-label="Previous photo">‹</button>
-        <button class="hp-carousel-btn hp-carousel-next" onclick="hpCarouselStep(1)" aria-label="Next photo">›</button>
-        <div class="hp-carousel-dots" id="hp-carousel-dots">${allPhotos.map((_,i) => `<span class="hp-dot${i===0?' active':''}" onclick="hpCarouselGo(${i})"></span>`).join('')}</div>
-        ` : ''}
-      </div>` : `<div class="hp-hero-placeholder"></div>`;
-
-    // Lightbox
-    const lightboxHTML = photoCount > 0 ? `
-      <div class="hp-lightbox" id="hp-lightbox" onclick="closeHpLightbox()">
-        <button class="hp-lb-close" onclick="closeHpLightbox()">✕</button>
-        <button class="hp-lb-prev" onclick="event.stopPropagation();hpLightboxStep(-1)">‹</button>
-        <img class="hp-lb-img" id="hp-lb-img" src="" alt="">
-        <button class="hp-lb-next" onclick="event.stopPropagation();hpLightboxStep(1)">›</button>
-        <div class="hp-lb-counter" id="hp-lb-counter"></div>
-      </div>` : '';
+    const displayName = hotelDisplayTitle({ name: d.name, id: d.hotel_id, city: d.city });
+    const carouselHTML = hotelDetailCarouselHTML(allPhotos);
+    const mosaicHTML = hotelDetailMosaicHTML(allPhotos);
+    const lightboxHTML = hotelDetailLightboxHTML(allPhotos);
 
     const propChip = propertyTypeChipsHTML(
       { property_type: d.property_type, name: d.name },
@@ -7948,23 +8025,31 @@
         <button type="button" class="hpage-cta hpage-cta--secondary hpage-cta--mobile hpage-cta--small" onclick="openVibeTourForHotel('${hotelIdAttr}')">Vibe tour</button>
       </div>`;
 
+    const addressHTML = _hpAddressRowHTML(d);
+    const subRowHTML = _hpMetaSubRowHTML(stars, ratingBadge, nbhdChip, propChip);
+
     return `
       ${lightboxHTML}
       <div class="hpage-topbar">
         <button class="hpage-back" onclick="closeHotelDetailPage()" aria-label="Back">‹ Back</button>
         <div class="hpage-topbar-spacer"></div>
       </div>
-      <div class="hpage-hero">${carouselHTML}</div>
+      <header class="hpage-head hpage-head--desktop">
+        <h1 class="hp-name">${escHtml(displayName)}</h1>
+        ${addressHTML}
+        ${subRowHTML}
+        ${timesHTML}
+      </header>
+      <div class="hpage-hero">
+        <div class="hp-gallery-mobile">${carouselHTML}</div>
+        <div class="hp-gallery-desktop">${mosaicHTML}</div>
+      </div>
       <div class="hpage-grid">
         <div class="hpage-content">
-          <div class="hp-meta">
-            <h1 class="hp-name">${escHtml(hotelDisplayTitle({ name: d.name, id: d.hotel_id, city: d.city }))}</h1>
-            <div class="hp-sub">
-              ${stars ? `<span class="hp-stars">${stars}</span>` : ''}
-              ${ratingBadge}
-              ${nbhdChip}
-              ${propChip}
-            </div>
+          <div class="hp-meta hp-meta--mobile">
+            <h1 class="hp-name">${escHtml(displayName)}</h1>
+            ${addressHTML}
+            ${subRowHTML}
             ${timesHTML}
           </div>
           ${descHTML}
@@ -8284,11 +8369,14 @@
   // ── Hotel panel lightbox ───────────────────────────────────────────────────
 
   function openHpLightbox(idx) {
-    // Only open lightbox on desktop (non-touch)
-    if (window.matchMedia('(hover: none)').matches) return;
-    const track = document.getElementById('hp-carousel-track');
-    if (!track) return;
-    _hpLightboxUrls = Array.from(track.querySelectorAll('.hp-carousel-img')).map(img => img.src);
+    if (window.matchMedia('(max-width: 760px)').matches) return;
+    if (_hpDetailPhotos.length) {
+      _hpLightboxUrls = _hpDetailPhotos.slice();
+    } else {
+      const track = document.getElementById('hp-carousel-track');
+      if (!track) return;
+      _hpLightboxUrls = Array.from(track.querySelectorAll('.hp-carousel-img')).map(img => img.src);
+    }
     if (!_hpLightboxUrls.length) return;
     const lb = document.getElementById('hp-lightbox');
     if (!lb) return;
@@ -8312,6 +8400,13 @@
     const counter = document.getElementById('hp-lb-counter');
     if (img) img.src = _hpLightboxUrls[_hpLightboxIdx];
     if (counter) counter.textContent = `${_hpLightboxIdx + 1} / ${_hpLightboxUrls.length}`;
+    const strip = document.getElementById('hp-lb-strip');
+    if (strip) {
+      strip.querySelectorAll('.hp-lb-thumb').forEach((btn, i) => {
+        btn.classList.toggle('active', i === _hpLightboxIdx);
+      });
+      strip.querySelector('.hp-lb-thumb.active')?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+    }
   }
 
   function hpLightboxStep(dir) { hpLightboxGo(_hpLightboxIdx + dir); }
