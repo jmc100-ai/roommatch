@@ -3245,6 +3245,15 @@
     };
   }
 
+  /** Desktop: wheel scrolls the page; mobile keeps MapLibre scroll-to-zoom. */
+  function _applyNbhdMapScrollZoomPolicy(map) {
+    if (!map?.scrollZoom) return;
+    try {
+      if (isMobileCmdTripUi()) map.scrollZoom.enable();
+      else map.scrollZoom.disable();
+    } catch (_) {}
+  }
+
   function resetNbhdMap() {
     if (!_nbhdMap || !_nbhdMapBounds) return;
     _nbhdMap.fitBounds(_nbhdMapBounds, {
@@ -3358,6 +3367,7 @@
         // re-fits to the full city bounds (`_nbhdMapBounds`).
         fitBoundsOptions: { padding: { top: 38, bottom: 50, left: 36, right: 36 }, maxZoom: 14 },
         attributionControl: { compact: true },
+        scrollZoom: isMobileCmdTripUi(),
       });
     } catch (e) {
       console.warn('[nbhd-map] init failed', e.message);
@@ -3365,6 +3375,19 @@
       return;
     }
     _nbhdMap = map;
+    _applyNbhdMapScrollZoomPolicy(map);
+    const _nbhdScrollZoomMq = typeof window.matchMedia === 'function'
+      ? window.matchMedia('(max-width: 640px)')
+      : null;
+    if (_nbhdScrollZoomMq) {
+      const onScrollZoomMq = () => { if (_nbhdMap === map) _applyNbhdMapScrollZoomPolicy(map); };
+      if (_nbhdScrollZoomMq.addEventListener) _nbhdScrollZoomMq.addEventListener('change', onScrollZoomMq);
+      else _nbhdScrollZoomMq.addListener(onScrollZoomMq);
+      map.on('remove', () => {
+        if (_nbhdScrollZoomMq.removeEventListener) _nbhdScrollZoomMq.removeEventListener('change', onScrollZoomMq);
+        else _nbhdScrollZoomMq.removeListener(onScrollZoomMq);
+      });
+    }
     map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'bottom-right');
 
     // Defensive: re-fit + resize on container size changes (orientation change,
