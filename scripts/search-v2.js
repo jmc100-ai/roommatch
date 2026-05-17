@@ -192,6 +192,8 @@ async function runV2Search({ req, supabase, supabaseAdmin, resolveCityName }) {
   // active "Hotels only" property-type filter does explicit exclusion.
   function propertyTypePenalty(propertyType) {
     if (!stayVibe) return 1.0;
+    // Value-seeking on the price slider: do not downrank hostels (often the budget pick).
+    if (priceMatters > 0 && propertyType === "hostel") return 1.0;
     if (propertyType === "hostel") {
       if (stayVibe === "sleek_polished")  return 0.72;
       if (stayVibe === "cozy_warm")       return 0.85;
@@ -655,7 +657,7 @@ async function runV2Search({ req, supabase, supabaseAdmin, resolveCityName }) {
     // When price matters is important, do not nudge 5★ up via star prior — it
     // fights the value-seeking penalty applied to display scores below.
     const wantsLuxuryPrior =
-      priceMatters < 30 &&
+      priceMatters <= 32 &&
       (stayVibe === "sleek_polished" || stayVibe === "classic_traditional");
 
     const STAR_PRIOR_W   = parseFloat(process.env.HOTEL_VIBE_STAR_PRIOR   ?? "0.10");

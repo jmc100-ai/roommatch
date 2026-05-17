@@ -3936,7 +3936,7 @@
       margin-top:16px;
       padding:14px 16px;
       background:rgba(255,255,255,0.03);
-      border:1px solid rgba(255,255,255,0.08);
+      border:1px solid rgba(201,169,110,0.22);
       border-radius:12px;
     }
     /* Inline variant used on the must-haves screen (above chip list) */
@@ -3971,10 +3971,10 @@
       font-weight:400;
       letter-spacing:normal;
     }
-    .boop-deal-freetext-input {
+    input.boop-deal-freetext-input {
       width:100%;
       background:rgba(0,0,0,0.25);
-      border:1px solid rgba(255,255,255,0.1);
+      border:1px solid rgba(201,169,110,0.48);
       color:var(--text);
       border-radius:8px;
       padding:10px 12px;
@@ -3983,11 +3983,15 @@
       outline:none;
       transition:border-color .15s ease, box-shadow .15s ease;
     }
-    .boop-deal-freetext-input:focus {
-      border-color:var(--accent2);
-      box-shadow:0 0 0 2px rgba(var(--accent2-rgb,216,178,122),0.18);
+    input.boop-deal-freetext-input:hover {
+      border-color:rgba(232,213,176,0.95);
+      box-shadow:0 0 0 1px rgba(201,169,110,0.22);
     }
-    .boop-deal-freetext-input::placeholder {
+    input.boop-deal-freetext-input:focus {
+      border-color:var(--accent2);
+      box-shadow:0 0 0 2px rgba(201,169,110,0.38);
+    }
+    input.boop-deal-freetext-input::placeholder {
       color:var(--muted);
     }
     /* BOOP v4 — final screen: optional free-text (neighbourhood + hotel + room notes) */
@@ -5382,6 +5386,17 @@
       color: var(--accent2);
       font-style: normal;
     }
+  /* Results bar: "+ Must-haves" empty chip — slightly stronger default legibility */
+    #st-results .vibe-chip-empty[data-vibe-step="musthaves"] {
+      color: rgba(232, 228, 220, 0.9);
+      font-weight: 500;
+      font-style: normal;
+      border-color: rgba(201, 169, 110, 0.32);
+    }
+    #st-results .vibe-chip-empty[data-vibe-step="musthaves"]:hover {
+      color: var(--accent2);
+      border-color: rgba(201, 169, 110, 0.5);
+    }
     .advanced-search-btn {
       background: transparent;
       border: 1px solid rgba(255,255,255,0.10);
@@ -5647,11 +5662,11 @@
       color: var(--muted);
       margin-bottom: 4px;
     }
-    .boop-keywords-input {
+    textarea.boop-keywords-input {
       width: 100%;
       min-height: 60px;
       background: rgba(0,0,0,0.35);
-      border: 1px solid var(--border, rgba(255,255,255,0.12));
+      border: 1px solid rgba(201,169,110,0.48);
       border-radius: 10px;
       padding: 12px 14px;
       color: var(--text);
@@ -5660,10 +5675,17 @@
       line-height: 1.5;
       resize: vertical;
       box-sizing: border-box;
-    }
-    .boop-keywords-input:focus {
       outline: none;
-      border-color: rgba(201,169,110,0.6);
+      transition: border-color 0.15s ease, box-shadow 0.15s ease;
+    }
+    textarea.boop-keywords-input:hover {
+      border-color: rgba(232,213,176,0.95);
+      box-shadow: 0 0 0 1px rgba(201,169,110,0.22);
+    }
+    textarea.boop-keywords-input:focus {
+      outline: none;
+      border-color: var(--accent2);
+      box-shadow: 0 0 0 2px rgba(201,169,110,0.38);
     }
 
     /* ── Hotel details — full page (#st-hotel-detail) ─────────────────── */

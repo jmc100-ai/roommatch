@@ -1671,11 +1671,26 @@
     return 'Neutral';
   }
 
+  let _priceMattersInputTimer = null;
   function boopPriceMattersInput(v) {
     const n = Math.max(-100, Math.min(100, parseInt(v, 10) || 0));
     BOOP.answers.priceMatters = n;
+    if (S.boopProfile?.answers) {
+      S.boopProfile = {
+        ...S.boopProfile,
+        answers: { ...S.boopProfile.answers, priceMatters: n },
+        updatedAt: Date.now(),
+      };
+      if (S.city) saveBoopProfileForCity(S.city, S.boopProfile);
+    }
     const el = document.getElementById('boop-price-matter-cur');
     if (el) el.textContent = boopPriceMattersCaption(n);
+    if (!document.body.classList.contains('has-results') || !_lastHotels?.length) return;
+    clearTimeout(_priceMattersInputTimer);
+    _priceMattersInputTimer = setTimeout(() => {
+      _priceMattersInputTimer = null;
+      renderSortedSmooth();
+    }, 250);
   }
 
   function boopNext() {
@@ -2052,10 +2067,10 @@
     const safeLabel = escHtml(label);
     const safeStep = escHtml(stepKey);
     if (isEmpty) {
-      return `<button type="button" class="vibe-chip vibe-chip-empty" onclick="openBoopFromChip('${safeStep}')">${safeLabel}</button>`;
+      return `<button type="button" class="vibe-chip vibe-chip-empty" data-vibe-step="${safeStep}" onclick="openBoopFromChip('${safeStep}')">${safeLabel}</button>`;
     }
     const iconHtml = icon ? `<span class="vibe-chip-icon">${escHtml(icon)}</span>` : '';
-    return `<button type="button" class="vibe-chip" onclick="openBoopFromChip('${safeStep}')" aria-label="Edit ${safeLabel}">${iconHtml}<span class="vibe-chip-text">${safeLabel}</span><span class="vibe-chip-pencil" aria-hidden="true">✎</span></button>`;
+    return `<button type="button" class="vibe-chip" data-vibe-step="${safeStep}" onclick="openBoopFromChip('${safeStep}')" aria-label="Edit ${safeLabel}">${iconHtml}<span class="vibe-chip-text">${safeLabel}</span><span class="vibe-chip-pencil" aria-hidden="true">✎</span></button>`;
   }
 
   /** Clear legacy inline margin from old resultCount alignment (removed — caused overlap). */
@@ -4873,6 +4888,8 @@
 
     // Increment race ID — any in-flight rates response with an older ID will be discarded
     const reqId = ++_ratesReqId;
+    clearTimeout(_priceMattersInputTimer);
+    _priceMattersInputTimer = null;
     _fetchedStubIds = new Set();  // reset per-search cache for _fetchRoomsForRenderedStubs
 
     // Determine dates before vsearch so we know whether to fetch prices
@@ -4922,6 +4939,15 @@
           'blend_applied=', !!st.nbhd_blend_applied,
           'boop_profile=', !!st.boop_profile_received,
           'sort_uses_blend=', typeof st.nbhd_rank_weight === 'number'
+        );
+      }
+      if (st && st.price_matters != null) {
+        console.info(
+          '[vsearch price]',
+          'pm=', st.price_matters,
+          'active=', !!st.price_matters_ranking_active,
+          'strength=', st.price_matters_strength,
+          'mode=', st.price_matters_mode
         );
       }
 
@@ -5302,13 +5328,11 @@
   // This is the primary mechanism for filling room photos; the legacy
   // lazyFetchVisibleStubPhotos / lazyFetchStubRooms remain as complementary passes.
   let _fetchedStubIds = new Set();
-  async function _fetchRoomsForRenderedStubs() {
+  let _scrollLoadCooldown = false;
+  async function _fetchRoomsForRenderedStubs(sortedHotels) {
     if (!S.city || !_lastHotels.length) return;
     const reqId = _ratesReqId;
-    // Scan the DISPLAYED hotels (after sort+filter), not _lastHotels positional slice.
-    // _displayedCount refers to display positions, so we must use getSortedHotelsForDisplay()
-    // to find the actual hotels on screen — their _lastHotels positions can be anywhere.
-    const displayedHotels = getSortedHotelsForDisplay().slice(0, _displayedCount);
+    const displayedHotels = (sortedHotels || getSortedHotelsForDisplay()).slice(0, _displayedCount);
     const newStubs = [];
     for (const h of displayedHotels) {
       if (!h || !h.id) continue;
@@ -5600,7 +5624,9 @@
       // Mutate hotel object so future renders persist these values.
       if (m.name && !isPlaceholderHotelTitle(m.name, sid)) h.name = m.name;
       if (m.mainPhoto)   h.mainPhoto   = m.mainPhoto;
-      if (m.starRating)  h.starRating  = m.starRating;
+      if (m.starRating != null && Number(m.starRating) > 0) {
+        h.starRating = m.starRating;
+      }
       if (m.guestRating) h.rating      = m.guestRating;
       if (m.address)     h.address     = m.address;
 
@@ -5709,6 +5735,7 @@
       return;
     }
     const priceDependentSort = _currentSort === 'match+price' || _currentSort === 'price';
+    const priceMattersResort = _currentSort === 'match' && boopPriceMattersForSort() !== 0;
     // When "Available only" is on, prices arriving will remove cards (any hotel
     // LiteAPI didn't return rates for → hotelPassesAvailFilter returns false).
     // applyPricesInPlace only updates DOM text on already-rendered cards; it
@@ -5716,7 +5743,8 @@
     // visible at the top of the list (e.g. `lp114339` Ire Ile My Hostel
     // showing #1 with no rates because the filter never re-ran).
     const availFilterActive = _showAvailOnly && _hasDateSearch;
-    if (priceDependentSort || _requireFreeCancel || availFilterActive) {
+    const tourCoveringResults = _deferResultsRenderUntilTourClose || _vibeTourVisible;
+    if ((priceDependentSort || priceMattersResort || _requireFreeCancel || availFilterActive) && !tourCoveringResults) {
       renderSortedSmooth();
     } else {
       applyPricesInPlace(sym);
@@ -6416,6 +6444,7 @@
   async function openVibeTourWithStreetView(hotels) {
     if (!hotels?.length) return;
     const hotelId = hotels[0]?.id;
+    if (hotelId != null) _vibeTourLeadId = String(hotelId);
     if (hotelId && Object.prototype.hasOwnProperty.call(_svFrameCache, hotelId)) {
       openVibeTourPopup(hotels, _svFrameCache[hotelId]);
       return;
@@ -6825,30 +6854,111 @@
     return Math.max(-100, Math.min(100, pm));
   }
 
-  /** Mirrors server: skip value nudge when user asked for polished / high luxury. */
-  function boopValueNudgeBlocked() {
-    const ans = S.boopProfile?.answers;
-    if (!ans) return true;
-    if (ans.hotelPersonality === 'polished') return true;
-    if (ans.stayVibe === 'sleek_polished' || ans.stayVibe === 'classic_traditional') return true;
-    const luxury = Number(S.boopProfile?.prefs?.luxury ?? 0);
-    return Number.isFinite(luxury) && luxury > 15;
+  const BOOP_PRICE_VALUE_PENALTY_MAX = 24;
+  const BOOP_PRICE_LUXURY_STAR_EXTRA = 5;
+  const BOOP_PRICE_SPLURGE_BONUS_MAX = 14;
+  const BOOP_PRICE_ROOM_GAP_GUARD = 10;
+  const BOOP_PRICE_NBHD_GAP_GUARD = 16;
+  const BOOP_PRICE_NBHD_ROOM_YIELD_GAP = 22;
+  const BOOP_PRICE_NBHD_WEIGHT_BOOST = 0.30;
+
+  function valueSeekingLuxuryLean(h, pct) {
+    if (pct && h.price != null && Number.isFinite(Number(h.price))) {
+      const p = Number(h.price);
+      return Math.max(0, Math.min(1, (p - pct.p10) / pct.range));
+    }
+    const s = Number(h.starRating);
+    if (Number.isFinite(s) && s > 0) {
+      if (s >= 4.5) return 1.0;
+      if (s >= 3.5) return 0.72;
+      if (s >= 2.5) return 0.42;
+      if (s >= 1.5) return 0.24;
+      return 0.14;
+    }
+    const hv = Number(h.hotelScore);
+    if (Number.isFinite(hv) && hv >= 82) return 0.88;
+    if (Number.isFinite(hv) && hv >= 70) return 0.62;
+    return 0.45;
   }
 
-  /** Same band as `boopPriceMattersCaption` ("Neutral" when |pm| <= 32). */
-  const BOOP_PM_NEUTRAL_BAND = 32;
+  const BOOP_PRICE_LUXURY_ROOM_GUARD_LEAN = 0.72;
 
-  function boopPriceMattersSplurge(pm) {
-    return Number.isFinite(pm) && pm <= -33;
+  function shouldRoomGuardYieldToPrice(h, pct) {
+    const stars = Number(h.starRating);
+    if (Number.isFinite(stars) && stars >= 4) return true;
+    return valueSeekingLuxuryLean(h, pct) >= BOOP_PRICE_LUXURY_ROOM_GUARD_LEAN;
   }
 
-  function boopPriceMattersValue(pm) {
-    return Number.isFinite(pm) && pm >= 33 && !boopValueNudgeBlocked();
+  function effectiveNbhdWeightForPriceMatters(baseW, pm) {
+    const w = Number(baseW) || 0;
+    if (w <= 0) return 0;
+    const p = Number(pm) || 0;
+    if (p <= 0) return w;
+    const t = Math.abs(p) / 100;
+    return Math.min(0.72, w * (1 + BOOP_PRICE_NBHD_WEIGHT_BOOST * t));
+  }
+
+  function shouldNbhdGuardYieldToPrice(weakNbhdHotel, strongNbhdHotel) {
+    const roomWeak = bestMatchRoomScore(weakNbhdHotel);
+    const roomStrong = bestMatchRoomScore(strongNbhdHotel);
+    return roomWeak - roomStrong >= BOOP_PRICE_NBHD_ROOM_YIELD_GAP;
   }
 
   function boopPriceMattersStrength(pm) {
-    if (!Number.isFinite(pm) || Math.abs(pm) <= BOOP_PM_NEUTRAL_BAND) return 0;
-    return Math.min(1, (Math.abs(pm) - 33) / (100 - 33));
+    const p = Math.max(-100, Math.min(100, Number(pm) || 0));
+    return Math.abs(p) / 100;
+  }
+
+  function hotelPriceValueScore(h, pct) {
+    if (pct && h.price != null && Number.isFinite(Number(h.price))) {
+      const p = Number(h.price);
+      return Math.max(0, Math.min(100, ((pct.p90 - p) / pct.range) * 100));
+    }
+    const s = Number(h.starRating);
+    if (Number.isFinite(s) && s > 0) {
+      return Math.max(0, Math.min(100, ((5 - Math.min(s, 5)) / 4) * 100));
+    }
+    return 50;
+  }
+
+  function hotelPriceSplurgeScore(h, pct) {
+    if (pct && h.price != null && Number.isFinite(Number(h.price))) {
+      const p = Number(h.price);
+      return Math.max(0, Math.min(100, ((p - pct.p10) / pct.range) * 100));
+    }
+    const s = Number(h.starRating);
+    if (Number.isFinite(s) && s > 0) {
+      return Math.max(0, Math.min(100, (Math.min(s, 5) / 5) * 100));
+    }
+    return 50;
+  }
+
+  function hotelPriceExpensiveness(h, pct) {
+    return valueSeekingLuxuryLean(h, pct);
+  }
+
+  function boopPriceAdjustBlendedScore(blended, h, pm, pct) {
+    const p = Math.max(-100, Math.min(100, Number(pm) || 0));
+    if (Math.abs(p) < 1) return blended;
+    const t = Math.abs(p) / 100;
+    if (p > 0) {
+      let penalty = t * BOOP_PRICE_VALUE_PENALTY_MAX * valueSeekingLuxuryLean(h, pct);
+      const stars = Number(h.starRating);
+      if (Number.isFinite(stars) && stars >= 4) {
+        penalty += t * BOOP_PRICE_LUXURY_STAR_EXTRA;
+      }
+      return Math.max(0, blended - penalty);
+    }
+    const exp = valueSeekingLuxuryLean(h, pct);
+    return blended + t * BOOP_PRICE_SPLURGE_BONUS_MAX * exp;
+  }
+
+  /** Best Match sort basis: best room % when indexed rooms exist (matches card room rows). */
+  function bestMatchRoomScore(h) {
+    const canFilter = _showAvailOnly && _hasDateSearch && _pricesLoaded;
+    if (canFilter) return hotelEffectiveScore(h);
+    const room = roomVibeMatchDisplayPct(h);
+    return room > 0 ? room : (h.vectorScore || 0);
   }
 
   function getSortedHotelsForDisplay() {
@@ -7005,102 +7115,98 @@
         return 0;
       });
     } else if (_currentSort === 'match') {
-      const wNbhd = typeof _lastVsearchStats?.nbhd_rank_weight === 'number' ? _lastVsearchStats.nbhd_rank_weight : 0;
-      const canFilter = _showAvailOnly && _hasDateSearch && _pricesLoaded;
-      // Boop priceMatters: tiebreaker only at slider extremes (|pm| >= 33), within 5 pts.
-      const pmRaw = boopPriceMattersForSort();
-      const pm = Number.isFinite(pmRaw) ? pmRaw : 0;
-      const pmSplurge = boopPriceMattersSplurge(pm);
-      const pmValue = boopPriceMattersValue(pm);
-      const pmActive = pmSplurge || pmValue;
+      const wNbhdBase = typeof _lastVsearchStats?.nbhd_rank_weight === 'number' ? _lastVsearchStats.nbhd_rank_weight : 0;
+      const pm = boopPriceMattersForSort();
       const pmStrength = boopPriceMattersStrength(pm);
+      const wNbhd = effectiveNbhdWeightForPriceMatters(wNbhdBase, pm);
       let pricePercentiles = null;
-      if (pmActive && _pricesLoaded && _hasDateSearch) {
+      if (_pricesLoaded && _hasDateSearch) {
         const priced = hotels.filter(h => h.price != null).map(h => h.price).sort((a, b) => a - b);
-        if (priced.length >= 5) {
+        if (priced.length >= 3) {
           const p10 = priced[Math.floor(priced.length * 0.10)] ?? priced[0];
           const p90 = priced[Math.floor(priced.length * 0.90)] ?? priced[priced.length - 1];
           pricePercentiles = { p10, p90, range: Math.max(p90 - p10, 1) };
         }
       }
-      // blendedScore (0-100): combines room/hotel match with nbhd fit when active.
-      // Use vectorScore (server sort basis) unless availability filter is active.
-      const blendedScore = h => {
-        const raw = canFilter ? hotelEffectiveScore(h) : (h.vectorScore || 0);
+      const roomMatchScore = h => bestMatchRoomScore(h);
+      const blendedMatchScore = h => {
+        const room = roomMatchScore(h);
         if (wNbhd > 0 && h.nbhd_fit_pct != null) {
-          return (1 - wNbhd) * raw + wNbhd * h.nbhd_fit_pct;
+          return (1 - wNbhd) * room + wNbhd * h.nbhd_fit_pct;
         }
-        return raw;
+        return room;
       };
-      // normExpensive (0=cheapest, 100=most expensive in the result set)
-      const normExpensive = p => {
-        if (!pricePercentiles || p == null) return 50;
-        return Math.max(0, Math.min(100, ((p - pricePercentiles.p10) / pricePercentiles.range) * 100));
-      };
-      const normStarCheap = h => {
-        const s = Number(h.starRating);
-        if (!Number.isFinite(s) || s <= 0) return 50;
-        return Math.max(0, Math.min(100, ((5 - Math.min(s, 5)) / 5) * 100));
-      };
-      const normStarExpensive = h => {
-        const s = Number(h.starRating);
-        if (!Number.isFinite(s) || s <= 0) return 50;
-        return Math.max(0, Math.min(100, (Math.min(s, 5) / 5) * 100));
-      };
+      const sortScore = h => boopPriceAdjustBlendedScore(
+        blendedMatchScore(h), h, pm, pricePercentiles
+      );
       hotels.sort((a, b) => {
-        const aScore = blendedScore(a);
-        const bScore = blendedScore(b);
-        const matchDiff = bScore - aScore; // positive → b ranks higher
-        // More than 5 pts apart: match quality wins outright, price is irrelevant.
-        if (Math.abs(matchDiff) > 5) {
-          const cmp = matchDiff > 0 ? 1 : -1;
-          return _sortReverse ? -cmp : cmp;
+        if (pm > 0) {
+          const roomA = roomMatchScore(a);
+          const roomB = roomMatchScore(b);
+          const roomGap = roomB - roomA;
+          if (roomGap >= BOOP_PRICE_ROOM_GAP_GUARD) {
+            if (!shouldRoomGuardYieldToPrice(b, pricePercentiles)) {
+              const cmp = 1;
+              return _sortReverse ? -cmp : cmp;
+            }
+          } else if (roomGap <= -BOOP_PRICE_ROOM_GAP_GUARD) {
+            if (!shouldRoomGuardYieldToPrice(a, pricePercentiles)) {
+              const cmp = -1;
+              return _sortReverse ? -cmp : cmp;
+            }
+          }
+          const nbhdA = a.nbhd_fit_pct;
+          const nbhdB = b.nbhd_fit_pct;
+          if (wNbhd > 0 && nbhdA != null && nbhdB != null) {
+            const nbhdGap = nbhdB - nbhdA;
+            if (nbhdGap >= BOOP_PRICE_NBHD_GAP_GUARD) {
+              if (!shouldNbhdGuardYieldToPrice(a, b)) {
+                const cmp = 1;
+                return _sortReverse ? -cmp : cmp;
+              }
+            } else if (nbhdGap <= -BOOP_PRICE_NBHD_GAP_GUARD) {
+              if (!shouldNbhdGuardYieldToPrice(b, a)) {
+                const cmp = -1;
+                return _sortReverse ? -cmp : cmp;
+              }
+            }
+          }
         }
-        // Within 5 pts: price tiebreaker when slider off center (stronger as |pm| grows).
-        if (pmActive) {
-          const aExp = pricePercentiles ? normExpensive(a.price) : normStarExpensive(a);
-          const bExp = pricePercentiles ? normExpensive(b.price) : normStarExpensive(b);
-          const priceCmp = (pmSplurge ? bExp - aExp : aExp - bExp) * pmStrength;
-          if (Math.abs(priceCmp) > 2) return _sortReverse ? -priceCmp : priceCmp;
-        }
-        // Pure match tiebreak
-        const cmp = matchDiff > 0 ? 1 : (matchDiff < 0 ? -1 : 0);
-        return _sortReverse ? -cmp : cmp;
+        let diff = sortScore(b) - sortScore(a);
+        if (Math.abs(diff) < 1e-6) diff = (b.vectorScore || 0) - (a.vectorScore || 0);
+        return _sortReverse ? -diff : (diff > 0 ? 1 : diff < 0 ? -1 : 0);
       });
 
-      // ── DEBUG: client-side match sort top-15 (temporary) ────────────────
-      // Mirrors the server-side [v2-rank-debug] log so we can spot client/
-      // server ranking divergence (eg. stale vibe-tour pin, vectorScore vs
-      // server primarySignal mismatch). Grep "[client-rank-debug]".
       try {
         const dbg = hotels.slice(0, 15).map((h, i) => {
-          const top  = h.roomTypes && h.roomTypes.length
+          const top = h.roomTypes?.length
             ? Math.max(...h.roomTypes.map(rt => rt.score || 0))
             : 0;
+          const lean = valueSeekingLuxuryLean(h, pricePercentiles);
           return `  #${String(i + 1).padStart(2)} ${String(h.id).padEnd(12)} `
-            + `vec=${(h.vectorScore || 0).toString().padStart(3)} `
-            + `topRoom=${String(top).padStart(3)} `
-            + `hotelV=${(h.hotelScore == null ? "—" : String(h.hotelScore)).padStart(3)} `
+            + `sort=${sortScore(h).toFixed(1).padStart(6)} `
+            + `blend=${blendedMatchScore(h).toFixed(1).padStart(6)} `
+            + `room=${roomMatchScore(h).toFixed(0).padStart(3)} `
+            + `lux=${lean.toFixed(2).padStart(4)} `
             + `nbhd=${(h.nbhd_fit_pct == null ? "—" : String(Math.round(h.nbhd_fit_pct))).padStart(3)} `
-            + `blended=${blendedScore(h).toFixed(2).padStart(6)} `
-            + `nb="${(h.primary_nbhd && h.primary_nbhd.name) || h.primary_nbhd || "—"}" `
-            + `nm="${(h.name || "").slice(0, 32)}"`;
+            + `stars=${String(h.starRating || "—").padStart(4)} `
+            + `nm="${(h.name || "").slice(0, 28)}"`;
         });
-        console.log(
-          `[client-rank-debug] match-sort top-15 (wNbhd=${wNbhd.toFixed(3)} `
-          + `pin=${_vibeTourLeadId || "—"}):\n` + dbg.join("\n")
-        );
+        if (window._RM_RANK_DEBUG) {
+          console.log(
+            `[client-rank-debug] match-sort top-15 pm=${pm} strength=${pmStrength.toFixed(2)} `
+            + `wNbhd=${wNbhd.toFixed(3)} (base=${wNbhdBase.toFixed(3)}) rates=${!!pricePercentiles} `
+            + `pin=${_vibeTourLeadId || "—"}:\n` + dbg.join("\n")
+          );
+        }
       } catch (e) {
-        console.log(`[client-rank-debug] log failed: ${e.message}`);
+        if (window._RM_RANK_DEBUG) console.log(`[client-rank-debug] log failed: ${e.message}`);
       }
     }
 
     // Vibe-tour pin: keep the hotel the user just saw in the tour at #1 even if
-    // a later sort criterion (typically Match+Price after rates load) would
-    // demote it. The pin is only honoured when the lead hotel is still in the
-    // filtered/sorted set; if it has been filtered out (e.g. nbhd or property
-    // filter), we let the natural sort win. Pin is cleared by setSortBy and at
-    // the start of every new search.
+    // price-matters ranking or rates arrival would otherwise reshuffle the order.
+    // Cleared by setSortBy and at the start of every new search.
     //
     // Exception: do NOT pin to #1 when the hotel has no rates and the
     // availability filter is active. The avail-filter exception keeps it
@@ -7116,16 +7222,20 @@
           (lead.roomPrices && Object.keys(lead.roomPrices).length > 0)
         );
         if (!availFilterActive || leadHasRates) {
-          console.log(`[client-rank-debug] PIN APPLIED: moved id=${_vibeTourLeadId} from idx=${idx} → #0 (name="${lead?.name || ""}")`);
+          if (window._RM_RANK_DEBUG) {
+            console.log(`[client-rank-debug] PIN APPLIED: moved id=${_vibeTourLeadId} from idx=${idx} → #0 (name="${lead?.name || ""}")`);
+          }
           hotels.splice(idx, 1);
           hotels.unshift(lead);
-        } else {
+        } else if (window._RM_RANK_DEBUG) {
           console.log(`[client-rank-debug] PIN SKIPPED: id=${_vibeTourLeadId} at idx=${idx} (avail filter blocking, no rates)`);
         }
-      } else if (idx === 0) {
-        console.log(`[client-rank-debug] PIN ALREADY AT #0: id=${_vibeTourLeadId}`);
-      } else {
-        console.log(`[client-rank-debug] PIN NOT FOUND in hotels: id=${_vibeTourLeadId}`);
+      } else if (window._RM_RANK_DEBUG) {
+        if (idx === 0) {
+          console.log(`[client-rank-debug] PIN ALREADY AT #0: id=${_vibeTourLeadId}`);
+        } else {
+          console.log(`[client-rank-debug] PIN NOT FOUND in hotels: id=${_vibeTourLeadId}`);
+        }
       }
     }
     return hotels;
@@ -7179,21 +7289,24 @@
     resultsEl.innerHTML = html;
     bindFeaturedStripNavs(resultsEl);
 
-    // Fetch room photos for any newly-rendered stub hotels (roomTypes=[]).
-    // Runs after every renderSorted() — initial paint, rate arrival, and scroll —
-    // so hotels entering the DOM always get photos filled in quickly.
-    _fetchRoomsForRenderedStubs();
+    _fetchRoomsForRenderedStubs(hotels);
 
     if (remaining > 0) {
       const sentinel = document.getElementById('scroll-sentinel');
-      const obs = new IntersectionObserver(entries => {
-        if (entries[0].isIntersecting) {
+      if (sentinel) {
+        const obs = new IntersectionObserver(entries => {
+          if (!entries[0]?.isIntersecting || _scrollLoadCooldown) return;
           obs.disconnect();
+          _scrollLoadCooldown = true;
           _displayedCount += 10;
           renderSorted();
-        }
-      }, { rootMargin: '300px' });
-      obs.observe(sentinel);
+          setTimeout(() => { _scrollLoadCooldown = false; }, 350);
+        }, { rootMargin: '200px' });
+        requestAnimationFrame(() => {
+          const el = document.getElementById('scroll-sentinel');
+          if (el) obs.observe(el);
+        });
+      }
     }
     updateFreeCancelHint();
     syncSortDirectionIndicators();

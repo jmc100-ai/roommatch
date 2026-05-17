@@ -405,14 +405,155 @@ function prefetchHotelMetaBackground(hotelIds) {
     .catch(e => console.warn(`[hotel-meta] background warm failed: ${e.message}`));
 }
 
-/** Matches client `boopPriceMattersCaption`: Neutral when |pm| <= 32; active at ±33+. */
+/** UI caption only ("Neutral" when |pm| <= 32); ranking uses every slider step. */
 const BOOP_PRICE_MATTERS_NEUTRAL_BAND = 32;
-/** Same band as client Best Match sort (`app.js` match sort). */
-const BOOP_VALUE_TIE_BAND_PTS = 5;
+/** Max points off blended score at |pm|=100 for 5★ / top-tier $ (value-seeking). */
+const BOOP_PRICE_VALUE_PENALTY_MAX = 24;
+/** Extra shave for 4–5★ when value-seeking (on top of tier lean). */
+const BOOP_PRICE_LUXURY_STAR_EXTRA = 5;
+/** Max points added at |pm|=100 when splurging. */
+const BOOP_PRICE_SPLURGE_BONUS_MAX = 14;
+const BOOP_PRICE_ROOM_GAP_GUARD = 10;
+/** When value-seeking, block weak-nbhd hotels beating strong-nbhd peers on price alone. */
+const BOOP_PRICE_NBHD_GAP_GUARD = 16;
+/** Room lead required before a weak-nbhd hotel may override the nbhd guard. */
+const BOOP_PRICE_NBHD_ROOM_YIELD_GAP = 22;
+/** At |pm|=100, multiply nbhd blend weight by (1 + this) — neighbourhood stays decisive. */
+const BOOP_PRICE_NBHD_WEIGHT_BOOST = 0.30;
 const BOOP_VALUE_LUXURY_PREF_BLOCK = 15;
 
-function boopPriceMattersActive(pm) {
-  return Number.isFinite(pm) && Math.abs(pm) > BOOP_PRICE_MATTERS_NEUTRAL_BAND;
+/** 0–1: how “luxury / pricey” for value penalty (5★ = 1, 1★ = small). */
+function valueSeekingLuxuryLean(h, pct) {
+  if (pct && h.price != null && Number.isFinite(Number(h.price))) {
+    const p = Number(h.price);
+    return Math.max(0, Math.min(1, (p - pct.p10) / pct.range));
+  }
+  const s = Number(h.starRating);
+  if (Number.isFinite(s) && s > 0) {
+    if (s >= 4.5) return 1.0;
+    if (s >= 3.5) return 0.72;
+    if (s >= 2.5) return 0.42;
+    if (s >= 1.5) return 0.24;
+    return 0.14;
+  }
+  const hv = Number(h.hotelScore);
+  if (Number.isFinite(hv) && hv >= 82) return 0.88;
+  if (Number.isFinite(hv) && hv >= 70) return 0.62;
+  return 0.45;
+}
+
+function boopPriceMattersStrength(pm) {
+  const p = Math.max(-100, Math.min(100, Number(pm) || 0));
+  return Math.abs(p) / 100;
+}
+
+/** 0–100: higher = better for value seekers (cheap stars or low nightly $). */
+function hotelPriceValueScore(h, pct) {
+  if (pct && h.price != null && Number.isFinite(Number(h.price))) {
+    const p = Number(h.price);
+    return Math.max(0, Math.min(100, ((pct.p90 - p) / pct.range) * 100));
+  }
+  const s = Number(h.starRating);
+  if (Number.isFinite(s) && s > 0) {
+    return Math.max(0, Math.min(100, ((5 - Math.min(s, 5)) / 4) * 100));
+  }
+  return 50;
+}
+
+/** 0–100: higher = splurge / luxury lean (high stars or high nightly $). */
+function hotelPriceSplurgeScore(h, pct) {
+  if (pct && h.price != null && Number.isFinite(Number(h.price))) {
+    const p = Number(h.price);
+    return Math.max(0, Math.min(100, ((p - pct.p10) / pct.range) * 100));
+  }
+  const s = Number(h.starRating);
+  if (Number.isFinite(s) && s > 0) {
+    return Math.max(0, Math.min(100, (Math.min(s, 5) / 5) * 100));
+  }
+  return 50;
+}
+
+function v2BestRoomScore(h) {
+  const rooms = h.roomTypes || [];
+  if (rooms.length) {
+    const best = Math.max(0, ...rooms.map((r) => r.score || 0));
+    if (best > 0) return best;
+  }
+  return h.vectorScore || 0;
+}
+
+/** 0–1 luxury lean (stars / $). Splurge path only. */
+function hotelPriceExpensiveness(h, pct) {
+  return valueSeekingLuxuryLean(h, pct);
+}
+
+/** Subtract luxury penalty from room+nbhd blend when slider is right (value). */
+function boopPriceAdjustBlendedScore(blended, h, pm, pct) {
+  const p = Math.max(-100, Math.min(100, Number(pm) || 0));
+  if (Math.abs(p) < 1) return blended;
+  const t = Math.abs(p) / 100;
+  if (p > 0) {
+    let penalty = t * BOOP_PRICE_VALUE_PENALTY_MAX * valueSeekingLuxuryLean(h, pct);
+    const stars = Number(h.starRating);
+    if (Number.isFinite(stars) && stars >= 4) {
+      penalty += t * BOOP_PRICE_LUXURY_STAR_EXTRA;
+    }
+    return Math.max(0, blended - penalty);
+  }
+  const exp = valueSeekingLuxuryLean(h, pct);
+  return blended + t * BOOP_PRICE_SPLURGE_BONUS_MAX * exp;
+}
+
+/** Room-gap guard: higher room wins unless the leader is 4–5★ (then price penalty applies). */
+const BOOP_PRICE_LUXURY_ROOM_GUARD_LEAN = 0.72;
+
+function shouldRoomGuardYieldToPrice(h, pct) {
+  const stars = Number(h.starRating);
+  if (Number.isFinite(stars) && stars >= 4) return true;
+  return valueSeekingLuxuryLean(h, pct) >= BOOP_PRICE_LUXURY_ROOM_GUARD_LEAN;
+}
+
+function effectiveNbhdWeightForPriceMatters(baseW, pm) {
+  const w = Number(baseW) || 0;
+  if (w <= 0) return 0;
+  const p = Number(pm) || 0;
+  if (p <= 0) return w;
+  const t = Math.abs(p) / 100;
+  return Math.min(0.72, w * (1 + BOOP_PRICE_NBHD_WEIGHT_BOOST * t));
+}
+
+/** Weak-nbhd hotel may beat strong-nbhd peer on price only with a large room lead. */
+function shouldNbhdGuardYieldToPrice(weakNbhdHotel, strongNbhdHotel) {
+  const roomWeak = v2BestRoomScore(weakNbhdHotel);
+  const roomStrong = v2BestRoomScore(strongNbhdHotel);
+  return roomWeak - roomStrong >= BOOP_PRICE_NBHD_ROOM_YIELD_GAP;
+}
+
+function compareV2HotelsPriceAware(a, b, nbhdWeight, pm, pricePercentiles) {
+  const p = Number(pm) || 0;
+  const wEff = effectiveNbhdWeightForPriceMatters(nbhdWeight, pm);
+  if (p > 0) {
+    const roomGap = v2BestRoomScore(b) - v2BestRoomScore(a);
+    if (roomGap >= BOOP_PRICE_ROOM_GAP_GUARD) {
+      if (!shouldRoomGuardYieldToPrice(b, pricePercentiles)) return 1;
+    } else if (roomGap <= -BOOP_PRICE_ROOM_GAP_GUARD) {
+      if (!shouldRoomGuardYieldToPrice(a, pricePercentiles)) return -1;
+    }
+    const nbhdA = a.nbhd_fit_pct;
+    const nbhdB = b.nbhd_fit_pct;
+    if (wEff > 0 && nbhdA != null && nbhdB != null) {
+      const nbhdGap = nbhdB - nbhdA;
+      if (nbhdGap >= BOOP_PRICE_NBHD_GAP_GUARD) {
+        if (!shouldNbhdGuardYieldToPrice(a, b)) return 1;
+      } else if (nbhdGap <= -BOOP_PRICE_NBHD_GAP_GUARD) {
+        if (!shouldNbhdGuardYieldToPrice(b, a)) return -1;
+      }
+    }
+  }
+  const diff = v2PriceAdjustedBlendedScore(b, wEff, pm, pricePercentiles)
+    - v2PriceAdjustedBlendedScore(a, wEff, pm, pricePercentiles);
+  if (Math.abs(diff) > 1e-6) return diff > 0 ? 1 : -1;
+  return (b.vectorScore || 0) - (a.vectorScore || 0);
 }
 
 function parseBoopProfileFromQuery(query) {
@@ -425,33 +566,27 @@ function parseBoopProfileFromQuery(query) {
   }
 }
 
-function boopValueNudgeBlocked(profile) {
-  if (!profile?.answers) return true;
-  const a = profile.answers;
-  if (a.hotelPersonality === "polished") return true;
-  const sv = a.stayVibe;
-  if (sv === "sleek_polished" || sv === "classic_traditional") return true;
-  const luxury = Number(profile.prefs?.luxury ?? 0);
-  return Number.isFinite(luxury) && luxury > BOOP_VALUE_LUXURY_PREF_BLOCK;
-}
-
-/** Extra LiteAPI meta sync only when star class is needed for ranking tweaks. */
+/** Extra LiteAPI meta sync when star class is needed for price-matters or luxury tweaks. */
 function needsBoopStarMetaForRanking(profile) {
   if (!profile?.answers) return false;
   const luxuryPref = Number(profile.prefs?.luxury ?? 0);
   if (Number.isFinite(luxuryPref) && luxuryPref < -5) return true;
   const pm = Number(profile.answers.priceMatters);
-  if (!boopPriceMattersActive(pm)) return false;
-  if (pm > 0 && boopValueNudgeBlocked(profile)) return false;
-  return true;
+  return Number.isFinite(pm) && pm !== 0;
 }
 
-function v2BlendedSortScore(h, nbhdWeight) {
-  const raw = h.vectorScore || 0;
+function v2BlendedSortScore(h, nbhdWeight, roomScore) {
+  const raw = roomScore != null ? roomScore : v2BestRoomScore(h);
   if (nbhdWeight > 0 && h.nbhd_fit_pct != null) {
     return (1 - nbhdWeight) * raw + nbhdWeight * h.nbhd_fit_pct;
   }
   return raw;
+}
+
+/** Room+nbhd blend first, then price slider (same BOOP nbhd weight as search). */
+function v2PriceAdjustedBlendedScore(h, nbhdWeight, pm, pct) {
+  const blended = v2BlendedSortScore(h, nbhdWeight);
+  return boopPriceAdjustBlendedScore(blended, h, pm, pct);
 }
 
 function sortV2HotelsDefault(hotels, nbhdWeight) {
@@ -463,18 +598,10 @@ function sortV2HotelsDefault(hotels, nbhdWeight) {
   });
 }
 
-/** Within tie band, star tiebreak by slider sign (pm>0 value, pm<0 splurge). */
-function sortV2HotelsPriceTieband(hotels, nbhdWeight, pm) {
-  const preferCheap = pm > 0;
-  hotels.sort((a, b) => {
-    const sa = v2BlendedSortScore(a, nbhdWeight);
-    const sb = v2BlendedSortScore(b, nbhdWeight);
-    if (Math.abs(sb - sa) > BOOP_VALUE_TIE_BAND_PTS) return sb - sa;
-    const starA = a.starRating > 0 ? a.starRating : 3;
-    const starB = b.starRating > 0 ? b.starRating : 3;
-    if (starA !== starB) return preferCheap ? starA - starB : starB - starA;
-    return (b.vectorScore || 0) - (a.vectorScore || 0);
-  });
+function sortV2HotelsByPriceMatters(hotels, nbhdWeight, pm, pricePercentiles) {
+  hotels.sort((a, b) =>
+    compareV2HotelsPriceAware(a, b, nbhdWeight, pm, pricePercentiles)
+  );
 }
 
 const CITY_COORDS = {
@@ -2318,24 +2445,19 @@ app.get("/api/vsearch", async (req, res) => {
             v2.body.stats.luxury_star_penalty_applied = true;
             v2.body.stats.luxury_pref = luxuryPref;
           }
-          // Any non-neutral slider (|pm| >= 1): tie-band only (±5 blended pts).
-          // pm > 0 → cheaper stars/rates; pm < 0 → splurge. Value side skipped when
-          // profile is upscale (polished personality or luxury pref > 15).
+          // Continuous price blend: every slider step shifts ranking (stars w/o dates).
           v2.body.stats.price_matters_ranking_active = false;
-          if (hasBoopTailoredQuery && boopPriceMattersActive(priceMatters)) {
+          if (hasBoopTailoredQuery && Number.isFinite(priceMatters) && priceMatters !== 0) {
+            const pmStrength = boopPriceMattersStrength(priceMatters);
             v2.body.stats.price_matters = priceMatters;
-            if (priceMatters > 0 && boopValueNudgeBlocked(boopProfile)) {
-              v2.body.stats.price_matters_value_nudge = "blocked";
-            } else {
-              v2.body.stats.price_matters_ranking_active = true;
-              sortV2HotelsPriceTieband(v2.body.hotels, nbhdWeight, priceMatters);
-              v2.body.stats.price_matters_star_penalty_applied = true;
-              v2.body.stats.price_matters_value_nudge =
-                priceMatters > 0 ? "tieband_value" : "tieband_splurge";
-              console.log(
-                `[v2] price_matters tieband: pm=${priceMatters} band=${BOOP_VALUE_TIE_BAND_PTS}pts`
-              );
-            }
+            v2.body.stats.price_matters_strength = pmStrength;
+            v2.body.stats.price_matters_ranking_active = true;
+            sortV2HotelsByPriceMatters(v2.body.hotels, nbhdWeight, priceMatters, null);
+            v2.body.stats.price_matters_mode = priceMatters > 0 ? "room_penalty_value" : "room_bonus_splurge";
+            console.log(
+              `[v2] price_matters: pm=${priceMatters} strength=${pmStrength.toFixed(2)} `
+              + `mode=${v2.body.stats.price_matters_mode}`
+            );
           }
         }
       } catch (e) {
