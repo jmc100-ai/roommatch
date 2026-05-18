@@ -103,6 +103,9 @@
   let _ratesArrivalResolve = null;
   let _initialRenderHappened = false;
   const RATES_GATE_TIMEOUT_MS = 5000;
+  /** Hard cap so "Checking live rates…" cannot spin forever if /api/rates hangs. */
+  const FETCH_RATES_TIMEOUT_MS = 120000;
+  let _ratesStatusFadeTimers = [];
   /**
    * Hotel id chosen as the vibe-tour hero. While set, getSortedHotelsForDisplay()
    * pins this hotel to position 0 of the rendered list so the card the user just
@@ -1686,6 +1689,9 @@
     const el = document.getElementById('boop-price-matter-cur');
     if (el) el.textContent = boopPriceMattersCaption(n);
     if (!document.body.classList.contains('has-results') || !_lastHotels?.length) return;
+    // User is explicitly re-weighting price — release the vibe-tour #1 pin so a
+    // luxury hero (e.g. Hilton suite) cannot stay locked at the top.
+    _vibeTourLeadId = null;
     clearTimeout(_priceMattersInputTimer);
     _priceMattersInputTimer = setTimeout(() => {
       _priceMattersInputTimer = null;
@@ -4333,6 +4339,7 @@
       if (resEl) resEl.classList.remove('no-anim');
       _initialRenderHappened = true;
       renderSorted();
+      _syncRatesStatusAfterReveal();
       return;
     }
 
@@ -4366,6 +4373,23 @@
     if (resultsEl) resultsEl.classList.remove('no-anim');
     _initialRenderHappened = true;
     renderSorted();
+    _syncRatesStatusAfterReveal();
+  }
+
+  /** Clear #ratesStatus loading spinner when this rates request is finished. */
+  function _resolveRatesLoadingUi() {
+    const el = document.getElementById('ratesStatus');
+    if (!el?.classList.contains('loading')) return false;
+    if (_pricesLoaded) _setRatesStatus('done', '✓ Live rates');
+    else _setRatesStatus('', 'Rates unavailable — add dates again or sort by match');
+    return true;
+  }
+
+  /** After first results paint, align #ratesStatus with whether prices already landed. */
+  function _syncRatesStatusAfterReveal() {
+    if (_resolveRatesLoadingUi()) return;
+    if (_pricesLoaded) _setRatesStatus('done', '✓ Live rates');
+    else if (!_fetchingPrices && S.checkin && S.checkout) _setRatesStatus('', '');
   }
 
   function startSearch() {
@@ -5183,15 +5207,24 @@
     });
   }
 
+  function _clearRatesStatusFadeTimers() {
+    for (const t of _ratesStatusFadeTimers) clearTimeout(t);
+    _ratesStatusFadeTimers = [];
+  }
+
   function _setRatesStatus(state, text) {
     const el = document.getElementById('ratesStatus');
     if (!el) return;
+    _clearRatesStatusFadeTimers();
     el.className = `rates-status${state ? ' ' + state : ''}`;
     el.textContent = text;
     if (state === 'done') {
       // Fade out after 4s so it doesn't clutter the UI permanently
-      setTimeout(() => { el.classList.add('fade'); }, 4000);
-      setTimeout(() => { el.textContent = ''; el.className = 'rates-status'; }, 4600);
+      _ratesStatusFadeTimers.push(setTimeout(() => { el.classList.add('fade'); }, 4000));
+      _ratesStatusFadeTimers.push(setTimeout(() => {
+        el.textContent = '';
+        el.className = 'rates-status';
+      }, 4600));
     }
   }
 
@@ -5212,22 +5245,26 @@
     try {
       const params = new URLSearchParams({ city, checkin, checkout, currency: getRatesCurrencyPref() });
       if (hotelIds.length > 0) params.set('hotelIds', hotelIds.join(','));
-      const resp = await fetch(`${BACKEND}/api/rates?` + params);
-      if (reqId !== _ratesReqId) { _signalRatesArrived(); return; }  // stale — a new search was started
+      const ratesUrl = `${BACKEND}/api/rates?` + params;
+      const resp = await Promise.race([
+        fetch(ratesUrl),
+        new Promise((_, reject) => {
+          setTimeout(() => reject(new Error('rates request timed out')), FETCH_RATES_TIMEOUT_MS);
+        }),
+      ]);
+      if (reqId !== _ratesReqId) return;  // stale — a new search was started
       if (!resp.ok) {
         _fetchingPrices = false;
         for (const h of _lastHotels) { h.price = null; }
         _pricesLoaded = true;
         _setPriceBtnsState(true);
         _setRatesStatus('', 'Rates unavailable — add dates again or sort by match');
-        _signalRatesArrived();
         return;
       }
       const data = await resp.json();
-      if (reqId !== _ratesReqId) { _signalRatesArrived(); return; }
+      if (reqId !== _ratesReqId) return;
       _fetchingPrices = false;
       applyPrices(data.prices || {}, data.roomPrices || {}, data.currency || getRatesCurrencyPref(), data.pricedCount || 0, data);
-      _signalRatesArrived();
       // V2 search only fetches photos for the top GALLERY_LIMIT (250) hotels.
       // For ~3500-hotel cities like Mexico City, hotels ranked > 250 come back
       // as stubs (roomTypes: []) even when we have indexed photos for them.
@@ -5246,7 +5283,15 @@
         _setRatesStatus('', 'Rates unavailable — add dates again or sort by match');
         updateFreeCancelHint();
       }
+    } finally {
       _signalRatesArrived();
+      // Safety net: if applyPrices returned early (before first paint) or threw,
+      // ensure the loading label/spinner cannot stick after this request ends.
+      if (reqId === _ratesReqId) {
+        _fetchingPrices = false;
+        _setPriceBtnsState(_pricesLoaded);
+        _resolveRatesLoadingUi();
+      }
     }
   }
 
@@ -5732,6 +5777,10 @@
     // rates…" text remains visible until the gated render lands.
     if (!_initialRenderHappened) {
       updateFreeCancelHint();
+      // Rates can beat revealResultsWhenReady / vibe-tour gating. Clear the
+      // in-flight label here so "Checking live rates…" doesn't stick after the
+      // list is visible; _syncRatesStatusAfterReveal() will show ✓ Live rates.
+      _setRatesStatus('', '');
       return;
     }
     const priceDependentSort = _currentSort === 'match+price' || _currentSort === 'price';
@@ -6423,7 +6472,13 @@
     _vibeTourAwaitingPrices = false;
 
     // Stale-search guard: a new search started while we were waiting.
-    if (capturedReqId !== _ratesReqId) return;
+    if (capturedReqId !== _ratesReqId) {
+      if (_deferResultsRenderUntilTourClose) {
+        _deferResultsRenderUntilTourClose = false;
+        revealResultsWhenReady();
+      }
+      return;
+    }
     // Tour was already dismissed (e.g. user navigated away).
     if (!_deferResultsRenderUntilTourClose) return;
 
@@ -6858,6 +6913,22 @@
   const BOOP_PRICE_LUXURY_STAR_EXTRA = 5;
   const BOOP_PRICE_SPLURGE_BONUS_MAX = 14;
   const BOOP_PRICE_ROOM_GAP_GUARD = 10;
+
+  /** Stronger value penalty when the slider is right ("Very important"). */
+  function boopPriceValuePenaltyMax(pm) {
+    const p = Math.max(-100, Math.min(100, Number(pm) || 0));
+    if (p <= 0) return BOOP_PRICE_VALUE_PENALTY_MAX;
+    const t = Math.abs(p) / 100;
+    return BOOP_PRICE_VALUE_PENALTY_MAX + t * 16;
+  }
+
+  /** Smaller room-match lead is needed to ignore price when price matters more. */
+  function boopPriceRoomGapGuard(pm) {
+    const p = Math.max(-100, Math.min(100, Number(pm) || 0));
+    if (p <= 0) return BOOP_PRICE_ROOM_GAP_GUARD;
+    const t = Math.abs(p) / 100;
+    return Math.max(4, Math.round(BOOP_PRICE_ROOM_GAP_GUARD * (1 - 0.55 * t)));
+  }
   const BOOP_PRICE_NBHD_GAP_GUARD = 16;
   const BOOP_PRICE_NBHD_ROOM_YIELD_GAP = 22;
   const BOOP_PRICE_NBHD_WEIGHT_BOOST = 0.30;
@@ -6942,7 +7013,7 @@
     if (Math.abs(p) < 1) return blended;
     const t = Math.abs(p) / 100;
     if (p > 0) {
-      let penalty = t * BOOP_PRICE_VALUE_PENALTY_MAX * valueSeekingLuxuryLean(h, pct);
+      let penalty = t * boopPriceValuePenaltyMax(p) * valueSeekingLuxuryLean(h, pct);
       const stars = Number(h.starRating);
       if (Number.isFinite(stars) && stars >= 4) {
         penalty += t * BOOP_PRICE_LUXURY_STAR_EXTRA;
@@ -7139,17 +7210,18 @@
       const sortScore = h => boopPriceAdjustBlendedScore(
         blendedMatchScore(h), h, pm, pricePercentiles
       );
+      const roomGapGuard = boopPriceRoomGapGuard(pm);
       hotels.sort((a, b) => {
         if (pm > 0) {
           const roomA = roomMatchScore(a);
           const roomB = roomMatchScore(b);
           const roomGap = roomB - roomA;
-          if (roomGap >= BOOP_PRICE_ROOM_GAP_GUARD) {
+          if (roomGap >= roomGapGuard) {
             if (!shouldRoomGuardYieldToPrice(b, pricePercentiles)) {
               const cmp = 1;
               return _sortReverse ? -cmp : cmp;
             }
-          } else if (roomGap <= -BOOP_PRICE_ROOM_GAP_GUARD) {
+          } else if (roomGap <= -roomGapGuard) {
             if (!shouldRoomGuardYieldToPrice(a, pricePercentiles)) {
               const cmp = -1;
               return _sortReverse ? -cmp : cmp;

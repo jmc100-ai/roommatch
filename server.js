@@ -414,6 +414,21 @@ const BOOP_PRICE_LUXURY_STAR_EXTRA = 5;
 /** Max points added at |pm|=100 when splurging. */
 const BOOP_PRICE_SPLURGE_BONUS_MAX = 14;
 const BOOP_PRICE_ROOM_GAP_GUARD = 10;
+
+function boopPriceValuePenaltyMax(pm) {
+  const p = Math.max(-100, Math.min(100, Number(pm) || 0));
+  if (p <= 0) return BOOP_PRICE_VALUE_PENALTY_MAX;
+  const t = Math.abs(p) / 100;
+  return BOOP_PRICE_VALUE_PENALTY_MAX + t * 16;
+}
+
+function boopPriceRoomGapGuard(pm) {
+  const p = Math.max(-100, Math.min(100, Number(pm) || 0));
+  if (p <= 0) return BOOP_PRICE_ROOM_GAP_GUARD;
+  const t = Math.abs(p) / 100;
+  return Math.max(4, Math.round(BOOP_PRICE_ROOM_GAP_GUARD * (1 - 0.55 * t)));
+}
+
 /** When value-seeking, block weak-nbhd hotels beating strong-nbhd peers on price alone. */
 const BOOP_PRICE_NBHD_GAP_GUARD = 16;
 /** Room lead required before a weak-nbhd hotel may override the nbhd guard. */
@@ -493,7 +508,7 @@ function boopPriceAdjustBlendedScore(blended, h, pm, pct) {
   if (Math.abs(p) < 1) return blended;
   const t = Math.abs(p) / 100;
   if (p > 0) {
-    let penalty = t * BOOP_PRICE_VALUE_PENALTY_MAX * valueSeekingLuxuryLean(h, pct);
+    let penalty = t * boopPriceValuePenaltyMax(p) * valueSeekingLuxuryLean(h, pct);
     const stars = Number(h.starRating);
     if (Number.isFinite(stars) && stars >= 4) {
       penalty += t * BOOP_PRICE_LUXURY_STAR_EXTRA;
@@ -533,10 +548,11 @@ function compareV2HotelsPriceAware(a, b, nbhdWeight, pm, pricePercentiles) {
   const p = Number(pm) || 0;
   const wEff = effectiveNbhdWeightForPriceMatters(nbhdWeight, pm);
   if (p > 0) {
+    const roomGapGuard = boopPriceRoomGapGuard(pm);
     const roomGap = v2BestRoomScore(b) - v2BestRoomScore(a);
-    if (roomGap >= BOOP_PRICE_ROOM_GAP_GUARD) {
+    if (roomGap >= roomGapGuard) {
       if (!shouldRoomGuardYieldToPrice(b, pricePercentiles)) return 1;
-    } else if (roomGap <= -BOOP_PRICE_ROOM_GAP_GUARD) {
+    } else if (roomGap <= -roomGapGuard) {
       if (!shouldRoomGuardYieldToPrice(a, pricePercentiles)) return -1;
     }
     const nbhdA = a.nbhd_fit_pct;
