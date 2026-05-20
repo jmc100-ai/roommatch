@@ -6575,6 +6575,16 @@
       _deferResultsRenderUntilTourClose = false;
       revealResultsWhenReady();
     }
+    // Without dates there is no rates-driven re-sort to protect — keeping the
+    // tour lead pinned at #1 made the same hotel (often Hilton Reforma in Centro
+    // Histórico) appear locked across unrelated Boop searches.
+    const haveDates = !!(S.checkin && S.checkout && S.checkin < S.checkout);
+    if (!haveDates && _vibeTourLeadId) {
+      _vibeTourLeadId = null;
+      if (document.body.classList.contains('has-results') && _lastHotels?.length) {
+        renderSortedSmooth();
+      }
+    }
     if (scrollToList) {
       document.getElementById('results')?.querySelector('.hotel-card,.hotel-row')?.scrollIntoView({ behavior:'smooth', block:'start' });
     }
