@@ -8973,9 +8973,10 @@
   // CSS: flex-wrap:nowrap + overflow:hidden). Recents come first, then top
   // cities fill any remaining slots.
   function buildCityChips() {
-    const MAX_CHIPS = 5;
+    // Home-screen chip row commented out in index.html (#city-chips).
     const container = document.getElementById('city-chips');
     if (!container) return;
+    const MAX_CHIPS = 5;
     // Recents must include cities that are also in TOP_CITIES (e.g. Kuala Lumpur
     // is both — old code filtered those out, then TOP_CITIES.slice(0, remaining)
     // only ever took Paris…Dubai, so KL never appeared on the home row).
