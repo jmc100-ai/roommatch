@@ -5980,3 +5980,14 @@
       min-width: 120px;
     }
     body.launch-city-modal-open { overflow: hidden; }
+
+    /* Mexico City-only guard on home — OK required before continuing */
+    .launch-city-modal { z-index: 220; }
+    .launch-city-modal .beta-modal-actions {
+      justify-content: center;
+      margin-top: 16px;
+    }
+    .launch-city-modal .beta-modal-actions .btn-pri {
+      min-width: 120px;
+    }
+    body.launch-city-modal-open { overflow: hidden; }
