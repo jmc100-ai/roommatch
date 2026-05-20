@@ -885,14 +885,36 @@
     );
   }
 
-  function rejectLaunchCityInput(rawName) {
-    flashMsg(LAUNCH_CITY_ONLY_MSG, 4200);
+  function showLaunchCityOnlyModal() {
+    const m = document.getElementById('launch-city-modal');
+    const msgEl = document.getElementById('launch-city-modal-msg');
+    if (!m) {
+      flashMsg(LAUNCH_CITY_ONLY_MSG, 4200);
+      return;
+    }
+    if (msgEl) msgEl.textContent = LAUNCH_CITY_ONLY_MSG;
+    m.hidden = false;
+    document.body.classList.add('launch-city-modal-open');
+    document.body.style.overflow = 'hidden';
+    const ok = document.getElementById('launch-city-modal-ok');
+    if (ok) ok.focus();
+  }
+
+  function closeLaunchCityOnlyModal() {
+    const m = document.getElementById('launch-city-modal');
+    if (m) m.hidden = true;
+    document.body.classList.remove('launch-city-modal-open');
+    document.body.style.overflow = '';
     const el = document.getElementById('cityInput');
     if (el) {
       el.value = DEFAULT_HOME_CITY;
       el.focus();
       el.select();
     }
+  }
+
+  function rejectLaunchCityInput(_rawName) {
+    showLaunchCityOnlyModal();
     return true;
   }
 
@@ -9299,6 +9321,13 @@
     }
   });
   document.addEventListener('keydown', (ev) => {
+    if (ev.key === 'Escape') {
+      const cityModal = document.getElementById('launch-city-modal');
+      if (cityModal && !cityModal.hidden) {
+        closeLaunchCityOnlyModal();
+        return;
+      }
+    }
     if (ev.key === 'Escape') closeSortMorePop();
     if (ev.key === 'Escape') closeCityDateRangePicker();
     if (ev.key === 'Escape') closeNbhdRefineDropdown();
