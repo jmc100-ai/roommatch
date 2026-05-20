@@ -613,7 +613,7 @@
       options:[
         { id:'sleek_polished', emoji:'✨', title:'Sleek & polished', note:'Clean modern rooms, refined service, calm luxury.', image:'images/wizard/sleek-polished.png' },
         { id:'cozy_warm', emoji:'🕯️', title:'Warm & cozy', note:'Warm lighting, texture, comfort, and a relaxed feel.', image:'images/wizard/warm-cozy.png' },
-        { id:'distinct_unique', emoji:'🎨', title:'Distinct & characterful', note:'Boutique, design-led, expressive, or one-of-a-kind.', image:'images/wizard/distinct-characterful.png' },
+        { id:'distinct_unique', emoji:'🎨', title:'Distinct and full of character', note:'Boutique, design-led, expressive, or one-of-a-kind.', image:'images/wizard/distinct-characterful.png' },
         { id:'simple_value', emoji:'💡', title:'Simple & good value', note:'Clean, functional, practical, and well-priced.', image:'https://images.pexels.com/photos/18201945/pexels-photo-18201945.jpeg?auto=compress&cs=tinysrgb&w=1200' },
       ]
     },
