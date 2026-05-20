@@ -406,6 +406,7 @@
   const HISTORY_LIMIT     = 6;
   /** Default city field + initial `S.city` — launch market (V2 catalog). */
   const DEFAULT_HOME_CITY = 'Mexico City';
+  const LAUNCH_CITY_ONLY_MSG = 'Only Mexico City is available for searching at this moment. More cities coming soon.';
 
   // ════════════════════════════════════════════════════════
   //  DISCOVERY FLOW — 4-step state machine
@@ -868,6 +869,31 @@
       .trim()
       .replace(/\s+/g, ' ')
       .replace(/\w\S*/g, w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase());
+  }
+
+  /** Beta launch: search is limited to Mexico City (home + all pickCity paths). */
+  function isAllowedLaunchCity(name) {
+    const k = cityKey(name)
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '');
+    return (
+      k === 'mexico city' ||
+      k === 'cdmx' ||
+      k === 'ciudad de mexico' ||
+      k === 'mexico df' ||
+      k === 'distrito federal'
+    );
+  }
+
+  function rejectLaunchCityInput(rawName) {
+    flashMsg(LAUNCH_CITY_ONLY_MSG, 4200);
+    const el = document.getElementById('cityInput');
+    if (el) {
+      el.value = DEFAULT_HOME_CITY;
+      el.focus();
+      el.select();
+    }
+    return true;
   }
 
   function readBoopProfiles() {
@@ -2377,7 +2403,11 @@
 
   // ── CITY ─────────────────────────────────────────────
   function pickCity(name) {
-    const city = normalizeCityName(name);
+    if (!isAllowedLaunchCity(name)) {
+      rejectLaunchCityInput(name);
+      return;
+    }
+    const city = DEFAULT_HOME_CITY;
     if (_returnToCmdTripSheet && isMobileCmdTripUi()) {
       const prevCity = S.city;
       S.city = city;
@@ -4860,6 +4890,10 @@
     const city  = document.getElementById('cityInput').value.trim();
     if (!query) { alert("Please describe the room you're looking for."); return; }
     if (!city)  { alert('Please enter a city.'); return; }
+    if (!isAllowedLaunchCity(city)) {
+      rejectLaunchCityInput(city);
+      return;
+    }
     writeHistory(QUERY_HISTORY_KEY, query);
     writeHistory(CITY_HISTORY_KEY, city);
     hideRecentDropdown('queryHistoryDropdown');
