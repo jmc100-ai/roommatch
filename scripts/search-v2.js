@@ -37,9 +37,19 @@ function invalidatePhaseACache(city) {
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 
+/** Legacy BOOP / V1 flag names → V2 fact_catalog keys */
+const MUST_HAVE_ALIASES = {
+  balcony: "private_balcony",
+  work_desk: "ergonomic_workspace",
+};
+
 function parseMustHaves(raw) {
   if (!raw) return [];
-  return String(raw).split(",").map((s) => s.trim()).filter(Boolean);
+  return String(raw)
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .map((k) => MUST_HAVE_ALIASES[k] || k);
 }
 
 function parseBbox(raw) {

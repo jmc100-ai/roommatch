@@ -649,10 +649,10 @@
       type:'chips',
       options:[
         { id:'free_cancellation', flag:null, label:'Free cancellation', hint:'When your dates are set, we favour rates you can cancel without a fee.', image:'https://images.unsplash.com/photo-1526778548025-fa2f459cd5c1?auto=format&fit=crop&w=1200&q=80', meta:'Add check-in and check-out first' },
-        { id:'balcony',      flag:'balcony',   label:'Balcony or view',    hint:'Outdoor space or a real view from the room.',                         image:'images/wizard/musthave-balcony.png' },
+        { id:'balcony',      flag:'private_balcony', label:'Balcony or view',    hint:'Outdoor space or a real view from the room.',                         image:'images/wizard/musthave-balcony.png' },
         { id:'spa_bathroom', flag:null,        label:'Spa-style bathroom', hint:'Soaking tub or rain shower plus larger counter / double vanity.',     image:'images/wizard/musthave-spa-bathroom.png', seed:'spa-like bathroom, soaking tub, rainfall shower, marble vanity, generous counter space, double sinks' },
         { id:'spacious',     flag:null,        label:'Spacious room',      hint:'Room to spread out, not a closet.',                                    image:'images/wizard/musthave-spacious.png', seed:'spacious hotel room, generous layout, open feel' },
-        { id:'work_desk',    flag:'work_desk', label:'Work desk',          hint:'Proper desk to get a few hours done.',                                 image:'images/wizard/musthave-work-desk.png' },
+        { id:'work_desk',    flag:'ergonomic_workspace', label:'Work desk',          hint:'Proper desk to get a few hours done.',                                 image:'images/wizard/musthave-work-desk.png' },
       ]
     },
   ];

@@ -675,6 +675,7 @@ const STAY_VIBE_TO_VISUAL_STYLE = {
   cozy_warm:           "visual_style_cozy_warm",
   vibrant_eclectic:    "visual_style_vibrant_eclectic",
   distinct_unique:     "visual_style_vibrant_eclectic", // legacy boop label
+  simple_value:        "visual_style_sleek_polished", // value stays lean/modern, not boutique-eclectic
   moody_dark:          "visual_style_moody_dark",
   classic_traditional: "visual_style_classic_traditional",
 };
@@ -717,6 +718,11 @@ const STAY_VIBE_SUPPORTING_FACTS = {
     { fact_key: "vintage_furniture",    weight: 0.40 },
     { fact_key: "mid_century_modern",   weight: 0.35 },
     { fact_key: "textured_upholstery",  weight: 0.30 },
+  ],
+  simple_value: [
+    { fact_key: "palette_minimalist",       weight: 0.60 },
+    { fact_key: "ergonomic_workspace",      weight: 0.35 },
+    { fact_key: "high_natural_light",       weight: 0.30 },
   ],
   moody_dark: [
     { fact_key: "palette_moody",         weight: 0.55 },
