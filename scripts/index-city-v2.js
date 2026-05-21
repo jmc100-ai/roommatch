@@ -406,6 +406,7 @@ async function processHotelPublicPhotos(db, { hotelId, city, cc, hotelPhotoUrls 
 async function clearCityV2Data(db, city) {
   await db.from("v2_room_feature_facts").delete().eq("city", city);
   await db.from("v2_room_inventory").delete().eq("city", city);
+  await db.from("v2_room_types_index").delete().eq("city", city);
   await db.from("v2_hotels_cache").delete().eq("city", city);
 }
 
