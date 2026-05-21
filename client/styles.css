@@ -76,7 +76,7 @@
       color: var(--text);
       line-height: 1;
     }
-    .logo-accent { color: var(--accent); }
+    .logo-accent, .brand-vibe { color: var(--accent); }
     .topnav-logo .logo-accent {
       font-family: 'DM Sans', sans-serif;
       font-weight: 700;
@@ -329,6 +329,7 @@
     .static-panel ul { margin: 0 0 14px; padding-left: 1.25em; }
     .static-panel a { color: var(--accent2); }
     .static-panel a:hover { color: var(--accent); }
+    .static-panel .brand-vibe { color: var(--accent); }
     .static-muted {
       font-size: 12px;
       line-height: 1.55;
