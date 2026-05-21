@@ -31,7 +31,7 @@ const { Resend } = require("resend");
 const { createClient } = require("@supabase/supabase-js");
 
 const RESEND_KEY      = process.env.RESEND_API_KEY || "";
-const BETA_FROM       = process.env.BETA_FROM      || "TravelBoop Beta <beta@travelboop.com>";
+const BETA_FROM       = process.env.BETA_FROM      || "TravelByVibe Beta <beta@travelboop.com>";
 const BETA_REPLY_TO   = process.env.BETA_REPLY_TO  || "beta@travelboop.com";
 const BETA_PASSWORD   = process.env.BETA_PASSWORD  || process.env.SITE_PASSWORD || "";
 const BETA_BASE_URL   = process.env.BETA_BASE_URL  || "https://www.travelboop.com";
@@ -105,13 +105,13 @@ const BTN_STYLE = `
 function wrap(html) {
   return `<!DOCTYPE html><html><body style="background:#f5f3ee;padding:24px 12px;">
     <div style="${BASE_STYLE} background:#fff;padding:32px 28px;border-radius:14px;box-shadow:0 2px 12px rgba(0,0,0,.05);">
-      <div style="font-family:'Cormorant Garamond',Georgia,serif;font-size:22px;font-weight:600;color:#c9a96e;letter-spacing:.04em;margin-bottom:18px;">
-        TravelBoop
+      <div style="font-family:'Cormorant Garamond',Georgia,serif;font-size:22px;font-weight:600;color:#e8e4dc;letter-spacing:.04em;margin-bottom:18px;">
+        TravelBy<span style="color:#c9a96e">Vibe</span>
       </div>
       ${html}
       <hr style="margin:28px 0 14px;border:0;border-top:1px solid #eee"/>
       <p style="font-size:11px;color:#888;margin:0;">
-        You are receiving this because you joined the TravelBoop beta waitlist or invite list.
+        You are receiving this because you joined the TravelByVibe beta waitlist or invite list.
         Reply to this email to reach a real person, or
         <a href="${BETA_BASE_URL}/privacy" style="color:#888">read our privacy note</a>.
       </p>
@@ -126,10 +126,10 @@ function templates(name = "there") {
     : "";
   return {
     invite: {
-      subject: "You're in — welcome to the TravelBoop beta",
+      subject: "You're in — welcome to the TravelByVibe beta",
       html: wrap(`
         <p>${greet}</p>
-        <p>Welcome to the TravelBoop beta for Mexico City. Tell us the room you have in mind — rain shower, sunny balcony, moody suite — and we will line up
+        <p>Welcome to the TravelByVibe beta for Mexico City. Tell us the room you have in mind — rain shower, sunny balcony, moody suite — and we will line up
         <strong>real hotel photos</strong> so you can judge with your eyes, not just a star count.</p>
         <p><strong>Your beta code:</strong> <code style="background:#f0ece4;padding:3px 8px;border-radius:4px;font-size:14px;">${BETA_PASSWORD}</code></p>
         <p>Try a first search like this:</p>
@@ -137,17 +137,17 @@ function templates(name = "there") {
           "modern bathroom with double sinks in Roma Norte"
         </p>
         <p style="margin:24px 0;">
-          <a href="${BETA_BASE_URL}/" style="${BTN_STYLE}">Open TravelBoop →</a>
+          <a href="${BETA_BASE_URL}/" style="${BTN_STYLE}">Open TravelByVibe →</a>
         </p>
         <p><strong>Small favour:</strong> tap the purple <strong>Feedback</strong> bubble anytime something feels confusing, slow, or surprisingly great. We read every note.</p>
         <p>We are still polishing — if something looks off, tell us and we will jump on it.</p>
         ${calendarLine}
-        <p>— The TravelBoop team</p>
+        <p>— The TravelByVibe team</p>
       `),
       text:
 `${greet}
 
-Welcome to the TravelBoop beta for Mexico City. Describe the room you want and
+Welcome to the TravelByVibe beta for Mexico City. Describe the room you want and
 we will match it to real hotel photos so you can see what you are booking toward.
 
 Your beta code: ${BETA_PASSWORD}
@@ -163,10 +163,10 @@ every note.
 We are still polishing; if something breaks, tell us and we will fix it fast.
 ${BETA_CALENDAR ? `\nWant to chat live? ${BETA_CALENDAR}\n` : ""}
 
-— The TravelBoop team`,
+— The TravelByVibe team`,
     },
     welcome: {
-      subject: "Quick tips for your TravelBoop beta",
+      subject: "Quick tips for your TravelByVibe beta",
       html: wrap(`
         <p>${greet}</p>
         <p>Glad you are here. Four tiny habits that make the beta feel great:</p>
@@ -180,7 +180,7 @@ ${BETA_CALENDAR ? `\nWant to chat live? ${BETA_CALENDAR}\n` : ""}
           <a href="${BETA_BASE_URL}/" style="${BTN_STYLE}">Jump back in →</a>
         </p>
         ${calendarLine}
-        <p>— The TravelBoop team</p>
+        <p>— The TravelByVibe team</p>
       `),
       text:
 `${greet}
@@ -195,13 +195,13 @@ Glad you are here. Four tiny habits that make the beta feel great:
 Jump back in: ${BETA_BASE_URL}/
 ${BETA_CALENDAR ? `\nWant to chat live? ${BETA_CALENDAR}\n` : ""}
 
-— The TravelBoop team`,
+— The TravelByVibe team`,
     },
     nudge: {
-      subject: "How is TravelBoop feeling for you?",
+      subject: "How is TravelByVibe feeling for you?",
       html: wrap(`
         <p>${greet}</p>
-        <p>You have been in the TravelBoop beta for a few days — we would love a gut check.</p>
+        <p>You have been in the TravelByVibe beta for a few days — we would love a gut check.</p>
         <p>What felt instantly useful? What felt confusing? There are no wrong answers.</p>
         <p>Three quick prompts:</p>
         <ol>
@@ -210,16 +210,16 @@ ${BETA_CALENDAR ? `\nWant to chat live? ${BETA_CALENDAR}\n` : ""}
           <li>What is one thing you wish the product did tomorrow?</li>
         </ol>
         <p style="margin:24px 0;">
-          <a href="${BETA_BASE_URL}/" style="${BTN_STYLE}">Open TravelBoop →</a>
+          <a href="${BETA_BASE_URL}/" style="${BTN_STYLE}">Open TravelByVibe →</a>
         </p>
         <p>Reply to this email with a sentence or two, or tap the purple Feedback bubble in the app — both land with us.</p>
         ${calendarLine}
-        <p>— The TravelBoop team</p>
+        <p>— The TravelByVibe team</p>
       `),
       text:
 `${greet}
 
-You have been in the TravelBoop beta for a few days — we would love a gut check.
+You have been in the TravelByVibe beta for a few days — we would love a gut check.
 
 Three quick prompts:
 1. What surprised you first — good or bad?
@@ -231,13 +231,13 @@ Reply here or use the in-app Feedback bubble.
 Open: ${BETA_BASE_URL}/
 ${BETA_CALENDAR ? `\nWant to chat live? ${BETA_CALENDAR}\n` : ""}
 
-— The TravelBoop team`,
+— The TravelByVibe team`,
     },
     call: {
       subject: "Could we borrow 15 minutes of your time?",
       html: wrap(`
         <p>${greet}</p>
-        <p>Thank you for living in TravelBoop lately — you have already taught us a ton.</p>
+        <p>Thank you for living in TravelByVibe lately — you have already taught us a ton.</p>
         <p>If you are up for it, we would love a relaxed 15-minute video chat: you share your screen, walk us through a real trip you would plan, and we mostly listen. No sales deck, we promise.</p>
         ${BETA_CALENDAR
           ? `<p style="margin:24px 0;">
@@ -246,19 +246,19 @@ ${BETA_CALENDAR ? `\nWant to chat live? ${BETA_CALENDAR}\n` : ""}
           : `<p>Reply with a few times that work and we will send a calendar invite.</p>`
         }
         <p>Either way, thank you for being early — it genuinely helps.</p>
-        <p>— The TravelBoop team</p>
+        <p>— The TravelByVibe team</p>
       `),
       text:
 `${greet}
 
-Thank you for using TravelBoop lately — you have already taught us a ton.
+Thank you for using TravelByVibe lately — you have already taught us a ton.
 
 If you are up for it, we would love a relaxed 15-minute video chat: you share
 your screen, walk us through a real trip, we listen. No sales deck.
 
 ${BETA_CALENDAR ? `Pick a time: ${BETA_CALENDAR}` : "Reply with a few windows that work for you."}
 
-— The TravelBoop team`,
+— The TravelByVibe team`,
     },
   };
 }

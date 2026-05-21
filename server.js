@@ -135,7 +135,7 @@ function loginHtml(error = "") {
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>TravelBoop</title>
+  <title>TravelByVibe</title>
   <link rel="preconnect" href="https://fonts.googleapis.com"/>
   <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300;400;600&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet"/>
   <style>
@@ -159,7 +159,7 @@ function loginHtml(error = "") {
 </head>
 <body>
   <div class="card">
-    <h1>TravelBoop</h1>
+    <h1>TravelBy<span style="color:#c9a96e">Vibe</span></h1>
     <p class="sub">Enter the code from your invite email</p>
     <form method="POST" action="/auth">
       <input type="password" name="password" placeholder="Beta code" autofocus autocomplete="current-password"/>
@@ -265,7 +265,7 @@ app.listen(PORT, "0.0.0.0", () => {
   console.log(
     `[config] VSEARCH_NBHD_RANK_WEIGHT=${Number.isFinite(nbhdW) ? nbhdW : "invalid"} (parsed from env; 0 or missing → blend off)`
   );
-  console.log(`TravelBoop on port ${PORT}`);
+  console.log(`TravelByVibe on port ${PORT}`);
   const KEEPALIVE_ENABLED = String(process.env.RENDER_KEEPALIVE || "").toLowerCase() === "true";
   const RENDER_URL = process.env.RENDER_EXTERNAL_URL;
   if (RENDER_URL && KEEPALIVE_ENABLED) {
@@ -1387,8 +1387,8 @@ function _legalHtml(title, body) {
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>${title} — TravelBoop</title>
-<meta name="description" content="${title} for TravelBoop — a friendly beta for discovering hotels by neighbourhood and real room photos."/>
+<title>${title} — TravelByVibe</title>
+<meta name="description" content="${title} for TravelByVibe — a friendly beta for discovering hotels by neighbourhood and real room photos."/>
 <link rel="icon" type="image/svg+xml" href="/favicon.svg"/>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300;400;600&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet"/>
@@ -1413,12 +1413,12 @@ function _legalHtml(title, body) {
 <body>
 <div class="wrap">
   <div class="top">
-    <a class="brand" href="/">TravelBoop</a>
+    <a class="brand" href="/">TravelBy<span style="color:#c9a96e">Vibe</span></a>
     <a class="home" href="/">← Home</a>
   </div>
   <h1>${title}</h1>
   ${body}
-  <p class="muted">TravelBoop is in beta — details here are a simple overview, not legal advice, and we may update them as the product evolves.</p>
+  <p class="muted">TravelByVibe is in beta — details here are a simple overview, not legal advice, and we may update them as the product evolves. Operated by TravelBoop, LLC.</p>
   <div class="foot">
     <a href="/privacy">Privacy</a>·<a href="/terms">Terms</a>·<a href="mailto:beta@travelboop.com">Contact</a>
   </div>
@@ -1448,9 +1448,9 @@ app.get("/privacy", (_req, res) => {
 });
 app.get("/terms", (_req, res) => {
   const body = `
-    <p>By using TravelBoop while we are in beta, you agree to these terms. If you do not agree, please stop using the site.</p>
+    <p>By using TravelByVibe while we are in beta, you agree to these terms. If you do not agree, please stop using the site.</p>
     <h2>Not professional advice</h2>
-    <p>TravelBoop is a trip-planning helper, not a lawyer, accountant, or travel agent. Neighbourhood blurbs and match scores are for inspiration — always double-check anything important before you book.</p>
+    <p>TravelByVibe is a trip-planning helper, not a lawyer, accountant, or travel agent. Neighbourhood blurbs and match scores are for inspiration — always double-check anything important before you book.</p>
     <h2>No guarantees</h2>
     <p>The service is provided “as is.” We do not promise that prices, availability, or any hotel will be right for your trip.</p>
     <h2>Bookings</h2>
@@ -1458,9 +1458,9 @@ app.get("/terms", (_req, res) => {
     <h2>Please play fair</h2>
     <p>Do not abuse the service — for example by trying to break it, scrape it at huge volume, or ruin the experience for others. We may pause access if we need to protect the beta or other users.</p>
     <h2>Limitation of liability</h2>
-    <p>To the fullest extent the law allows, TravelBoop and its operators are not responsible for indirect or consequential damages from using the beta.</p>
+    <p>To the fullest extent the law allows, TravelBoop, LLC and its operators are not responsible for indirect or consequential damages from using the beta.</p>
     <h2>Changes</h2>
-    <p>We may update these terms as the product grows. If you keep using TravelBoop after an update, that means you accept the new version.</p>`;
+    <p>We may update these terms as the product grows. If you keep using TravelByVibe after an update, that means you accept the new version.</p>`;
   res.setHeader("Content-Type", "text/html; charset=utf-8");
   res.setHeader("Cache-Control", "public, max-age=600, s-maxage=3600");
   res.send(_legalHtml("Terms of service", body));
@@ -5128,7 +5128,7 @@ app.post("/api/feedback", async (req, res) => {
       const resend = _getResend();
       if (resend) {
         const sentLabel = row.sentiment ? ` ${row.sentiment}/5` : "";
-        const subject   = `[TravelBoop beta]${sentLabel} ${message.slice(0, 60).replace(/\s+/g, " ")}${message.length > 60 ? "…" : ""}`;
+        const subject   = `[TravelByVibe beta]${sentLabel} ${message.slice(0, 60).replace(/\s+/g, " ")}${message.length > 60 ? "…" : ""}`;
         const escape    = (s) => String(s || "").replace(/[&<>]/g, (c) => ({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]));
         const html = `
           <div style="font-family:-apple-system,Segoe UI,Roboto,sans-serif;color:#1a1a1e;max-width:560px">

@@ -1,6 +1,11 @@
   const BACKEND = (location.hostname === 'localhost' || location.hostname === '127.0.0.1')
     ? 'http://localhost:3000' : '';
 
+  /** Public product name; legal entity remains TravelBoop, LLC. */
+  const BRAND_HTML = 'TravelBy<span class="brand-vibe">Vibe</span>';
+  const BRAND_PLAIN = 'TravelByVibe';
+  const COMPANY_LEGAL = 'TravelBoop, LLC';
+
   let PUBLIC_CLIP_SEARCH_ENABLED = false;
   (function loadPublicConfig() {
     const base = BACKEND || '';
@@ -4627,12 +4632,12 @@
   }
 
   function getStaticPageContent(id) {
-    const commonFoot = `<p class="static-muted">TravelBoop is in beta — this page is a friendly overview, not legal advice, and we may refresh it as the product changes.</p>`;
+    const commonFoot = `<p class="static-muted">${BRAND_HTML} is in beta — this page is a friendly overview, not legal advice, and we may refresh it as the product changes. Operated by ${COMPANY_LEGAL}.</p>`;
     const pages = {
       how: {
         title: 'How it works',
         html: `
-          <p>TravelBoop walks you through three simple layers: <strong>where you are going</strong>, <strong>what the neighbourhood should feel like</strong>, and <strong>what the room should look like</strong>.</p>
+          <p>${BRAND_HTML} walks you through three simple layers: <strong>where you are going</strong>, <strong>what the neighbourhood should feel like</strong>, and <strong>what the room should look like</strong>.</p>
           <h2>1 · City &amp; dates</h2>
           <p>Pick your destination and, if you like, your stay dates. Dates unlock live prices when our partners have them.</p>
           <h2>2 · Your vibe &amp; the map</h2>
@@ -4644,15 +4649,15 @@
           ${commonFoot}`,
       },
       about: {
-        title: 'About TravelBoop',
+        title: `About ${BRAND_PLAIN}`,
         html: `
-          <p><strong>TravelBoop</strong> helps you find a hotel that fits your trip — not just a place to sleep.</p>
+          <p><strong>${BRAND_HTML}</strong> helps you find a hotel that fits your trip — not just a place to sleep.</p>
           <p>We focus on neighborhood vibe and real room photos, so you can better understand what a stay will actually feel like before you book.</p>
           <p>Answer a few quick questions about your travel style, and we'll recommend hotels and areas that match — from walkable cafés and local character to quiet streets or nightlife.</p>
           <p>The goal: fewer booking surprises and more \u201Cthis is exactly what I wanted.\u201D</p>
           <h2>Currently in Beta</h2>
-          <p>TravelBoop is still growing, with more cities, smarter recommendations, and ongoing improvements added regularly. Use the purple <strong>Feedback</strong> button anytime — your feedback directly shapes what we build next.</p>
-          <p class="static-muted">TravelBoop is in beta, so features and information may change as the product evolves. Information here is for orientation only and is not legal or professional advice.</p>`,
+          <p>${BRAND_HTML} is still growing, with more cities, smarter recommendations, and ongoing improvements added regularly. Use the purple <strong>Feedback</strong> button anytime — your feedback directly shapes what we build next.</p>
+          <p class="static-muted">${BRAND_HTML} is in beta, so features and information may change as the product evolves. Information here is for orientation only and is not legal or professional advice. Operated by ${COMPANY_LEGAL}.</p>`,
       },
       privacy: {
         title: 'Privacy',
@@ -4673,9 +4678,9 @@
       terms: {
         title: 'Terms of service',
         html: `
-          <p>By using TravelBoop during beta you agree to these terms. If you disagree, please stop using the site.</p>
+          <p>By using ${BRAND_PLAIN} during beta you agree to these terms. If you disagree, please stop using the site.</p>
           <h2>Not professional advice</h2>
-          <p>TravelBoop is not legal, financial, or travel-agent advice. Neighbourhood notes and match hints are for discovery — they can be incomplete or wrong.</p>
+          <p>${BRAND_PLAIN} is not legal, financial, or travel-agent advice. Neighbourhood notes and match hints are for discovery — they can be incomplete or wrong.</p>
           <h2>No guarantees</h2>
           <p>The service is provided “as is.” We do not promise availability, perfect prices, or that any hotel suits your trip.</p>
           <h2>Bookings</h2>
@@ -4683,7 +4688,7 @@
           <h2>Play fair</h2>
           <p>Please do not abuse or overload the product. We may pause access that hurts other beta users.</p>
           <h2>Liability</h2>
-          <p>To the fullest extent the law allows, TravelBoop and its operators are not liable for indirect or consequential damages from using the beta.</p>
+          <p>To the fullest extent the law allows, ${COMPANY_LEGAL} and its operators are not liable for indirect or consequential damages from using the beta.</p>
           <h2>Changes</h2>
           <p>We may update these terms. Continuing to use the site means you accept the latest version.</p>
           ${commonFoot}`,

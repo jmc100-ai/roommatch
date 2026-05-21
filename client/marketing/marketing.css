@@ -1,4 +1,4 @@
-/* TravelBoop marketing landing pages — indexable SEO siblings only */
+/* TravelByVibe marketing landing pages — indexable SEO siblings only */
 :root {
   --bg: #0a0a0c;
   --surface: #121218;
@@ -56,6 +56,7 @@ a:hover { color: #fff; }
   text-decoration: none;
 }
 .mbrand:hover { color: var(--accent-soft); }
+.brand-vibe { color: var(--accent); }
 .mnav {
   display: flex;
   flex-wrap: wrap;
