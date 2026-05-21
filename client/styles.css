@@ -77,11 +77,13 @@
       line-height: 1;
     }
     .logo-accent, .brand-vibe { color: var(--accent); }
+    /* One word: inherit logo font so "TravelBy" + "Vibe" do not read as two tokens */
+    .brand-lockup { white-space: nowrap; }
     .topnav-logo .logo-accent {
-      font-family: 'DM Sans', sans-serif;
-      font-weight: 700;
-      letter-spacing: .04em;
-      font-size: .93em;
+      font-family: inherit;
+      font-weight: inherit;
+      letter-spacing: inherit;
+      font-size: inherit;
     }
     .topnav-links {
       display: flex;
@@ -3691,6 +3693,8 @@
     .chapter-sub { font-size:14px; color:var(--muted); line-height:1.75; max-width:440px; margin-bottom:32px; }
     .chapter-body { flex:1; padding-bottom:80px; }
     .eyebrow { font-size:11px; letter-spacing:.18em; text-transform:uppercase; color:var(--muted); margin-bottom:16px; display:flex; align-items:center; gap:8px; }
+    .eyebrow .brand-lockup { display:inline; letter-spacing:inherit; text-transform:inherit; }
+    .eyebrow .brand-vibe { margin-left:-0.22em; }
     .eyebrow-dot { width:5px; height:5px; border-radius:50%; background:var(--accent); flex-shrink:0; }
     .back-btn {
       display:inline-flex; align-items:center; gap:5px;

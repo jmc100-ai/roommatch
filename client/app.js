@@ -2,7 +2,7 @@
     ? 'http://localhost:3000' : '';
 
   /** Public product name; legal entity remains TravelBoop, LLC. */
-  const BRAND_HTML = 'TravelBy<span class="brand-vibe">Vibe</span>';
+  const BRAND_HTML = '<span class="brand-lockup">TravelBy<span class="brand-vibe">Vibe</span></span>';
   const BRAND_PLAIN = 'TravelByVibe';
   const COMPANY_LEGAL = 'TravelBoop, LLC';
 
