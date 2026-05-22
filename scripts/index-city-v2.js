@@ -139,9 +139,9 @@ function classifyPhoto(photo, roomName = "") {
   return "other";
 }
 
-async function geminiCaption(imageUrl, photoContext = {}, retries = 5) {
+/** Gemini vision call (no semaphore — caller must acquire _photoGeminiSlot). */
+async function geminiCaptionInner(imageUrl, photoContext = {}, retries = 5) {
   if (!GEMINI_KEY) return null;
-  return _photoGeminiSlot(async () => {
   try {
     const now = Date.now();
     if (now - _capWindow > 60000) { _capWindow = now; _capCount = 0; }
@@ -290,7 +290,7 @@ async function geminiCaption(imageUrl, photoContext = {}, retries = 5) {
         const attempt = 6 - retries; // 1..5
         const delay = Math.min(attempt * attempt * 3000, 60000); // 3s, 12s, 27s, 48s, 60s cap
         await new Promise((resolve) => setTimeout(resolve, delay));
-        return geminiCaption(imageUrl, photoContext, retries - 1);
+        return geminiCaptionInner(imageUrl, photoContext, retries - 1);
       }
       console.warn(`[v2-index] caption HTTP ${r.status}: ${txt.slice(0, 120)}`);
       return null;
@@ -299,10 +299,13 @@ async function geminiCaption(imageUrl, photoContext = {}, retries = 5) {
     const cap = d?.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || null;
     return cap;
   } catch (_) {
-    if (retries > 0) return geminiCaption(imageUrl, photoContext, retries - 1);
+    if (retries > 0) return geminiCaptionInner(imageUrl, photoContext, retries - 1);
     return null;
   }
-  });
+}
+
+async function geminiCaption(imageUrl, photoContext = {}, retries = 5) {
+  return _photoGeminiSlot(() => geminiCaptionInner(imageUrl, photoContext, retries));
 }
 
 function extractFeatureSummary(caption) {
@@ -338,9 +341,8 @@ async function upsertV2Facts(db, rows) {
 // Re-uses the indexer's caption rate-gate by sharing the _capWindow/_capCount
 // variables. Returns the parsed { areas, visualStyle } object or
 // { areas: [], visualStyle: null } on permanent failure.
-async function geminiClassifyPublicPhoto(imageUrl, retries = 4) {
+async function geminiClassifyPublicPhotoInner(imageUrl, retries = 4) {
   if (!GEMINI_KEY) return { areas: [], visualStyle: null };
-  return _photoGeminiSlot(async () => {
   try {
     const now = Date.now();
     if (now - _capWindow > 60000) { _capWindow = now; _capCount = 0; }
@@ -377,7 +379,7 @@ async function geminiClassifyPublicPhoto(imageUrl, retries = 4) {
         const attempt = 5 - retries;
         const delay = Math.min(attempt * attempt * 3000, 60000);
         await new Promise((res) => setTimeout(res, delay));
-        return geminiClassifyPublicPhoto(imageUrl, retries - 1);
+        return geminiClassifyPublicPhotoInner(imageUrl, retries - 1);
       }
       return { areas: [], visualStyle: null };
     }
@@ -386,10 +388,13 @@ async function geminiClassifyPublicPhoto(imageUrl, retries = 4) {
     const txt = d?.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || "";
     return parseHotelPublicReply(txt);
   } catch (_err) {
-    if (retries > 0) return geminiClassifyPublicPhoto(imageUrl, retries - 1);
+    if (retries > 0) return geminiClassifyPublicPhotoInner(imageUrl, retries - 1);
     return { areas: [], visualStyle: null };
   }
-  });
+}
+
+async function geminiClassifyPublicPhoto(imageUrl, retries = 4) {
+  return _photoGeminiSlot(() => geminiClassifyPublicPhotoInner(imageUrl, retries));
 }
 
 /**
@@ -659,6 +664,19 @@ async function reindexCityV2(city, limit = 200, forceRebuild = true) {
   let hotelsSkippedExisting = resumeProgress?.skipped_existing || 0;
   let hotelsFailed = resumeProgress?.hotels_failed || 0;
   let photosDone = 0;
+  let lastHeartbeat = Date.now();
+  const HEARTBEAT_MS = Math.max(60_000, Number(process.env.V2_PROGRESS_HEARTBEAT_MS) || 180_000);
+
+  const snapshotProgress = () => ({
+    liteapi_offset: liteapiOffset,
+    catalog_scanned: catalogScanned,
+    catalog_limit: limit,
+    indexed_in_cache: existing.size,
+    skipped_quality: hotelsSkippedQuality,
+    skipped_existing: hotelsSkippedExisting,
+    hotels_failed: hotelsFailed,
+    photos_done: photosDone,
+  });
 
   console.log(
     `[v2-index] ${city}: limit=${limit} batch=${BATCH_SIZE} hotel_conc=${HOTEL_CONCURRENCY} ` +
@@ -666,8 +684,9 @@ async function reindexCityV2(city, limit = 200, forceRebuild = true) {
     `resume_offset=${liteapiOffset} indexed_cache=${existing.size}`
   );
 
-  while (catalogScanned < limit) {
-    const pageSize = Math.min(LITEAPI_PAGE_SIZE, limit - catalogScanned);
+  // Paginate by liteapi_offset (not catalogScanned) so we advance through catalog pages.
+  while (liteapiOffset < limit) {
+    const pageSize = Math.min(LITEAPI_PAGE_SIZE, limit - liteapiOffset);
     const params = new URLSearchParams({ limit: String(pageSize), offset: String(liteapiOffset) });
     if (cc) {
       params.set("countryCode", cc);
@@ -704,23 +723,15 @@ async function reindexCityV2(city, limit = 200, forceRebuild = true) {
             console.warn(`[v2-index] hotel ${hotelId} failed: ${e.message}`);
           }
 
-          if (catalogScanned % PROGRESS_EVERY_HOTELS === 0) {
-            const progress = {
-              liteapi_offset: liteapiOffset,
-              catalog_scanned: catalogScanned,
-              catalog_limit: limit,
-              indexed_in_cache: existing.size,
-              skipped_quality: hotelsSkippedQuality,
-              skipped_existing: hotelsSkippedExisting,
-              hotels_failed: hotelsFailed,
-              photos_done: photosDone,
-            };
-            await writeIndexProgress(db, city, progress);
-            const pct = Math.round((catalogScanned / limit) * 100);
+          const now = Date.now();
+          if (catalogScanned % PROGRESS_EVERY_HOTELS === 0 || now - lastHeartbeat >= HEARTBEAT_MS) {
+            lastHeartbeat = now;
+            await writeIndexProgress(db, city, snapshotProgress());
+            const pct = Math.round((liteapiOffset / limit) * 100);
             console.log(
-              `[v2-index] progress ${city}: ${pct}% catalog_scanned=${catalogScanned}/${limit} ` +
-              `indexed=${existing.size} skip_existing=${hotelsSkippedExisting} ` +
-              `skip_quality=${hotelsSkippedQuality} failed=${hotelsFailed}`
+              `[v2-index] progress ${city}: offset_pct≈${pct}% liteapi_offset=${liteapiOffset} ` +
+              `catalog_scanned=${catalogScanned}/${limit} indexed=${existing.size} ` +
+              `skip_existing=${hotelsSkippedExisting} skip_quality=${hotelsSkippedQuality} failed=${hotelsFailed}`
             );
           }
         }
@@ -728,16 +739,7 @@ async function reindexCityV2(city, limit = 200, forceRebuild = true) {
     }
 
     liteapiOffset += page.length;
-    await writeIndexProgress(db, city, {
-      liteapi_offset: liteapiOffset,
-      catalog_scanned: catalogScanned,
-      catalog_limit: limit,
-      indexed_in_cache: existing.size,
-      skipped_quality: hotelsSkippedQuality,
-      skipped_existing: hotelsSkippedExisting,
-      hotels_failed: hotelsFailed,
-      photos_done: photosDone,
-    });
+    await writeIndexProgress(db, city, snapshotProgress());
     console.log(
       `[v2-index] page done ${city}: liteapi_offset=${liteapiOffset} scanned=${catalogScanned} ` +
       `indexed=${existing.size} skip_existing=${hotelsSkippedExisting}`

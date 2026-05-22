@@ -8,7 +8,7 @@ GitHub: **https://github.com/jmc100-ai/roommatch**
 Render service: **https://roommatch-1fg5.onrender.com** (service ID: srv-d6s27b75r7bs738737fg)
 Supabase project ID: **dmgxrcmdihgsffvqllms**
 
-**Launch city: Mexico City.** All manual testing, perf benchmarking, and search-quality QA must use `?city=Mexico City` (V2 catalog, ~3 600 hotels). Paris and Kuala Lumpur are V1-only and will be migrated/retired post-launch — do **not** use them as the primary test target.
+**Launch city: Mexico City.** All manual testing, perf benchmarking, and search-quality QA must use `?city=Mexico City` (V2 catalog, ~3 600 hotels). **Paris V2 migration is in progress** (May 2026) — see **§ V2 City Rollout** and `docs/v2-city-rollout.md`. Kuala Lumpur remains V1 until migrated. Do **not** use Paris for launch QA until `v2_indexed_cities.status = complete` for Paris.
 
 ---
 
@@ -76,7 +76,17 @@ SUPABASE_ANON_KEY      — public anon key
 SUPABASE_SERVICE_KEY   — service role key (write access for indexer)
 GEOAPIFY_KEY           — city autocomplete
 RENDER_EXTERNAL_URL    — https://roommatch-1fg5.onrender.com (keepalive)
-INDEX_SECRET           — roommatch-2026 (protects indexing + backfill endpoints)
+INDEX_SECRET           — roommatch-2026 (protects indexing + backfill endpoints; also send as `x-index-secret` header when `SITE_PASSWORD` gates `/api/*`)
+V2_MAX_INFLIGHT_PHOTOS — cap simultaneous Gemini+image fetches during V2 index (Render Starter: 10; OOM → 6)
+V2_HOTEL_CONCURRENCY   — parallel hotels per catalog batch (Render default: 2)
+V2_BATCH_SIZE          — catalog slice size per inner loop (Render default: 10)
+V2_SKIP_HOTEL_PUBLIC   — `1` = skip lobby/pool/bar classifier during bulk index on Render; run `classify-hotel-public` after
+V2_PHOTO_CONCURRENCY   — legacy; global pool uses `V2_MAX_INFLIGHT_PHOTOS`
+V2_CAPTION_RATE_PER_MIN — Gemini calls/min ceiling during index (default 1500)
+V2_INDEX_SUPERVISOR    — `0` disables Render auto-resume watchdog (default: on when `RENDER` set)
+V2_SUPERVISOR_CITIES   — comma-separated cities to watch (default `Paris`)
+V2_SUPERVISOR_INTERVAL_MS — supervisor tick (default 300000)
+V2_SUPERVISOR_STALE_MS — idle before auto-resume (default 720000)
 VSEARCH_FLAG_MODE      — soft (default) or strict: strict uses SQL `required_features` pre-filter; soft uses semantic recall + per-hotel flag coverage boost (see Search Design)
 SOFT_FLAG_COVERAGE_MULT — multiplicative boost factor for soft flag-heavy queries: raw × (1 + mult × coverage); default 0.28 (replaces legacy SOFT_FLAG_BONUS_MAX additive)
 SOFT_FLAG_MISS_PENALTY — multiply raw by (1 − pen × (1 − coverage)) so low coverage ranks lower; default 0.08; set 0 to disable
@@ -151,8 +161,15 @@ roommatch/
 │   ├── index.html               — HTML skeleton only (markup, meta tags, links to css/js)
 │   ├── styles.css               — all CSS (extracted from index.html May 2026)
 │   └── app.js                   — all frontend JS (extracted from index.html May 2026)
+├── docs/
+│   └── v2-city-rollout.md       — **V2 city index playbook** (Paris + future cities; agent handoff)
 ├── scripts/
-│   ├── index-city.js            — batch indexing script (captions + embeddings + feature flags)
+│   ├── index-city.js            — V1 batch indexing (captions + embeddings + feature flags)
+│   ├── index-city-v2.js         — V2 facts indexer (catalog scan, checkpoints, coalesced reindex)
+│   ├── v2-city-rollout-core.js  — verify + neighbourhoods + V1 cleanup (shared CLI + API)
+│   ├── v2-city-rollout.js         — local full city rollout CLI
+│   ├── v2-city-rollout-remote.js — Render rollout trigger + watch loop
+│   ├── v2-index-supervisor.js     — Render auto-resume for stalled V2 reindex
 │   ├── backfill-room-ids.js     — backfill room_type_id for existing rows
 │   └── test-search-quality.js  — automated search quality tests (7 tests, run with node)
 └── supabase/
@@ -163,6 +180,7 @@ roommatch/
     ├── feature-flags.sql        — bulk UPDATE room_embeddings.feature_flags from feature_summary
     ├── rebuild-functions.sql    — CREATE OR REPLACE for rebuild_room_types_index_city,
     │                              score_room_types, fetch_hotel_photos
+    ├── add-v2-index-progress.sql — `v2_indexed_cities.index_progress` JSONB checkpoints
     └── migrate-3072.sql         — SUPERSEDED, do not use
 ```
 
@@ -235,9 +253,11 @@ NOTIFY pgrst, 'reload config';
 ```
 
 ### Current Index Status
-- **Paris: 999 hotels, ~60,000+ photos** (full city indexed, structured captions, feature flags populated)
-- **Kuala Lumpur: 200 hotels, 9,258 photos** (indexed March 2026)
-- London, NYC: not yet indexed
+- **Paris V1 (legacy):** ~999 hotels, ~60,000+ photos in `room_embeddings` — retained until V2 rollout tail deletes per-city V1 rows
+- **Paris V2 (in progress, May 2026):** full LiteAPI catalog **5,097** hotels; quality-filtered subset in `v2_*` (check live: `GET /api/v2/city-rollout/status?city=Paris`). Target hundreds–~1.5k indexed hotels, not 5,097 rows
+- **Mexico City V2:** ~3,616 hotels indexed (launch catalog)
+- **Kuala Lumpur: 200 hotels, 9,258 photos** (V1, March 2026)
+- London, NYC: not yet indexed on V2
 
 ### Feature flag counts (as of March 2026)
 | Feature | Paris hotels | KL hotels |
@@ -261,6 +281,9 @@ NOTIFY pgrst, 'reload config';
 | POST /api/index-city | Trigger indexing (requires INDEX_SECRET in body) |
 | POST /api/backfill-feature-embeddings | Re-embed feature_summary + re-extract feature_flags for a city |
 | POST /api/backfill-room-ids | Backfill room_type_id for existing rows (requires INDEX_SECRET) |
+| POST /api/v2/reindex-city | V2 reindex only. Body: `{city, secret, force?, resume?, limit?}`. Duplicate starts **join in-flight** job. |
+| POST /api/v2/city-rollout | Full V2 pipeline: reindex → verify → neighbourhoods → V1 cleanup. Body includes `skip_reindex`, `skip_neighborhoods`, `resume`, `limit`. |
+| GET /api/v2/city-rollout/status?city= | Progress: `counts`, `catalog_total`, `rollout_running`, `index_progress`. |
 | POST /api/v2/classify-visual-style | Incremental Gemini visual_style classification for an indexed city. Body: `{city, secret, limit?}`. Idempotent. See "Visual style classification" below for cost + runtime. |
 | POST /api/v2/classify-hotel-public | Incremental Gemini hotel-public photo classification (lobby/pool/bar/...) for an indexed city. Body: `{city, secret, limit?, concurrency?, rate_per_min?}`. Populates `area_*` + `visual_style_*` facts under `room_name='__hotel_public__'`. Powers Phase 1b of hotel-vibe scoring. See "HOTEL VIBE MODEL" section. |
 | GET /api/debug-city?city | LiteAPI coverage analysis |
@@ -643,19 +666,47 @@ Index the **full Mexico City catalog** (~3,616 hotels from LiteAPI) with a quali
 
 **CRITICAL SCHEMA NOTE:** `v2_room_inventory` requires a `photo_url TEXT` column and a unique index on `(hotel_id, photo_url)` for upserts to work. This was added May 1 2026 after a failed run that cleared inventory and errored on every insert due to the missing column.
 
-### V2 Indexing Script
-`scripts/index-city-v2.js` — exports `reindexCityV2(city, limit, forceRebuild)`
+### V2 City Rollout (Paris + future cities)
 
-**Quality filter (already implemented):** skips any hotel where no room type has ≥2 photos.
+**Playbook:** `docs/v2-city-rollout.md` — agent handoff, Paris checklist, API examples, troubleshooting.
 
-**Triggered via:**
+**Production path:** long runs on **Render** (`roommatch-1fg5.onrender.com`), not local (Supabase timeouts). **Commit, push, deploy** before remote neighbourhood jobs.
+
+**Paris catalog:** LiteAPI **5,097** FR hotels → API `limit: 5147` (catalog + 50). Quality filter → hundreds–~1.5k rows in `v2_hotels_cache`, not 5,097.
+
+**Key modules:**
+| Module | Role |
+|--------|------|
+| `scripts/index-city-v2.js` | Stream catalog, Gemini captions, `index_progress` checkpoints, `reindexCityV2` (coalesced duplicate starts) |
+| `scripts/v2-city-rollout-core.js` | `verifyV2`, `runNeighborhoods`, `cleanupV1`, `runFullCityRollout` |
+| `scripts/v2-index-supervisor.js` | On Render: auto-resume Paris when stale/false-`failed` (5 min tick; disable with `V2_INDEX_SUPERVISOR=0`) |
+| `scripts/v2-city-rollout-remote.js` | Trigger/monitor from laptop |
+
+**Agent resume (Paris in progress):**
 ```powershell
-# Full Mexico City reindex (all ~3616 hotels, forceRebuild=true clears first)
-$body = '{"city":"Mexico City","limit":3616,"secret":"roommatch-2026","force":true}'
-Invoke-RestMethod -Uri "https://roommatch-1fg5.onrender.com/api/v2/reindex-city" -Method POST -ContentType "application/json" -Body $body
+$h = @{ "x-index-secret" = "roommatch-2026" }
+Invoke-RestMethod "https://roommatch-1fg5.onrender.com/api/v2/city-rollout/status?city=Paris" -Headers $h
+# if stalled and not running:
+$body = '{"city":"Paris","secret":"roommatch-2026","resume":true,"force":false,"limit":5147}'
+Invoke-RestMethod -Uri "https://roommatch-1fg5.onrender.com/api/v2/reindex-city" -Method POST -ContentType "application/json" -Headers $h -Body $body
 ```
 
-**Or run locally (faster, uses local .env):**
+**After `status: complete`:** (1) `classify-hotel-public` if `V2_SKIP_HOTEL_PUBLIC=1` during index, (2) post-index tail `POST /api/v2/city-rollout` with `skip_reindex: true`, (3) **restart Render** for `/api/rates`, (4) QA `?city=Paris`.
+
+**Paris rollout history (May 2026):** OOM stalls at ~50 hotels on Starter → streaming indexer + env caps; false `failed` on duplicate POST → coalescing (`7d234bf`) + supervisor; throughput pass (`a1c4896`) — in-flight photo pool, skip hotel-public during bulk. See playbook for full timeline.
+
+### V2 Indexing Script
+`scripts/index-city-v2.js` — exports `reindexCityV2(city, limit, forceRebuild)` (guarded; duplicate calls join same Promise).
+
+**Quality filter:** skips hotels where no room type has ≥2 photos.
+
+**Mexico City (full reindex):**
+```powershell
+$body = '{"city":"Mexico City","limit":3616,"secret":"roommatch-2026","force":true}'
+Invoke-RestMethod -Uri "https://roommatch-1fg5.onrender.com/api/v2/reindex-city" -Method POST -ContentType "application/json" -Headers @{ "x-index-secret" = "roommatch-2026" } -Body $body
+```
+
+**Local (fast network only):**
 ```powershell
 node -e "require('./scripts/index-city-v2').reindexCityV2('Mexico City',3616,true).then(r=>console.log('DONE',JSON.stringify(r))).catch(e=>{console.error(e.message);process.exit(1)});"
 ```
@@ -789,8 +840,11 @@ Expect each bucket to cover **somewhere in the 5–40 % range** (mutex ensures n
 ### V2 Known Issues Fixed
 - **`v2_room_inventory` missing `photo_url`** — fixed May 1 2026 (ALTER TABLE + unique index)
 - **Gemini captioning used file_uri** — fixed Apr 28 (switched to inline image-bytes)
-- **Rate limits on Gemini 2.5 Flash Lite** — handled via CAPTION_RATE_PER_MIN=500 + exponential backoff (5 retries: 3s, 12s, 27s, 48s, 60s cap)
+- **Rate limits on Gemini 2.5 Flash Lite** — handled via `V2_CAPTION_RATE_PER_MIN` + exponential backoff (5 retries: 3s, 12s, 27s, 48s, 60s cap)
 - **LiteAPI paginates at 1000/page** — indexer loops until `limit` reached
+- **Paris V2 stall at ~50 hotels on Render Starter** — May 2026: stream catalog, `index_progress`, `V2_MAX_INFLIGHT_PHOTOS`, avoid parallel OOM (see `docs/v2-city-rollout.md`)
+- **False `failed` + `V2 reindex already running`** — May 2026: coalesce in-flight reindex; `city-rollout` catch ignores duplicate; `v2-index-supervisor` auto-resumes on Render
+- **Paris index hung (`rollout_running: true`, no `updated_at` for hours)** — May 2026: Gemini retry re-entered `_photoGeminiSlot` → deadlock; fixed with `geminiCaptionInner` / no nested slot acquire. **Restart Render** to kill hung worker, deploy fix, resume
 
 ### V2 Search Latency — Cold-Instance Tuning (May 7 2026)
 
@@ -835,10 +889,7 @@ Render rotates instances every ~1–3 hours, so most users hit a cold-cache inst
 
 1. **Hotel-level vibe score — Phase 1a + 1b + 2 shipped (May 2026).** The legacy `hotel_vibe_model="fallback_rating"` log line (caused by the `hotel_profile_index` table being permanently empty) is gone. V2 search now produces a real hotel-level facts-coverage score via `score_hotels_facts_v2` (see "HOTEL VIBE MODEL" section below). The `hotelScore` field on every hotel response is 0-100 and is computed from `intent.soft_preferences` coverage across both ROOM photos and HOTEL PUBLIC photos (lobby/pool/bar/exterior — populated by `scripts/classify-hotel-public.js`). The `hotel-match-badge` in the UI reads this directly. Phase 3 (semantic hotel embedding) is the next layer; see design doc in "HOTEL VIBE MODEL" section.
 
-2. **Index London and NYC** — same flow as KL: trigger index-city, auto-rebuild happens after
-   ```powershell
-   Invoke-RestMethod -Uri "https://roommatch-1fg5.onrender.com/api/index-city" -Method POST -ContentType "application/json" -Body '{"city":"London","limit":200,"secret":"roommatch-2026"}'
-   ```
+2. **Paris V2 index (in progress)** — follow `docs/v2-city-rollout.md`; do not use V1 `index-city` for Paris. **London/NYC** — use V2 city rollout when ready (`node scripts/v2-city-rollout-remote.js --city=London`), not legacy V1 `index-city`.
 
 3. **Neighborhood Vibe + Visual Search** — full plan in two places:
    - **Cursor plan file (authoritative, most detailed):** `C:\Users\jmc10\.cursor\plans\neighborhood_vibe_+_visual_search_39871fcd.plan.md`
