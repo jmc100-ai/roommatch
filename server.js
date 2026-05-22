@@ -281,6 +281,23 @@ app.listen(PORT, "0.0.0.0", () => {
   } else if (RENDER_URL) {
     console.log("[keepalive] disabled (set RENDER_KEEPALIVE=true to enable)");
   }
+
+  if (process.env.RENDER && supabaseAdmin) {
+    try {
+      const { startV2IndexSupervisor } = require("./scripts/v2-index-supervisor");
+      const v2core = loadV2RolloutCore();
+      const { isV2ReindexActive } = require("./scripts/index-city-v2");
+      startV2IndexSupervisor({
+        db: supabaseAdmin,
+        reindexFn: loadIndexCityV2(),
+        isReindexActive: isV2ReindexActive,
+        isRolloutActive: (city) => _v2RolloutActive.has(city),
+        rolloutCore: v2core,
+      });
+    } catch (e) {
+      console.warn("[v2-supervisor] start failed:", e.message);
+    }
+  }
 });
 
 // ── In-memory hotel metadata cache (replaces hotels_cache DB reads for display) ──
@@ -4315,22 +4332,20 @@ app.post("/api/v2/reindex-city", async (req, res) => {
   }
   if (!city) return res.status(400).json({ error: "city required" });
   const forceRebuild = resume ? false : !!force;
-  res.json({ message: `V2 reindex started for ${city}`, city, limit, force: forceRebuild, resume: !!resume });
-  loadIndexCityV2()(city, Number(limit) || 200, forceRebuild)
+  const limitN = Number(limit) || 200;
+  const reindexFn = loadIndexCityV2();
+  const joined = require("./scripts/index-city-v2").isV2ReindexActive(city);
+  res.json({
+    message: joined ? `V2 reindex already in flight for ${city} (joined)` : `V2 reindex started for ${city}`,
+    city,
+    limit: limitN,
+    force: forceRebuild,
+    resume: !!resume,
+    joined_in_flight: joined,
+  });
+  reindexFn(city, limitN, forceRebuild)
     .then((r) => console.log(`[v2-index] complete ${city}:`, r))
-    .catch(async (e) => {
-      console.error(`[v2-index] failed ${city}:`, e.message);
-      if (/already running/i.test(e.message)) return;
-      const fc = supabaseAdmin || supabase;
-      if (fc) {
-        await fc.from("v2_indexed_cities").upsert({
-          city,
-          status: "failed",
-          last_error: e.message,
-          updated_at: new Date().toISOString(),
-        }, { onConflict: "city" });
-      }
-    });
+    .catch((e) => console.error(`[v2-index] failed ${city}:`, e.message));
 });
 
 // ── V2 full city rollout (reindex → verify → neighbourhoods → V1 cleanup) ─────
@@ -4407,7 +4422,7 @@ app.post("/api/v2/city-rollout", async (req, res) => {
     .then((snap) => console.log(`[v2-rollout] complete ${city}:`, snap?.counts))
     .catch(async (e) => {
       console.error(`[v2-rollout] failed ${city}:`, e.message);
-      if (e.code !== "VERIFY_FAILED") {
+      if (e.code !== "VERIFY_FAILED" && !/already running/i.test(e.message)) {
         await supabaseAdmin.from("v2_indexed_cities").upsert({
           city,
           status: "failed",
@@ -4437,7 +4452,7 @@ app.get("/api/v2/city-rollout/status", async (req, res) => {
     } catch (_) { /* optional */ }
     res.json({
       ...snapshot,
-      rollout_running: _v2RolloutActive.has(city) || loadIndexCityV2()._reindexActive?.has(city),
+      rollout_running: _v2RolloutActive.has(city) || require("./scripts/index-city-v2").isV2ReindexActive(city),
       catalog_total,
     });
   } catch (e) {

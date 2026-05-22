@@ -656,6 +656,7 @@ async function reindexCityV2(city, limit = 200, forceRebuild = true) {
   let liteapiOffset = resumeProgress?.liteapi_offset || 0;
   let catalogScanned = resumeProgress?.catalog_scanned || 0;
   let hotelsSkippedQuality = resumeProgress?.skipped_quality || 0;
+  let hotelsSkippedExisting = resumeProgress?.skipped_existing || 0;
   let hotelsFailed = resumeProgress?.hotels_failed || 0;
   let photosDone = 0;
 
@@ -686,7 +687,10 @@ async function reindexCityV2(city, limit = 200, forceRebuild = true) {
         for (const hotel of hotelSlice) {
           catalogScanned++;
           const hotelId = String(hotel.id || hotel.hotelId);
-          if (existing.has(hotelId)) continue;
+          if (existing.has(hotelId)) {
+            hotelsSkippedExisting++;
+            continue;
+          }
 
           try {
             const result = await processOneHotel(db, { hotel, city, cc });
@@ -707,6 +711,7 @@ async function reindexCityV2(city, limit = 200, forceRebuild = true) {
               catalog_limit: limit,
               indexed_in_cache: existing.size,
               skipped_quality: hotelsSkippedQuality,
+              skipped_existing: hotelsSkippedExisting,
               hotels_failed: hotelsFailed,
               photos_done: photosDone,
             };
@@ -714,7 +719,8 @@ async function reindexCityV2(city, limit = 200, forceRebuild = true) {
             const pct = Math.round((catalogScanned / limit) * 100);
             console.log(
               `[v2-index] progress ${city}: ${pct}% catalog_scanned=${catalogScanned}/${limit} ` +
-              `indexed=${existing.size} skipped_quality=${hotelsSkippedQuality} failed=${hotelsFailed}`
+              `indexed=${existing.size} skip_existing=${hotelsSkippedExisting} ` +
+              `skip_quality=${hotelsSkippedQuality} failed=${hotelsFailed}`
             );
           }
         }
@@ -728,11 +734,13 @@ async function reindexCityV2(city, limit = 200, forceRebuild = true) {
       catalog_limit: limit,
       indexed_in_cache: existing.size,
       skipped_quality: hotelsSkippedQuality,
+      skipped_existing: hotelsSkippedExisting,
       hotels_failed: hotelsFailed,
       photos_done: photosDone,
     });
     console.log(
-      `[v2-index] page done ${city}: liteapi_offset=${liteapiOffset} scanned=${catalogScanned} indexed=${existing.size}`
+      `[v2-index] page done ${city}: liteapi_offset=${liteapiOffset} scanned=${catalogScanned} ` +
+      `indexed=${existing.size} skip_existing=${hotelsSkippedExisting}`
     );
     if (page.length < pageSize) break;
   }
@@ -811,18 +819,40 @@ async function reindexCityV2(city, limit = 200, forceRebuild = true) {
   };
 }
 
-const _reindexActive = new Set();
+/** @type {Map<string, Promise<unknown>>} */
+const _reindexJobs = new Map();
 
-async function reindexCityV2Guarded(city, limit, forceRebuild) {
-  if (_reindexActive.has(city)) {
-    throw new Error(`V2 reindex already running for ${city}`);
-  }
-  _reindexActive.add(city);
-  try {
-    return await reindexCityV2(city, limit, forceRebuild);
-  } finally {
-    _reindexActive.delete(city);
-  }
+function isV2ReindexActive(city) {
+  return _reindexJobs.has(city);
 }
 
-module.exports = { reindexCityV2: reindexCityV2Guarded, _reindexActive };
+async function reindexCityV2Guarded(city, limit, forceRebuild) {
+  const inFlight = _reindexJobs.get(city);
+  if (inFlight) {
+    console.log(`[v2-index] ${city}: joined in-flight reindex`);
+    return inFlight;
+  }
+  const job = reindexCityV2(city, limit, forceRebuild)
+    .catch(async (e) => {
+      try {
+        const db = getDb();
+        await db.from("v2_indexed_cities").update({
+          status: "failed",
+          last_error: e.message,
+          updated_at: new Date().toISOString(),
+        }).eq("city", city);
+      } catch (_) { /* ignore */ }
+      throw e;
+    })
+    .finally(() => {
+      _reindexJobs.delete(city);
+    });
+  _reindexJobs.set(city, job);
+  return job;
+}
+
+module.exports = {
+  reindexCityV2: reindexCityV2Guarded,
+  isV2ReindexActive,
+  _reindexJobs,
+};
