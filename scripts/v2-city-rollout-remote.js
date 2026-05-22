@@ -23,8 +23,15 @@ function hasFlag(flag) {
   return process.argv.includes(flag);
 }
 
+function apiHeaders() {
+  return { "x-index-secret": SECRET, accept: "application/json" };
+}
+
 async function apiGet(path) {
-  const r = await fetch(`${BASE}${path}`, { signal: AbortSignal.timeout(60000) });
+  const r = await fetch(`${BASE}${path}`, {
+    headers: apiHeaders(),
+    signal: AbortSignal.timeout(60000),
+  });
   const text = await r.text();
   let body;
   try {
@@ -39,7 +46,7 @@ async function apiGet(path) {
 async function apiPost(path, payload) {
   const r = await fetch(`${BASE}${path}`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { ...apiHeaders(), "Content-Type": "application/json" },
     body: JSON.stringify(payload),
     signal: AbortSignal.timeout(120000),
   });
