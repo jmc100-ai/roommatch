@@ -4309,13 +4309,14 @@ app.post("/api/index-city", async (req, res) => {
 
 // ── V2 isolated city index (facts-only datastore) ────────────────────────────
 app.post("/api/v2/reindex-city", async (req, res) => {
-  const { city, limit = 200, secret, force = true } = req.body || {};
+  const { city, limit = 200, secret, force = true, resume = false } = req.body || {};
   if (secret !== (process.env.INDEX_SECRET || "roommatch-index")) {
     return res.status(401).json({ error: "Unauthorized" });
   }
   if (!city) return res.status(400).json({ error: "city required" });
-  res.json({ message: `V2 reindex started for ${city}`, city, limit, force });
-  loadIndexCityV2()(city, Number(limit) || 200, !!force)
+  const forceRebuild = resume ? false : !!force;
+  res.json({ message: `V2 reindex started for ${city}`, city, limit, force: forceRebuild, resume: !!resume });
+  loadIndexCityV2()(city, Number(limit) || 200, forceRebuild)
     .then((r) => console.log(`[v2-index] complete ${city}:`, r))
     .catch(async (e) => {
       console.error(`[v2-index] failed ${city}:`, e.message);
@@ -4360,20 +4361,6 @@ app.post("/api/v2/city-rollout", async (req, res) => {
   }
 
   const forceRebuild = resume ? false : !!force;
-  _v2RolloutActive.add(city);
-  res.json({
-    message: `V2 city rollout started for ${city}`,
-    city,
-    force: forceRebuild,
-    resume: !!resume,
-    skip_neighborhoods: !!skip_neighborhoods,
-    keep_v1: !!keep_v1,
-    regenerate_neighborhoods: !!regenerate_neighborhoods,
-    limit: rolloutLimit ?? (limit != null ? Number(limit) : null),
-    status_url: `/api/v2/city-rollout/status?city=${encodeURIComponent(city)}`,
-    note: "Tail Render logs: [v2-rollout] and [v2-index]. Restart Render after complete so /api/rates uses v2_hotels_cache.",
-  });
-
   const core = loadV2RolloutCore();
   let rolloutLimit = limit != null ? Number(limit) : undefined;
   if (rolloutLimit == null) {
@@ -4388,6 +4375,20 @@ app.post("/api/v2/city-rollout", async (req, res) => {
       console.warn(`[v2-rollout] ${city}: could not auto-detect catalog limit:`, e.message);
     }
   }
+
+  _v2RolloutActive.add(city);
+  res.json({
+    message: `V2 city rollout started for ${city}`,
+    city,
+    force: forceRebuild,
+    resume: !!resume,
+    skip_neighborhoods: !!skip_neighborhoods,
+    keep_v1: !!keep_v1,
+    regenerate_neighborhoods: !!regenerate_neighborhoods,
+    limit: rolloutLimit ?? null,
+    status_url: `/api/v2/city-rollout/status?city=${encodeURIComponent(city)}`,
+    note: "Tail Render logs: [v2-rollout] and [v2-index]. Restart Render after complete so /api/rates uses v2_hotels_cache.",
+  });
   core.runFullCityRollout({
     db: supabaseAdmin,
     city,
