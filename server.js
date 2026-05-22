@@ -4320,6 +4320,7 @@ app.post("/api/v2/reindex-city", async (req, res) => {
     .then((r) => console.log(`[v2-index] complete ${city}:`, r))
     .catch(async (e) => {
       console.error(`[v2-index] failed ${city}:`, e.message);
+      if (/already running/i.test(e.message)) return;
       const fc = supabaseAdmin || supabase;
       if (fc) {
         await fc.from("v2_indexed_cities").upsert({
