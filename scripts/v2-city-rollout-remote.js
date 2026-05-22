@@ -94,7 +94,13 @@ async function fetchStatus(city) {
 }
 
 async function startRollout(city) {
-  const limit = getArg("limit");
+  const limitArg = getArg("limit");
+  let catalogLimit = limitArg ? Number(limitArg) : null;
+  if (!catalogLimit) {
+    const pre = await fetchStatus(city);
+    const total = pre.catalog_total;
+    if (total != null && total > 0) catalogLimit = total + 50;
+  }
   const body = {
     city,
     secret: SECRET,
@@ -104,7 +110,7 @@ async function startRollout(city) {
     skip_neighborhoods: hasFlag("--skip-neighborhoods"),
     regenerate_neighborhoods: hasFlag("--regenerate-neighborhoods"),
   };
-  if (limit) body.limit = Number(limit);
+  if (catalogLimit) body.limit = catalogLimit;
 
   try {
     return await apiPost("/api/v2/city-rollout", body);

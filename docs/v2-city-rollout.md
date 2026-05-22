@@ -1,91 +1,120 @@
-# V2 city rollout (repeatable playbook)
+# V2 city rollout runbook
 
-Use this for **Paris**, then **London**, **NYC**, **Kuala Lumpur**, etc.
+Repeatable playbook for **Paris** and future cities (London, NYC, Kuala Lumpur). Matches the Paris build-out plan: **full LiteAPI catalog**, V2-only, neighbourhood repair, V1 cleanup per city.
 
-## Principles
+## What “index all hotels” means
 
-1. **Commit + push + deploy Render** before starting a rollout (neighbourhood scoring runs whatever code loaded at instance startup).
-2. **Production rollouts run on Render** — one API starts the full pipeline; your machine only triggers and polls status.
-3. **Delete V1 per city** after V2 verify (automatic unless `keep_v1: true`).
-4. **Do not delete `hotels_cache`** — lat/lng used for neighbourhood matching.
+| Step | What happens |
+|------|----------------|
+| **Catalog fetch** | Paginate **every** LiteAPI hotel for the city (Paris: **5,097** FR; API `limit` = catalog + 50 → **5,147**). |
+| **Per-hotel LiteAPI detail** | Each catalog ID gets `/data/hotel` (required to see room photos). |
+| **Quality filter** | Only hotels with **≥2 photos on at least one room** are written to `v2_*` (same as Mexico City). Skipped IDs are counted in logs as `skipped_quality`. |
+| **Not indexed** | Thin-photo properties are intentionally excluded from search — not a bug. |
 
-## Render (recommended)
+**Success metric:** `v2_indexed_cities.status = complete` and `v2_hotels_cache` in the hundreds–thousands for Paris (not 5,097 rows).
 
-### 1. Deploy latest `main`
+---
 
-Push includes `POST /api/v2/city-rollout` and `GET /api/v2/city-rollout/status`.
+## Paris checklist (follow in order)
 
-### 2. Start Paris (full redo)
+### 0 — Code & deploy
+
+- [ ] Changes committed and pushed to `main`
+- [ ] **Render deploy live** (includes `POST /api/v2/city-rollout`)
+- [ ] Render env: `LITEAPI_PROD_KEY`, `GEMINI_KEY`, `SUPABASE_*`, `UNSPLASH_KEY`, `INDEX_SECRET`
+- [ ] If Render **Starter (512 MB)** stalls/OOM: set `V2_BATCH_SIZE=10` and `V2_PHOTO_CONCURRENCY=2`, redeploy, then **resume**
+
+### 1 — Start full rollout on Render
 
 ```powershell
 node scripts/v2-city-rollout-remote.js --city=Paris
+# or explicit catalog cap:
+node scripts/v2-city-rollout-remote.js --city=Paris --limit=5147
 ```
 
-This calls Render with `force: true` (clears Paris V2, reindexes all LiteAPI hotels, then neighbourhoods + V1 cleanup).
+Body sent: `force: true` (first run) or `resume: true` (after crash), **`limit: 5147`** (all catalog hotels).
 
-Optional flags: `--resume`, `--keep-v1`, `--skip-neighborhoods`, `--limit=5200`, `--watch-only`, `--interval=10`.
+**Do not** use a low cap like `1200` unless debugging — Paris catalog is ~5,097.
 
-### 3. Progress every 10 minutes
-
-The remote script prints a snapshot every 10 min until `status=complete` and `v2_room_types_index` is populated.
-
-Manual check:
+### 2 — Monitor (every 10 min)
 
 ```powershell
-Invoke-RestMethod "https://roommatch-1fg5.onrender.com/api/v2/city-rollout/status?city=Paris"
+$h = @{ "x-index-secret" = "roommatch-2026" }
+Invoke-RestMethod "https://roommatch-1fg5.onrender.com/api/v2/city-rollout/status?city=Paris" -Headers $h
 ```
 
-Render logs: filter `[v2-rollout]` and `[v2-index]`.
+Or: `node scripts/v2-city-rollout-remote.js --city=Paris --watch-only --interval=10`
 
-### 4. After complete
+Render logs: `[v2-index] progress Paris:` and `[v2-rollout]`.
 
-- **Restart Render** (or redeploy) so `loadV2Cities()` includes Paris → `/api/rates` uses `v2_hotels_cache`.
-- Run search QA: `node scripts/test-search-quality.js`
+**If counts freeze and `rollout_running: false`:** job died — **resume** (step 1 with `--resume`), do not `force` unless you intend to wipe partial V2.
 
-### API reference (same as CLI)
+### 3 — After `status: complete`
 
-| Endpoint | Body / query |
-|----------|----------------|
-| `POST /api/v2/city-rollout` | `{ "city", "secret", "force": true, "limit": 5200 }` |
-| `GET /api/v2/city-rollout/status?city=Paris` | — |
-| `POST /api/v2/reindex-city` | reindex only (legacy) |
-| `POST /api/backfill-neighborhood-vibes` | vibes only (after deploy) |
+- [ ] `v2_room_types_index` > 0 (rebuild runs at end of reindex)
+- [ ] **Restart Render** so `loadV2Cities()` includes Paris → `/api/rates` uses `v2_hotels_cache`
+- [ ] `node scripts/test-search-quality.js` (Paris tests use `source: "v2"`)
+- [ ] Manual Boop smoke: `?city=Paris`
 
-## Local (fallback)
+### 4 — Automatic tail (same rollout job)
+
+- Verify V2 thresholds
+- Neighbourhoods: polygons → `hotel_count` → vibe recompute
+- V1 cleanup for Paris only (`room_embeddings`, etc.)
+
+---
+
+## API reference
+
+| Endpoint | Purpose |
+|----------|---------|
+| `POST /api/v2/city-rollout` | Full pipeline (preferred) |
+| `GET /api/v2/city-rollout/status?city=Paris` | Progress + `catalog_total` |
+| `POST /api/v2/reindex-city` | Reindex only (use if splitting phases) |
+
+Example start (PowerShell):
 
 ```powershell
-node scripts/v2-city-rollout.js --city=Paris
+$h = @{ "x-index-secret" = "roommatch-2026" }
+$body = @{
+  city = "Paris"
+  secret = "roommatch-2026"
+  force = $true      # first run; use resume=$true after crash
+  limit = 5147       # all LiteAPI Paris hotels
+} | ConvertTo-Json
+Invoke-RestMethod -Uri "https://roommatch-1fg5.onrender.com/api/v2/city-rollout" -Method POST -ContentType "application/json" -Headers $h -Body $body
 ```
 
-Use when Render is unavailable; long runs may hit local network timeouts.
+Resume after crash:
 
-## Phase checklist
+```powershell
+$body = @{ city = "Paris"; secret = "roommatch-2026"; resume = $true; limit = 5147 } | ConvertTo-Json
+Invoke-RestMethod -Uri "https://roommatch-1fg5.onrender.com/api/v2/city-rollout" -Method POST -ContentType "application/json" -Headers $h -Body $body
+```
 
-### 0 — Pre-flight
+---
 
-- [ ] Code committed, pushed, **Render deployed**
-- [ ] `.env` on Render has `LITEAPI_PROD_KEY`, `GEMINI_KEY`, `SUPABASE_*`, `UNSPLASH_KEY`
+## Local (fallback only)
 
-### 1 — V2 full reindex (`force: true`)
+```powershell
+node scripts/v2-city-rollout.js --city=Paris --limit=5147
+```
 
-Clears per city: `v2_room_feature_facts`, `v2_room_inventory`, `v2_room_types_index`, `v2_hotels_cache`.
+Long runs may hit local network timeouts; production path is Render.
 
-**Paris catalog:** ~5,097 LiteAPI hotels (FR); quality filter keeps hotels with ≥2 photos per room type.
+---
 
-**Runtime on Render:** many hours (similar order of magnitude to Mexico City).
+## Future cities
 
-### 2 — Verify V2
+1. Add `COUNTRY_CODES` entry in `scripts/index-city-v2.js` + `scripts/v2-city-rollout-core.js`
+2. Preflight: `GET .../city-rollout/status?city=London` → note `catalog_total`
+3. `node scripts/v2-city-rollout-remote.js --city=London` (limit auto = catalog + 50)
+4. Restart Render after complete
 
-Automated inside rollout. Gates: `status=complete`, hotels ≥100, inventory/facts/room_types floors.
+---
 
-### 3 — Neighbourhood backfill
+## Principles
 
-Polygons → `refreshHotelCounts` → `recomputeNeighborhoodVibes`.
-
-### 4 — V1 cleanup
-
-Deletes `room_embeddings`, `room_types_index`, `indexed_cities`, `hotel_profile_index` for that city.
-
-## Country codes
-
-Add new cities to `COUNTRY_CODES` in `scripts/index-city-v2.js` and `scripts/v2-city-rollout-core.js`.
+1. **Commit + deploy** before neighbourhood scoring jobs on Render.
+2. **Never delete `hotels_cache`** for the city (coords for neighbourhood matching).
+3. **V1 cleanup is per-city** — Paris rollout does not touch Kuala Lumpur V1 data.

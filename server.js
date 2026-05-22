@@ -4375,11 +4375,24 @@ app.post("/api/v2/city-rollout", async (req, res) => {
   });
 
   const core = loadV2RolloutCore();
+  let rolloutLimit = limit != null ? Number(limit) : undefined;
+  if (rolloutLimit == null) {
+    try {
+      const cc = core.countryCode(city);
+      const total = await core.liteCatalogTotal(
+        city, cc, process.env.LITEAPI_PROD_KEY || process.env.LITEAPI_KEY,
+      );
+      rolloutLimit = total + 50;
+      console.log(`[v2-rollout] ${city}: auto limit=${rolloutLimit} (catalog=${total})`);
+    } catch (e) {
+      console.warn(`[v2-rollout] ${city}: could not auto-detect catalog limit:`, e.message);
+    }
+  }
   core.runFullCityRollout({
     db: supabaseAdmin,
     city,
     reindexFn: loadIndexCityV2(),
-    limit: limit != null ? Number(limit) : undefined,
+    limit: rolloutLimit,
     force: forceRebuild,
     skipNeighborhoods: !!skip_neighborhoods,
     keepV1: !!keep_v1,

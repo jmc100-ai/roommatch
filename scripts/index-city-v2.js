@@ -40,8 +40,9 @@ const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_AN
 // RATE is bumped above the prior 500/min in case the bottleneck ever
 // shifts to the rate limiter; with current concurrency we'll naturally
 // stay below this cap.
-const BATCH_SIZE = 25;
-const PHOTO_CONCURRENCY = 3;
+// Override on Render if indexing stalls/OOMs (Starter 512 MB): V2_BATCH_SIZE=10 V2_PHOTO_CONCURRENCY=2
+const BATCH_SIZE = Math.max(1, Number(process.env.V2_BATCH_SIZE) || 25);
+const PHOTO_CONCURRENCY = Math.max(1, Number(process.env.V2_PHOTO_CONCURRENCY) || 3);
 const CAPTION_RATE_PER_MIN = 1000;
 let _capWindow = Date.now();
 let _capCount = 0;
@@ -438,7 +439,7 @@ async function reindexCityV2(city, limit = 200, forceRebuild = true) {
     console.log(`[v2-index] fetched ${hotels.length} hotels (page ${page.length}, target ${limit})`);
     if (page.length < pageSize) break; // last page
   }
-  console.log(`[v2-index] total hotels from LiteAPI: ${hotels.length}`);
+  console.log(`[v2-index] total hotels from LiteAPI: ${hotels.length} (limit=${limit}, batch=${BATCH_SIZE}, photo_conc=${PHOTO_CONCURRENCY})`);
 
   let targetHotels = hotels;
   if (!forceRebuild) {
@@ -628,9 +629,23 @@ async function reindexCityV2(city, limit = 200, forceRebuild = true) {
       hotelsDone++;
     }));
 
+    const [{ count: cachedHotels }, { count: cachedPhotos }] = await Promise.all([
+      db.from("v2_hotels_cache").select("*", { count: "exact", head: true }).eq("city", city),
+      db.from("v2_room_inventory").select("*", { count: "exact", head: true }).eq("city", city),
+    ]);
     await db.from("v2_indexed_cities").update({
-      hotel_count: hotelsDone, photo_count: photosDone, updated_at: new Date().toISOString(),
+      hotel_count: cachedHotels ?? hotelsDone,
+      photo_count: cachedPhotos ?? photosDone,
+      updated_at: new Date().toISOString(),
     }).eq("city", city);
+    const pct = targetHotels.length
+      ? Math.round((Math.min(i + BATCH_SIZE, targetHotels.length) / targetHotels.length) * 100)
+      : 100;
+    console.log(
+      `[v2-index] progress ${city}: batch ${Math.floor(i / BATCH_SIZE) + 1}/${Math.ceil(targetHotels.length / BATCH_SIZE)} ` +
+      `(${pct}% of ${targetHotels.length} targets) | cache=${cachedHotels} photos=${cachedPhotos} ` +
+      `processed=${hotelsDone} skipped_quality=${hotelsSkippedQuality}`
+    );
   }
 
   // Use a fresh client for all final steps — the long-lived `db` connection often expires
