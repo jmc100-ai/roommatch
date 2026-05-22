@@ -40,15 +40,20 @@ const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_AN
 // RATE is bumped above the prior 500/min in case the bottleneck ever
 // shifts to the rate limiter; with current concurrency we'll naturally
 // stay below this cap.
-// Render Starter (512 MB): default smaller batches unless overridden (OOM at batch=25).
+// Render Starter (512 MB): serial hotels + tiny batches avoids OOM at ~50 hotels.
 const BATCH_SIZE = Math.max(
   1,
-  Number(process.env.V2_BATCH_SIZE) || (process.env.RENDER ? 10 : 25),
+  Number(process.env.V2_BATCH_SIZE) || (process.env.RENDER ? 5 : 25),
+);
+const HOTEL_CONCURRENCY = Math.max(
+  1,
+  Number(process.env.V2_HOTEL_CONCURRENCY) || (process.env.RENDER ? 1 : 3),
 );
 const PHOTO_CONCURRENCY = Math.max(
   1,
   Number(process.env.V2_PHOTO_CONCURRENCY) || (process.env.RENDER ? 2 : 3),
 );
+const PROGRESS_EVERY_HOTELS = Math.max(5, Number(process.env.V2_PROGRESS_EVERY) || 25);
 const CAPTION_RATE_PER_MIN = 1000;
 let _capWindow = Date.now();
 let _capCount = 0;
@@ -417,242 +422,278 @@ async function clearCityV2Data(db, city) {
   await db.from("v2_hotels_cache").delete().eq("city", city);
 }
 
+async function writeIndexProgress(db, city, progress) {
+  const [{ count: cachedHotels }, { count: cachedPhotos }] = await Promise.all([
+    db.from("v2_hotels_cache").select("*", { count: "exact", head: true }).eq("city", city),
+    db.from("v2_room_inventory").select("*", { count: "exact", head: true }).eq("city", city),
+  ]);
+  const patch = {
+    hotel_count: cachedHotels ?? progress.indexed_in_cache ?? 0,
+    photo_count: cachedPhotos ?? 0,
+    index_progress: progress,
+    updated_at: new Date().toISOString(),
+  };
+  const { error } = await db.from("v2_indexed_cities").update(patch).eq("city", city);
+  if (error) console.warn(`[v2-index] progress update failed: ${error.message}`);
+}
+
+/**
+ * Index one catalog hotel. Returns photos added; indexed=false when quality-filtered or detail fetch failed.
+ */
+async function processOneHotel(db, { hotel, city, cc }) {
+  const hotelId = String(hotel.id || hotel.hotelId);
+  const detailRes = await liteGet(`/data/hotel?hotelId=${hotelId}`);
+  if (!detailRes.ok) return { indexed: false, photosAdded: 0, skippedQuality: false };
+
+  const detail = detailRes.data?.data || {};
+  const hasQualityRoom = (detail.rooms || []).some((room) => (room.photos || []).length >= 2);
+  if (!hasQualityRoom) {
+    return { indexed: false, photosAdded: 0, skippedQuality: true };
+  }
+
+  const mainPhoto = detail.main_photo || detail.mainPhoto || "";
+  const hotelPhotos = (detail.hotelImages || [])
+    .map((p) => p?.urlHd || p?.url || "")
+    .filter(Boolean)
+    .filter((u) => u !== mainPhoto)
+    .slice(0, 8);
+
+  const HOSTEL_RE = /\b(hostel|dormitory|dorm|bunk bed)\b/i;
+  const VILLA_RE = /\bvilla\b/i;
+  const VACHOME_RE = /\b(vacation home|vacation rental|house)\b/i;
+  const ANY_RENTAL_RE = /\b(apartment|vacation home|vacation rental|house|villa|hostel|dormitory|dorm|bunk bed)\b/i;
+
+  let property_type = "hotel";
+  const liteApiType = detail.propertyType || detail.accommodationType || null;
+  if (liteApiType) {
+    const lt = liteApiType.toLowerCase();
+    if (HOSTEL_RE.test(lt)) property_type = "hostel";
+    else if (/\bvilla\b/.test(lt)) property_type = "villa";
+    else if (/vacation home|vacation rental|house/.test(lt)) property_type = "vacation_home";
+    else if (/apartment|rental/.test(lt)) property_type = "apartment";
+  } else {
+    const rooms = detail.rooms || [];
+    if (rooms.length > 0) {
+      const names = rooms.map((r) => r.roomName || r.name || "");
+      if (names.some((n) => HOSTEL_RE.test(n))) property_type = "hostel";
+      else {
+        const rentalCount = names.filter((n) => ANY_RENTAL_RE.test(n)).length;
+        if (rentalCount === rooms.length) {
+          if (names.some((n) => VILLA_RE.test(n))) property_type = "villa";
+          else if (names.some((n) => VACHOME_RE.test(n))) property_type = "vacation_home";
+          else property_type = "apartment";
+        }
+      }
+    }
+  }
+
+  await db.from("v2_hotels_cache").upsert({
+    hotel_id: hotelId,
+    city,
+    country_code: cc,
+    hotel_photos: hotelPhotos,
+    lat: detail.location?.latitude ?? detail.lat ?? null,
+    lng: detail.location?.longitude ?? detail.lng ?? null,
+    property_type,
+    cached_at: new Date().toISOString(),
+  }, { onConflict: "hotel_id" });
+
+  const MAX_PHOTOS_PER_ROOM = 8;
+  const chosen = [];
+  for (const room of detail.rooms || []) {
+    const roomName = room.roomName || room.name || "Room";
+    const roomTypeId = room.id || room.roomId || room.roomTypeId || null;
+    const seenInRoom = new Set();
+    let roomPhotoCount = 0;
+    for (const p of room.photos || []) {
+      if (roomPhotoCount >= MAX_PHOTOS_PER_ROOM) break;
+      const url = p.url || p.hd_url || "";
+      if (!url || seenInRoom.has(url)) continue;
+      seenInRoom.add(url);
+      chosen.push({ roomName, roomTypeId, url, type: classifyPhoto(p, roomName) });
+      roomPhotoCount++;
+    }
+  }
+
+  const captionCache = new Map();
+  const getCaptionFor = (photo) => {
+    const existing = captionCache.get(photo.url);
+    if (existing) return existing;
+    const p = (async () => {
+      const cap = await geminiCaption(photo.url, { type: photo.type, roomName: photo.roomName });
+      const detectedType = (cap?.match(/PHOTO[_ ]TYPE:\s*([^\n\r]+)/i)?.[1] || photo.type || "other").toLowerCase().trim();
+      const facts = parseStructuredCaption(cap);
+      return { caption: cap, detectedType, facts };
+    })();
+    captionCache.set(photo.url, p);
+    return p;
+  };
+
+  let photosAdded = 0;
+  for (let j = 0; j < chosen.length; j += PHOTO_CONCURRENCY) {
+    const chunk = chosen.slice(j, j + PHOTO_CONCURRENCY);
+    await Promise.all(chunk.map(async (photo) => {
+      const { detectedType, facts } = await getCaptionFor(photo);
+      await db.from("v2_room_inventory").upsert({
+        hotel_id: hotelId, city, country_code: cc, room_name: photo.roomName,
+        room_type_id: photo.roomTypeId || null, photo_url: photo.url, photo_type: detectedType, source: "vision",
+      }, { onConflict: "hotel_id,room_type_id,photo_url" });
+      const factRows = facts.map((f) => ({
+        hotel_id: hotelId,
+        room_type_id: photo.roomTypeId || null,
+        city,
+        country_code: cc,
+        room_name: photo.roomName,
+        photo_url: photo.url,
+        fact_key: f.fact_key,
+        fact_value: f.fact_value,
+        confidence: f.confidence,
+        source: f.source || "vision",
+        extractor_version: "v2-facts-1",
+        updated_at: new Date().toISOString(),
+      }));
+      await upsertV2Facts(db, factRows);
+      photosAdded++;
+    }));
+  }
+
+  try {
+    photosAdded += await processHotelPublicPhotos(db, { hotelId, city, cc, hotelPhotoUrls: hotelPhotos });
+  } catch (e) {
+    console.warn(`[v2-index] hotel-public classify failed for ${hotelId}: ${e.message}`);
+  }
+
+  return { indexed: true, photosAdded, skippedQuality: false };
+}
+
 async function reindexCityV2(city, limit = 200, forceRebuild = true) {
   if (!LITEAPI_KEY || !SUPABASE_URL || !SUPABASE_KEY) throw new Error("Missing required env vars");
   const db = getDb();
   const cc = COUNTRY_CODES[String(city || "").toLowerCase()] || "";
   const started = new Date().toISOString();
+  let resumeProgress = null;
+  if (!forceRebuild) {
+    const { data: row } = await db
+      .from("v2_indexed_cities")
+      .select("index_progress")
+      .eq("city", city)
+      .maybeSingle();
+    resumeProgress = row?.index_progress || null;
+  }
+
   await db.from("v2_indexed_cities").upsert({
-    city, country_code: cc, status: "indexing", hotel_count: 0, photo_count: 0, started_at: started, updated_at: started, last_error: null,
+    city,
+    country_code: cc,
+    status: "indexing",
+    hotel_count: resumeProgress?.indexed_in_cache ?? 0,
+    photo_count: 0,
+    started_at: forceRebuild ? started : undefined,
+    updated_at: started,
+    last_error: null,
+    index_progress: resumeProgress,
   }, { onConflict: "city" });
 
-  if (forceRebuild) await clearCityV2Data(db, city);
-
-  // Paginate LiteAPI /data/hotels — max 1000 per request, loop until we reach `limit`.
-  const LITEAPI_PAGE_SIZE = 1000;
-  const hotels = [];
-  let offset = 0;
-  while (hotels.length < limit) {
-    const pageSize = Math.min(LITEAPI_PAGE_SIZE, limit - hotels.length);
-    const params = new URLSearchParams({ limit: String(pageSize), offset: String(offset) });
-    if (cc) { params.set("countryCode", cc); params.set("cityName", city); } else { params.set("city", city); }
-    const hotelsRes = await liteGet(`/data/hotels?${params}`);
-    if (!hotelsRes.ok) throw new Error(`LiteAPI /data/hotels failed ${hotelsRes.status}`);
-    const page = hotelsRes.data?.data || [];
-    if (!page.length) break;
-    hotels.push(...page);
-    offset += page.length;
-    console.log(`[v2-index] fetched ${hotels.length} hotels (page ${page.length}, target ${limit})`);
-    if (page.length < pageSize) break; // last page
+  if (forceRebuild) {
+    await clearCityV2Data(db, city);
+    resumeProgress = null;
   }
-  console.log(`[v2-index] total hotels from LiteAPI: ${hotels.length} (limit=${limit}, batch=${BATCH_SIZE}, photo_conc=${PHOTO_CONCURRENCY})`);
 
-  let targetHotels = hotels;
+  const existing = new Set();
   if (!forceRebuild) {
     const { data: existingRows } = await db
       .from("v2_hotels_cache")
       .select("hotel_id")
       .eq("city", city);
-    const existing = new Set((existingRows || []).map((r) => String(r.hotel_id)));
-    targetHotels = hotels.filter((h) => !existing.has(String(h.id || h.hotelId)));
+    for (const r of existingRows || []) existing.add(String(r.hotel_id));
   }
 
-  let hotelsDone = 0;
-  let hotelsSkippedQuality = 0;
+  const LITEAPI_PAGE_SIZE = 1000;
+  let liteapiOffset = resumeProgress?.liteapi_offset || 0;
+  let catalogScanned = resumeProgress?.catalog_scanned || 0;
+  let hotelsSkippedQuality = resumeProgress?.skipped_quality || 0;
+  let hotelsFailed = resumeProgress?.hotels_failed || 0;
   let photosDone = 0;
-  for (let i = 0; i < targetHotels.length; i += BATCH_SIZE) {
-    const batch = targetHotels.slice(i, i + BATCH_SIZE);
-    await Promise.all(batch.map(async (hotel) => {
-      const hotelId = hotel.id || hotel.hotelId;
-      const detailRes = await liteGet(`/data/hotel?hotelId=${hotelId}`);
-      if (!detailRes.ok) { hotelsDone++; return; }
-      const detail = detailRes.data?.data || {};
 
-      // Quality filter: skip hotels with no room having ≥2 photos.
-      // Low-photo properties produce unreliable facts; filtering keeps the index clean.
-      const hasQualityRoom = (detail.rooms || []).some(
-        (room) => (room.photos || []).length >= 2
-      );
-      if (!hasQualityRoom) {
-        hotelsSkippedQuality++;
-        hotelsDone++;
-        return;
-      }
+  console.log(
+    `[v2-index] ${city}: limit=${limit} batch=${BATCH_SIZE} hotel_conc=${HOTEL_CONCURRENCY} ` +
+    `photo_conc=${PHOTO_CONCURRENCY} resume_offset=${liteapiOffset} indexed_cache=${existing.size}`
+  );
 
-      const stars = hotel.starRating || detail.starRating || 0;
-      const rating = hotel.rating || hotel.guestRating || detail.rating || 0;
-      const mainPhoto = detail.main_photo || detail.mainPhoto || "";
-      const hotelPhotos = (detail.hotelImages || [])
-        .map((p) => p?.urlHd || p?.url || "")
-        .filter(Boolean)
-        .filter((u) => u !== mainPhoto)
-        .slice(0, 8);
+  while (catalogScanned < limit) {
+    const pageSize = Math.min(LITEAPI_PAGE_SIZE, limit - catalogScanned);
+    const params = new URLSearchParams({ limit: String(pageSize), offset: String(liteapiOffset) });
+    if (cc) {
+      params.set("countryCode", cc);
+      params.set("cityName", city);
+    } else {
+      params.set("city", city);
+    }
+    const hotelsRes = await liteGet(`/data/hotels?${params}`);
+    if (!hotelsRes.ok) throw new Error(`LiteAPI /data/hotels failed ${hotelsRes.status}`);
+    const page = hotelsRes.data?.data || [];
+    if (!page.length) break;
 
-      // Classify property type: prefer LiteAPI field, fall back to room-name heuristics.
-      // Types: hotel | apartment | vacation_home | villa | hostel
-      const HOSTEL_RE      = /\b(hostel|dormitory|dorm|bunk bed)\b/i;
-      const VILLA_RE       = /\bvilla\b/i;
-      const VACHOME_RE     = /\b(vacation home|vacation rental|house)\b/i;
-      const APARTMENT_RE   = /\bapartment\b/i;
-      const ANY_RENTAL_RE  = /\b(apartment|vacation home|vacation rental|house|villa|hostel|dormitory|dorm|bunk bed)\b/i;
+    for (let pi = 0; pi < page.length; pi += BATCH_SIZE) {
+      const batch = page.slice(pi, pi + BATCH_SIZE);
+      for (let hi = 0; hi < batch.length; hi += HOTEL_CONCURRENCY) {
+        const hotelSlice = batch.slice(hi, hi + HOTEL_CONCURRENCY);
+        for (const hotel of hotelSlice) {
+          catalogScanned++;
+          const hotelId = String(hotel.id || hotel.hotelId);
+          if (existing.has(hotelId)) continue;
 
-      let property_type = "hotel";
-      const liteApiType = detail.propertyType || detail.accommodationType || null;
-      if (liteApiType) {
-        const lt = liteApiType.toLowerCase();
-        if (HOSTEL_RE.test(lt))                          property_type = "hostel";
-        else if (/\bvilla\b/.test(lt))                   property_type = "villa";
-        else if (/vacation home|vacation rental|house/.test(lt)) property_type = "vacation_home";
-        else if (/apartment|rental/.test(lt))            property_type = "apartment";
-      } else {
-        const rooms = detail.rooms || [];
-        if (rooms.length > 0) {
-          const names = rooms.map(r => r.roomName || r.name || "");
-          const hostelCount  = names.filter(n => HOSTEL_RE.test(n)).length;
-          // Hostel rule: ANY dorm-style room flips the property to "hostel".
-          // Hostels routinely mix dorm beds with private rooms (e.g. lp114339
-          // "Ire Ile My Hostel" has 2 "Economy Shared Dormitory" rows + 2
-          // "Basic Triple Room" rows). The old "ALL rooms must match" rule
-          // silently bucketed these mixed hostels back into "hotel".
-          if (hostelCount > 0) {
-            property_type = "hostel";
-          } else {
-            const rentalCount  = names.filter(n => ANY_RENTAL_RE.test(n)).length;
-            // Apartments/villas/vacation_homes still require ALL rooms to
-            // match (a luxury hotel with one "Apartment Suite" room isn't a
-            // vacation rental).
-            if (rentalCount === rooms.length) {
-              const villaCount   = names.filter(n => VILLA_RE.test(n)).length;
-              const vachomeCount = names.filter(n => VACHOME_RE.test(n)).length;
-              if (villaCount > 0)        property_type = "villa";
-              else if (vachomeCount > 0) property_type = "vacation_home";
-              else                       property_type = "apartment";
+          try {
+            const result = await processOneHotel(db, { hotel, city, cc });
+            if (result.skippedQuality) hotelsSkippedQuality++;
+            else if (result.indexed) {
+              existing.add(hotelId);
+              photosDone += result.photosAdded || 0;
             }
+          } catch (e) {
+            hotelsFailed++;
+            console.warn(`[v2-index] hotel ${hotelId} failed: ${e.message}`);
+          }
+
+          if (catalogScanned % PROGRESS_EVERY_HOTELS === 0) {
+            const progress = {
+              liteapi_offset: liteapiOffset,
+              catalog_scanned: catalogScanned,
+              catalog_limit: limit,
+              indexed_in_cache: existing.size,
+              skipped_quality: hotelsSkippedQuality,
+              hotels_failed: hotelsFailed,
+            };
+            await writeIndexProgress(db, city, progress);
+            const pct = Math.round((catalogScanned / limit) * 100);
+            console.log(
+              `[v2-index] progress ${city}: ${pct}% catalog_scanned=${catalogScanned}/${limit} ` +
+              `indexed=${existing.size} skipped_quality=${hotelsSkippedQuality} failed=${hotelsFailed}`
+            );
           }
         }
       }
+    }
 
-      // Only write columns that remain after ToS cleanup (name/address/ratings/main_photo dropped).
-      // Display metadata (name, photo, ratings) is fetched live from LiteAPI at search time.
-      await db.from("v2_hotels_cache").upsert({
-        hotel_id: hotelId, city, country_code: cc,
-        hotel_photos: hotelPhotos,
-        lat: detail.location?.latitude ?? detail.lat ?? null,
-        lng: detail.location?.longitude ?? detail.lng ?? null,
-        property_type,
-        cached_at: new Date().toISOString(),
-      }, { onConflict: "hotel_id" });
-
-      // Per-room photo selection.
-      //
-      // Previously a single hotel-wide `seenUrls` Set deduped photo URLs across
-      // all rooms in the catalog. LiteAPI commonly assigns the same physical
-      // photo URL to several sibling room types (e.g. Deluxe King + Grand
-      // Deluxe King at hotels that didn't shoot each tier separately). With a
-      // hotel-wide Set the first iterated room claimed those URLs and every
-      // later room saw them as "seen" and skipped — sometimes ending up with
-      // zero indexed photos (e.g. St. Regis MX `1144966`). Combined with the
-      // old unique index on `(hotel_id, photo_url)`, the DB also enforced a
-      // single-owner-per-URL constraint that compounded the bug.
-      //
-      // Fix: per-room dedup; rely on the new unique index
-      // `(hotel_id, COALESCE(room_type_id, '_null_'), photo_url)` to dedup
-      // accidental in-room duplicates at the DB level. Captions/facts for a
-      // shared URL are computed once and reused across rooms via captionCache,
-      // so Gemini is never called twice for the same image.
-      const MAX_PHOTOS_PER_ROOM = 8;
-      const chosen = [];
-      for (const room of (detail.rooms || [])) {
-        const roomName = room.roomName || room.name || "Room";
-        const roomTypeId = room.id || room.roomId || room.roomTypeId || null;
-        const seenInRoom = new Set();
-        let roomPhotoCount = 0;
-        for (const p of (room.photos || [])) {
-          if (roomPhotoCount >= MAX_PHOTOS_PER_ROOM) break;
-          const url = p.url || p.hd_url || "";
-          if (!url || seenInRoom.has(url)) continue;
-          seenInRoom.add(url);
-          chosen.push({ roomName, roomTypeId, url, type: classifyPhoto(p, roomName) });
-          roomPhotoCount++;
-        }
-      }
-
-      // Caption+facts cache keyed by URL. Promise-valued so PHOTO_CONCURRENCY
-      // parallel workers that pick the same URL collapse to a single
-      // Gemini call instead of racing each other.
-      const captionCache = new Map();
-      const getCaptionFor = (photo) => {
-        const existing = captionCache.get(photo.url);
-        if (existing) return existing;
-        const p = (async () => {
-          const cap = await geminiCaption(photo.url, { type: photo.type, roomName: photo.roomName });
-          const detectedType = (cap?.match(/PHOTO[_ ]TYPE:\s*([^\n\r]+)/i)?.[1] || photo.type || "other").toLowerCase().trim();
-          const facts = parseStructuredCaption(cap);
-          return { caption: cap, detectedType, facts };
-        })();
-        captionCache.set(photo.url, p);
-        return p;
-      };
-
-      for (let j = 0; j < chosen.length; j += PHOTO_CONCURRENCY) {
-        const chunk = chosen.slice(j, j + PHOTO_CONCURRENCY);
-        await Promise.all(chunk.map(async (photo) => {
-          const { caption, detectedType, facts } = await getCaptionFor(photo);
-          await db.from("v2_room_inventory").upsert({
-            hotel_id: hotelId, city, country_code: cc, room_name: photo.roomName, room_type_id: photo.roomTypeId || null,
-            photo_url: photo.url, photo_type: detectedType, source: "vision",
-          }, { onConflict: "hotel_id,room_type_id,photo_url" });
-          const factRows = facts.map((f) => ({
-            hotel_id: hotelId,
-            room_type_id: photo.roomTypeId || null,
-            city,
-            country_code: cc,
-            room_name: photo.roomName,
-            photo_url: photo.url,
-            fact_key: f.fact_key,
-            fact_value: f.fact_value,
-            confidence: f.confidence,
-            source: f.source || "vision",
-            extractor_version: "v2-facts-1",
-            updated_at: new Date().toISOString(),
-          }));
-          await upsertV2Facts(db, factRows);
-          photosDone++;
-        }));
-      }
-
-      // Phase 1b: classify hotel-public photos (lobby/pool/bar/...) so the
-      // hotel-level vibe score can blend room + public coverage. Best-effort;
-      // a hotel without classified public photos still ranks via room facts.
-      try {
-        const publicProcessed = await processHotelPublicPhotos(db, {
-          hotelId, city, cc, hotelPhotoUrls: hotelPhotos,
-        });
-        photosDone += publicProcessed;
-      } catch (e) {
-        console.warn(`[v2-index] hotel-public classify failed for ${hotelId}: ${e.message}`);
-      }
-      hotelsDone++;
-    }));
-
-    const [{ count: cachedHotels }, { count: cachedPhotos }] = await Promise.all([
-      db.from("v2_hotels_cache").select("*", { count: "exact", head: true }).eq("city", city),
-      db.from("v2_room_inventory").select("*", { count: "exact", head: true }).eq("city", city),
-    ]);
-    await db.from("v2_indexed_cities").update({
-      hotel_count: cachedHotels ?? hotelsDone,
-      photo_count: cachedPhotos ?? photosDone,
-      updated_at: new Date().toISOString(),
-    }).eq("city", city);
-    const pct = targetHotels.length
-      ? Math.round((Math.min(i + BATCH_SIZE, targetHotels.length) / targetHotels.length) * 100)
-      : 100;
+    liteapiOffset += page.length;
+    await writeIndexProgress(db, city, {
+      liteapi_offset: liteapiOffset,
+      catalog_scanned: catalogScanned,
+      catalog_limit: limit,
+      indexed_in_cache: existing.size,
+      skipped_quality: hotelsSkippedQuality,
+      hotels_failed: hotelsFailed,
+    });
     console.log(
-      `[v2-index] progress ${city}: batch ${Math.floor(i / BATCH_SIZE) + 1}/${Math.ceil(targetHotels.length / BATCH_SIZE)} ` +
-      `(${pct}% of ${targetHotels.length} targets) | cache=${cachedHotels} photos=${cachedPhotos} ` +
-      `processed=${hotelsDone} skipped_quality=${hotelsSkippedQuality}`
+      `[v2-index] page done ${city}: liteapi_offset=${liteapiOffset} scanned=${catalogScanned} indexed=${existing.size}`
     );
+    if (page.length < pageSize) break;
   }
+
+  const hotelsDone = catalogScanned;
+  console.log(
+    `[v2-index] catalog pass done ${city}: scanned=${catalogScanned} indexed=${existing.size} ` +
+    `skipped_quality=${hotelsSkippedQuality} failed=${hotelsFailed} photos=${photosDone}`
+  );
 
   // Use a fresh client for all final steps — the long-lived `db` connection often expires
   // after multi-hour runs, causing silent failures on status updates and the index rebuild.
@@ -669,6 +710,7 @@ async function reindexCityV2(city, limit = 200, forceRebuild = true) {
     completed_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
     last_error: null,
+    index_progress: null,
   }).eq("city", city);
 
   // Copy hotel spatial data to hotels_cache so neighbourhood RPC (get_primary_nbhds_for_hotels)
@@ -721,4 +763,18 @@ async function reindexCityV2(city, limit = 200, forceRebuild = true) {
   };
 }
 
-module.exports = { reindexCityV2 };
+const _reindexActive = new Set();
+
+async function reindexCityV2Guarded(city, limit, forceRebuild) {
+  if (_reindexActive.has(city)) {
+    throw new Error(`V2 reindex already running for ${city}`);
+  }
+  _reindexActive.add(city);
+  try {
+    return await reindexCityV2(city, limit, forceRebuild);
+  } finally {
+    _reindexActive.delete(city);
+  }
+}
+
+module.exports = { reindexCityV2: reindexCityV2Guarded, _reindexActive };

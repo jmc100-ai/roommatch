@@ -64,13 +64,22 @@ async function apiPost(path, payload) {
 function formatProgress(snap) {
   const st = snap.v2_indexed_cities || {};
   const c = snap.counts || {};
+  const prog = st.index_progress || snap.index_progress || null;
   const lines = [
     `[${new Date().toISOString()}] ${snap.city}`,
-    `  status: ${st.status || "none"} | phase hint: check Render logs [v2-rollout] / [v2-index]`,
+    `  status: ${st.status || "none"} | rollout_running: ${snap.rollout_running ?? "?"}`,
     `  v2_hotels_cache: ${c.v2_hotels} | inventory: ${c.v2_inventory} | facts: ${c.v2_facts} | room_types: ${c.v2_room_types}`,
     `  status row: hotels=${st.hotel_count ?? 0} photos=${st.photo_count ?? 0}`,
-    `  started: ${st.started_at || "—"} | updated: ${st.updated_at || "—"}`,
   ];
+  if (prog) {
+    lines.push(
+      `  index_progress: scanned=${prog.catalog_scanned ?? "?"}/${prog.catalog_limit ?? "?"} ` +
+      `indexed=${prog.indexed_in_cache ?? "?"} skipped_quality=${prog.skipped_quality ?? 0} ` +
+      `liteapi_offset=${prog.liteapi_offset ?? 0}`
+    );
+  }
+  lines.push(`  catalog_total: ${snap.catalog_total ?? "?"}`);
+  lines.push(`  started: ${st.started_at || "—"} | updated: ${st.updated_at || "—"}`);
   if (st.last_error) lines.push(`  last_error: ${st.last_error}`);
   if (st.completed_at) lines.push(`  completed_at: ${st.completed_at}`);
   return lines.join("\n");

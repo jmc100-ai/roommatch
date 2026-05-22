@@ -55,7 +55,7 @@ async function getRolloutSnapshot(db, city) {
   const cc = countryCode(city);
   const { data: status } = await db
     .from("v2_indexed_cities")
-    .select("status, hotel_count, photo_count, started_at, completed_at, last_error, updated_at")
+    .select("status, hotel_count, photo_count, started_at, completed_at, last_error, updated_at, index_progress")
     .eq("city", city)
     .maybeSingle();
 
