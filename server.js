@@ -4331,6 +4331,102 @@ app.post("/api/v2/reindex-city", async (req, res) => {
     });
 });
 
+// ── V2 full city rollout (reindex → verify → neighbourhoods → V1 cleanup) ─────
+const _v2RolloutActive = new Set();
+function loadV2RolloutCore() {
+  return require("./scripts/v2-city-rollout-core");
+}
+
+// POST /api/v2/city-rollout {"secret":"...","city":"Paris","force":true,"limit":5200}
+// Fire-and-forget on Render. Poll GET /api/v2/city-rollout/status?city=Paris
+app.post("/api/v2/city-rollout", async (req, res) => {
+  const {
+    city,
+    secret,
+    limit,
+    force = true,
+    resume = false,
+    skip_neighborhoods = false,
+    keep_v1 = false,
+    regenerate_neighborhoods = false,
+  } = req.body || {};
+  if (secret !== (process.env.INDEX_SECRET || "roommatch-index")) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
+  if (!city) return res.status(400).json({ error: "city required" });
+  if (!supabaseAdmin) return res.status(500).json({ error: "Supabase service role required" });
+  if (_v2RolloutActive.has(city)) {
+    return res.status(409).json({ error: "rollout_already_running", city });
+  }
+
+  const forceRebuild = resume ? false : !!force;
+  _v2RolloutActive.add(city);
+  res.json({
+    message: `V2 city rollout started for ${city}`,
+    city,
+    force: forceRebuild,
+    resume: !!resume,
+    skip_neighborhoods: !!skip_neighborhoods,
+    keep_v1: !!keep_v1,
+    regenerate_neighborhoods: !!regenerate_neighborhoods,
+    limit: limit != null ? Number(limit) : null,
+    status_url: `/api/v2/city-rollout/status?city=${encodeURIComponent(city)}`,
+    note: "Tail Render logs: [v2-rollout] and [v2-index]. Restart Render after complete so /api/rates uses v2_hotels_cache.",
+  });
+
+  const core = loadV2RolloutCore();
+  core.runFullCityRollout({
+    db: supabaseAdmin,
+    city,
+    reindexFn: loadIndexCityV2(),
+    limit: limit != null ? Number(limit) : undefined,
+    force: forceRebuild,
+    skipNeighborhoods: !!skip_neighborhoods,
+    keepV1: !!keep_v1,
+    regenerateNeighborhoods: !!regenerate_neighborhoods,
+    log: (...args) => console.log("[v2-rollout]", ...args),
+  })
+    .then((snap) => console.log(`[v2-rollout] complete ${city}:`, snap?.counts))
+    .catch(async (e) => {
+      console.error(`[v2-rollout] failed ${city}:`, e.message);
+      if (e.code !== "VERIFY_FAILED") {
+        await supabaseAdmin.from("v2_indexed_cities").upsert({
+          city,
+          status: "failed",
+          last_error: e.message,
+          updated_at: new Date().toISOString(),
+        }, { onConflict: "city" });
+      }
+    })
+    .finally(() => _v2RolloutActive.delete(city));
+});
+
+app.get("/api/v2/city-rollout/status", async (req, res) => {
+  const cityInput = (req.query.city || "").trim();
+  if (!cityInput || !supabase) return res.status(400).json({ error: "city required" });
+  const db = supabaseAdmin || supabase;
+  const city = await resolveCityName(cityInput, db, ["v2_indexed_cities", "v2_hotels_cache", "hotels_cache"]);
+  try {
+    const core = loadV2RolloutCore();
+    const snapshot = await core.getRolloutSnapshot(db, city);
+    let catalog_total = null;
+    try {
+      catalog_total = await core.liteCatalogTotal(
+        city,
+        core.countryCode(city),
+        process.env.LITEAPI_PROD_KEY || process.env.LITEAPI_KEY,
+      );
+    } catch (_) { /* optional */ }
+    res.json({
+      ...snapshot,
+      rollout_running: _v2RolloutActive.has(city),
+      catalog_total,
+    });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // ── V2 room-type classification backfill (Gemini text, no vision) ────────────
 app.post("/api/v2/backfill-room-types", async (req, res) => {
   const { city, secret, force = false } = req.body || {};
