@@ -161,14 +161,17 @@ async function watchLoop(city, intervalMin) {
       } else if (autoResume && !snap.rollout_running && (st === "indexing" || st === "none")) {
         const flat = hotels === lastHotels && hotels > 0;
         flatTicks = flat ? flatTicks + 1 : 0;
-        if (flat || st === "indexing") {
-          console.warn(`[watch] stalled (running=false, hotels=${hotels}) — auto-resume…`);
+        // Two consecutive flat polls (~30 min at 15m interval) before resume — avoids deploy blips.
+        if (flatTicks >= 2) {
+          console.warn(`[watch] stalled (running=false, hotels=${hotels} flat x${flatTicks}) — auto-resume…`);
           const limit = (snap.catalog_total || 5097) + 50;
           await apiPost("/api/v2/city-rollout", {
             city, secret: SECRET, resume: true, limit,
           });
           flatTicks = 0;
         }
+      } else if (snap.rollout_running) {
+        flatTicks = 0;
       } else {
         flatTicks = 0;
       }
