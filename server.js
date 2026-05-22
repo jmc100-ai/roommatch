@@ -4369,7 +4369,7 @@ app.post("/api/v2/city-rollout", async (req, res) => {
     skip_neighborhoods: !!skip_neighborhoods,
     keep_v1: !!keep_v1,
     regenerate_neighborhoods: !!regenerate_neighborhoods,
-    limit: limit != null ? Number(limit) : null,
+    limit: rolloutLimit ?? (limit != null ? Number(limit) : null),
     status_url: `/api/v2/city-rollout/status?city=${encodeURIComponent(city)}`,
     note: "Tail Render logs: [v2-rollout] and [v2-index]. Restart Render after complete so /api/rates uses v2_hotels_cache.",
   });
