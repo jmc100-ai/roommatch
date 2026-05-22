@@ -22,7 +22,12 @@ Repeatable playbook for **Paris** and future cities (London, NYC, Kuala Lumpur).
 - [ ] Changes committed and pushed to `main`
 - [ ] **Render deploy live** (includes `POST /api/v2/city-rollout`)
 - [ ] Render env: `LITEAPI_PROD_KEY`, `GEMINI_KEY`, `SUPABASE_*`, `UNSPLASH_KEY`, `INDEX_SECRET`
-- [ ] If Render **Starter (512 MB)** stalls/OOM: set `V2_BATCH_SIZE=10` and `V2_PHOTO_CONCURRENCY=2`, redeploy, then **resume**
+- [ ] **Indexer throughput (Render env)** — defaults in code target ~3–5× faster than the old `hotel_conc=1 / photo_conc=2` profile. If you previously set conservative vars, **remove or update** them:
+  - `V2_MAX_INFLIGHT_PHOTOS` — simultaneous Gemini+image fetches (Starter: **8–10**, Standard: **16–24**)
+  - `V2_HOTEL_CONCURRENCY` — parallel hotels (Starter: **2**, Standard: **3–4**)
+  - `V2_SKIP_HOTEL_PUBLIC=1` — skip lobby/pool classifier during bulk index (run `classify-hotel-public` after)
+  - On OOM: lower `V2_MAX_INFLIGHT_PHOTOS` to **6**, not back to serial hotels
+- [ ] If Render **Starter (512 MB)** stalls/OOM: lower `V2_MAX_INFLIGHT_PHOTOS`, redeploy, then **resume**
 
 ### 1 — Start full rollout on Render
 
@@ -110,6 +115,19 @@ Long runs may hit local network timeouts; production path is Render.
 2. Preflight: `GET .../city-rollout/status?city=London` → note `catalog_total`
 3. `node scripts/v2-city-rollout-remote.js --city=London` (limit auto = catalog + 50)
 4. Restart Render after complete
+
+---
+
+## Indexer speed (why Paris felt slow)
+
+| Cause | Effect |
+|-------|--------|
+| **1 hotel at a time** + **2 photos at a time** on Render | ~2 Gemini calls in flight → ~54 hotels in many hours |
+| **Hotel-public photos inline** | +8–12 extra Gemini calls per indexed hotel during bulk run |
+| **Resume without `index_progress`** | Re-walks catalog from page 0 (skips are fast, but restarts looked “stuck”) |
+| **~90% of catalog skipped** | Quality filter (≥2 photos/room) — only hundreds of hotels get indexed |
+
+After deploy, tail **`classify-hotel-public`** for the city (Mexico City pattern). Room search does not need public-area facts to finish indexing.
 
 ---
 

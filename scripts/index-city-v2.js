@@ -27,36 +27,85 @@ const GEMINI_KEY = process.env.GEMINI_KEY || "";
 const SUPABASE_URL = process.env.SUPABASE_URL || "";
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_ANON_KEY || "";
 
-// Throughput knobs. Constrained by Render Starter plan memory (512 MB):
-// in-flight photo buffers must stay under ~75 to avoid OOM crashes
-// (each cupid.travel photo base64s to 2–5 MB and we hold two copies during
-// the Gemini call). BATCH * CONC = 75 is the proven-safe ceiling.
-//
-// To speed this up further we'd need either (a) a Render plan upgrade to
-// Standard (2 GB), (b) streaming photos to Gemini without buffering full
-// base64, or (c) passing image URLs to Gemini instead of bytes. Tracked
-// as a future optimisation; current ETA ~10-13 hr for a full MX reindex.
-//
-// RATE is bumped above the prior 500/min in case the bottleneck ever
-// shifts to the rate limiter; with current concurrency we'll naturally
-// stay below this cap.
-// Render Starter (512 MB): serial hotels + tiny batches avoids OOM at ~50 hotels.
+// Throughput knobs. Bottleneck is Gemini vision calls (~0.5–1.5 s each).
+// Memory on Render Starter (512 MB): cap simultaneous in-flight image buffers
+// via V2_MAX_INFLIGHT_PHOTOS (each fetch ≈ 1–3 MB base64). Hotel-public photos
+// are skipped during bulk index by default on Render — run classify-hotel-public
+// after the city completes.
+function createSemaphore(max) {
+  let active = 0;
+  const queue = [];
+  return async function run(fn) {
+    if (active >= max) await new Promise((resolve) => queue.push(resolve));
+    active++;
+    try {
+      return await fn();
+    } finally {
+      active--;
+      const next = queue.shift();
+      if (next) next();
+    }
+  };
+}
+
 const BATCH_SIZE = Math.max(
   1,
-  Number(process.env.V2_BATCH_SIZE) || (process.env.RENDER ? 5 : 25),
+  Number(process.env.V2_BATCH_SIZE) || (process.env.RENDER ? 10 : 25),
 );
 const HOTEL_CONCURRENCY = Math.max(
   1,
-  Number(process.env.V2_HOTEL_CONCURRENCY) || (process.env.RENDER ? 1 : 3),
+  Number(process.env.V2_HOTEL_CONCURRENCY) || (process.env.RENDER ? 2 : 3),
 );
+// Legacy alias; global pool uses V2_MAX_INFLIGHT_PHOTOS.
 const PHOTO_CONCURRENCY = Math.max(
   1,
-  Number(process.env.V2_PHOTO_CONCURRENCY) || (process.env.RENDER ? 2 : 3),
+  Number(process.env.V2_PHOTO_CONCURRENCY) || (process.env.RENDER ? 4 : 6),
 );
+const MAX_INFLIGHT_PHOTOS = Math.max(
+  1,
+  Number(process.env.V2_MAX_INFLIGHT_PHOTOS)
+    || Math.min(PHOTO_CONCURRENCY * HOTEL_CONCURRENCY, process.env.RENDER ? 10 : 24),
+);
+const _photoGeminiSlot = createSemaphore(MAX_INFLIGHT_PHOTOS);
+const SKIP_HOTEL_PUBLIC = process.env.V2_SKIP_HOTEL_PUBLIC === "1"
+  || (process.env.V2_SKIP_HOTEL_PUBLIC !== "0" && !!process.env.RENDER);
 const PROGRESS_EVERY_HOTELS = Math.max(5, Number(process.env.V2_PROGRESS_EVERY) || 25);
-const CAPTION_RATE_PER_MIN = 1000;
+const CAPTION_RATE_PER_MIN = Math.max(100, Number(process.env.V2_CAPTION_RATE_PER_MIN) || 1500);
+const MAX_IMAGE_BYTES = Math.max(400_000, Number(process.env.V2_MAX_IMAGE_BYTES) || 1_800_000);
 let _capWindow = Date.now();
 let _capCount = 0;
+const _imageB64Cache = new Map();
+const IMAGE_CACHE_MAX = 120;
+
+async function fetchImageB64(imageUrl) {
+  const cached = _imageB64Cache.get(imageUrl);
+  if (cached) return cached;
+  const imgRes = await fetch(imageUrl, {
+    headers: { "User-Agent": "Mozilla/5.0" },
+    signal: AbortSignal.timeout(12000),
+  });
+  if (!imgRes.ok) return null;
+  const len = Number(imgRes.headers.get("content-length") || 0);
+  if (len > MAX_IMAGE_BYTES) {
+    console.warn(`[v2-index] skip oversized image (${len} B): ${imageUrl.slice(0, 80)}…`);
+    return null;
+  }
+  const buf = Buffer.from(await imgRes.arrayBuffer());
+  if (buf.length > MAX_IMAGE_BYTES) {
+    console.warn(`[v2-index] skip oversized image (${buf.length} B): ${imageUrl.slice(0, 80)}…`);
+    return null;
+  }
+  const out = {
+    b64: buf.toString("base64"),
+    mime: imgRes.headers.get("content-type")?.split(";")[0] || "image/jpeg",
+  };
+  if (_imageB64Cache.size >= IMAGE_CACHE_MAX) {
+    const first = _imageB64Cache.keys().next().value;
+    if (first) _imageB64Cache.delete(first);
+  }
+  _imageB64Cache.set(imageUrl, out);
+  return out;
+}
 
 const COUNTRY_CODES = {
   "mexico city": "MX",
@@ -92,6 +141,7 @@ function classifyPhoto(photo, roomName = "") {
 
 async function geminiCaption(imageUrl, photoContext = {}, retries = 5) {
   if (!GEMINI_KEY) return null;
+  return _photoGeminiSlot(async () => {
   try {
     const now = Date.now();
     if (now - _capWindow > 60000) { _capWindow = now; _capCount = 0; }
@@ -103,13 +153,9 @@ async function geminiCaption(imageUrl, photoContext = {}, retries = 5) {
     }
     _capCount++;
 
-    const imgRes = await fetch(imageUrl, {
-      headers: { "User-Agent": "Mozilla/5.0" },
-      signal: AbortSignal.timeout(12000),
-    });
-    if (!imgRes.ok) return null;
-    const b64 = Buffer.from(await imgRes.arrayBuffer()).toString("base64");
-    const mime = imgRes.headers.get("content-type")?.split(";")[0] || "image/jpeg";
+    const img = await fetchImageB64(imageUrl);
+    if (!img) return null;
+    const { b64, mime } = img;
     const isLikelyBath = /bath/i.test(photoContext.roomName || "") || photoContext.type === "bathroom";
     const prompt = [
       "Analyze this hotel room photo. For each field answer ONLY: yes | no | unknown",
@@ -256,6 +302,7 @@ async function geminiCaption(imageUrl, photoContext = {}, retries = 5) {
     if (retries > 0) return geminiCaption(imageUrl, photoContext, retries - 1);
     return null;
   }
+  });
 }
 
 function extractFeatureSummary(caption) {
@@ -293,6 +340,7 @@ async function upsertV2Facts(db, rows) {
 // { areas: [], visualStyle: null } on permanent failure.
 async function geminiClassifyPublicPhoto(imageUrl, retries = 4) {
   if (!GEMINI_KEY) return { areas: [], visualStyle: null };
+  return _photoGeminiSlot(async () => {
   try {
     const now = Date.now();
     if (now - _capWindow > 60000) { _capWindow = now; _capCount = 0; }
@@ -304,13 +352,9 @@ async function geminiClassifyPublicPhoto(imageUrl, retries = 4) {
     }
     _capCount++;
 
-    const imgRes = await fetch(imageUrl, {
-      headers: { "User-Agent": "Mozilla/5.0" },
-      signal: AbortSignal.timeout(12000),
-    });
-    if (!imgRes.ok) return { areas: [], visualStyle: null };
-    const b64  = Buffer.from(await imgRes.arrayBuffer()).toString("base64");
-    const mime = imgRes.headers.get("content-type")?.split(";")[0] || "image/jpeg";
+    const img = await fetchImageB64(imageUrl);
+    if (!img) return { areas: [], visualStyle: null };
+    const { b64, mime } = img;
     const prompt = buildHotelPublicClassifierPrompt({
       roomName: HOTEL_PUBLIC_ROOM_NAME,
       type:     "other",
@@ -345,6 +389,7 @@ async function geminiClassifyPublicPhoto(imageUrl, retries = 4) {
     if (retries > 0) return geminiClassifyPublicPhoto(imageUrl, retries - 1);
     return { areas: [], visualStyle: null };
   }
+  });
 }
 
 /**
@@ -356,7 +401,7 @@ async function processHotelPublicPhotos(db, { hotelId, city, cc, hotelPhotoUrls 
   const urls = (hotelPhotoUrls || []).slice(0, HOTEL_PUBLIC_PHOTOS_PER_HOTEL);
   if (!urls.length) return 0;
   let processed = 0;
-  for (const url of urls) {
+  await Promise.all(urls.map(async (url) => {
     const { areas, visualStyle } = await geminiClassifyPublicPhoto(url);
     const stamp = new Date().toISOString();
     const dominantArea = areas.length > 0 ? areas[0].replace(/^area_/, "") : "other";
@@ -411,7 +456,7 @@ async function processHotelPublicPhotos(db, { hotelId, city, cc, hotelPhotoUrls 
     }
     if (factRows.length) await upsertV2Facts(db, factRows);
     processed++;
-  }
+  }));
   return processed;
 }
 
@@ -423,16 +468,13 @@ async function clearCityV2Data(db, city) {
 }
 
 async function writeIndexProgress(db, city, progress) {
-  const [{ count: cachedHotels }, { count: cachedPhotos }] = await Promise.all([
-    db.from("v2_hotels_cache").select("*", { count: "exact", head: true }).eq("city", city),
-    db.from("v2_room_inventory").select("*", { count: "exact", head: true }).eq("city", city),
-  ]);
   const patch = {
-    hotel_count: cachedHotels ?? progress.indexed_in_cache ?? 0,
-    photo_count: cachedPhotos ?? 0,
+    hotel_count: progress.indexed_in_cache ?? 0,
+    photo_count: progress.photos_done ?? null,
     index_progress: progress,
     updated_at: new Date().toISOString(),
   };
+  if (patch.photo_count == null) delete patch.photo_count;
   const { error } = await db.from("v2_indexed_cities").update(patch).eq("city", city);
   if (error) console.warn(`[v2-index] progress update failed: ${error.message}`);
 }
@@ -530,15 +572,16 @@ async function processOneHotel(db, { hotel, city, cc }) {
   };
 
   let photosAdded = 0;
-  for (let j = 0; j < chosen.length; j += PHOTO_CONCURRENCY) {
-    const chunk = chosen.slice(j, j + PHOTO_CONCURRENCY);
-    await Promise.all(chunk.map(async (photo) => {
-      const { detectedType, facts } = await getCaptionFor(photo);
-      await db.from("v2_room_inventory").upsert({
-        hotel_id: hotelId, city, country_code: cc, room_name: photo.roomName,
-        room_type_id: photo.roomTypeId || null, photo_url: photo.url, photo_type: detectedType, source: "vision",
-      }, { onConflict: "hotel_id,room_type_id,photo_url" });
-      const factRows = facts.map((f) => ({
+  const allFactRows = [];
+  await Promise.all(chosen.map(async (photo) => {
+    const { detectedType, facts } = await getCaptionFor(photo);
+    await db.from("v2_room_inventory").upsert({
+      hotel_id: hotelId, city, country_code: cc, room_name: photo.roomName,
+      room_type_id: photo.roomTypeId || null, photo_url: photo.url, photo_type: detectedType, source: "vision",
+    }, { onConflict: "hotel_id,room_type_id,photo_url" });
+    const stamp = new Date().toISOString();
+    for (const f of facts) {
+      allFactRows.push({
         hotel_id: hotelId,
         room_type_id: photo.roomTypeId || null,
         city,
@@ -550,17 +593,19 @@ async function processOneHotel(db, { hotel, city, cc }) {
         confidence: f.confidence,
         source: f.source || "vision",
         extractor_version: "v2-facts-1",
-        updated_at: new Date().toISOString(),
-      }));
-      await upsertV2Facts(db, factRows);
-      photosAdded++;
-    }));
-  }
+        updated_at: stamp,
+      });
+    }
+    photosAdded++;
+  }));
+  if (allFactRows.length) await upsertV2Facts(db, allFactRows);
 
-  try {
-    photosAdded += await processHotelPublicPhotos(db, { hotelId, city, cc, hotelPhotoUrls: hotelPhotos });
-  } catch (e) {
-    console.warn(`[v2-index] hotel-public classify failed for ${hotelId}: ${e.message}`);
+  if (!SKIP_HOTEL_PUBLIC) {
+    try {
+      photosAdded += await processHotelPublicPhotos(db, { hotelId, city, cc, hotelPhotoUrls: hotelPhotos });
+    } catch (e) {
+      console.warn(`[v2-index] hotel-public classify failed for ${hotelId}: ${e.message}`);
+    }
   }
 
   return { indexed: true, photosAdded, skippedQuality: false };
@@ -616,7 +661,8 @@ async function reindexCityV2(city, limit = 200, forceRebuild = true) {
 
   console.log(
     `[v2-index] ${city}: limit=${limit} batch=${BATCH_SIZE} hotel_conc=${HOTEL_CONCURRENCY} ` +
-    `photo_conc=${PHOTO_CONCURRENCY} resume_offset=${liteapiOffset} indexed_cache=${existing.size}`
+    `max_inflight_photos=${MAX_INFLIGHT_PHOTOS} skip_hotel_public=${SKIP_HOTEL_PUBLIC} ` +
+    `resume_offset=${liteapiOffset} indexed_cache=${existing.size}`
   );
 
   while (catalogScanned < limit) {
@@ -662,6 +708,7 @@ async function reindexCityV2(city, limit = 200, forceRebuild = true) {
               indexed_in_cache: existing.size,
               skipped_quality: hotelsSkippedQuality,
               hotels_failed: hotelsFailed,
+              photos_done: photosDone,
             };
             await writeIndexProgress(db, city, progress);
             const pct = Math.round((catalogScanned / limit) * 100);
@@ -682,6 +729,7 @@ async function reindexCityV2(city, limit = 200, forceRebuild = true) {
       indexed_in_cache: existing.size,
       skipped_quality: hotelsSkippedQuality,
       hotels_failed: hotelsFailed,
+      photos_done: photosDone,
     });
     console.log(
       `[v2-index] page done ${city}: liteapi_offset=${liteapiOffset} scanned=${catalogScanned} indexed=${existing.size}`

@@ -117,6 +117,7 @@ async function startRollout(city, { resume: resumeOpt } = {}) {
     force: !resume,
     resume: !!resume,
     keep_v1: hasFlag("--keep-v1"),
+    skip_reindex: hasFlag("--skip-reindex"),
     skip_neighborhoods: hasFlag("--skip-neighborhoods"),
     regenerate_neighborhoods: hasFlag("--regenerate-neighborhoods"),
   };
@@ -138,6 +139,45 @@ async function startRollout(city, { resume: resumeOpt } = {}) {
   }
 }
 
+const { spawn } = require("child_process");
+const path = require("path");
+
+async function runPostIndexTail(city, snap) {
+  if (hasFlag("--no-tail")) {
+    console.log("\n[watch] Index complete (--no-tail). Restart Render manually, then QA.");
+    return;
+  }
+  console.log("\n[watch] Index complete — verify + neighbourhoods + V1 cleanup…");
+  const limit = (snap.catalog_total || 5097) + 50;
+  try {
+    const started = await apiPost("/api/v2/city-rollout", {
+      city,
+      secret: SECRET,
+      skip_reindex: true,
+      limit,
+      regenerate_neighborhoods: hasFlag("--regenerate-neighborhoods"),
+    });
+    console.log(JSON.stringify(started, null, 2));
+    console.log("[watch] Tail job started on Render. Poll status until rollout_running=false and neighbourhoods updated.");
+    return;
+  } catch (e) {
+    console.warn(`[watch] Remote tail failed (${e.message}) — running local --skip-reindex…`);
+    await new Promise((resolve, reject) => {
+      const child = spawn(
+        process.execPath,
+        [
+          path.join(__dirname, "v2-city-rollout.js"),
+          `--city=${city}`,
+          "--skip-reindex",
+          ...(hasFlag("--regenerate-neighborhoods") ? ["--regenerate-neighborhoods"] : []),
+        ],
+        { cwd: path.join(__dirname, ".."), stdio: "inherit", env: process.env },
+      );
+      child.on("exit", (code) => (code === 0 ? resolve() : reject(new Error(`local tail exit ${code}`))));
+    });
+  }
+}
+
 async function watchLoop(city, intervalMin) {
   const ms = intervalMin * 60 * 1000;
   const autoResume = !hasFlag("--no-auto-resume");
@@ -152,17 +192,23 @@ async function watchLoop(city, intervalMin) {
       const hotels = snap.counts?.v2_hotels ?? 0;
 
       if (st === "complete" && (snap.counts?.v2_room_types || 0) > 0) {
-        console.log("\n✓ Rollout appears complete (status=complete, room_types_index populated).");
+        console.log("\n✓ V2 reindex complete (room_types_index populated).");
+        await runPostIndexTail(city, snap);
+        console.log("\n✓ Post-index tail triggered. Restart Render so /api/rates loads Paris from v2_hotels_cache.");
         break;
       }
       if (st === "failed") {
-        if (autoResume && !hasFlag("--watch-only")) {
+        const err = String(snap.v2_indexed_cities?.last_error || "");
+        const benignDuplicate = /already running/i.test(err);
+        if (benignDuplicate) {
+          console.warn("[watch] status=failed but duplicate-start only — keep watching (reindex may still be running).");
+        } else if (autoResume && !hasFlag("--watch-only")) {
           console.warn("\n[watch] status=failed — retrying with resume…");
-          await startRollout(city);
+          await startRollout(city, { resume: true });
         } else if (autoResume) {
           console.warn("\n[watch] status=failed — POST resume (watch-only mode)…");
           const limit = (snap.catalog_total || 5097) + 50;
-          await apiPost("/api/v2/city-rollout", { city, secret: SECRET, resume: true, limit });
+          await apiPost("/api/v2/reindex-city", { city, secret: SECRET, resume: true, force: false, limit });
         } else {
           console.error("\n✗ Rollout failed — see last_error and Render logs.");
           process.exit(1);

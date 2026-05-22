@@ -4348,6 +4348,7 @@ app.post("/api/v2/city-rollout", async (req, res) => {
     limit,
     force = true,
     resume = false,
+    skip_reindex = false,
     skip_neighborhoods = false,
     keep_v1 = false,
     regenerate_neighborhoods = false,
@@ -4383,6 +4384,7 @@ app.post("/api/v2/city-rollout", async (req, res) => {
     city,
     force: forceRebuild,
     resume: !!resume,
+    skip_reindex: !!skip_reindex,
     skip_neighborhoods: !!skip_neighborhoods,
     keep_v1: !!keep_v1,
     regenerate_neighborhoods: !!regenerate_neighborhoods,
@@ -4396,6 +4398,7 @@ app.post("/api/v2/city-rollout", async (req, res) => {
     reindexFn: loadIndexCityV2(),
     limit: rolloutLimit,
     force: forceRebuild,
+    skipReindex: !!skip_reindex,
     skipNeighborhoods: !!skip_neighborhoods,
     keepV1: !!keep_v1,
     regenerateNeighborhoods: !!regenerate_neighborhoods,
@@ -4434,7 +4437,7 @@ app.get("/api/v2/city-rollout/status", async (req, res) => {
     } catch (_) { /* optional */ }
     res.json({
       ...snapshot,
-      rollout_running: _v2RolloutActive.has(city),
+      rollout_running: _v2RolloutActive.has(city) || loadIndexCityV2()._reindexActive?.has(city),
       catalog_total,
     });
   } catch (e) {
