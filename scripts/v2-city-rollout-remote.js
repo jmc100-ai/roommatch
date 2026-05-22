@@ -93,7 +93,7 @@ async function fetchStatus(city) {
   }
 }
 
-async function startRollout(city) {
+async function startRollout(city, { resume: resumeOpt } = {}) {
   const limitArg = getArg("limit");
   let catalogLimit = limitArg ? Number(limitArg) : null;
   if (!catalogLimit) {
@@ -101,11 +101,12 @@ async function startRollout(city) {
     const total = pre.catalog_total;
     if (total != null && total > 0) catalogLimit = total + 50;
   }
+  const resume = resumeOpt ?? hasFlag("--resume");
   const body = {
     city,
     secret: SECRET,
-    force: !hasFlag("--resume"),
-    resume: hasFlag("--resume"),
+    force: !resume,
+    resume: !!resume,
     keep_v1: hasFlag("--keep-v1"),
     skip_neighborhoods: hasFlag("--skip-neighborhoods"),
     regenerate_neighborhoods: hasFlag("--regenerate-neighborhoods"),
@@ -130,20 +131,48 @@ async function startRollout(city) {
 
 async function watchLoop(city, intervalMin) {
   const ms = intervalMin * 60 * 1000;
-  console.log(`\nWatching ${city} every ${intervalMin} min (Ctrl+C to stop)…\n`);
+  const autoResume = !hasFlag("--no-auto-resume");
+  let lastHotels = -1;
+  let flatTicks = 0;
+  console.log(`\nWatching ${city} every ${intervalMin} min (auto_resume=${autoResume})…\n`);
   for (;;) {
     try {
       const snap = await fetchStatus(city);
       console.log(formatProgress(snap));
       const st = snap.v2_indexed_cities?.status;
+      const hotels = snap.counts?.v2_hotels ?? 0;
+
       if (st === "complete" && (snap.counts?.v2_room_types || 0) > 0) {
         console.log("\n✓ Rollout appears complete (status=complete, room_types_index populated).");
         break;
       }
       if (st === "failed") {
-        console.error("\n✗ Rollout failed — see last_error and Render logs.");
-        process.exit(1);
+        if (autoResume && !hasFlag("--watch-only")) {
+          console.warn("\n[watch] status=failed — retrying with resume…");
+          await startRollout(city);
+        } else if (autoResume) {
+          console.warn("\n[watch] status=failed — POST resume (watch-only mode)…");
+          const limit = (snap.catalog_total || 5097) + 50;
+          await apiPost("/api/v2/city-rollout", { city, secret: SECRET, resume: true, limit });
+        } else {
+          console.error("\n✗ Rollout failed — see last_error and Render logs.");
+          process.exit(1);
+        }
+      } else if (autoResume && !snap.rollout_running && (st === "indexing" || st === "none")) {
+        const flat = hotels === lastHotels && hotels > 0;
+        flatTicks = flat ? flatTicks + 1 : 0;
+        if (flat || st === "indexing") {
+          console.warn(`[watch] stalled (running=false, hotels=${hotels}) — auto-resume…`);
+          const limit = (snap.catalog_total || 5097) + 50;
+          await apiPost("/api/v2/city-rollout", {
+            city, secret: SECRET, resume: true, limit,
+          });
+          flatTicks = 0;
+        }
+      } else {
+        flatTicks = 0;
       }
+      lastHotels = hotels;
     } catch (e) {
       console.error(`[watch] ${e.message}`);
     }
@@ -154,10 +183,10 @@ async function watchLoop(city, intervalMin) {
 async function main() {
   const city = getArg("city");
   if (!city) {
-    console.error("Usage: node scripts/v2-city-rollout-remote.js --city=Paris [--watch-only] [--interval=10]");
+    console.error("Usage: node scripts/v2-city-rollout-remote.js --city=Paris [--watch-only] [--interval=15]");
     process.exit(1);
   }
-  const interval = Number(getArg("interval") || "10");
+  const interval = Number(getArg("interval") || "15");
 
   console.log(`Render base: ${BASE}`);
 
