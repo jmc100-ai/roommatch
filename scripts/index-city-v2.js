@@ -40,9 +40,15 @@ const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_AN
 // RATE is bumped above the prior 500/min in case the bottleneck ever
 // shifts to the rate limiter; with current concurrency we'll naturally
 // stay below this cap.
-// Override on Render if indexing stalls/OOMs (Starter 512 MB): V2_BATCH_SIZE=10 V2_PHOTO_CONCURRENCY=2
-const BATCH_SIZE = Math.max(1, Number(process.env.V2_BATCH_SIZE) || 25);
-const PHOTO_CONCURRENCY = Math.max(1, Number(process.env.V2_PHOTO_CONCURRENCY) || 3);
+// Render Starter (512 MB): default smaller batches unless overridden (OOM at batch=25).
+const BATCH_SIZE = Math.max(
+  1,
+  Number(process.env.V2_BATCH_SIZE) || (process.env.RENDER ? 10 : 25),
+);
+const PHOTO_CONCURRENCY = Math.max(
+  1,
+  Number(process.env.V2_PHOTO_CONCURRENCY) || (process.env.RENDER ? 2 : 3),
+);
 const CAPTION_RATE_PER_MIN = 1000;
 let _capWindow = Date.now();
 let _capCount = 0;
