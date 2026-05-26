@@ -6075,6 +6075,28 @@
     return bestRoomScore > 0 ? Math.round(bestRoomScore) : Math.round(h?.vectorScore || 0);
   }
 
+  /** Upper-left badge on the featured (best matching) room photo strip. */
+  function featuredRoomVibeBadgeHTML(hotel, rt) {
+    const rowScore = Math.round(Number(rt?.score) || 0);
+    const hotelRoom = Math.round(Number(hotel?.vectorScore) || 0);
+    // This row's score when present; else hotel-level room match (stub lazy-load sets score=0).
+    const displayPct = rowScore > 0 ? rowScore : hotelRoom;
+    if (displayPct > 0) {
+      return `<span class="room-featured-vibe-badge">Room vibe - ${displayPct}% match</span>`;
+    }
+    return `<span class="room-featured-vibe-badge room-featured-vibe-badge--low">Room vibe - browse</span>`;
+  }
+
+  /** Keep overlay pill when a room photo fails to load (never replace cell innerHTML). */
+  function roomPhotoImgOnError(img) {
+    if (!img) return;
+    img.style.display = 'none';
+    const cell = img.closest('.room-photo-cell');
+    if (cell && !cell.querySelector('.no-photo')) {
+      cell.insertAdjacentHTML('beforeend', '<div class="no-photo">🛏</div>');
+    }
+  }
+
   // Re-render while suppressing the card entrance animation and preserving scroll.
   // Used when prices arrive so the re-sort is invisible to the user.
   function renderSortedSmooth() {
@@ -8888,10 +8910,8 @@
 
     // ── Featured variant (top match room — scrollable strip, same indices as lightbox) ──
   if (variant === 'featured') {
-    const fromRoom = Math.round(Number(rt.score) || 0) || Math.round(Number(hotel?.vectorScore) || 0);
-    const vibeOverlay = fromRoom > 0
-      ? `<span class="room-featured-vibe-badge">Room vibe - ${fromRoom}% match</span>`
-      : `<span class="room-featured-vibe-badge room-featured-vibe-badge--low">Room vibe - browse</span>`;
+    const vibeOverlay = featuredRoomVibeBadgeHTML(hotel, rt);
+    const roomNameAttr = escAttr(rt.name || 'Room');
 
       const toShow = photos.length > 0 ? photos.slice(0, 10) : [null];
       const stripCells = toShow.map((url, pi) => {
@@ -8903,8 +8923,8 @@
         }
         return `<div class="room-photo-cell${heroCls}" onclick="${lbClick}">
           ${overlay}
-          <img src="${url}" alt="${rt.name}" loading="lazy"
-               onerror="this.style.display='none';if(!this.parentElement.querySelector('.no-photo')){this.insertAdjacentHTML('afterend','<div class=no-photo>🛏</div>')}">
+          <img src="${escAttr(url)}" alt="${roomNameAttr}" loading="lazy"
+               onerror="roomPhotoImgOnError(this)">
           <div class="zoom-hint">⤢</div>
         </div>`;
       }).join('');
@@ -8919,7 +8939,7 @@
             <button type="button" class="room-featured-nav room-featured-nav--next" aria-label="Next photos" onclick="event.stopPropagation();featuredStripNav(this,1)">&#8250;</button>
           </div>
           <div class="room-featured-info">
-            <div class="room-featured-name">${rt.name}${bedsHTML ? `<span class="room-meta-sep"> · </span>${bedsHTML}` : ''}${sizeHTML ? `<span class="room-meta-sep"> · </span>${sizeHTML}` : ''}</div>
+            <div class="room-featured-name">${escHtml(rt.name)}${bedsHTML ? `<span class="room-meta-sep"> · </span>${bedsHTML}` : ''}${sizeHTML ? `<span class="room-meta-sep"> · </span>${sizeHTML}` : ''}</div>
             <div class="room-featured-meta">${priceHTML}${roomBookHTML}<span class="room-featured-collapse">▾ collapse</span></div>
           </div>
         </div>`;
@@ -8941,8 +8961,8 @@
     const photoHTML = photos.length
       ? photos.slice(0, 10).map((url, pi) =>
           `<div class="room-photo-cell" onclick="openLightbox(${regKey}, ${pi})">
-            <img src="${url}" alt="${rt.name}" loading="lazy"
-                 onerror="this.parentElement.innerHTML='<div class=no-photo>🛏</div>'">
+            <img src="${escAttr(url)}" alt="${escAttr(rt.name || 'Room')}" loading="lazy"
+                 onerror="roomPhotoImgOnError(this)">
             <div class="zoom-hint">⤢</div>
           </div>`).join('')
       : `<div class="room-photo-cell"><div class="no-photo">🛏</div></div>`;
