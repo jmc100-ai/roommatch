@@ -411,7 +411,7 @@
   const HISTORY_LIMIT     = 6;
   /** Default city field + initial `S.city` — launch market (V2 catalog). */
   const DEFAULT_HOME_CITY = 'Mexico City';
-  const LAUNCH_CITY_ONLY_MSG = 'Only Mexico City is available for searching at this moment. More cities coming soon.';
+  const LAUNCH_CITY_ONLY_MSG = 'Only Mexico City and Paris are available for searching right now. More cities coming soon.';
 
   // ════════════════════════════════════════════════════════
   //  DISCOVERY FLOW — 4-step state machine
@@ -419,7 +419,7 @@
 
   // Hardcoded neighbourhood fallback for non-indexed cities
   // Cities that are indexed in our DB (real neighbourhood data available)
-  const DB_INDEXED_CITIES = ['Paris', 'Kuala Lumpur'];
+  const DB_INDEXED_CITIES = ['Mexico City', 'Paris', 'Kuala Lumpur'];
 
   // Returns true if a city has neighbourhood data (DB or fallback hardcoded)
   function cityHasNeighbourhoods(name) {
@@ -876,18 +876,24 @@
       .replace(/\w\S*/g, w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase());
   }
 
-  /** Beta launch: search is limited to Mexico City (home + all pickCity paths). */
-  function isAllowedLaunchCity(name) {
+  /** Canonical launch city or null (home + pickCity + free-text search). */
+  function resolveLaunchCity(name) {
     const k = cityKey(name)
       .normalize('NFD')
       .replace(/[\u0300-\u036f]/g, '');
-    return (
+    if (
       k === 'mexico city' ||
       k === 'cdmx' ||
       k === 'ciudad de mexico' ||
       k === 'mexico df' ||
       k === 'distrito federal'
-    );
+    ) return 'Mexico City';
+    if (k === 'paris') return 'Paris';
+    return null;
+  }
+
+  function isAllowedLaunchCity(name) {
+    return resolveLaunchCity(name) != null;
   }
 
   function showLaunchCityOnlyModal() {
@@ -2430,11 +2436,11 @@
 
   // ── CITY ─────────────────────────────────────────────
   function pickCity(name) {
-    if (!isAllowedLaunchCity(name)) {
+    const city = resolveLaunchCity(name);
+    if (!city) {
       rejectLaunchCityInput(name);
       return;
     }
-    const city = DEFAULT_HOME_CITY;
     if (_returnToCmdTripSheet && isMobileCmdTripUi()) {
       const prevCity = S.city;
       S.city = city;
@@ -4917,12 +4923,13 @@
     const city  = document.getElementById('cityInput').value.trim();
     if (!query) { alert("Please describe the room you're looking for."); return; }
     if (!city)  { alert('Please enter a city.'); return; }
-    if (!isAllowedLaunchCity(city)) {
+    const launchCity = resolveLaunchCity(city);
+    if (!launchCity) {
       rejectLaunchCityInput(city);
       return;
     }
     writeHistory(QUERY_HISTORY_KEY, query);
-    writeHistory(CITY_HISTORY_KEY, city);
+    writeHistory(CITY_HISTORY_KEY, launchCity);
     hideRecentDropdown('queryHistoryDropdown');
     hideRecentDropdown('cityHistoryDropdown');
     hideNeighborhoodSection();
@@ -4932,13 +4939,13 @@
     // Free-text search does not use BOOP v4 wizard seeds — clear them.
     S.hotelQ = null;
     S.mustHaves = null;
-    if (currentMode === 'vector') startVectorSearch(query, city, btn);
-    else if (currentMode === 'clip' && PUBLIC_CLIP_SEARCH_ENABLED) startClip(query, city, btn);
+    if (currentMode === 'vector') startVectorSearch(query, launchCity, btn);
+    else if (currentMode === 'clip' && PUBLIC_CLIP_SEARCH_ENABLED) startClip(query, launchCity, btn);
     else if (currentMode === 'clip') {
       setStatus('Extra photo mode is off here — running the standard photo match instead.', true);
-      startVectorSearch(query, city, btn);
+      startVectorSearch(query, launchCity, btn);
     }
-    else startLiteApi(query, city, btn);
+    else startLiteApi(query, launchCity, btn);
   }
 
   async function startLiteApi(query, city, btn) {
@@ -9030,6 +9037,7 @@
   // cityData: {name, country_code, lat, lng} from autocomplete, or plain string from history/keyboard
   // ── Top world cities shown as default chips ──────────────────────────────
   const TOP_CITIES = [
+    {name:'Mexico City',   flag:'🇲🇽'},
     {name:'Paris',         flag:'🇫🇷'},
     {name:'London',        flag:'🇬🇧'},
     {name:'New York',      flag:'🇺🇸'},
@@ -9361,7 +9369,13 @@
     const cityInput = document.getElementById('cityInput');
     if (!cityInput) return;
     if (!cityInput.value.trim()) cityInput.value = DEFAULT_HOME_CITY;
-    S.city = normalizeCityName(cityInput.value.trim()) || DEFAULT_HOME_CITY;
+    const launchFromInput = resolveLaunchCity(cityInput.value.trim());
+    if (launchFromInput) {
+      cityInput.value = launchFromInput;
+      S.city = launchFromInput;
+    } else {
+      S.city = normalizeCityName(cityInput.value.trim()) || DEFAULT_HOME_CITY;
+    }
 
     /* Recent popover on focus + duplicate arrow-key nav — paused with Geo autocomplete (use onCityKeydown on input)
     cityInput.addEventListener('focus', () => {

@@ -1,8 +1,7 @@
 #!/usr/bin/env node
 /**
- * Search quality test suite — calls the live /api/vsearch endpoint with flag_mode=strict
- * so expected DB counts match legacy hard-filter behavior.
- * and cross-references results against live DB counts from room_types_index.
+ * Search quality test suite — V1 tests use flag_mode=strict; V2 tests use soft
+ * ranking and verify flagged hotels appear in the top 10 (V2 returns full catalog).
  *
  * Usage:
  *   node scripts/test-search-quality.js
@@ -13,6 +12,7 @@ const {
   SEARCH_TESTS,
   getBaseUrl,
   getExpectedHotelCount,
+  fetchDistinctHotelIds,
 } = require("./search-test-lib");
 
 const BASE_URL = getBaseUrl(process.argv);
@@ -27,8 +27,12 @@ function red(s)   { return `\x1b[31m${s}\x1b[0m`; }
 function yellow(s){ return `\x1b[33m${s}\x1b[0m`; }
 function bold(s)  { return `\x1b[1m${s}\x1b[0m`; }
 
-async function callVsearch(query, city) {
-  const url = `${BASE_URL}/api/vsearch?query=${encodeURIComponent(query)}&city=${encodeURIComponent(city)}&flag_mode=strict`;
+async function callVsearch(query, city, test = {}) {
+  const source = test.source || "v1";
+  const params = new URLSearchParams({ query, city, search_version: source === "v2" ? "v2" : "v1" });
+  // V1-only: strict DB pre-filter. V2 uses soft ranking + top-N fact coverage checks.
+  if (source !== "v2") params.set("flag_mode", "strict");
+  const url = `${BASE_URL}/api/vsearch?${params}`;
   // Bypass the beta gate (closed-beta SITE_PASSWORD cookie wall) when INDEX_SECRET
   // is set in the environment. Required for CI runs against production.
   const headers = process.env.INDEX_SECRET ? { "x-index-secret": process.env.INDEX_SECRET } : {};
@@ -38,6 +42,15 @@ async function callVsearch(query, city) {
   if (!res.ok) throw new Error(`HTTP ${res.status}: ${await res.text()}`);
   const data = await res.json();
   return { data, elapsed };
+}
+
+/** V2 feature queries return the full catalog — verify flagged hotels appear in top N. */
+async function checkV2FeatureCoverage(test, hotels, topN = 10) {
+  const flaggedIds = await fetchDistinctHotelIds(test.city, test.expectation.flag, "v2");
+  if (flaggedIds.size === 0) return { pass: true, hits: 0, flaggedInDb: 0, skipped: true };
+  const minHits = typeof test.minTopFactHits === "number" ? test.minTopFactHits : 1;
+  const hits = hotels.slice(0, topN).filter((h) => flaggedIds.has(String(h.hotel_id || h.id))).length;
+  return { pass: hits >= minHits, hits, flaggedInDb: flaggedIds.size, skipped: false };
 }
 
 function scoreLabel(pct) {
@@ -65,14 +78,28 @@ async function main() {
     let result;
     try {
       const expectedHotels = await getExpectedHotelCount(test);
-      const { data, elapsed } = await callVsearch(test.query, test.city);
+      const { data, elapsed } = await callVsearch(test.query, test.city, test);
       const hotels = data.hotels || [];
       const count  = hotels.length;
 
-      // Count check: V2/semantic tests use minHotels as a floor (`>=`),
-      // V1/feature tests still demand exact count.
-      const isFloor = test.expectation.type === "semantic" || (test.source === "v2" && typeof test.minHotels === "number");
-      const countPass = isFloor ? count >= expectedHotels : count === expectedHotels;
+      const isV2 = (test.source || "v1") === "v2";
+      const isV2Feature = isV2 && test.expectation.type === "feature";
+      const isFloor = test.expectation.type === "semantic" || (isV2 && typeof test.minHotels === "number");
+
+      let countPass;
+      let factPass = true;
+      let factMeta = null;
+
+      if (isV2Feature) {
+        // V2 returns the full indexed catalog — check top-N fact coverage instead of total count.
+        countPass = count >= 1;
+        factMeta = await checkV2FeatureCoverage(test, hotels);
+        factPass = factMeta.pass;
+      } else if (isFloor) {
+        countPass = count >= expectedHotels;
+      } else {
+        countPass = count === expectedHotels;
+      }
 
       // Top 5 hotels
       const top5 = hotels.slice(0, 5).map(h => ({
@@ -87,16 +114,16 @@ async function main() {
 
       const latencyPass = elapsed <= LATENCY_SOFT_CAP_MS;
 
-      const pass = countPass && scorePass; // latency is soft — doesn't fail the test
+      const pass = countPass && scorePass && factPass; // latency is soft — doesn't fail the test
       process.stdout.write(pass ? green("PASS") : red("FAIL"));
       const latencyStr = latencyPass ? `${elapsed}ms` : yellow(`${elapsed}ms (slow)`);
       console.log(` (${latencyStr})`);
 
-      result = { test, expectedHotels, count, countPass, scorePass, pass, top5, elapsed, latencyPass, isFloor, error: null };
+      result = { test, expectedHotels, count, countPass, scorePass, factPass, factMeta, pass, top5, elapsed, latencyPass, isFloor, isV2Feature, error: null };
     } catch (err) {
       process.stdout.write(red("ERROR"));
       console.log();
-      result = { test, expectedHotels: null, count: null, countPass: false, scorePass: false, pass: false, top5: [], elapsed: null, latencyPass: false, isFloor: false, error: err.message };
+      result = { test, expectedHotels: null, count: null, countPass: false, scorePass: false, factPass: false, factMeta: null, pass: false, top5: [], elapsed: null, latencyPass: false, isFloor: false, isV2Feature: false, error: err.message };
     }
 
     results.push(result);
@@ -144,10 +171,13 @@ async function main() {
         console.log(`     ${i + 1}. ${h.name} ${stars}  ${scoreLabel(h.score)}%`);
       });
     }
-    if (!r.countPass && r.count !== null) {
+    if (!r.countPass && r.count !== null && !r.isV2Feature) {
       const diff = r.count - r.expectedHotels;
       const cmp = r.isFloor ? `min ${r.expectedHotels}` : `expected ${r.expectedHotels}`;
       console.log(`     ${yellow(`Count mismatch: ${cmp}, got ${r.count} (${diff > 0 ? "+" : ""}${diff})`)}`);
+    }
+    if (r.isV2Feature && r.factMeta && !r.factMeta.skipped && !r.factPass) {
+      console.log(`     ${yellow(`Top-10 fact coverage: ${r.factMeta.hits} hits (need ≥1 of ${r.factMeta.flaggedInDb} flagged hotels in DB)`)}`);
     }
     if (r.elapsed !== null && !r.latencyPass) {
       console.log(`     ${yellow(`Latency: ${r.elapsed}ms (>${6000}ms soft cap; not a failure)`)}`);

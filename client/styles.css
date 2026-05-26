@@ -6549,7 +6549,7 @@
     }
     .beta-consent-list a { color: #c9a96e; }
 
-    /* Mexico City-only guard on home â€” OK required before continuing */
+    /* Launch-city guard on home (Mexico City + Paris) — OK required before continuing */
     .launch-city-modal { z-index: 220; }
     .launch-city-modal .beta-modal-actions {
       justify-content: center;
