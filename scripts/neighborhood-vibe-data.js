@@ -42,7 +42,7 @@ const QUERY_TEMPLATES = {
   icon_spots: [
     "{neighborhood} {city} landmark",
     "{neighborhood} {city} square plaza",
-    "{city} iconic tourist spot",
+    "{neighborhood} {city} iconic plaza monument",
   ],
   museums: [
     "{neighborhood} {city} museum",
@@ -1365,8 +1365,12 @@ const TRAVEL_PHOTO_CONTEXT = {
   shops:      "a shop, market, boutique, or shopping street",
 };
 
-async function geminiVisionIsTravelPhoto(photoUrl, geminiKey, elementKey) {
+async function geminiVisionIsTravelPhoto(photoUrl, geminiKey, elementKey, city = "") {
   const context = TRAVEL_PHOTO_CONTEXT[elementKey] || "a neighbourhood scene";
+  const cityPhrase = city ? photoSearchCityPhrase(city) : "";
+  const cityGuard = cityPhrase
+    ? `\n- Photo must plausibly depict ${cityPhrase}, not a different city or region. For Mexico City CDMX: reject Caribbean beaches, northern desert/border towns, colonial towns clearly outside the capital, and standalone pyramids in open desert unless unmistakably part of the urban capital experience. For Paris France: reject obvious non-European or non-Paris skylines.`
+    : "";
   return geminiVisionCheck(
     photoUrl, geminiKey,
     `Is this photo suitable to appear in a travel neighbourhood guide representing ${context}?
@@ -1374,7 +1378,7 @@ ANSWER NO (hard reject) if ANY of the following apply:
 - Photo is black & white or heavily monochrome (desaturated, no vivid colours)
 - Main subject is a person sleeping on the street, a homeless person, someone in visible distress, or a person in a clearly unsafe/negative situation
 - Photo shows content completely unrelated to ${context} (e.g. a person sitting inside a truck for a park entry, industrial storage, purely a portrait with no neighbourhood context)
-- Photo contains explicit, offensive, or politically charged content
+- Photo contains explicit, offensive, or politically charged content${cityGuard}
 Otherwise ANSWER YES.`
   );
 }
@@ -1686,10 +1690,35 @@ async function fetchPexelsPhotos(query, pexelsKey, perPage = 8) {
 
 // ── Unsplash photo helpers ────────────────────────────────────────────────────
 
+/** Disambiguated city phrase for Unsplash/Wikimedia keyword search (avoids "Juárez" → border city). */
+function photoSearchCityPhrase(city) {
+  const k = String(city || "").trim().toLowerCase();
+  if (k === "mexico city" || k.includes("cdmx") || k.includes("ciudad de mexico")) return "Mexico City CDMX";
+  if (k === "paris") return "Paris France";
+  if (k === "kuala lumpur") return "Kuala Lumpur Malaysia";
+  return String(city || "").trim();
+}
+
+/** Ensure every keyword query names the launch city (neighbourhood names often collide nationally). */
+function ensureCityInPhotoQuery(query, city, neighborhoodName = "") {
+  const q = String(query || "").trim();
+  if (!q) return q;
+  const phrase = photoSearchCityPhrase(city);
+  const lower = q.toLowerCase();
+  const pl = phrase.toLowerCase();
+  if (lower.includes(pl)) return q;
+  if (pl.includes("mexico city") && (lower.includes("mexico city") || lower.includes("cdmx"))) return q;
+  if (pl.startsWith("paris") && lower.includes("paris")) return q;
+  if (pl.includes("kuala lumpur") && lower.includes("kuala lumpur")) return q;
+  const hood = String(neighborhoodName || "").trim();
+  return hood ? `${hood} ${phrase} ${q}` : `${phrase} ${q}`;
+}
+
 function buildQueries(elementKey, neighborhoodName, city) {
+  const cityPhrase = photoSearchCityPhrase(city);
   const templates = QUERY_TEMPLATES[elementKey] || [];
   return templates.map((t) =>
-    t.replace("{neighborhood}", neighborhoodName).replace("{city}", city)
+    t.replace("{neighborhood}", neighborhoodName).replace("{city}", cityPhrase)
   );
 }
 
@@ -1910,7 +1939,7 @@ async function fetchElementPhotos(city, neighborhoodName, elementKey, unsplashKe
     // Rejects B&W photos, homeless/distress subjects, and completely off-category
     // content.  This check can never be bypassed by the "below min" heuristic.
     if (geminiKey) {
-      const isSuitable = await geminiVisionIsTravelPhoto(obj.url, geminiKey, elementKey);
+      const isSuitable = await geminiVisionIsTravelPhoto(obj.url, geminiKey, elementKey, city);
       if (!isSuitable) {
         console.log(`[vision] ${elementKey} hard-rejected (B&W/inappropriate/off-category): ${obj.query || obj.url.slice(-40)}`);
         return;
@@ -1968,12 +1997,14 @@ async function fetchElementPhotos(city, neighborhoodName, elementKey, unsplashKe
   // (Wikimedia returns interior shots for named commercial venues).
   const WIKI_CATEGORIES = new Set(["museums", "icon_spots", "parks", "street_feel"]);
   if (picks.length < PHOTO_RULES.target && WIKI_CATEGORIES.has(elementKey)) {
+    const cityPhrase = photoSearchCityPhrase(city);
     const wikiQueryList = specificQueries.length > 0
-      ? [...specificQueries, `${neighborhoodName} ${city}`]
+      ? [...specificQueries.map((q) => ensureCityInPhotoQuery(q, city, neighborhoodName)), `${neighborhoodName} ${cityPhrase}`]
       : (elementKey === "museums" || elementKey === "icon_spots")
-        ? [`${neighborhoodName} ${city} ${elementKey === "museums" ? "museum gallery" : "landmark monument"}`, `${neighborhoodName} ${city}`]
-        : [`${neighborhoodName} ${city}`];
-    for (const q of wikiQueryList) {
+        ? [`${neighborhoodName} ${cityPhrase} ${elementKey === "museums" ? "museum gallery" : "landmark monument"}`, `${neighborhoodName} ${cityPhrase}`]
+        : [`${neighborhoodName} ${cityPhrase}`];
+    for (const rawQ of wikiQueryList) {
+      const q = ensureCityInPhotoQuery(rawQ, city, neighborhoodName);
       if (picks.length >= PHOTO_RULES.target) break;
       const wantWiki = isMuseumCategory ? PHOTO_RULES.target + 4 : PHOTO_RULES.target - picks.length;
       const wikiPhotos = await fetchWikimediaPhotos(q, wantWiki);
@@ -1998,8 +2029,9 @@ async function fetchElementPhotos(city, neighborhoodName, elementKey, unsplashKe
   if (picks.length < unsplashFireThreshold) {
     // 3a: named-place specific queries
     const unsplashTarget = PHOTO_RULES.target;
-    for (const q of specificQueries) {
+    for (const rawQ of specificQueries) {
       if (picks.length >= unsplashTarget) break;
+      const q = ensureCityInPhotoQuery(rawQ, city, neighborhoodName);
       let res = await fetchUnsplashPhotos(q, unsplashKey, PHOTO_RULES.max);
       if (elementKey === "parks") res = rankParkUnsplashResults(res);
       for (const photo of res) {
@@ -2103,4 +2135,6 @@ module.exports = {
   geminiVisionIsTravelPhoto,
   geminiVisionIsOutdoorFoodPhoto,
   geminiVisionIsArchitecturalPhoto,
+  photoSearchCityPhrase,
+  ensureCityInPhotoQuery,
 };

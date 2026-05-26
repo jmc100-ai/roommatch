@@ -19,6 +19,8 @@ const {
   placeInsideNeighborhoodFence,
   isPlaygroundLikePlaceName,
   isParkLikePlaceName,
+  photoSearchCityPhrase,
+  ensureCityInPhotoQuery,
 } = require("./neighborhood-vibe-data");
 
 try {
@@ -414,6 +416,7 @@ async function fetchNeighborhoodPhoto(name, city, unsplashKey, vibeShort = "", t
   if (!unsplashKey) return null;
 
   const simpleName = name.replace(/\s*\([^)]*\)/g, "").trim();
+  const cityPhrase = photoSearchCityPhrase(city);
   const vibeTerms  = vibeVisualTerms(vibeShort);
   const tagTerms   = (tags || []).slice(0, 2)
     .map(t => TAG_VISUAL[t] || t)
@@ -421,12 +424,13 @@ async function fetchNeighborhoodPhoto(name, city, unsplashKey, vibeShort = "", t
     .split(/\s+/).slice(0, 4).join(" ");
 
   const queries = [
+    `${simpleName} ${cityPhrase}`,
     `${simpleName} ${city}`,
-    simpleName,
-    tagTerms   ? `${simpleName} ${tagTerms}`           : null,
-    vibeTerms  ? `${simpleName} ${city} ${vibeTerms}`  : null,
-    tagTerms   ? `${city} ${tagTerms}`                 : null,
-    `${city} street neighborhood`,
+    ensureCityInPhotoQuery(simpleName, city, simpleName),
+    tagTerms   ? `${simpleName} ${cityPhrase} ${tagTerms}` : null,
+    vibeTerms  ? `${simpleName} ${cityPhrase} ${vibeTerms}` : null,
+    tagTerms   ? `${cityPhrase} ${tagTerms}` : null,
+    `${cityPhrase} street neighborhood`,
   ].filter(Boolean).filter((q, i, arr) => arr.indexOf(q) === i);
 
   for (const query of queries) {
@@ -523,6 +527,83 @@ function scoreNeighborhoodScene(entry) {
   }
   if (entry.is_fallback) score -= 8;
   return score;
+}
+
+/** Strip tracking params and normalize scheme for stable hotlinking. */
+function normalizePhotoUrl(url) {
+  if (!url || typeof url !== "string") return "";
+  const trimmed = url.trim();
+  if (!trimmed.startsWith("http")) return "";
+  try {
+    const parsed = new URL(trimmed);
+    for (const k of [...parsed.searchParams.keys()]) {
+      if (k.startsWith("utm_")) parsed.searchParams.delete(k);
+    }
+    return parsed.toString();
+  } catch {
+    return trimmed;
+  }
+}
+
+function photoSourceRank(url) {
+  const src = inferPhotoSourceFromUrl(url);
+  if (src === "unsplash") return 40;
+  if (src === "flickr") return 35;
+  if (src === "pexels") return 30;
+  if (src === "wikimedia") return 12;
+  if (src === "google_places") return 8;
+  return 10;
+}
+
+function normalizeVibePhotoRaw(raw) {
+  if (typeof raw === "string") {
+    const url = normalizePhotoUrl(raw);
+    return url || null;
+  }
+  if (!raw?.url) return null;
+  const url = normalizePhotoUrl(raw.url);
+  if (!url) return null;
+  return { ...raw, url };
+}
+
+/** Prefer Flickr/Unsplash heroes over Wikimedia (rate-limited in browsers). */
+function pickBestHeroUrl(hood) {
+  const candidates = [];
+  const seen = new Set();
+  const add = (url, isFallback = false) => {
+    const n = normalizePhotoUrl(url);
+    if (!n || seen.has(n)) return;
+    seen.add(n);
+    let rank = photoSourceRank(n);
+    if (isFallback) rank -= 6;
+    candidates.push({ url: n, rank });
+  };
+  add(hood.photo_url, false);
+  for (const arr of Object.values(hood.vibe_photos || {})) {
+    for (const raw of arr || []) {
+      const fb = typeof raw === "object" && raw?.is_fallback === true;
+      const url = typeof raw === "string" ? raw : raw?.url;
+      if (url) add(url, fb);
+    }
+  }
+  if (!candidates.length) return normalizePhotoUrl(hood.photo_url) || "";
+  candidates.sort((a, b) => b.rank - a.rank);
+  return candidates[0].url;
+}
+
+/** Client-facing cleanup: dedupe bad scenes, normalize URLs, upgrade hero picks. */
+function prepareNeighborhoodsForClient(rows) {
+  return (rows || []).map((row) => {
+    const name = row.name || "";
+    const cleaned = sanitizeVibePhotos(row.vibe_photos, name);
+    const vibe_photos = {};
+    for (const [key, arr] of Object.entries(cleaned)) {
+      const norm = (arr || []).map(normalizeVibePhotoRaw).filter(Boolean);
+      if (norm.length) vibe_photos[key] = norm;
+    }
+    const photo_url = pickBestHeroUrl({ ...row, vibe_photos });
+    return { ...row, vibe_photos, photo_url };
+  });
 }
 
 function sanitizeVibePhotos(vibePhotos, neighborhoodName = "") {
@@ -1533,4 +1614,14 @@ async function backfillNeighborhoodPolygons(city, db, force = false) {
   return { updated, skipped };
 }
 
-module.exports = { generateNeighborhoods, refreshHotelCounts, recomputeNeighborhoodVibes, backfillNeighborhoodPhotos, backfillPhotoQueries, backfillNeighborhoodPolygons };
+module.exports = {
+  generateNeighborhoods,
+  refreshHotelCounts,
+  recomputeNeighborhoodVibes,
+  backfillNeighborhoodPhotos,
+  backfillPhotoQueries,
+  backfillNeighborhoodPolygons,
+  prepareNeighborhoodsForClient,
+  normalizePhotoUrl,
+  sanitizeVibePhotos,
+};

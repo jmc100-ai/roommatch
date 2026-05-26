@@ -1235,6 +1235,7 @@ const API_GATE_ALLOWLIST = new Set([
   "/api/health",
   "/api/config",
   "/api/public-config",
+  "/api/nbhd-img",
 ]);
 function _apiBetaGate(req, res, next) {
   if (!SITE_PASSWORD) return next();
@@ -3988,6 +3989,89 @@ app.post("/api/v2/rebuild-city-index", async (req, res) => {
   }
 });
 
+// ── Neighborhood photo proxy (Wikimedia/Flickr hotlink + rate-limit relief) ─────
+const NBHD_IMG_HOSTS = new Set([
+  "upload.wikimedia.org",
+  "commons.wikimedia.org",
+  "live.staticflickr.com",
+  "farm1.staticflickr.com",
+  "farm2.staticflickr.com",
+  "farm3.staticflickr.com",
+  "farm4.staticflickr.com",
+  "farm5.staticflickr.com",
+  "farm6.staticflickr.com",
+  "farm66.staticflickr.com",
+  "farm67.staticflickr.com",
+  "farm68.staticflickr.com",
+  "farm69.staticflickr.com",
+  "images.unsplash.com",
+  "images.pexels.com",
+]);
+const _nbhdImgCache = new Map();
+const NBHD_IMG_CACHE_MAX = 500;
+const NBHD_IMG_CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+
+function _nbhdImgCacheGet(key) {
+  const hit = _nbhdImgCache.get(key);
+  if (!hit) return null;
+  if (Date.now() - hit.at > NBHD_IMG_CACHE_TTL_MS) {
+    _nbhdImgCache.delete(key);
+    return null;
+  }
+  return hit;
+}
+
+function _nbhdImgCacheSet(key, body, contentType) {
+  if (_nbhdImgCache.size >= NBHD_IMG_CACHE_MAX) {
+    const oldest = _nbhdImgCache.keys().next().value;
+    if (oldest) _nbhdImgCache.delete(oldest);
+  }
+  _nbhdImgCache.set(key, { body, contentType, at: Date.now() });
+}
+
+app.get("/api/nbhd-img", async (req, res) => {
+  const raw = String(req.query.u || req.query.url || "").trim();
+  if (!raw) return res.status(400).end();
+  let parsed;
+  try {
+    parsed = new URL(raw);
+  } catch {
+    return res.status(400).end();
+  }
+  if (parsed.protocol !== "https:" || !NBHD_IMG_HOSTS.has(parsed.hostname)) {
+    return res.status(403).end();
+  }
+  const cacheKey = parsed.toString();
+  const cached = _nbhdImgCacheGet(cacheKey);
+  if (cached) {
+    res.set("Content-Type", cached.contentType);
+    res.set("Cache-Control", "public, max-age=604800, immutable");
+    return res.send(cached.body);
+  }
+  try {
+    const upstream = await fetch(cacheKey, {
+      redirect: "follow",
+      headers: {
+        "User-Agent": "TravelBoop/1.0 (+https://www.travelboop.com)",
+        Accept: "image/*",
+      },
+    });
+    if (!upstream.ok) {
+      return res.status(upstream.status === 429 ? 503 : upstream.status).end();
+    }
+    const ct = upstream.headers.get("content-type") || "image/jpeg";
+    if (!ct.includes("image")) return res.status(502).end();
+    const body = Buffer.from(await upstream.arrayBuffer());
+    _nbhdImgCacheSet(cacheKey, body, ct);
+    res.set("Content-Type", ct);
+    res.set("Cache-Control", "public, max-age=604800, immutable");
+    return res.send(body);
+  } catch (e) {
+    console.warn("[nbhd-img]", e.message);
+    return res.status(502).end();
+  }
+});
+
 app.get("/api/neighborhoods", async (req, res) => {
   const cityInput = (req.query.city || "").trim();
   if (!cityInput) return res.status(400).json({ error: "city required" });
@@ -4002,7 +4086,9 @@ app.get("/api/neighborhoods", async (req, res) => {
       .eq("city", city)
       .order("id");
     if (cached?.length > 0) {
-      return res.json({ neighborhoods: cached, city });
+      const prep = loadNeighborhoodGenerator().prepareNeighborhoodsForClient;
+      const neighborhoods = prep ? prep(cached) : cached;
+      return res.json({ neighborhoods, city });
     }
 
     // If generation already in-flight for this city, return 202
@@ -4018,7 +4104,9 @@ app.get("/api/neighborhoods", async (req, res) => {
         process.env.GEMINI_KEY, process.env.UNSPLASH_KEY, process.env.GOOGLE_PLACES_KEY, process.env.PEXELS_KEY, process.env.FLICKR_KEY
       );
       neighborhoodGenerating.delete(city);
-      return res.json({ neighborhoods: rows, city });
+      const prep = loadNeighborhoodGenerator().prepareNeighborhoodsForClient;
+      const neighborhoods = prep ? prep(rows) : rows;
+      return res.json({ neighborhoods, city });
     } catch (e) {
       neighborhoodGenerating.delete(city);
       console.error(`[neighborhoods] generation failed for ${city}:`, e.message);

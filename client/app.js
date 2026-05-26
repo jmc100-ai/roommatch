@@ -2459,6 +2459,7 @@
       finishCmdTripSheetSubflow(prevCity !== city ? `✓ ${city}` : undefined);
       return;
     }
+    const prevCityKey = cityKey(S.city);
     S.city = city;
     document.getElementById('cityInput').value = city;
     document.getElementById('sv-city').textContent = city.length > 20 ? city.slice(0,18)+'…' : city;
@@ -2466,6 +2467,14 @@
     writeHistory(CITY_HISTORY_KEY, city);
     buildCityChips();
     // Reset downstream selections when city changes
+    if (prevCityKey && prevCityKey !== cityKey(city)) {
+      for (const k of Object.keys(NBHD_CITY_ROWS)) delete NBHD_CITY_ROWS[k];
+      Object.keys(NBHD_CARD_DATA).forEach(k => delete NBHD_CARD_DATA[k]);
+      NBHD_RESERVED_HEROES = new Set();
+      for (const k of Object.keys(BOOP_WIZARD_IMAGES)) {
+        if (k !== cityKey(city)) delete BOOP_WIZARD_IMAGES[k];
+      }
+    }
     S.nbhd = null;
     S.nbhdBbox = null;
     selectedNeighborhood = null;
@@ -2674,6 +2683,35 @@
     return (s||'').replace(/"/g,'&quot;').replace(/'/g,'&#39;').replace(/</g,'&lt;');
   }
 
+  function escAttr(s) {
+    return (s || '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+  }
+
+  /** Route Wikimedia/Flickr through our proxy to avoid hotlink 429s and broken CSS url() heroes. */
+  function nbhdDisplayPhotoUrl(url) {
+    if (!url) return '';
+    try {
+      const h = new URL(url, location.origin).hostname;
+      if (
+        h.includes('wikimedia.org') ||
+        h.includes('staticflickr.com') ||
+        h.includes('images.unsplash.com') ||
+        h.includes('images.pexels.com')
+      ) {
+        const base = BACKEND || '';
+        return `${base}/api/nbhd-img?u=${encodeURIComponent(url)}`;
+      }
+    } catch (_) { /* use raw url */ }
+    return url;
+  }
+
+  function nbhdImgOnError(img) {
+    if (!img) return;
+    const wrap = img.closest('.nbhd-hero-slide, .nbhd-el-photo');
+    if (wrap) wrap.classList.add('nbhd-img-broken');
+    img.removeAttribute('src');
+  }
+
   /** LiteAPI ids look like `lp` + hex — never show as the card / header title. */
   function isPlaceholderHotelTitle(name, hotelId) {
     const n = String(name ?? '').trim();
@@ -2778,7 +2816,8 @@
       const clickAttr = cardId
         ? `onclick="openNbhdPhotoLightbox(event,'${escHtml(cardId)}','${escHtml(elementKey)}',${i})" style="cursor:zoom-in"`
         : `onclick="event.stopPropagation()"`;
-      return `<div class="nbhd-el-photo" ${clickAttr}><img src="${escHtml(url)}" loading="lazy" alt="${escHtml(h.name)} ${escHtml(elementKey)}"></div>`;
+      const src = nbhdDisplayPhotoUrl(url);
+      return `<div class="nbhd-el-photo" ${clickAttr}><img src="${escAttr(src)}" loading="lazy" alt="${escHtml(h.name)} ${escHtml(elementKey)}" onerror="nbhdImgOnError(this)"></div>`;
     }).join('');
     const facts = (element.facts || []).slice(0, 3).map(f => `<li>${escHtml(f)}</li>`).join('');
     const m = element.metrics || {};
@@ -2892,7 +2931,10 @@
         }
       }
     }
-    if (!photos.length && h.photo_url) photos.push(h.photo_url);
+    if (h.photo_url) {
+      const hero = h.photo_url;
+      if (!photos.includes(hero)) photos.unshift(hero);
+    }
     return photos;
   }
 
@@ -3090,12 +3132,15 @@
     const heroPhotos = buildHeroPhotos(h);
     const firstPhoto = heroPhotos[0] || '';
     const slidesHtml = heroPhotos.length
-      ? heroPhotos.map(url => `<div class="nbhd-hero-slide" style="background-image:url('${escHtml(url)}')"></div>`).join('')
-      : `<div class="nbhd-hero-slide" style="background:${h.bg || 'linear-gradient(160deg,#1a1008 0%,#0e0a06 100%)'}"></div>`;
+      ? heroPhotos.map(url => {
+          const src = nbhdDisplayPhotoUrl(url);
+          return `<div class="nbhd-hero-slide"><img src="${escAttr(src)}" alt="" loading="lazy" decoding="async" onerror="nbhdImgOnError(this)"></div>`;
+        }).join('')
+      : `<div class="nbhd-hero-slide nbhd-hero-slide--fallback" style="background:${h.bg || 'linear-gradient(160deg,#1a1008 0%,#0e0a06 100%)'}"></div>`;
     const credit = formatNbhdHeroCreditHtml(h.photo_credit);
     const firstEl = nbhdFirstElementKey(h);
     const tabs = NBHD_ELEMENT_ORDER
-      .filter(e => (h.vibe_elements || {})[e.key])
+      .filter(e => (h.vibe_elements || {})[e.key] && ((h.vibe_photos || {})[e.key] || []).length > 0)
       .map(e => {
         const sc = e.key === 'parks' ? effectiveNbhdParksScore(h) : (h.vibe_elements[e.key]?.score ?? 0);
         return `<button class="nbhd-el-tab ${e.key===firstEl?'active':''}" data-card="${cardId}" data-key="${e.key}" onclick="setNbhdElement('${cardId}','${e.key}',event)">${e.label} - ${sc}%</button>`;
@@ -9421,6 +9466,12 @@
   const _lbRegistry = [];  // [{photos:[url,...], name:string}] populated per render
   let _lbKey = -1, _lbIdx = 0;
 
+  function lightboxPhotoSrc(url, regKey) {
+    const key = String(regKey ?? '');
+    if (key.startsWith('_nbhd_')) return nbhdDisplayPhotoUrl(url) || url;
+    return url;
+  }
+
   function openLightbox(regKey, idx) {
     const entry = _lbRegistry[regKey];
     if (!entry || !entry.photos.length) return;
@@ -9429,7 +9480,7 @@
     // Build thumbnail strip
     const thumbsEl = document.getElementById('lb-thumbs');
     thumbsEl.innerHTML = entry.photos.map((url, i) =>
-      `<img class="lb-thumb${i === idx ? ' active' : ''}" src="${url}" onclick="lbGoTo(${i})" alt="">`
+      `<img class="lb-thumb${i === idx ? ' active' : ''}" src="${escAttr(lightboxPhotoSrc(url, regKey))}" onclick="lbGoTo(${i})" alt="">`
     ).join('');
     _lbUpdate();
     document.getElementById('lightbox').classList.add('active');
@@ -9456,7 +9507,7 @@
   function _lbUpdate() {
     const entry = _lbRegistry[_lbKey];
     if (!entry) return;
-    document.getElementById('lb-img').src = entry.photos[_lbIdx];
+    document.getElementById('lb-img').src = lightboxPhotoSrc(entry.photos[_lbIdx], _lbKey);
     document.getElementById('lb-room-name').textContent = entry.name;
     const badge = document.getElementById('lb-match-badge');
     if (entry.score !== null && entry.score > 0) {
