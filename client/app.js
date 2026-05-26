@@ -5106,7 +5106,7 @@
         // background warm of these IDs so the cache is usually hot by the time
         // we ask. Patches name / stars / location / rating in place per card.
         if (Array.isArray(data.deferred_meta_ids) && data.deferred_meta_ids.length) {
-          lazyFetchHotelMeta(data.deferred_meta_ids, reqId);
+          lazyFetchHotelMeta(prioritizeMetaIds(data.deferred_meta_ids), reqId);
         }
         lazyFetchVisibleStubPhotos(reqId);   // immediately fill stub cards with room photos
         if (hasDates) {
@@ -5529,7 +5529,10 @@
   async function lazyFetchVisibleStubPhotos(searchReqId) {
     if (!S.city) { console.log('[stub-prefetch] skipped: no city'); return; }
     const MAX_PREFETCH = 50;
-    const allStubs = _lastHotels.filter(h => h?.id && Array.isArray(h.roomTypes) && h.roomTypes.length === 0);
+    const ranked = (_lastHotels.length && typeof getSortedHotelsForDisplay === 'function')
+      ? getSortedHotelsForDisplay()
+      : _lastHotels;
+    const allStubs = ranked.filter(h => h?.id && Array.isArray(h.roomTypes) && h.roomTypes.length === 0);
     const targets = allStubs.slice(0, MAX_PREFETCH).map(h => String(h.id));
     console.log(`[stub-prefetch] _lastHotels=${_lastHotels.length}, stubs=${allStubs.length}, prefetching=${targets.length}`);
     if (!targets.length) return;
@@ -5709,6 +5712,56 @@
     console.log(`[perf] hotel-rates enrich: ${targets.length} targets, ${enriched} enriched, ${Date.now() - t0}ms`);
   }
 
+  /** After stub rooms or meta load, fill a blank hero from room/gallery photos. */
+  function patchHotelHeroFromRoomPhotos(h) {
+    if (!h?.id) return;
+    const heroUrls = [];
+    if (h.mainPhoto) heroUrls.push(h.mainPhoto);
+    for (const url of (h.hotelPhotos || [])) {
+      if (url && !heroUrls.includes(url)) heroUrls.push(url);
+    }
+    for (const rt of (h.roomTypes || [])) {
+      for (const url of (rt.photos || [])) {
+        if (url && !heroUrls.includes(url)) { heroUrls.push(url); break; }
+      }
+      if (heroUrls.length >= 3) break;
+    }
+    if (!heroUrls.length) return;
+    if (!h.mainPhoto) h.mainPhoto = heroUrls[0];
+
+    const cardEl = document.getElementById(`hotel-card-${h.id}`);
+    const heroEl = cardEl?.querySelector('.hotel-hero');
+    if (!heroEl) return;
+    const blank = heroEl.querySelector('.hotel-hero-blank');
+    const realImgs = heroEl.querySelectorAll('.hotel-hero-img:not(.hotel-hero-blank)');
+    if (realImgs.length > 0 && !blank) return;
+
+    const heroCount = Math.min(heroUrls.length, 3);
+    const heroClass = heroCount <= 1 ? 'hero-1' : heroCount === 2 ? 'hero-2' : '';
+    const heroImgs = heroUrls.slice(0, 3).map((url) =>
+      `<img class="hotel-hero-img" src="${escAttr(url)}" alt="" loading="lazy" onerror="this.classList.add('hotel-hero-blank');this.style.visibility='hidden'">`
+    ).join('');
+    heroEl.className = `hotel-hero hotel-hero--clickable ${heroClass}`.trim();
+    heroEl.innerHTML = heroImgs;
+  }
+
+  function prioritizeMetaIds(deferredIds) {
+    const urgent = [];
+    const urgentSet = new Set();
+    for (const h of _lastHotels.slice(0, 50)) {
+      if (!h?.id) continue;
+      const sid = String(h.id);
+      if (!h.mainPhoto || isPlaceholderHotelTitle(h.name, sid)) {
+        if (!urgentSet.has(sid)) {
+          urgentSet.add(sid);
+          urgent.push(sid);
+        }
+      }
+    }
+    const rest = (deferredIds || []).filter((id) => !urgentSet.has(String(id)));
+    return urgent.length ? [...urgent, ...rest] : rest;
+  }
+
   // Mirrors applyMetaInPlace pattern. For each hotel in roomsMap, mutate the
   // _lastHotels entry (so future re-renders persist the rooms), then patch
   // its on-screen card (#hotel-rooms-{id}) without a full list re-render.
@@ -5740,6 +5793,7 @@
       h.roomTypes = existing.length === 0 ? entry.roomTypes : existing.concat(additions);
       if (sid === 'lpfc697') console.log(`[debug-h21] applyStubRoomsInPlace: set roomTypes.length=${h.roomTypes.length}`);
       mergedHotels++;
+      patchHotelHeroFromRoomPhotos(h);
       const roomsEl = document.getElementById(`hotel-rooms-${h.id}`);
       if (!roomsEl) continue;
       const visibleRooms = sortRoomsForCard(h.roomTypes, h);

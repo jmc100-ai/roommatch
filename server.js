@@ -2417,7 +2417,7 @@ app.get("/api/vsearch", async (req, res) => {
       // every hotel — including "stubs" beyond GALLERY_LIMIT that have no indexed
       // room rows — still gets a real LiteAPI name, hero photo, star rating, and
       // address. Without this, stubs would render as "Hotel in {city}" forever.
-      const META_SYNC_LIMIT = parseInt(process.env.META_SYNC_LIMIT || "30", 10);
+      const META_SYNC_LIMIT = parseInt(process.env.META_SYNC_LIMIT || "50", 10);
       const allIds       = v2.body.hotels.map((h) => String(h.id).trim()).filter(Boolean);
       const boopProfileForMeta = parseBoopProfileFromQuery(req.query);
       const needsStarPenaltyMeta = needsBoopStarMetaForRanking(boopProfileForMeta);

@@ -43,6 +43,44 @@ const MUST_HAVE_ALIASES = {
   work_desk: "ergonomic_workspace",
 };
 
+/** Merge room photos from v2_room_inventory when the facts RPC missed them. */
+async function backfillRoomPhotosFromInventory(fetchClient, hotelIds, city, photosByHotel) {
+  const need = hotelIds.filter((id) => !(photosByHotel.get(id) || []).length);
+  if (!need.length) return 0;
+  const { data, error } = await fetchClient
+    .from("v2_room_inventory")
+    .select("hotel_id, room_name, room_type_id, photo_url, photo_type")
+    .in("hotel_id", need)
+    .eq("city", city)
+    .neq("room_name", "__hotel_public__")
+    .limit(15000);
+  if (error) {
+    console.warn(`[v2] inventory_photo_backfill: ${error.message}`);
+    return 0;
+  }
+  let added = 0;
+  const seen = new Set();
+  for (const row of data || []) {
+    if (!row?.photo_url || !row.hotel_id) continue;
+    const key = `${row.hotel_id}::${row.room_name}::${row.photo_url}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    if (!photosByHotel.has(row.hotel_id)) photosByHotel.set(row.hotel_id, []);
+    photosByHotel.get(row.hotel_id).push({
+      hotel_id:     row.hotel_id,
+      room_name:    row.room_name || "Room",
+      room_type_id: row.room_type_id,
+      photo_url:    row.photo_url,
+      photo_type:   row.photo_type || "other",
+    });
+    added++;
+  }
+  if (added) {
+    console.log(`[v2] inventory_photo_backfill: ${need.length} hotel(s), ${added} photo row(s)`);
+  }
+  return added;
+}
+
 function parseMustHaves(raw) {
   if (!raw) return [];
   return String(raw)
@@ -783,6 +821,12 @@ async function runV2Search({ req, supabase, supabaseAdmin, resolveCityName }) {
     if (!photosByHotel.has(p.hotel_id)) photosByHotel.set(p.hotel_id, []);
     photosByHotel.get(p.hotel_id).push(p);
   }
+  await backfillRoomPhotosFromInventory(
+    fetchClient,
+    topHotelIds.filter((id) => !(photosByHotel.get(id) || []).length),
+    city,
+    photosByHotel
+  );
 
   // ── Adaptive score remapping (exact V1 constants) ─────────────────────────
   const SIM_MAX  = maxRawSim > 0 ? maxRawSim : 0.9;
@@ -1107,6 +1151,29 @@ async function runV2Search({ req, supabase, supabaseAdmin, resolveCityName }) {
       }
       console.log(`[v2] photo_backfill: ${missingPhotoIds.length} hotel(s) in final top ${GALLERY_LIMIT} had no Phase-B photos — merged ${(extraResult.data || []).length} rows`);
     }
+    await backfillRoomPhotosFromInventory(fetchClient, missingPhotoIds, city, photosByHotel);
+  }
+
+  // LiteAPI catalog photos from v2_hotels_cache for cards still missing room rows.
+  const catalogHeroByHotel = new Map();
+  const stillBareIds = finalTopIds.filter((id) => !(photosByHotel.get(id) || []).length);
+  if (stillBareIds.length) {
+    const { data: cacheRows, error: cacheErr } = await fetchClient
+      .from("v2_hotels_cache")
+      .select("hotel_id, hotel_photos")
+      .in("hotel_id", stillBareIds)
+      .eq("city", city);
+    if (cacheErr) {
+      console.warn(`[v2] catalog_hero_backfill: ${cacheErr.message}`);
+    } else {
+      for (const row of cacheRows || []) {
+        const urls = (Array.isArray(row.hotel_photos) ? row.hotel_photos : []).filter(Boolean);
+        if (urls.length) catalogHeroByHotel.set(row.hotel_id, urls);
+      }
+      if (catalogHeroByHotel.size) {
+        console.log(`[v2] catalog_hero_backfill: ${catalogHeroByHotel.size}/${stillBareIds.length} hotels`);
+      }
+    }
   }
 
   // ── Build response payload ─────────────────────────────────────────────────
@@ -1132,6 +1199,7 @@ async function runV2Search({ req, supabase, supabaseAdmin, resolveCityName }) {
     const propertyType = meta.property_type || "hotel";
 
     if (!hasPhotos) {
+      const catalogUrls = catalogHeroByHotel.get(hotelId) || [];
       return {
         id:           hotelId,
         name:         "", // real name from LiteAPI merged in server.js (never use raw id as title)
@@ -1140,8 +1208,8 @@ async function runV2Search({ req, supabase, supabaseAdmin, resolveCityName }) {
         country:      "",
         starRating:   0,
         rating:       0,
-        mainPhoto:    null,
-        hotelPhotos:  [],
+        mainPhoto:    catalogUrls[0] || null,
+        hotelPhotos:  catalogUrls.slice(0, 8),
         roomTypes:    [],
         isMatched:    score > 0,
         vectorScore:  score,
