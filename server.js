@@ -4006,6 +4006,10 @@ const NBHD_IMG_HOSTS = new Set([
   "farm69.staticflickr.com",
   "images.unsplash.com",
   "images.pexels.com",
+  "lh3.googleusercontent.com",
+  "lh4.googleusercontent.com",
+  "lh5.googleusercontent.com",
+  "lh6.googleusercontent.com",
 ]);
 const _nbhdImgCache = new Map();
 const NBHD_IMG_CACHE_MAX = 500;
@@ -4069,6 +4073,56 @@ app.get("/api/nbhd-img", async (req, res) => {
   } catch (e) {
     console.warn("[nbhd-img]", e.message);
     return res.status(502).end();
+  }
+});
+
+// Boop wizard "trip" question — city-specific landmark / skyline / café-street photos.
+const _boopTripImgCache = new Map();
+const BOOP_TRIP_CACHE_MS = 14 * 24 * 60 * 60 * 1000;
+
+function loadBoopTripImages() {
+  return require("./scripts/boop-trip-images");
+}
+
+app.get("/api/boop-trip-images", async (req, res) => {
+  const cityInput = (req.query.city || "").trim();
+  if (!cityInput) return res.status(400).json({ error: "city required" });
+
+  try {
+    const city = await resolveCityName(
+      cityInput,
+      supabaseAdmin || supabase,
+      ["neighborhoods", "indexed_cities", "hotels_cache", "v2_indexed_cities"]
+    );
+    const ck = city.toLowerCase();
+    const lat = parseFloat(req.query.lat);
+    const lng = parseFloat(req.query.lng);
+    const cacheKey = `${ck}|${Number.isFinite(lat) ? lat : ""}|${Number.isFinite(lng) ? lng : ""}`;
+    const hit = _boopTripImgCache.get(cacheKey);
+    if (hit && Date.now() - hit.at < BOOP_TRIP_CACHE_MS) {
+      return res.json({ city, images: hit.images, meta: hit.meta, cached: true });
+    }
+
+    const t0 = Date.now();
+    const result = await loadBoopTripImages().fetchTripWizardImages(city, {
+      placesKey: process.env.GOOGLE_PLACES_KEY || null,
+      unsplashKey: process.env.UNSPLASH_KEY || null,
+      lat: Number.isFinite(lat) ? lat : undefined,
+      lng: Number.isFinite(lng) ? lng : undefined,
+    });
+    _boopTripImgCache.set(cacheKey, {
+      at: Date.now(),
+      images: result.images,
+      meta: result.meta,
+    });
+    console.log(
+      `[boop-trip-images] ${city}: first=${result.meta?.first?.source} repeat=${result.meta?.repeat?.source} ` +
+      `expert=${result.meta?.expert?.source} in ${Date.now() - t0}ms`
+    );
+    res.json({ city, images: result.images, meta: result.meta, cached: false });
+  } catch (e) {
+    console.error("[boop-trip-images]", e.message);
+    res.status(500).json({ error: e.message });
   }
 });
 

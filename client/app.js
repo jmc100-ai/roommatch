@@ -561,6 +561,7 @@
   const BOOP_WIZARD_IMAGES = {}; // cityKey -> { questionId: { optionId: url } }
   const BOOP_WIZARD_CITY_FALLBACKS = {}; // cityKey -> { questionId: url }
   const BOOP_WIZARD_FETCHING = new Set();
+  const BOOP_TRIP_FETCHING = new Set();
   // BOOP v5 wizard — 4 screens:
   //   1. Trip context       (3 cards)
   //   2. Stay vibe          (4 cards; maps to roomStyle + hotelPersonality internally)
@@ -1394,10 +1395,20 @@
     });
   }
 
+  /** Proxy external wizard photos (Unsplash / Google) like neighbourhood heroes. */
+  function boopWizardImageUrl(url) {
+    if (!url) return '';
+    if (!/^https?:/i.test(url)) return url;
+    return nbhdDisplayPhotoUrl(url) || url;
+  }
+
   function boopGetDynamicImage(questionId, optionId, fallback) {
-    // Trip context uses fixed Unsplash art per option; swapping in city-specific
-    // hood photos after /api/neighborhoods resolves caused a visible flash.
-    if (questionId === 'trip') return fallback;
+    if (questionId === 'trip') {
+      const cityK = cityKey(S.city);
+      const tripUrl = cityK && BOOP_WIZARD_IMAGES[cityK]?.trip?.[optionId];
+      if (tripUrl) return boopWizardImageUrl(tripUrl);
+      return fallback;
+    }
     // Scenic & Open uses a single curated hero asset (must not swap after prefetch).
     if (questionId === 'nbhdScene' && optionId === 'scenic_open') return fallback;
     // Keep this card literal: users expect a car visual cue.
@@ -1416,20 +1427,48 @@
     return fallback;
   }
 
-  function preloadBoopTripWizardImages() {
-    const trip = BOOP_QUESTIONS.find(q => q.id === 'trip');
-    if (!trip?.options) return;
-    for (const o of trip.options) {
-      const href = o.image;
-      if (!href || !/^https?:/.test(href)) continue;
-      const rid = 'preload-boop-trip-' + o.id;
+  function preloadBoopTripWizardImageUrls(urls) {
+    if (!urls || typeof urls !== 'object') return;
+    for (const [optId, href] of Object.entries(urls)) {
+      if (!href) continue;
+      const src = boopWizardImageUrl(href);
+      const rid = 'preload-boop-trip-' + optId;
       if (document.getElementById(rid)) continue;
       const link = document.createElement('link');
       link.id = rid;
       link.rel = 'preload';
       link.as = 'image';
-      link.href = href;
+      link.href = src;
       document.head.appendChild(link);
+    }
+  }
+
+  async function prefetchBoopTripWizardImages(city) {
+    const cityK = cityKey(city);
+    if (!cityK || BOOP_TRIP_FETCHING.has(cityK)) return;
+    if (BOOP_WIZARD_IMAGES[cityK]?.trip?.first) return;
+    BOOP_TRIP_FETCHING.add(cityK);
+    try {
+      const params = new URLSearchParams({ city });
+      const resp = await fetch(`${BACKEND}/api/boop-trip-images?${params}`);
+      if (!resp.ok) return;
+      const data = await resp.json();
+      const images = data.images;
+      if (!images || typeof images !== 'object') return;
+      if (!BOOP_WIZARD_IMAGES[cityK]) BOOP_WIZARD_IMAGES[cityK] = {};
+      BOOP_WIZARD_IMAGES[cityK].trip = {
+        first: images.first || null,
+        repeat: images.repeat || null,
+        expert: images.expert || null,
+      };
+      preloadBoopTripWizardImageUrls(BOOP_WIZARD_IMAGES[cityK].trip);
+      const onTrip = document.getElementById('st-boop')?.style.display !== 'none'
+        && BOOP_QUESTIONS[BOOP.idx]?.id === 'trip';
+      if (onTrip) renderBoopQuestion();
+    } catch (_) {
+      // keep static fallbacks from BOOP_QUESTIONS
+    } finally {
+      BOOP_TRIP_FETCHING.delete(cityK);
     }
   }
 
@@ -2294,7 +2333,7 @@
         return `
         <button class="boop-card${isCurrent ? ' boop-card--current' : ''}" onclick="boopChoose('${q.id}','${o.id}')">
           <div class="boop-card-media">
-            <img src="${boopGetDynamicImage(q.id, o.id, o.image)}" alt="${o.title}" ${q.id === 'trip' ? `loading="eager" decoding="async"${cardIdx === 0 ? ' fetchpriority="high"' : ''}` : 'loading="lazy"'} onerror="this.onerror=null;this.src='https://images.unsplash.com/photo-1477959858617-67f85cf4f1df?auto=format&fit=crop&w=1200&q=80';" />
+            <img src="${escAttr(boopGetDynamicImage(q.id, o.id, o.image))}" alt="${escHtml(o.title)}" ${q.id === 'trip' ? `loading="eager" decoding="async"${cardIdx === 0 ? ' fetchpriority="high"' : ''}` : 'loading="lazy"'} onerror="this.onerror=null;this.src='https://images.unsplash.com/photo-1477959858617-67f85cf4f1df?auto=format&fit=crop&w=1200&q=80';" />
             <div class="boop-card-grad"></div>
             <div class="boop-card-body">
               <div class="boop-card-emoji">${o.emoji}</div>
@@ -2470,6 +2509,7 @@
       for (const k of Object.keys(BOOP_WIZARD_IMAGES)) {
         if (k !== cityKey(city)) delete BOOP_WIZARD_IMAGES[k];
       }
+      BOOP_TRIP_FETCHING.clear();
     }
     S.nbhd = null;
     S.nbhdBbox = null;
@@ -2479,7 +2519,7 @@
     S.hotelQ = null;
     S.mustHaves = null;
     clearNbhdPickerMatchCache();
-    preloadBoopTripWizardImages();
+    prefetchBoopTripWizardImages(city);
     prefetchBoopWizardImages(city);
 
     // BOOP v4 — saved-profile review screen temporarily disabled; always send
