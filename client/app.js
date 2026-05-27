@@ -94,15 +94,11 @@
   let _vibeTourPseudoFullscreen = false;
   let _deferResultsRenderUntilTourClose = false;
   /**
-   * Date-aware first-render gating. When the user types dates AND the active
-   * default sort is price-dependent (match+price / price),
-   * we hold the FIRST render of the results list until /api/rates lands so the
-   * list paints once with the final price-aware sort instead of paint-then-
-   * reshuffle. The vibe tour acts as natural cover; by the time it closes,
-   * rates are usually already in. Bypassed (immediate render) when rates take
-   * longer than RATES_GATE_TIMEOUT_MS so we never block the UI indefinitely.
-   * Subsequent re-renders (sort changes, filter toggles) are unaffected — only
-   * the first paint is gated.
+   * Date-aware first-render gating. When the user searches with check-in/out,
+   * hold the FIRST results paint until /api/rates lands (or times out). Without
+   * this, Best Match renders on vibe scores alone, then applyPrices turns on
+   * "Available rooms only" and re-sorts — the #1 card visibly swaps 1–2s later.
+   * Bypassed after RATES_GATE_TIMEOUT_MS so a hung rates call never blocks forever.
    */
   let _ratesArrivalPromise = null;
   let _ratesArrivalResolve = null;
@@ -4422,12 +4418,10 @@
   /**
    * Single entry point for the FIRST paint of the results list after a search.
    *
-   * - No dates / non-price-dependent sort / prices already loaded → render now.
-   * - Dates entered + price-dependent default sort + rates in flight →
-   *   keep the existing skeleton/spinner UI showing, swap the result-count
-   *   line to "Finalizing rates for your dates…", and await rates landing
-   *   (capped at RATES_GATE_TIMEOUT_MS so we never block forever). On resolve
-   *   or timeout, render once.
+   * - No dates / prices already loaded → render now.
+   * - Dates entered + rates in flight → skeleton until rates land (or
+   *   RATES_GATE_TIMEOUT_MS), then render once with availability filter +
+   *   price-aware match scores applied.
    *
    * applyPrices() is wired to NO-OP its renderSortedSmooth() while
    * _initialRenderHappened is false, so when rates arrive during the wait
@@ -4435,11 +4429,8 @@
    * of the first paint.
    */
   async function revealResultsWhenReady() {
-    const priceDependentSort =
-      _currentSort === 'match+price' ||
-      _currentSort === 'price';
     const haveDates = !!(S.checkin && S.checkout);
-    const needWait = haveDates && priceDependentSort && _fetchingPrices && !_pricesLoaded;
+    const needWait = haveDates && _fetchingPrices && !_pricesLoaded;
 
     if (!needWait) {
       exitResultsPendingMode();
@@ -4475,7 +4466,11 @@
       new Promise(r => setTimeout(r, RATES_GATE_TIMEOUT_MS))
     ]);
     const waited = Date.now() - t0;
-    if (waited > 50) console.log(`[reveal] gated render waited ${waited}ms for rates (loaded=${_pricesLoaded})`);
+    if (waited > 50) {
+      console.log(
+        `[reveal] gated render waited ${waited}ms for rates (loaded=${_pricesLoaded} availOnly=${_showAvailOnly})`
+      );
+    }
 
     exitResultsPendingMode();
     if (resultsEl) resultsEl.classList.remove('no-anim');
@@ -5938,10 +5933,8 @@
     // hasn't fired yet, we DON'T render here — we just stash prices on the
     // hotel objects. The awaiting helper will pick them up when its rates
     // promise resolves and paint the list once with the price-aware sort.
-    // This is what eliminates the visible "match-only → match+price" reshuffle
-    // on date-aware searches. The result-count + rates-status updates below
-    // are also skipped during the gate so the skeleton's "Finalizing live
-    // rates…" text remains visible until the gated render lands.
+    // Stash prices on hotel objects only; revealResultsWhenReady owns the first
+    // paint when dates were entered (avoids match-then-avail-filter reshuffle).
     if (!_initialRenderHappened) {
       updateFreeCancelHint();
       // Rates can beat revealResultsWhenReady / vibe-tour gating. Clear the
@@ -5961,6 +5954,9 @@
     const availFilterActive = _showAvailOnly && _hasDateSearch;
     const tourCoveringResults = _deferResultsRenderUntilTourClose || _vibeTourVisible;
     if ((priceDependentSort || priceMattersResort || _requireFreeCancel || availFilterActive) && !tourCoveringResults) {
+      if (availFilterActive && _currentSort === 'match') {
+        console.log('[prices] re-sort after rates (avail filter + match scores)');
+      }
       renderSortedSmooth();
     } else {
       applyPricesInPlace(sym);
