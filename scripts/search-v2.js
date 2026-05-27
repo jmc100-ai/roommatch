@@ -187,26 +187,27 @@ async function runV2Search({ req, supabase, supabaseAdmin, resolveCityName }) {
     return { status: 500, body: { error: "Supabase not configured" } };
 
   const _t0Total = Date.now();
-  const city      = await resolveCityName(cityInput, fetchClient, ["indexed_cities", "hotels_cache"]);
+  const _perf = {};
   const mustHaves = parseMustHaves(req.query.must_haves || "");
 
-  // Kick off the NLP intent call IMMEDIATELY so it runs in parallel with the
-  // geo prefilter + Phase-A DB load below. We await it just before scoring,
-  // which is the first step that actually depends on `intent`. Cache hits return
-  // synchronously (in-memory _nlpCache) so this is a no-op when warm.
-  const _t0Intent  = Date.now();
-  // Pass the supabase client so buildFactIntentLLM can hit the shared
-  // `v2_intent_cache` table (L2 cache) — turns cold LLM timeouts into a
-  // one-time event per unique query instead of a per-request lottery.
+  // Start NLP intent before city resolution — intent only needs query + supabase,
+  // not the canonical city name. Overlaps resolveCityName (~50–200ms) with L2/LLM.
+  const _t0Intent = Date.now();
   const intentPromise = buildFactIntentLLM(
     query,
     { mustHaves, supabase: fetchClient },
     process.env.GEMINI_KEY || ""
   ).then((i) => {
-    const dt = Date.now() - _t0Intent;
-    if (dt > 50) console.log(`[v2 perf] nlp intent: ${dt}ms (router=${i.router_version || "regex"})`);
+    _perf.nlp_intent_ms = Date.now() - _t0Intent;
+    if (_perf.nlp_intent_ms > 50) {
+      console.log(`[v2 perf] nlp intent: ${_perf.nlp_intent_ms}ms (router=${i.router_version || "regex"})`);
+    }
     return i;
   });
+
+  const _t0City = Date.now();
+  const city = await resolveCityName(cityInput, fetchClient, ["indexed_cities", "hotels_cache"]);
+  _perf.resolve_city_ms = Date.now() - _t0City;
   const hotelQuery = String(req.query.hotel_query || query).trim();
   const tokens    = tokenize(query);
 
@@ -357,6 +358,7 @@ async function runV2Search({ req, supabase, supabaseAdmin, resolveCityName }) {
   if (cached) {
     hotelRows = cached.hotelRows;
     indexRows = cached.indexRows;
+    _perf.phase_a_ms = 0;
     console.log(`[v2 perf] phase-A db: 0ms (cache hit)  hotels=${hotelRows.length} index_rows=${indexRows.length}`);
   } else {
     const [cacheResult, indexResult] = await Promise.all([
@@ -375,7 +377,8 @@ async function runV2Search({ req, supabase, supabaseAdmin, resolveCityName }) {
     hotelRows = cacheResult.data || [];
     indexRows = indexResult.data || [];
     setPhaseACache(city, hotelRows, indexRows);
-    console.log(`[v2 perf] phase-A db: ${Date.now()-_t0}ms  hotels=${hotelRows.length} index_rows=${indexRows.length}`);
+    _perf.phase_a_ms = Date.now() - _t0;
+    console.log(`[v2 perf] phase-A db: ${_perf.phase_a_ms}ms  hotels=${hotelRows.length} index_rows=${indexRows.length}`);
   }
 
   // Resolve the NLP intent now — it has been running in parallel since the top
@@ -534,7 +537,8 @@ async function runV2Search({ req, supabase, supabaseAdmin, resolveCityName }) {
     };
   }
 
-  console.log(`[v2 perf] scoring: ${Date.now()-_t0}ms  ranked=${rankedHotels.length}`);
+  _perf.scoring_ms = Date.now() - _t0;
+  console.log(`[v2 perf] scoring: ${_perf.scoring_ms}ms  ranked=${rankedHotels.length}`);
 
   // Initial top set by room-match (sBoosted). When nbhd-boop runs below, we
   // recompute this so the post-boop top — i.e. the hotels that will actually
@@ -630,7 +634,8 @@ async function runV2Search({ req, supabase, supabaseAdmin, resolveCityName }) {
     } catch (_) {}
   }
 
-  console.log(`[v2 perf] post-boop: ${Date.now()-_t0}ms`);
+  _perf.post_boop_ms = Date.now() - _t0;
+  console.log(`[v2 perf] post-boop: ${_perf.post_boop_ms}ms`);
 
   // ── Phase B: photos + hotel-vibe-facts + primary-nbhd (all parallel) ──
   //
@@ -658,7 +663,7 @@ async function runV2Search({ req, supabase, supabaseAdmin, resolveCityName }) {
         p_city:          city,
         p_hotel_ids:     topHotelIds,
         p_fact_weights:  factWeightsRaw,
-        p_public_weight: Number(process.env.HOTEL_VIBE_PUBLIC_WEIGHT) || 5.0,
+        p_public_weight: Number(process.env.HOTEL_VIBE_PUBLIC_WEIGHT ?? "1"),
       })
     : Promise.resolve(null);
 
@@ -673,7 +678,8 @@ async function runV2Search({ req, supabase, supabaseAdmin, resolveCityName }) {
   const [photosResult, hotelVibeResult] = phaseB;
   const primaryNbhdRpcResult = needPrimaryNbhdRpc ? phaseB[2] : null;
 
-  console.log(`[v2 perf] phase-B parallel (photos+vibe+nbhd): ${Date.now()-_t0}ms  photos=${photosResult.data?.length}`);
+  _perf.phase_b_ms = Date.now() - _t0;
+  console.log(`[v2 perf] phase-B parallel (photos+vibe+nbhd): ${_perf.phase_b_ms}ms  photos=${photosResult.data?.length}`);
   if (photosResult.error) return { status: 500, body: { error: photosResult.error.message } };
 
   // ── Hotel-vibe scoring (facts-based, mirrors room model) ───────────────────
@@ -1351,7 +1357,11 @@ async function runV2Search({ req, supabase, supabaseAdmin, resolveCityName }) {
       ? ` HV_MAX=${HOTEL_SIM_MAX.toFixed(4)} HV_BLEND=${HOTEL_VIBE_BLEND_WEIGHT.toFixed(2)} (${hotelVibeRawMap.size} hotels scored)`
       : "")
   );
-  console.log(`[v2 perf] TOTAL: ${Date.now()-_t0}ms (since phase-A) | wall: ${Date.now()-_t0Total}ms (since handler entry)`);
+  _perf.total_since_phase_a_ms = Date.now() - _t0;
+  _perf.wall_ms = Date.now() - _t0Total;
+  console.log(
+    `[v2 perf] TOTAL: ${_perf.total_since_phase_a_ms}ms (since phase-A) | wall: ${_perf.wall_ms}ms (since handler entry)`
+  );
 
   return {
     status: 200,
@@ -1362,6 +1372,7 @@ async function runV2Search({ req, supabase, supabaseAdmin, resolveCityName }) {
       indexing:    false,
       indexStatus: "complete",
       stats: {
+        perf_ms: _perf,
         search_version_used:      "v2",
         search_version_requested: String(req.query.search_version || "v2"),
         query_router:             intent,

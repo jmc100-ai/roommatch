@@ -247,6 +247,8 @@
 
   <!-- ─── Step 1: City ─────────────────────────────────── -->
   <div id="st-city">
+
+    <!-- LEGACY_HOME_START — restore centered hero: uncomment this block and set #home-v2 hidden in styles.css
     <div class="city-chapter">
       <div class="city-chapter-inner">
         <div class="eyebrow"><div class="eyebrow-dot"></div><span class="brand-lockup">TravelBy<span class="brand-vibe">Vibe</span></span> · Find your travel vibe</div>
@@ -254,72 +256,137 @@
         <p class="chapter-sub">Choose a city, tell us the pace and style you like, and we will line up neighbourhoods and real hotel-room photos so what you see is closer to what you get.</p>
         <div class="city-box">
           <span class="city-box-icon">⌕</span>
-          <!-- Geoapify + recent popover paused (clashed with chips) — restore oninput/onblur + onCityInput -->
-          <input type="text" id="cityInput" value="Mexico City" placeholder="Where are you going?"
-                 autocomplete="off"
-                 onkeydown="onCityKeydown(event)"/>
+          <input type="text" id="cityInput" value="Mexico City" placeholder="Where are you going?" autocomplete="off" onkeydown="onCityKeydown(event)"/>
           <button class="city-go-btn" id="cityGoBtn" onclick="onCityGo()" aria-label="Go">Go →</button>
           <div class="recent-dropdown" id="cityHistoryDropdown"></div>
           <div class="city-dropdown" id="cityDropdown"></div>
         </div>
-        <!-- BOOP v4 — optional dates sit directly under the edit box -->
-        <div class="city-dates" id="city-dates">
-          <input type="hidden" id="city-d-ci"/>
-          <input type="hidden" id="city-d-co"/>
-          <button type="button" class="city-date-trigger" id="city-date-trigger" aria-expanded="false" aria-controls="city-date-pop" onclick="toggleCityDateRangePicker()">
-            <span class="city-date-trigger-main">
-              <span class="city-date-icon">◇</span>
-              <span class="city-date-copy">
-                <span class="city-date-kicker">Add dates <span class="city-dates-opt">(optional)</span></span>
-                <span class="city-date-value ph" id="city-date-value">Check-in — Check-out</span>
-              </span>
-            </span>
-            <span class="city-date-chevron">⌄</span>
-          </button>
-          <div class="city-date-pop" id="city-date-pop" role="dialog" aria-label="Choose travel dates">
-            <div class="city-date-pop-head">
-              <div>
-                <div class="city-date-pop-title">Choose your dates</div>
-                <div class="city-date-pop-sub" id="city-date-pop-sub">Select a check-in date, then choose your check-out date.</div>
+        <div class="city-dates" id="city-dates">…</div>
+        <div class="city-group-pick" id="city-group-pick">…</div>
+      </div>
+    </div>
+    LEGACY_HOME_END -->
+
+    <!-- Desktop-first split hero (May 2026 mock). Mobile: stacked form, polaroids hidden. -->
+    <div id="home-v2" class="home-v2">
+      <div class="home-v2-hero">
+        <div class="home-v2-copy">
+          <div class="home-v2-copy-inner">
+            <div class="eyebrow home-v2-eyebrow"><div class="eyebrow-dot"></div><span class="brand-lockup">TravelBy<span class="brand-vibe">Vibe</span></span> · Find your travel vibe</div>
+            <h1 class="city-heading home-v2-heading">Where are you <em>headed?</em></h1>
+            <p class="chapter-sub home-v2-sub">Choose a city, tell us the pace and style you like, and we will line up neighbourhoods and real hotel-room photos so what you see is closer to what you get.</p>
+
+            <div class="home-v2-form">
+              <div class="home-v2-field home-v2-field--city city-box">
+                <span class="city-box-icon" aria-hidden="true">⌕</span>
+                <input type="text" id="cityInput" value="Mexico City" placeholder="Where are you going?"
+                       autocomplete="off"
+                       onkeydown="onCityKeydown(event)"/>
+                <button type="button" class="home-v2-swap" onclick="swapLaunchCity()" title="Cycle suggested cities" aria-label="Cycle suggested cities">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M7 16V4M7 4L3 8M7 4l4 4M17 8v12M17 20l4-4M17 20l-4-4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </button>
+                <button class="city-go-btn" id="cityGoBtn" type="button" onclick="onCityGo()" aria-label="Go">Go →</button>
+                <div class="recent-dropdown" id="cityHistoryDropdown"></div>
+                <div class="city-dropdown" id="cityDropdown"></div>
               </div>
-              <div class="city-date-nav" aria-label="Change calendar month">
-                <button type="button" onclick="shiftCityDateMonth(-1)" aria-label="Previous month">‹</button>
-                <button type="button" onclick="shiftCityDateMonth(1)" aria-label="Next month">›</button>
+
+              <div class="city-dates home-v2-field" id="city-dates">
+                <input type="hidden" id="city-d-ci"/>
+                <input type="hidden" id="city-d-co"/>
+                <button type="button" class="city-date-trigger" id="city-date-trigger" aria-expanded="false" aria-controls="city-date-pop" onclick="toggleCityDateRangePicker()">
+                  <span class="city-date-trigger-main">
+                    <span class="city-date-icon">◇</span>
+                    <span class="city-date-copy">
+                      <span class="city-date-kicker">Add dates <span class="city-dates-opt">(optional)</span></span>
+                      <span class="city-date-value ph" id="city-date-value">Check-in — Check-out</span>
+                    </span>
+                  </span>
+                  <span class="city-date-chevron">⌄</span>
+                </button>
+                <div class="city-date-pop" id="city-date-pop" role="dialog" aria-label="Choose travel dates">
+                  <div class="city-date-pop-head">
+                    <div>
+                      <div class="city-date-pop-title">Choose your dates</div>
+                      <div class="city-date-pop-sub" id="city-date-pop-sub">Select a check-in date, then choose your check-out date.</div>
+                    </div>
+                    <div class="city-date-nav" aria-label="Change calendar month">
+                      <button type="button" onclick="shiftCityDateMonth(-1)" aria-label="Previous month">‹</button>
+                      <button type="button" onclick="shiftCityDateMonth(1)" aria-label="Next month">›</button>
+                    </div>
+                    <button type="button" class="city-date-pop-close" onclick="closeCityDateRangePicker()" aria-label="Close date picker">&times;</button>
+                  </div>
+                  <div class="city-date-months" id="city-date-months"></div>
+                  <div class="city-date-footer">
+                    <div class="city-date-summary" id="city-date-summary">No dates selected</div>
+                    <div class="city-date-actions">
+                      <button type="button" class="city-date-clear" onclick="clearCityDates()">Clear</button>
+                      <button type="button" class="city-date-done" onclick="closeCityDateRangePicker()">Done</button>
+                    </div>
+                  </div>
+                </div>
               </div>
-              <button type="button" class="city-date-pop-close" onclick="closeCityDateRangePicker()" aria-label="Close date picker">&times;</button>
-            </div>
-            <div class="city-date-months" id="city-date-months"></div>
-            <div class="city-date-footer">
-              <div class="city-date-summary" id="city-date-summary">No dates selected</div>
-              <div class="city-date-actions">
-                <button type="button" class="city-date-clear" onclick="clearCityDates()">Clear</button>
-                <button type="button" class="city-date-done" onclick="closeCityDateRangePicker()">Done</button>
+
+              <div class="city-group-pick home-v2-field" id="city-group-pick" aria-label="Who is traveling">
+                <div class="city-group-row">
+                  <div class="city-group-row-main">
+                    <span class="city-group-icon" aria-hidden="true">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                    </span>
+                    <span class="city-group-title">Who's coming?</span>
+                  </div>
+                  <div class="city-group-pills" role="group" aria-label="Party size">
+                    <button type="button" class="city-group-pill" data-city-group="solo" onclick="boopSetGroupSize('solo')">1 person</button>
+                    <button type="button" class="city-group-pill active" data-city-group="couple" onclick="boopSetGroupSize('couple')">2 people</button>
+                    <button type="button" class="city-group-pill" data-city-group="group" onclick="boopSetGroupSize('group')">3+ people</button>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
         </div>
 
-        <div class="city-group-pick" id="city-group-pick" aria-label="Who is traveling">
-          <div class="city-group-row">
-            <div class="city-group-row-main">
-              <span class="city-group-icon" aria-hidden="true">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-              </span>
-              <span class="city-group-title">Who's coming?</span>
-            </div>
-            <div class="city-group-pills" role="group" aria-label="Party size">
-              <button type="button" class="city-group-pill" data-city-group="solo" onclick="boopSetGroupSize('solo')">1 person</button>
-              <button type="button" class="city-group-pill active" data-city-group="couple" onclick="boopSetGroupSize('couple')">2 people</button>
-              <button type="button" class="city-group-pill" data-city-group="group" onclick="boopSetGroupSize('group')">3+ people</button>
-            </div>
+        <div class="home-v2-visual" aria-hidden="true">
+          <div class="home-v2-polaroids" id="home-v2-polaroids" aria-hidden="true">
+            <figure class="polaroid polaroid--1"><img src="https://images.unsplash.com/photo-1522083165195-3424ed129620?auto=format&amp;fit=crop&amp;w=520&amp;q=80" alt="Palacio de Bellas Artes" width="260" height="300" loading="eager" decoding="async" onerror="this.onerror=null;this.src='https://images.unsplash.com/photo-1477959858617-67f85cf4f1df?auto=format&amp;fit=crop&amp;w=520&amp;q=80';"/></figure>
+            <figure class="polaroid polaroid--2 polaroid--hero"><img src="https://images.unsplash.com/photo-1584669727833-88b47506defb?auto=format&amp;fit=crop&amp;w=600&amp;q=80" alt="Mexico City skyline" width="300" height="360" loading="eager" decoding="async" fetchpriority="high" onerror="this.onerror=null;this.src='https://images.unsplash.com/photo-1477959858617-67f85cf4f1df?auto=format&amp;fit=crop&amp;w=520&amp;q=80';"/></figure>
+            <figure class="polaroid polaroid--3"><img src="https://images.unsplash.com/photo-1521216774850-01bc1c5fe0da?auto=format&amp;fit=crop&amp;w=480&amp;q=80" alt="Historic Mexico City" width="220" height="260" loading="lazy" decoding="async" onerror="this.onerror=null;this.src='https://images.unsplash.com/photo-1477959858617-67f85cf4f1df?auto=format&amp;fit=crop&amp;w=520&amp;q=80';"/></figure>
+            <figure class="polaroid polaroid--4"><img src="https://images.unsplash.com/photo-1514565131-fce0801e5785?auto=format&amp;fit=crop&amp;w=480&amp;q=80" alt="Aerial Mexico City" width="200" height="240" loading="lazy" decoding="async" onerror="this.onerror=null;this.src='https://images.unsplash.com/photo-1477959858617-67f85cf4f1df?auto=format&amp;fit=crop&amp;w=520&amp;q=80';"/></figure>
+            <figure class="polaroid polaroid--5"><img src="/images/wizard/trendy-cafe-filled.png" alt="Neighbourhood café" width="200" height="240" loading="lazy" decoding="async"/></figure>
+            <figure class="polaroid polaroid--6"><img src="https://images.unsplash.com/photo-1619872978981-e9885a014ba3?auto=format&amp;fit=crop&amp;w=480&amp;q=80" alt="Mexico City streets" width="180" height="220" loading="lazy" decoding="async" onerror="this.onerror=null;this.src='https://images.unsplash.com/photo-1477959858617-67f85cf4f1df?auto=format&amp;fit=crop&amp;w=520&amp;q=80';"/></figure>
           </div>
         </div>
+      </div>
 
-        <!-- Recent + suggested city chips (paused)
-        <div class="city-chips" id="city-chips">
-          populated by buildCityChips() on load — capped to 5, single-row
+      <section class="home-v2-features landing-sections" aria-label="Why TravelByVibe">
+        <div class="home-v2-features-inner">
+          <article class="home-v2-feature">
+            <div class="home-v2-feature-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3-3"/><path d="M11 8v6M8 11h6"/></svg>
+            </div>
+            <h2 class="home-v2-feature-title">Visual search</h2>
+            <p class="home-v2-feature-desc">Real hotel-room &amp; neighbourhoods</p>
+          </article>
+          <article class="home-v2-feature">
+            <div class="home-v2-feature-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 21s-6-4.35-6-10a6 6 0 0 1 12 0c0 5.65-6 10-6 10z"/><circle cx="12" cy="11" r="2.5"/></svg>
+            </div>
+            <h2 class="home-v2-feature-title">Vibe first</h2>
+            <p class="home-v2-feature-desc">Tell us your vibe, we'll do the matching</p>
+          </article>
+          <article class="home-v2-feature">
+            <div class="home-v2-feature-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 3l7 4v5c0 4.5-3.2 8.2-7 9-3.8-.8-7-4.5-7-9V7l7-4z"/><path d="M9 12l2 2 4-4"/></svg>
+            </div>
+            <h2 class="home-v2-feature-title">Honest stays</h2>
+            <p class="home-v2-feature-desc">See what you'll really wake up to</p>
+          </article>
         </div>
-        -->
+      </section>
+
+      <div class="trust-bar home-v2-trust" role="presentation">
+        <span class="home-v2-trust-line" aria-hidden="true"></span>
+        <span class="home-v2-trust-label"><span class="home-v2-trust-globe" aria-hidden="true">🌐</span> Trusted by travellers worldwide</span>
+        <span class="home-v2-trust-line" aria-hidden="true"></span>
       </div>
     </div>
   </div>

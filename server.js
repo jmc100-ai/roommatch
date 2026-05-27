@@ -358,16 +358,21 @@ async function fetchHotelMetaBatch(hotelIds) {
   });
   if (needed.length) {
     console.log(`[hotel-meta] fetching ${needed.length} hotels from LiteAPI`);
-    // CHUNK=200: prefer a single parallel wave to LiteAPI over multiple sequential
-    // batches. LiteAPI handles parallel requests fine on a paid key; the prior
-    // CHUNK=50 caused ~3s sequential blocking on cold caches when fetching 250.
-    const CHUNK = 200;
-    for (let i = 0; i < needed.length; i += CHUNK) {
-      const results = await Promise.allSettled(needed.slice(i, i + CHUNK).map(async (hotelIdRaw) => {
+    // Bounded concurrency + per-hotel timeout: 150+ parallel /data/hotel calls on a
+    // cold cache often stall 8–12s (socket pressure / LiteAPI throttling). Smaller
+    // waves with a hard timeout keep vsearch TTFB predictable.
+    const META_CONCURRENCY = Math.max(8, Math.min(80, parseInt(process.env.HOTEL_META_FETCH_CONCURRENCY || "40", 10)));
+    const META_TIMEOUT_MS = Math.max(2000, parseInt(process.env.HOTEL_META_FETCH_TIMEOUT_MS || "6000", 10));
+    for (let i = 0; i < needed.length; i += META_CONCURRENCY) {
+      const batch = needed.slice(i, i + META_CONCURRENCY);
+      const results = await Promise.allSettled(batch.map(async (hotelIdRaw) => {
         const hotelId = String(hotelIdRaw).trim();
         const r = await fetch(
           `https://api.liteapi.travel/v3.0/data/hotel?hotelId=${encodeURIComponent(hotelId)}`,
-          { headers: { "X-API-Key": LITEAPI_KEY, "accept": "application/json" } }
+          {
+            headers: { "X-API-Key": LITEAPI_KEY, "accept": "application/json" },
+            signal: AbortSignal.timeout(META_TIMEOUT_MS),
+          }
         );
         if (!r.ok) throw new Error(`HTTP ${r.status}`);
         const d = await r.json();
@@ -399,7 +404,7 @@ async function fetchHotelMetaBatch(hotelIds) {
       }));
       const ok  = results.filter(r => r.status === "fulfilled").length;
       const err = results.filter(r => r.status === "rejected").length;
-      if (err > 0) console.warn(`[hotel-meta] chunk ${i}-${i+CHUNK}: ${ok} ok, ${err} errors`);
+      if (err > 0) console.warn(`[hotel-meta] batch ${i}-${i + batch.length}: ${ok} ok, ${err} errors`);
     }
   }
   for (const id of normalized) out[id] = _hotelMetaCache.get(id) || null;
@@ -2404,6 +2409,7 @@ app.get("/api/vsearch", async (req, res) => {
   const requestedVersionRaw = String(req.query.search_version || process.env.SEARCH_VERSION_DEFAULT || "v2").toLowerCase();
   const requestedVersion = requestedVersionRaw === "v2" ? "v2" : "v1";
   if (requestedVersion === "v2") {
+    const t0VsearchHandler = Date.now();
     const v2 = await runV2Search({
       req,
       supabase,
@@ -2417,13 +2423,23 @@ app.get("/api/vsearch", async (req, res) => {
       // every hotel — including "stubs" beyond GALLERY_LIMIT that have no indexed
       // room rows — still gets a real LiteAPI name, hero photo, star rating, and
       // address. Without this, stubs would render as "Hotel in {city}" forever.
-      const META_SYNC_LIMIT = parseInt(process.env.META_SYNC_LIMIT || "50", 10);
-      const allIds       = v2.body.hotels.map((h) => String(h.id).trim()).filter(Boolean);
+      const META_SYNC_LIMIT = Math.max(10, parseInt(process.env.META_SYNC_LIMIT || "30", 10));
       const boopProfileForMeta = parseBoopProfileFromQuery(req.query);
       const needsStarPenaltyMeta = needsBoopStarMetaForRanking(boopProfileForMeta);
-      const STAR_PENALTY_META_TOPN = parseInt(process.env.STAR_PENALTY_META_TOPN || "150", 10);
+      const nbhdWeightForMeta = v2.body.stats?.nbhd_rank_weight ?? 0;
+      // Boop price-matters / luxury sorts need starRating on the hotels that can
+      // actually reach the top of the list. Pre-sort by room+nbhd (no stars) so
+      // we fetch LiteAPI meta for the right IDs — not a fixed API-order prefix.
+      if (needsStarPenaltyMeta && nbhdWeightForMeta > 0) {
+        sortV2HotelsDefault(v2.body.hotels, nbhdWeightForMeta);
+      }
+      const allIds = v2.body.hotels.map((h) => String(h.id).trim()).filter(Boolean);
+      const STAR_PENALTY_META_TOPN = Math.max(
+        META_SYNC_LIMIT,
+        parseInt(process.env.STAR_PENALTY_META_TOPN || "80", 10)
+      );
       const metaFetchTopN = needsStarPenaltyMeta
-        ? Math.min(allIds.length, Math.max(META_SYNC_LIMIT, STAR_PENALTY_META_TOPN))
+        ? Math.min(allIds.length, STAR_PENALTY_META_TOPN)
         : META_SYNC_LIMIT;
       const syncIds      = allIds.slice(0, metaFetchTopN);
       const deferredIds  = allIds.slice(metaFetchTopN);
@@ -2497,6 +2513,11 @@ app.get("/api/vsearch", async (req, res) => {
       } catch (e) {
         console.warn("[v2] star-penalty failed (non-fatal):", e.message);
       }
+
+      if (!v2.body.stats) v2.body.stats = {};
+      v2.body.stats.meta_sync_ms = Date.now() - t0meta;
+      v2.body.stats.meta_sync_count = syncIds.length;
+      v2.body.stats.handler_wall_ms = Date.now() - t0VsearchHandler;
 
       return res.status(200).json(v2.body);
     }

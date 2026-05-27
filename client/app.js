@@ -244,7 +244,7 @@
   }
 
   function syncCityTripSheetBackUi() {
-    const inner = document.querySelector('#st-city .city-chapter-inner');
+    const inner = document.querySelector('#st-city .home-v2-copy-inner, #st-city .city-chapter-inner');
     if (!inner) return;
     let btn = document.getElementById('city-trip-sheet-back');
     const show = _returnToCmdTripSheet && isMobileCmdTripUi();
@@ -562,6 +562,10 @@
   const BOOP_WIZARD_CITY_FALLBACKS = {}; // cityKey -> { questionId: url }
   const BOOP_WIZARD_FETCHING = new Set();
   const BOOP_TRIP_FETCHING = new Set();
+  /** cityKey -> Promise; dedupes concurrent trip-image fetches. */
+  const BOOP_TRIP_LOAD_PROMISES = new Map();
+  /** cityKeys where trip prefetch finished (success or failure) — safe to use static fallbacks. */
+  const BOOP_TRIP_READY = new Set();
   // BOOP v5 wizard — 4 screens:
   //   1. Trip context       (3 cards)
   //   2. Stay vibe          (4 cards; maps to roomStyle + hotelPersonality internally)
@@ -757,8 +761,10 @@
     if (id === 'style' && !S.nbhd)  { flashMsg('Choose a neighbourhood first'); return; }
     if (id === 'dates' && !S.style) { flashMsg('Choose a room vibe first'); return; }
     if (id === 'boop') {
-      startBoopStep();
-      showFlowStep('boop');
+      void (async () => {
+        await startBoopStep();
+        showFlowStep('boop');
+      })();
       return;
     }
     if (id === 'nbhd') {
@@ -1407,7 +1413,10 @@
       const cityK = cityKey(S.city);
       const tripUrl = cityK && BOOP_WIZARD_IMAGES[cityK]?.trip?.[optionId];
       if (tripUrl) return boopWizardImageUrl(tripUrl);
-      return fallback;
+      // Never paint static BOOP_QUESTIONS art while /api/boop-trip-images is in flight — that
+      // caused a visible swap when prefetch completed and re-rendered the step.
+      if (cityK && BOOP_TRIP_READY.has(cityK)) return fallback;
+      return '';
     }
     // Scenic & Open uses a single curated hero asset (must not swap after prefetch).
     if (questionId === 'nbhdScene' && optionId === 'scenic_open') return fallback;
@@ -1427,49 +1436,60 @@
     return fallback;
   }
 
-  function preloadBoopTripWizardImageUrls(urls) {
-    if (!urls || typeof urls !== 'object') return;
-    for (const [optId, href] of Object.entries(urls)) {
-      if (!href) continue;
-      const src = boopWizardImageUrl(href);
-      const rid = 'preload-boop-trip-' + optId;
-      if (document.getElementById(rid)) continue;
-      const link = document.createElement('link');
-      link.id = rid;
-      link.rel = 'preload';
-      link.as = 'image';
-      link.href = src;
-      document.head.appendChild(link);
-    }
+  function boopPreloadImageUrl(href) {
+    const src = boopWizardImageUrl(href);
+    if (!src) return Promise.resolve();
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.onload = img.onerror = () => resolve();
+      img.src = src;
+    });
   }
 
-  async function prefetchBoopTripWizardImages(city) {
+  async function boopPreloadTripWizardImages(trip) {
+    if (!trip || typeof trip !== 'object') return;
+    await Promise.all(
+      ['first', 'repeat', 'expert'].map((id) => boopPreloadImageUrl(trip[id])),
+    );
+  }
+
+  /** Load city-specific trip card photos; resolves when decoded (or fetch failed). */
+  function prefetchBoopTripWizardImages(city) {
     const cityK = cityKey(city);
-    if (!cityK || BOOP_TRIP_FETCHING.has(cityK)) return;
-    if (BOOP_WIZARD_IMAGES[cityK]?.trip?.first) return;
-    BOOP_TRIP_FETCHING.add(cityK);
-    try {
-      const params = new URLSearchParams({ city });
-      const resp = await fetch(`${BACKEND}/api/boop-trip-images?${params}`);
-      if (!resp.ok) return;
-      const data = await resp.json();
-      const images = data.images;
-      if (!images || typeof images !== 'object') return;
-      if (!BOOP_WIZARD_IMAGES[cityK]) BOOP_WIZARD_IMAGES[cityK] = {};
-      BOOP_WIZARD_IMAGES[cityK].trip = {
-        first: images.first || null,
-        repeat: images.repeat || null,
-        expert: images.expert || null,
-      };
-      preloadBoopTripWizardImageUrls(BOOP_WIZARD_IMAGES[cityK].trip);
-      const onTrip = document.getElementById('st-boop')?.style.display !== 'none'
-        && BOOP_QUESTIONS[BOOP.idx]?.id === 'trip';
-      if (onTrip) renderBoopQuestion();
-    } catch (_) {
-      // keep static fallbacks from BOOP_QUESTIONS
-    } finally {
-      BOOP_TRIP_FETCHING.delete(cityK);
-    }
+    if (!cityK) return Promise.resolve();
+    if (BOOP_WIZARD_IMAGES[cityK]?.trip?.first) return Promise.resolve();
+    const pending = BOOP_TRIP_LOAD_PROMISES.get(cityK);
+    if (pending) return pending;
+
+    const job = (async () => {
+      BOOP_TRIP_FETCHING.add(cityK);
+      try {
+        const params = new URLSearchParams({ city });
+        const resp = await fetch(`${BACKEND}/api/boop-trip-images?${params}`);
+        if (resp.ok) {
+          const data = await resp.json();
+          const images = data.images;
+          if (images && typeof images === 'object') {
+            if (!BOOP_WIZARD_IMAGES[cityK]) BOOP_WIZARD_IMAGES[cityK] = {};
+            BOOP_WIZARD_IMAGES[cityK].trip = {
+              first: images.first || null,
+              repeat: images.repeat || null,
+              expert: images.expert || null,
+            };
+            await boopPreloadTripWizardImages(BOOP_WIZARD_IMAGES[cityK].trip);
+          }
+        }
+      } catch (_) {
+        // fall back to static BOOP_QUESTIONS art after BOOP_TRIP_READY is set
+      } finally {
+        BOOP_TRIP_FETCHING.delete(cityK);
+        BOOP_TRIP_READY.add(cityK);
+        BOOP_TRIP_LOAD_PROMISES.delete(cityK);
+      }
+    })();
+
+    BOOP_TRIP_LOAD_PROMISES.set(cityK, job);
+    return job;
   }
 
   async function prefetchBoopWizardImages(city) {
@@ -1590,15 +1610,15 @@
     runBoopSearch(profile);
   }
 
-  function reviewRetake() {
+  async function reviewRetake() {
     // Start fresh wizard, preserving nothing — profile stays in storage until
     // boopFinish() overwrites it.
-    startBoopStep();
+    await startBoopStep();
     refreshStory('boop');
     showFlowStep('boop');
   }
 
-  function reviewEditAnswer(qId) {
+  async function reviewEditAnswer(qId) {
     const profile = S.boopProfile || loadBoopProfileForCity(S.city);
     if (!profile) { reviewRetake(); return; }
     // Pre-fill BOOP state with saved answers + prefs so edits only need to
@@ -1611,14 +1631,16 @@
     const qIdx = BOOP_QUESTIONS.findIndex(q => q.id === qId);
     BOOP.idx = qIdx >= 0 ? qIdx : 0;
     showFlowStep('boop');
+    if (qId === 'trip' && S.city) await prefetchBoopTripWizardImages(S.city);
     renderBoopQuestion();
     refreshStory('boop');
   }
 
-  function startBoopStep() {
+  async function startBoopStep() {
     const saved = loadBoopProfileForCity(S.city);
     BOOP.saved = saved;
     resetBoopState();
+    if (S.city) await prefetchBoopTripWizardImages(S.city);
     renderBoopQuestion();
   }
 
@@ -2186,7 +2208,7 @@
   // Open the existing Boop wizard at a specific question, rendered as a modal
   // overlay over the results screen. Reuses #st-boop markup + renderBoopQuestion
   // so the look/feel matches the first-time flow.
-  function openBoopFromChip(stepKey) {
+  async function openBoopFromChip(stepKey) {
     if (!S.city) { flashMsg('Pick a city first'); return; }
     const allSteps = ['trip', 'stayVibe', 'nbhdScene', 'musthaves'];
     let idx = allSteps.indexOf(stepKey);
@@ -2214,6 +2236,7 @@
     // we display the flow as an overlay. showFlowStep wires the panel display
     // toggles; the .boop-overlay-mode CSS handles the rest.
     showFlowStep('boop');
+    if (stepKey === 'trip') await prefetchBoopTripWizardImages(S.city);
     renderBoopQuestion();
     // Trap scroll on the results page while the overlay is open.
     if (typeof window !== 'undefined') window.scrollTo({ top: 0 });
@@ -2330,10 +2353,15 @@
       }
       const gridHtml = `<div class="boop-grid${gridClass}">${q.options.map((o, cardIdx) => {
         const isCurrent = overlayMode && o.id === currentPick;
+        const imgSrc = boopGetDynamicImage(q.id, o.id, o.image);
+        const tripImgPending = q.id === 'trip' && !imgSrc;
+        const imgTag = imgSrc
+          ? `<img src="${escAttr(imgSrc)}" alt="${escHtml(o.title)}" ${q.id === 'trip' ? `loading="eager" decoding="async"${cardIdx === 0 ? ' fetchpriority="high"' : ''}` : 'loading="lazy"'} onerror="this.onerror=null;this.src='https://images.unsplash.com/photo-1477959858617-67f85cf4f1df?auto=format&fit=crop&w=1200&q=80';" />`
+          : (tripImgPending ? '<div class="boop-card-img-skeleton" aria-hidden="true"></div>' : '');
         return `
         <button class="boop-card${isCurrent ? ' boop-card--current' : ''}" onclick="boopChoose('${q.id}','${o.id}')">
-          <div class="boop-card-media">
-            <img src="${escAttr(boopGetDynamicImage(q.id, o.id, o.image))}" alt="${escHtml(o.title)}" ${q.id === 'trip' ? `loading="eager" decoding="async"${cardIdx === 0 ? ' fetchpriority="high"' : ''}` : 'loading="lazy"'} onerror="this.onerror=null;this.src='https://images.unsplash.com/photo-1477959858617-67f85cf4f1df?auto=format&fit=crop&w=1200&q=80';" />
+          <div class="boop-card-media${tripImgPending ? ' boop-card-media--loading' : ''}">
+            ${imgTag}
             <div class="boop-card-grad"></div>
             <div class="boop-card-body">
               <div class="boop-card-emoji">${o.emoji}</div>
@@ -2470,7 +2498,7 @@
   }
 
   // ── CITY ─────────────────────────────────────────────
-  function pickCity(name) {
+  async function pickCity(name) {
     const city = resolveLaunchCity(name);
     if (!city) {
       rejectLaunchCityInput(name);
@@ -2480,6 +2508,7 @@
       const prevCity = S.city;
       S.city = city;
       document.getElementById('cityInput').value = city;
+      updateHomePolaroids(city);
       document.getElementById('sv-city').textContent = city.length > 20 ? city.slice(0, 18) + '…' : city;
       writeHistory(CITY_HISTORY_KEY, city);
       buildCityChips();
@@ -2497,6 +2526,7 @@
     const prevCityKey = cityKey(S.city);
     S.city = city;
     document.getElementById('cityInput').value = city;
+    updateHomePolaroids(city);
     document.getElementById('sv-city').textContent = city.length > 20 ? city.slice(0,18)+'…' : city;
     // Save to history and rebuild chips so next visit shows it as recent
     writeHistory(CITY_HISTORY_KEY, city);
@@ -2510,6 +2540,8 @@
         if (k !== cityKey(city)) delete BOOP_WIZARD_IMAGES[k];
       }
       BOOP_TRIP_FETCHING.clear();
+      BOOP_TRIP_LOAD_PROMISES.clear();
+      BOOP_TRIP_READY.clear();
     }
     S.nbhd = null;
     S.nbhdBbox = null;
@@ -2519,7 +2551,7 @@
     S.hotelQ = null;
     S.mustHaves = null;
     clearNbhdPickerMatchCache();
-    prefetchBoopTripWizardImages(city);
+    const tripImagesP = prefetchBoopTripWizardImages(city);
     prefetchBoopWizardImages(city);
 
     // BOOP v4 — saved-profile review screen temporarily disabled; always send
@@ -2529,7 +2561,8 @@
     const saved = loadBoopProfileForCity(city);
     if (saved) S.boopProfile = saved;
 
-    startBoopStep();
+    await tripImagesP;
+    await startBoopStep();
     refreshStory('boop');
     showFlowStep('boop');
   }
@@ -5122,6 +5155,14 @@
           'mode=', st.price_matters_mode
         );
       }
+      if (st && (st.perf_ms || st.handler_wall_ms != null)) {
+        console.info(
+          '[perf] vsearch server',
+          st.handler_wall_ms != null ? `handler=${st.handler_wall_ms}ms` : '',
+          st.meta_sync_ms != null ? `meta=${st.meta_sync_ms}ms×${st.meta_sync_count || '?'}` : '',
+          st.perf_ms || ''
+        );
+      }
 
       const hotels = data.hotels || [];
 
@@ -5328,10 +5369,13 @@
     if (shouldOpenVibeTour) {
       if (resPre) resPre.classList.add('no-anim');
       updateFreeCancelHint();
+      // Paint the hotel list as soon as vsearch (+ rates when dated) are ready.
+      // Previously we held the skeleton until the tour closed (vsearch + street-view
+      // could easily exceed 10s perceived latency). The tour overlay sits on top.
+      revealResultsWhenReady();
       if (hasDates && _ratesArrivalPromise) {
         // Dates are set: wait for prices before choosing the vibe-tour hotel so
         // we always show an available (and free-cancel-if-required) hotel.
-        // Results remain deferred via _deferResultsRenderUntilTourClose.
         _vibeTourAwaitingPrices = true;
         _vibeTourLeadId = null;
         _openVibeTourAfterPrices(_ratesReqId, deduped);
@@ -9203,6 +9247,127 @@
     {name:'Barcelona',     flag:'🇪🇸'},
   ];
 
+  const POLAROID_IMG_FALLBACK = 'https://images.unsplash.com/photo-1477959858617-67f85cf4f1df?auto=format&fit=crop&w=520&q=80';
+  const _U = (id, w = 520) => `https://images.unsplash.com/photo-${id}?auto=format&fit=crop&w=${w}&q=80`;
+  /** Slot index 1 maps to `.polaroid--2` (largest, centre frame). */
+  const MX_HERO = { src: _U('1584669727833-88b47506defb', 600), alt: 'Mexico City skyline' };
+  /** Six polaroid slots per home hero city — URLs HEAD-verified (invalid IDs 404 on Unsplash). */
+  const HOME_POLAROID_SETS = {
+    'mexico city': [
+      { src: _U('1522083165195-3424ed129620'), alt: 'Palacio de Bellas Artes' },
+      MX_HERO,
+      { src: _U('1521216774850-01bc1c5fe0da'), alt: 'Historic Mexico City' },
+      { src: _U('1514565131-fce0801e5785'), alt: 'Aerial view of Mexico City' },
+      { src: '/images/wizard/trendy-cafe-filled.png', alt: 'Neighbourhood café' },
+      { src: _U('1619872978981-e9885a014ba3'), alt: 'Mexico City streets' },
+    ],
+    paris: [
+      { src: _U('1496950866446-3253e1470e8e'), alt: 'Paris cityscape' },
+      { src: _U('1502602898657-3e91760cbb34'), alt: 'Eiffel Tower, Paris' },
+      { src: _U('1414235077428-338989a2e8c0'), alt: 'Paris dining terrace' },
+      { src: _U('1555396273-367ea4eb4db5'), alt: 'Paris restaurant scene' },
+      { src: _U('1509042239860-f550ce710b93'), alt: 'Café culture, Paris' },
+      { src: _U('1558642452-9d2a7deb7f62'), alt: 'Colourful architecture' },
+    ],
+    london: [
+      { src: _U('1477959858617-67f85cf4f1df'), alt: 'London skyline at dusk' },
+      { src: _U('1513635269975-59663e0ac1ad'), alt: 'Big Ben and Westminster, London' },
+      { src: _U('1495474472287-4d71bcdd2085'), alt: 'Coffee shop, London' },
+      { src: _U('1445116572660-236099ec97a0'), alt: 'Café interior' },
+      { src: _U('1554907984-15263bfd63bd'), alt: 'Colourful city streets' },
+      { src: _U('1521334884684-d80222895322'), alt: 'Urban street scene' },
+    ],
+    'new york': [
+      { src: _U('1514565131-fce0801e5785'), alt: 'Aerial city grid' },
+      { src: _U('1496442226666-8d4d0e62e6e9'), alt: 'Empire State Building, New York' },
+      { src: _U('1477959858617-67f85cf4f1df'), alt: 'City skyline at night' },
+      { src: _U('1441986300917-64674bd600d8'), alt: 'Shopping street' },
+      { src: _U('1483985988355-763728e1935b'), alt: 'City fashion district' },
+      { src: _U('1600585154526-990dced4db0d'), alt: 'Modern hotel interior' },
+    ],
+    tokyo: [
+      { src: _U('1445116572660-236099ec97a0'), alt: 'Café interior' },
+      { src: _U('1518998053901-5348d3961a04'), alt: 'Neon street scene' },
+      { src: _U('1559339352-11d035aa65de'), alt: 'Restaurant interior' },
+      { src: _U('1477959858617-67f85cf4f1df'), alt: 'City lights at night' },
+      { src: '/images/wizard/vibrant-busy.png', alt: 'Busy neighbourhood street' },
+      { src: _U('1555396273-367ea4eb4db5'), alt: 'Lively dining scene' },
+    ],
+    dubai: [
+      { src: _U('1518684079-3c830dcef090'), alt: 'Dubai Marina' },
+      { src: _U('1512453979798-5ea266f8880c'), alt: 'Burj Khalifa, Dubai' },
+      { src: _U('1566073771259-6a8506099945'), alt: 'Resort pool at golden hour' },
+      { src: _U('1558618666-fcd25c85cd64'), alt: 'Desert landscape' },
+      { src: _U('1501854140801-50d01698950b'), alt: 'Mountain vista' },
+      { src: _U('1598928506311-c55ded91a20c'), alt: 'Coastal view' },
+    ],
+    singapore: [
+      { src: _U('1414235077428-338989a2e8c0'), alt: 'Rooftop dining' },
+      { src: _U('1477959858617-67f85cf4f1df'), alt: 'Skyline at dusk' },
+      { src: _U('1414235077428-338989a2e8c0'), alt: 'Rooftop dining' },
+      { src: _U('1555396273-367ea4eb4db5'), alt: 'Restaurant scene' },
+      { src: _U('1566073771259-6a8506099945'), alt: 'Pool and palms' },
+      { src: _U('1526778548025-fa2f459cd5c1'), alt: 'Travel planning' },
+    ],
+    'kuala lumpur': [
+      { src: _U('1509042239860-f550ce710b93'), alt: 'Local café' },
+      { src: _U('1477959858617-67f85cf4f1df'), alt: 'City skyline' },
+      { src: _U('1555396273-367ea4eb4db5'), alt: 'Street food scene' },
+      { src: _U('1509042239860-f550ce710b93'), alt: 'Local café' },
+      { src: '/images/wizard/vibrant-busy.png', alt: 'Busy street' },
+      { src: _U('1495474472287-4d71bcdd2085'), alt: 'Coffee culture' },
+    ],
+    barcelona: [
+      { src: _U('1502602898657-3e91760cbb34'), alt: 'Iconic architecture' },
+      { src: _U('1558642452-9d2a7deb7f62'), alt: 'Park Güell, Barcelona' },
+      { src: _U('1496950866446-3253e1470e8e'), alt: 'City panorama' },
+      { src: _U('1414235077428-338989a2e8c0'), alt: 'Outdoor dining' },
+      { src: _U('1619872978981-e9885a014ba3'), alt: 'Historic streets' },
+      { src: _U('1555396273-367ea4eb4db5'), alt: 'Tapas bar' },
+    ],
+  };
+  HOME_POLAROID_SETS._default = HOME_POLAROID_SETS['mexico city'];
+
+  function homePolaroidSetKey(cityName) {
+    const n = (cityName || '').trim().toLowerCase();
+    if (HOME_POLAROID_SETS[n]) return n;
+    const hit = TOP_CITIES.find((c) => c.name.toLowerCase() === n);
+    return hit ? hit.name.toLowerCase() : '_default';
+  }
+
+  function updateHomePolaroids(cityName) {
+    const root = document.getElementById('home-v2-polaroids');
+    if (!root) return;
+    const set = HOME_POLAROID_SETS[homePolaroidSetKey(cityName)] || HOME_POLAROID_SETS._default;
+    root.querySelectorAll('.polaroid img').forEach((img, i) => {
+      const entry = set[i];
+      if (!entry) return;
+      const nextSrc = entry.src;
+      if (!nextSrc || img.dataset.polaroidSrc === nextSrc) {
+        if (nextSrc && img.style.opacity !== '1') img.style.opacity = '1';
+        return;
+      }
+      img.dataset.polaroidSrc = nextSrc;
+      img.dataset.polaroidFallback = '';
+      img.alt = entry.alt || '';
+      const fadeIn = () => {
+        img.style.opacity = '1';
+      };
+      img.onerror = () => {
+        if (img.dataset.polaroidFallback === '1') {
+          fadeIn();
+          return;
+        }
+        img.dataset.polaroidFallback = '1';
+        img.src = POLAROID_IMG_FALLBACK;
+      };
+      img.style.opacity = '0';
+      img.onload = fadeIn;
+      img.src = nextSrc;
+      if (img.complete && img.naturalWidth > 0) fadeIn();
+    });
+  }
+
   // Cap at 5 total so the chip row stays on a single line (see .city-chips
   // CSS: flex-wrap:nowrap + overflow:hidden). Recents come first, then top
   // cities fill any remaining slots.
@@ -9227,6 +9392,21 @@
       html.push(`<div class="city-chip" onclick="selectCity({name:'${c.name}'})">${c.flag} ${c.name}</div>`);
     });
     container.innerHTML = html.join('');
+  }
+
+  function swapLaunchCity() {
+    const inp = document.getElementById('cityInput');
+    if (!inp) return;
+    const cur = (inp.value || '').trim();
+    const names = TOP_CITIES.map((c) => c.name);
+    let idx = names.findIndex((n) => n.toLowerCase() === cur.toLowerCase());
+    if (idx < 0) idx = -1;
+    const next = names[(idx + 1) % names.length];
+    inp.value = next;
+    updateHomePolaroids(next);
+    try { prefetchBoopTripWizardImages(next); } catch (_) {}
+    inp.focus();
+    inp.select();
   }
 
   function onCityGo() {
@@ -9531,6 +9711,14 @@
     } else {
       S.city = normalizeCityName(cityInput.value.trim()) || DEFAULT_HOME_CITY;
     }
+    updateHomePolaroids(cityInput.value.trim() || DEFAULT_HOME_CITY);
+    if (S.city) prefetchBoopTripWizardImages(S.city);
+    cityInput.addEventListener('input', () => {
+      const v = (cityInput.value || '').trim();
+      if (TOP_CITIES.some((c) => c.name.toLowerCase() === v.toLowerCase())) {
+        updateHomePolaroids(v);
+      }
+    });
 
     /* Recent popover on focus + duplicate arrow-key nav — paused with Geo autocomplete (use onCityKeydown on input)
     cityInput.addEventListener('focus', () => {
