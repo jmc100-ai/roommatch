@@ -4501,17 +4501,22 @@
    * they don't trigger a competing render — this helper is the sole owner
    * of the first paint.
    */
-  async function revealResultsWhenReady() {
+  async function revealResultsWhenReady(onReady) {
     const haveDates = !!(S.checkin && S.checkout);
     const needWait = haveDates && _fetchingPrices && !_pricesLoaded;
 
-    if (!needWait) {
+    const finishPaint = () => {
       exitResultsPendingMode();
       const resEl = document.getElementById('results');
       if (resEl) resEl.classList.remove('no-anim');
       _initialRenderHappened = true;
       renderSorted();
       _syncRatesStatusAfterReveal();
+      if (typeof onReady === 'function') onReady();
+    };
+
+    if (!needWait) {
+      finishPaint();
       return;
     }
 
@@ -4545,11 +4550,7 @@
       );
     }
 
-    exitResultsPendingMode();
-    if (resultsEl) resultsEl.classList.remove('no-anim');
-    _initialRenderHappened = true;
-    renderSorted();
-    _syncRatesStatusAfterReveal();
+    finishPaint();
   }
 
   /** Clear #ratesStatus loading spinner when this rates request is finished. */
@@ -4924,15 +4925,21 @@
       if (btn) { btn.textContent = '✗ no data'; setTimeout(() => { btn.textContent = '⎘ debug'; }, 1500); }
       return;
     }
-    const hotels = (_lastVsearchHotels || []).slice(0, 10).map((h, i) => ({
+    const sorted = (_lastHotels?.length && typeof getSortedHotelsForDisplay === 'function')
+      ? getSortedHotelsForDisplay()
+      : (_lastVsearchHotels || []);
+    const hotels = sorted.slice(0, 10).map((h, i) => ({
       rank: i + 1,
+      id: h.id,
       name_raw: h.name,
       display_as: hotelDisplayTitle(h),
       vectorScore: h.vectorScore,
       hotelScore: h.hotelScore ?? null,
       nbhd_fit_pct: h.nbhd_fit_pct ?? null,
       primary_nbhd: h.primary_nbhd?.name ?? null,
-      effectiveScore: Math.max(0, ...(h.roomTypes || []).map(rt => rt.score || 0)),
+      roomVibeDisplayPct: roomVibeMatchDisplayPct(h),
+      bestMatchRoomScore: bestMatchRoomScore(h),
+      price: h.price ?? null,
       topRoom: h.roomTypes?.[0]
         ? { name: h.roomTypes[0].name, score: h.roomTypes[0].score }
         : null,
@@ -4940,6 +4947,8 @@
     }));
     const snap = {
       url: _lastVsearchUrl,
+      sort_source: 'client_best_match',
+      sort_note: 'Top 10 uses client Best Match order (room vibe % + nbhd blend + price guards). API response order may differ.',
       stats: {
         ..._lastVsearchStats,
         luxury_star_penalty_applied: _lastVsearchStats?.luxury_star_penalty_applied ?? false,
@@ -5369,23 +5378,9 @@
     if (shouldOpenVibeTour) {
       if (resPre) resPre.classList.add('no-anim');
       updateFreeCancelHint();
-      // Paint the hotel list as soon as vsearch (+ rates when dated) are ready.
-      // Previously we held the skeleton until the tour closed (vsearch + street-view
-      // could easily exceed 10s perceived latency). The tour overlay sits on top.
-      revealResultsWhenReady();
-      if (hasDates && _ratesArrivalPromise) {
-        // Dates are set: wait for prices before choosing the vibe-tour hotel so
-        // we always show an available (and free-cancel-if-required) hotel.
-        _vibeTourAwaitingPrices = true;
-        _vibeTourLeadId = null;
-        _openVibeTourAfterPrices(_ratesReqId, deduped);
-        return;
-      }
-      // No dates: open immediately with the top semantic-match hotel.
-      const sortedHotels = getSortedHotelsForDisplay();
-      const topForTour = sortedHotels[0] || deduped[0];
-      _vibeTourLeadId = topForTour?.id != null ? String(topForTour.id) : null;
-      setTimeout(() => openVibeTourWithStreetView(topForTour ? [topForTour] : deduped), 120);
+      // Paint the hotel list (waits for rates when dated), then open the tour for
+      // getSortedHotelsForDisplay()[0] so the tour hero always matches list #1.
+      revealResultsWhenReady(openAutoVibeTourAfterFinalSort);
       return;
     }
     _vibeTourLeadId = null;
@@ -5607,7 +5602,7 @@
   let _visibleStubReqId = 0;
   async function lazyFetchVisibleStubPhotos(searchReqId) {
     if (!S.city) { console.log('[stub-prefetch] skipped: no city'); return; }
-    const MAX_PREFETCH = 50;
+    const MAX_PREFETCH = 30;
     const ranked = (_lastHotels.length && typeof getSortedHotelsForDisplay === 'function')
       ? getSortedHotelsForDisplay()
       : _lastHotels;
@@ -5827,7 +5822,10 @@
   function prioritizeMetaIds(deferredIds) {
     const urgent = [];
     const urgentSet = new Set();
-    for (const h of _lastHotels.slice(0, 50)) {
+    const ranked = (_lastHotels.length && typeof getSortedHotelsForDisplay === 'function')
+      ? getSortedHotelsForDisplay()
+      : _lastHotels;
+    for (const h of ranked.slice(0, 50)) {
       if (!h?.id) continue;
       const sid = String(h.id);
       if (!h.mainPhoto || isPlaceholderHotelTitle(h.name, sid)) {
@@ -5839,6 +5837,18 @@
     }
     const rest = (deferredIds || []).filter((id) => !urgentSet.has(String(id)));
     return urgent.length ? [...urgent, ...rest] : rest;
+  }
+
+  /** Lazy-fetch LiteAPI names/photos for visible Best Match top cards missing meta. */
+  function lazyFetchSortedTopMeta() {
+    if (!_lastHotels.length || typeof getSortedHotelsForDisplay !== 'function') return;
+    const ids = [];
+    for (const h of getSortedHotelsForDisplay().slice(0, 30)) {
+      if (!h?.id) continue;
+      const sid = String(h.id);
+      if (isPlaceholderHotelTitle(h.name, sid) || !h.mainPhoto) ids.push(sid);
+    }
+    if (ids.length) lazyFetchHotelMeta(ids, _ratesReqId);
   }
 
   // Mirrors applyMetaInPlace pattern. For each hotel in roomsMap, mutate the
@@ -6029,6 +6039,7 @@
     }
     const priceDependentSort = _currentSort === 'match+price' || _currentSort === 'price';
     const priceMattersResort = _currentSort === 'match' && boopPriceMattersForSort() !== 0;
+    const matchLiveRateResort = matchSortUsesLiveRates();
     // When "Available only" is on, prices arriving will remove cards (any hotel
     // LiteAPI didn't return rates for → hotelPassesAvailFilter returns false).
     // applyPricesInPlace only updates DOM text on already-rendered cards; it
@@ -6037,11 +6048,15 @@
     // showing #1 with no rates because the filter never re-ran).
     const availFilterActive = _showAvailOnly && _hasDateSearch;
     const tourCoveringResults = _deferResultsRenderUntilTourClose || _vibeTourVisible;
-    if ((priceDependentSort || priceMattersResort || _requireFreeCancel || availFilterActive) && !tourCoveringResults) {
-      if (availFilterActive && _currentSort === 'match') {
+    if ((priceDependentSort || priceMattersResort || matchLiveRateResort || _requireFreeCancel || availFilterActive) && !tourCoveringResults) {
+      if (matchLiveRateResort) {
+        console.log('[prices] re-sort after rates (Best Match live-rate nudge)');
+      } else if (availFilterActive && _currentSort === 'match') {
         console.log('[prices] re-sort after rates (avail filter + match scores)');
       }
       renderSortedSmooth();
+      lazyFetchVisibleStubPhotos(_ratesReqId);
+      lazyFetchSortedTopMeta();
     } else {
       applyPricesInPlace(sym);
     }
@@ -6197,8 +6212,10 @@
    * score for them outside the top-250 window), so vectorScore is the only
    * meaningful room-quality signal we have until the hotel is re-indexed.
    *
-   * Sorting still uses `hotelEffectiveScore` (availability-aware) so ranking
-   * order continues to be driven by the best BOOKABLE matching room.
+   * Sorting uses the same signal so list order matches the room vibe % on the card.
+   * "Available only" hides hotels with no bookable rates via hotelPassesAvailFilter;
+   * it does not re-score hotels using only priced room rows (that caused 85% display /
+   * 56% sort mismatches when LiteAPI priced a different room type than the best match).
    */
   function roomVibeMatchDisplayPct(h) {
     const allRooms = h?.roomTypes || [];
@@ -6727,42 +6744,16 @@
     startVibeTourAutoAdvance();
   }
 
-  /** Deferred vibe-tour opener used when dates are set.
-   *  Awaits price data, then picks the top hotel that passes all active filters
-   *  (availability, free-cancel) before opening the tour.  */
-  async function _openVibeTourAfterPrices(capturedReqId, fallbackHotels) {
-    try {
-      await Promise.race([
-        _ratesArrivalPromise || Promise.resolve(),
-        new Promise(r => setTimeout(r, RATES_GATE_TIMEOUT_MS)),
-      ]);
-    } catch (_) {}
-
-    _vibeTourAwaitingPrices = false;
-
-    // Stale-search guard: a new search started while we were waiting.
-    if (capturedReqId !== _ratesReqId) {
-      if (_deferResultsRenderUntilTourClose) {
-        _deferResultsRenderUntilTourClose = false;
-        revealResultsWhenReady();
-      }
+  /** Open the post-Boop vibe tour for whatever hotel is #1 after the final Best Match sort. */
+  function openAutoVibeTourAfterFinalSort() {
+    if (!_deferResultsRenderUntilTourClose) return;
+    const topForTour = getSortedHotelsForDisplay()[0];
+    if (!topForTour) {
+      _deferResultsRenderUntilTourClose = false;
       return;
     }
-    // Tour was already dismissed (e.g. user navigated away).
-    if (!_deferResultsRenderUntilTourClose) return;
-
-    // Prices are now in; pick the top hotel that passes all active filters.
-    const sortedHotels = getSortedHotelsForDisplay();
-    const topForTour = sortedHotels[0] || fallbackHotels[0];
-    _vibeTourLeadId = topForTour?.id != null ? String(topForTour.id) : null;
-
-    if (topForTour) {
-      openVibeTourWithStreetView([topForTour]);
-    } else {
-      // No hotels pass filters (e.g. no availability at all) — skip tour.
-      _deferResultsRenderUntilTourClose = false;
-      revealResultsWhenReady();
-    }
+    _vibeTourLeadId = topForTour.id != null ? String(topForTour.id) : null;
+    setTimeout(() => openVibeTourWithStreetView([topForTour]), 120);
   }
 
   async function openVibeTourWithStreetView(hotels) {
@@ -7188,8 +7179,16 @@
     return Math.max(-100, Math.min(100, pm));
   }
 
+  /** Best Match applies a light live-rate nudge when the price slider is neutral. */
+  function matchSortUsesLiveRates() {
+    return _currentSort === 'match'
+      && _hasDateSearch
+      && Math.abs(boopPriceMattersForSort()) <= BOOP_PRICE_NEUTRAL_BAND;
+  }
+
   const BOOP_PRICE_VALUE_PENALTY_MAX = 24;
-  const BOOP_PRICE_LUXURY_STAR_EXTRA = 5;
+  const BOOP_PRICE_LUXURY_STAR_EXTRA = 10;
+  const BOOP_PRICE_HIGH_VALUE_EXTRA = 12;
   const BOOP_PRICE_SPLURGE_BONUS_MAX = 14;
   const BOOP_PRICE_ROOM_GAP_GUARD = 10;
 
@@ -7211,6 +7210,21 @@
   const BOOP_PRICE_NBHD_GAP_GUARD = 16;
   const BOOP_PRICE_NBHD_ROOM_YIELD_GAP = 22;
   const BOOP_PRICE_NBHD_WEIGHT_BOOST = 0.30;
+  /** When price slider is neutral, room lead ≥ this beats similar nbhd (pts). */
+  const BOOP_ROOM_DOMINANCE_GAP = 15;
+  const BOOP_NBHD_SIMILAR_MAX = 8;
+  /** Slider within ±32 = "Neutral" caption; no strong Boop price signal. */
+  const BOOP_PRICE_NEUTRAL_BAND = 32;
+  /**
+   * Best Match + live rates: nudge toward cheaper hotels when room scores are
+   * close (see MATCH_LIVE_RATE_ROOM_GAP). Does not apply when the user moved the
+   * price slider off neutral — boopPriceAdjustBlendedScore already handles that.
+   */
+  const MATCH_LIVE_RATE_NUDGE_MAX = 18;
+  const MATCH_LIVE_RATE_ROOM_GAP = 14;
+  /** Extra nudge when one hotel is ≥2.2× cohort median price with similar room match. */
+  const MATCH_LIVE_RATE_RATIO_BOOST = 8;
+  const MATCH_LIVE_RATE_PRICE_RATIO = 2.2;
 
   function valueSeekingLuxuryLean(h, pct) {
     if (pct && h.price != null && Number.isFinite(Number(h.price))) {
@@ -7297,16 +7311,33 @@
       if (Number.isFinite(stars) && stars >= 4) {
         penalty += t * BOOP_PRICE_LUXURY_STAR_EXTRA;
       }
+      if (Math.abs(p) >= 70) {
+        penalty += t * BOOP_PRICE_HIGH_VALUE_EXTRA * valueSeekingLuxuryLean(h, pct);
+      }
       return Math.max(0, blended - penalty);
     }
     const exp = valueSeekingLuxuryLean(h, pct);
     return blended + t * BOOP_PRICE_SPLURGE_BONUS_MAX * exp;
   }
 
-  /** Best Match sort basis: best room % when indexed rooms exist (matches card room rows). */
+  /** Live-rate price nudge when room scores are close (Best Match + neutral slider). */
+  function matchLiveRateNudgeDiff(a, b, roomA, roomB, pricePercentiles) {
+    if (!pricePercentiles || Math.abs(roomB - roomA) > MATCH_LIVE_RATE_ROOM_GAP) return 0;
+    const aPriced = a.price != null && Number.isFinite(Number(a.price));
+    const bPriced = b.price != null && Number.isFinite(Number(b.price));
+    if (!aPriced || !bPriced) return 0;
+    let diff = ((hotelPriceValueScore(b, pricePercentiles) - hotelPriceValueScore(a, pricePercentiles))
+      / 100) * MATCH_LIVE_RATE_NUDGE_MAX;
+    const med = (pricePercentiles.p10 + pricePercentiles.p90) / 2;
+    const maxP = Math.max(Number(a.price), Number(b.price));
+    if (med > 0 && maxP / med >= MATCH_LIVE_RATE_PRICE_RATIO) {
+      diff += (Number(a.price) > Number(b.price) ? -1 : 1) * MATCH_LIVE_RATE_RATIO_BOOST;
+    }
+    return diff;
+  }
+
+  /** Best Match sort basis — same % as the room vibe badge on each card. */
   function bestMatchRoomScore(h) {
-    const canFilter = _showAvailOnly && _hasDateSearch && _pricesLoaded;
-    if (canFilter) return hotelEffectiveScore(h);
     const room = roomVibeMatchDisplayPct(h);
     return room > 0 ? room : (h.vectorScore || 0);
   }
@@ -7490,10 +7521,25 @@
         blendedMatchScore(h), h, pm, pricePercentiles
       );
       const roomGapGuard = boopPriceRoomGapGuard(pm);
+      const pmNeutral = matchSortUsesLiveRates();
       hotels.sort((a, b) => {
+        const roomA = roomMatchScore(a);
+        const roomB = roomMatchScore(b);
+        if (Math.abs(pm) <= BOOP_PRICE_NEUTRAL_BAND) {
+          const nbhdA = a.nbhd_fit_pct;
+          const nbhdB = b.nbhd_fit_pct;
+          const nbhdGap = (nbhdA != null && nbhdB != null) ? Math.abs(nbhdB - nbhdA) : 0;
+          const roomGap = roomB - roomA;
+          if (roomGap >= BOOP_ROOM_DOMINANCE_GAP && nbhdGap <= BOOP_NBHD_SIMILAR_MAX) {
+            const cmp = 1;
+            return _sortReverse ? -cmp : cmp;
+          }
+          if (roomGap <= -BOOP_ROOM_DOMINANCE_GAP && nbhdGap <= BOOP_NBHD_SIMILAR_MAX) {
+            const cmp = -1;
+            return _sortReverse ? -cmp : cmp;
+          }
+        }
         if (pm > 0) {
-          const roomA = roomMatchScore(a);
-          const roomB = roomMatchScore(b);
           const roomGap = roomB - roomA;
           if (roomGap >= roomGapGuard) {
             if (!shouldRoomGuardYieldToPrice(b, pricePercentiles)) {
@@ -7524,6 +7570,9 @@
           }
         }
         let diff = sortScore(b) - sortScore(a);
+        if (pmNeutral && pricePercentiles) {
+          diff += matchLiveRateNudgeDiff(a, b, roomA, roomB, pricePercentiles);
+        }
         if (Math.abs(diff) < 1e-6) diff = (b.vectorScore || 0) - (a.vectorScore || 0);
         return _sortReverse ? -diff : (diff > 0 ? 1 : diff < 0 ? -1 : 0);
       });
@@ -7534,12 +7583,17 @@
             ? Math.max(...h.roomTypes.map(rt => rt.score || 0))
             : 0;
           const lean = valueSeekingLuxuryLean(h, pricePercentiles);
+          const priceVal = pricePercentiles && h.price != null
+            ? hotelPriceValueScore(h, pricePercentiles).toFixed(0)
+            : "—";
           return `  #${String(i + 1).padStart(2)} ${String(h.id).padEnd(12)} `
             + `sort=${sortScore(h).toFixed(1).padStart(6)} `
             + `blend=${blendedMatchScore(h).toFixed(1).padStart(6)} `
             + `room=${roomMatchScore(h).toFixed(0).padStart(3)} `
             + `lux=${lean.toFixed(2).padStart(4)} `
             + `nbhd=${(h.nbhd_fit_pct == null ? "—" : String(Math.round(h.nbhd_fit_pct))).padStart(3)} `
+            + `$/val=${priceVal.padStart(3)} `
+            + `price=${h.price != null ? String(Math.round(h.price)) : "—"} `
             + `stars=${String(h.starRating || "—").padStart(4)} `
             + `nm="${(h.name || "").slice(0, 28)}"`;
         });
@@ -7547,6 +7601,7 @@
           console.log(
             `[client-rank-debug] match-sort top-15 pm=${pm} strength=${pmStrength.toFixed(2)} `
             + `wNbhd=${wNbhd.toFixed(3)} (base=${wNbhdBase.toFixed(3)}) rates=${!!pricePercentiles} `
+            + `liveRateNudge=${pmNeutral && !!pricePercentiles ? `±${MATCH_LIVE_RATE_NUDGE_MAX} if room≤${MATCH_LIVE_RATE_ROOM_GAP}pt` : "off"} `
             + `pin=${_vibeTourLeadId || "—"}:\n` + dbg.join("\n")
           );
         }
@@ -7641,6 +7696,7 @@
     bindFeaturedStripNavs(resultsEl);
 
     _fetchRoomsForRenderedStubs(hotels);
+    lazyFetchSortedTopMeta();
 
     if (remaining > 0) {
       const sentinel = document.getElementById('scroll-sentinel');

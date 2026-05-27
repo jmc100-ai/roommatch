@@ -1394,6 +1394,8 @@ async function runV2Search({ req, supabase, supabaseAdmin, resolveCityName }) {
         luxury_pref:              luxuryPref,
         price_matters_star_penalty_applied: false,
         ...(nbhdBlendApplied ? { nbhd_rank_weight: nbhdRankWeight } : {}),
+        client_resort_note:
+          "API hotel order uses server primarySignal; the UI re-sorts with Best Match (room vibe % + nbhd blend + Boop price guards).",
         ...(String(req.query.compare || "") === "1"
           ? { compare: { enabled: true, v2_top_ids: hotels.slice(0, 20).map((h) => h.id) } }
           : {}),
