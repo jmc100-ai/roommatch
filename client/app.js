@@ -7223,8 +7223,10 @@
   const MATCH_LIVE_RATE_NUDGE_MAX = 18;
   const MATCH_LIVE_RATE_ROOM_GAP = 14;
   /** Extra nudge when one hotel is ≥2.2× cohort median price with similar room match. */
-  const MATCH_LIVE_RATE_RATIO_BOOST = 8;
+  const MATCH_LIVE_RATE_RATIO_BOOST = 12;
   const MATCH_LIVE_RATE_PRICE_RATIO = 2.2;
+  /** Subtract from sort score when neutral slider + live price ≫ cohort median (St Regis class). */
+  const MATCH_LIVE_RATE_LUXURY_TRIM_MAX = 14;
 
   function valueSeekingLuxuryLean(h, pct) {
     if (pct && h.price != null && Number.isFinite(Number(h.price))) {
@@ -7322,18 +7324,44 @@
 
   /** Live-rate price nudge when room scores are close (Best Match + neutral slider). */
   function matchLiveRateNudgeDiff(a, b, roomA, roomB, pricePercentiles) {
-    if (!pricePercentiles || Math.abs(roomB - roomA) > MATCH_LIVE_RATE_ROOM_GAP) return 0;
+    if (!pricePercentiles) return 0;
     const aPriced = a.price != null && Number.isFinite(Number(a.price));
     const bPriced = b.price != null && Number.isFinite(Number(b.price));
     if (!aPriced || !bPriced) return 0;
-    let diff = ((hotelPriceValueScore(b, pricePercentiles) - hotelPriceValueScore(a, pricePercentiles))
-      / 100) * MATCH_LIVE_RATE_NUDGE_MAX;
+
+    const priceA = Number(a.price);
+    const priceB = Number(b.price);
     const med = (pricePercentiles.p10 + pricePercentiles.p90) / 2;
-    const maxP = Math.max(Number(a.price), Number(b.price));
-    if (med > 0 && maxP / med >= MATCH_LIVE_RATE_PRICE_RATIO) {
-      diff += (Number(a.price) > Number(b.price) ? -1 : 1) * MATCH_LIVE_RATE_RATIO_BOOST;
+    const maxP = Math.max(priceA, priceB);
+    const priceRatio = med > 0 ? maxP / med : 1;
+
+    const roomGap = Math.abs(roomB - roomA);
+    const roomGapLimit = MATCH_LIVE_RATE_ROOM_GAP
+      + (priceRatio >= 2.5 ? Math.min(14, (priceRatio - 2) * 5) : 0);
+    if (roomGap > roomGapLimit) return 0;
+
+    const nudgeScale = priceRatio >= MATCH_LIVE_RATE_PRICE_RATIO
+      ? Math.min(2.4, 1 + (priceRatio - MATCH_LIVE_RATE_PRICE_RATIO) * 0.5)
+      : 1;
+    let diff = ((hotelPriceValueScore(b, pricePercentiles) - hotelPriceValueScore(a, pricePercentiles))
+      / 100) * MATCH_LIVE_RATE_NUDGE_MAX * nudgeScale;
+
+    if (priceRatio >= MATCH_LIVE_RATE_PRICE_RATIO) {
+      const ratioBoost = MATCH_LIVE_RATE_RATIO_BOOST * Math.min(2.5, priceRatio / MATCH_LIVE_RATE_PRICE_RATIO);
+      if (priceA > priceB) diff -= ratioBoost;
+      else if (priceB > priceA) diff += ratioBoost;
     }
     return diff;
+  }
+
+  /** Flat trim on blended sort score for extreme live prices (neutral slider only). */
+  function neutralLuxuryPriceTrim(h, pricePercentiles, pm) {
+    if (Math.abs(pm) > BOOP_PRICE_NEUTRAL_BAND || !pricePercentiles || h.price == null) return 0;
+    const med = (pricePercentiles.p10 + pricePercentiles.p90) / 2;
+    if (med <= 0) return 0;
+    const ratio = Number(h.price) / med;
+    if (ratio <= MATCH_LIVE_RATE_PRICE_RATIO) return 0;
+    return Math.min(MATCH_LIVE_RATE_LUXURY_TRIM_MAX, (ratio - MATCH_LIVE_RATE_PRICE_RATIO) * 4.5);
   }
 
   /** Best Match sort basis — same % as the room vibe badge on each card. */
@@ -7517,11 +7545,15 @@
         }
         return room;
       };
-      const sortScore = h => boopPriceAdjustBlendedScore(
-        blendedMatchScore(h), h, pm, pricePercentiles
-      );
       const roomGapGuard = boopPriceRoomGapGuard(pm);
       const pmNeutral = matchSortUsesLiveRates();
+      const sortScore = (h) => {
+        let s = boopPriceAdjustBlendedScore(blendedMatchScore(h), h, pm, pricePercentiles);
+        if (pmNeutral && pricePercentiles) {
+          s -= neutralLuxuryPriceTrim(h, pricePercentiles, pm);
+        }
+        return s;
+      };
       hotels.sort((a, b) => {
         const roomA = roomMatchScore(a);
         const roomB = roomMatchScore(b);

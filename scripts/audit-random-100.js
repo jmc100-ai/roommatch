@@ -25,7 +25,11 @@ const { getBaseUrl } = require("./search-test-lib");
 
 const BASE_URL = getBaseUrl(process.argv);
 const COUNT = Number((process.argv.find((a) => a.startsWith("--count=")) || "").split("=")[1]) || 100;
-const SEED = Number((process.argv.find((a) => a.startsWith("--seed=")) || "").split("=")[1]) || 20260521;
+const SEED_ARG = (process.argv.find((a) => a.startsWith("--seed=")) || "").split("=")[1];
+const SEED = SEED_ARG === "random" || !SEED_ARG
+  ? (Date.now() ^ (Math.random() * 0xffffffff)) >>> 0
+  : Number(SEED_ARG);
+const FULLY_RANDOM = !process.argv.includes("--stratified");
 const DELAY_MS = Number((process.argv.find((a) => a.startsWith("--delay=")) || "").split("=")[1]) || 350;
 const HVB = 0.2;
 
@@ -56,32 +60,33 @@ function addDays(iso, days) {
   return d.toISOString().slice(0, 10);
 }
 
-function generateCases(n, seed) {
+function generateCases(n, seed, fullyRandom = true) {
   const rng = mulberry32(seed);
   const cities = ["Mexico City", "Paris"];
   const cases = [];
   let i = 0;
 
-  // Stratified grid: cover trip × stay × nbhd for both cities (60 combos → take 40)
-  for (const city of cities) {
-    for (const trip of TRIPS) {
-      for (const stayVibe of STAY_VIBES) {
-        for (const nbhdScene of NBHD_SCENES) {
-          if (cases.length >= Math.min(40, n)) break;
-          cases.push({
-            id: `grid_${String(++i).padStart(3, "0")}`,
-            city,
-            dates: cases.length % 2 === 0,
-            answers: {
-              trip,
-              stayVibe,
-              nbhdScene,
-              group_size: pick(rng, GROUPS),
-              priceMatters: pick(rng, [0, 0, 50, 80, -50]),
-            },
-            dealbreakers: pick(rng, DEAL_POOL),
-            freetext: pick(rng, FREETEXT_POOL),
-          });
+  if (!fullyRandom) {
+    for (const city of cities) {
+      for (const trip of TRIPS) {
+        for (const stayVibe of STAY_VIBES) {
+          for (const nbhdScene of NBHD_SCENES) {
+            if (cases.length >= Math.min(40, n)) break;
+            cases.push({
+              id: `grid_${String(++i).padStart(3, "0")}`,
+              city,
+              dates: rng() < 0.52,
+              answers: {
+                trip,
+                stayVibe,
+                nbhdScene,
+                group_size: pick(rng, GROUPS),
+                priceMatters: pick(rng, [0, 0, 50, 80, -50]),
+              },
+              dealbreakers: pick(rng, DEAL_POOL),
+              freetext: pick(rng, FREETEXT_POOL),
+            });
+          }
         }
       }
     }
@@ -104,7 +109,6 @@ function generateCases(n, seed) {
     });
   }
 
-  // Assign date ranges for dated cases
   const base = "2026-06-18";
   for (const c of cases) {
     if (!c.dates) {
@@ -458,6 +462,7 @@ function buildReport(results, meta) {
   lines.push(`- **Cities:** Mexico City + Paris`);
   lines.push(`- **Dated searches:** ${results.filter((r) => r.ok && r.caseDef.dates).length}`);
   lines.push(`- **Sort model:** Client Best Match (lib/client-match-sort.js)`);
+  lines.push(`- **Case generation:** ${meta.fullyRandom ? "100% random (no stratified grid)" : "stratified grid + random"}`);
   lines.push("");
 
   lines.push("## Executive summary");
@@ -600,9 +605,9 @@ function buildReport(results, meta) {
 }
 
 async function main() {
-  const cases = generateCases(COUNT, SEED);
+  const cases = generateCases(COUNT, SEED, FULLY_RANDOM);
   const results = [];
-  console.log(`\nRandom search QA — ${COUNT} cases @ ${BASE_URL} (seed=${SEED})\n`);
+  console.log(`\nRandom search QA — ${COUNT} cases @ ${BASE_URL} (seed=${SEED}, ${FULLY_RANDOM ? "fully random" : "stratified"})\n`);
 
   for (let idx = 0; idx < cases.length; idx++) {
     const c = cases[idx];
@@ -626,8 +631,8 @@ async function main() {
   const reportDir = path.join(__dirname, "..", "reports");
   fs.mkdirSync(reportDir, { recursive: true });
   const date = new Date().toISOString().slice(0, 10);
-  const reportPath = path.join(reportDir, `random-search-audit-${date}.md`);
-  const report = buildReport(results, { count: COUNT, seed: SEED, baseUrl: BASE_URL, date });
+  const reportPath = path.join(reportDir, `random-search-audit-${date}-seed${SEED}.md`);
+  const report = buildReport(results, { count: COUNT, seed: SEED, baseUrl: BASE_URL, date, fullyRandom: FULLY_RANDOM });
   fs.writeFileSync(reportPath, report, "utf8");
 
   const okN = results.filter((r) => r.ok).length;
