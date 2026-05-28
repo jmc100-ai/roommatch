@@ -9517,21 +9517,6 @@
     container.innerHTML = html.join('');
   }
 
-  function swapLaunchCity() {
-    const inp = document.getElementById('cityInput');
-    if (!inp) return;
-    const cur = (inp.value || '').trim();
-    const names = TOP_CITIES.map((c) => c.name);
-    let idx = names.findIndex((n) => n.toLowerCase() === cur.toLowerCase());
-    if (idx < 0) idx = -1;
-    const next = names[(idx + 1) % names.length];
-    inp.value = next;
-    updateHomePolaroids(next);
-    try { prefetchBoopTripWizardImages(next); } catch (_) {}
-    inp.focus();
-    inp.select();
-  }
-
   function onCityGo() {
     const val = (document.getElementById('cityInput').value || '').trim();
     if (val) selectCity({ name: val });
