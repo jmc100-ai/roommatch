@@ -56,7 +56,7 @@
 **Build**
 
 - **Server:** After choosing a photo from search results in `scripts/neighborhood-generator.js` (`fetchNeighborhoodPhoto`), **POST** to Unsplash `download_location` when the API returns it ([guidelines](https://help.unsplash.com/api-guidelines/unsplash-api-guidelines)). Do this **once per stored hero** at generation time (and optionally once on first API response if you defer persistence).
-- **Links:** Ensure outbound photographer / Unsplash links use **`utm_source=travelboop`** (or your canonical app slug) per Unsplash attribution guidelines.
+- **Links:** Ensure outbound photographer / Unsplash links use **`utm_source=travelbyvibe`** (or your canonical app slug) per Unsplash attribution guidelines.
 - **Client:** Only use **`urls.*`** from API responses for Unsplash heroes (already hotlinking); do not re-upload to your CDN without checking API terms.
 
 **UX**

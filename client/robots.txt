@@ -1,4 +1,4 @@
 User-agent: *
 Disallow: /api/
 
-Sitemap: https://www.travelboop.com/sitemap.xml
+Sitemap: https://www.travelbyvibe.com/sitemap.xml

@@ -231,6 +231,12 @@ function sanitizeRatesCurrency(q) {
   return RATES_CURRENCY_ALLOW.has(c) ? c : "USD";
 }
 const PORT        = process.env.PORT || 3000;
+/** Canonical public site origin (marketing, sitemap, OG). Override with SITE_PUBLIC_ORIGIN or BETA_BASE_URL. */
+const SITE_PUBLIC_ORIGIN = (
+  process.env.SITE_PUBLIC_ORIGIN ||
+  process.env.BETA_BASE_URL ||
+  "https://www.travelbyvibe.com"
+).replace(/\/$/, "");
 
 // Keep health check fast and dependency-free for Render startup probes.
 app.get("/api/health", (_, res) => {
@@ -238,6 +244,25 @@ app.get("/api/health", (_, res) => {
 });
 app.head("/api/health", (_, res) => {
   res.status(200).end();
+});
+
+/** JSON readiness for beta launch (UptimeRobot should keep using /api/health). */
+app.get("/api/health/beta", (_req, res) => {
+  res.json({
+    ok: true,
+    release: SENTRY_RELEASE,
+    env: process.env.SENTRY_ENV || "production",
+    instrumentation: {
+      sentry_server: !!process.env.SENTRY_DSN_SERVER,
+      sentry_client: !!process.env.SENTRY_DSN_CLIENT,
+      posthog: !!(process.env.POSTHOG_API_KEY || process.env.POSTHOG_PROJECT_KEY),
+      feedback_slack: !!process.env.SLACK_FEEDBACK_WEBHOOK,
+      feedback_email: !!(process.env.BETA_FEEDBACK_EMAIL && process.env.RESEND_API_KEY && process.env.BETA_FROM),
+      site_gate: !!SITE_PASSWORD,
+      supabase_admin: !!supabaseAdmin,
+      posthog_person_links: !!String(process.env.POSTHOG_PROJECT_URL || "").trim(),
+    },
+  });
 });
 
 app.get("/api/public-config", (_req, res) => {
@@ -1184,6 +1209,8 @@ app.use(helmet({
 // localhost dev. The `null` origin (curl, server-side, Same-origin POST) is
 // always allowed because cors() passes through requests with no Origin header.
 const _allowedOrigins = new Set([
+  "https://www.travelbyvibe.com",
+  "https://travelbyvibe.com",
   "https://www.travelboop.com",
   "https://travelboop.com",
   "https://roommatch-1fg5.onrender.com",
@@ -1206,7 +1233,7 @@ app.use(express.json({ limit: "256kb" }));
 // the beta). Health + public-config are explicitly skipped so monitors and the
 // SPA's first-paint config fetch are never throttled.
 const rateLimit = require("express-rate-limit");
-const RL_SKIP = new Set(["/api/health", "/api/config", "/api/public-config"]);
+const RL_SKIP = new Set(["/api/health", "/api/health/beta", "/api/config", "/api/public-config"]);
 function rlHandler(req, res /*, next, options */) {
   res.status(429).json({
     error: "rate_limited",
@@ -1238,6 +1265,7 @@ app.use(/^\/api\//,          _rlGeneric);
 // by monitors and the first paint.
 const API_GATE_ALLOWLIST = new Set([
   "/api/health",
+  "/api/health/beta",
   "/api/config",
   "/api/public-config",
   "/api/nbhd-img",
@@ -1258,9 +1286,13 @@ app.use(_apiBetaGate);
 
 /** Indexable marketing pages + crawler helpers — do not send global noindex. */
 const MARKETING_HTML = {
+  "/destinations": "destinations.html",
   "/mexico-city-hotels": "mexico-city-hotels.html",
   "/cdmx-neighborhood-stays": "cdmx-neighborhood-stays.html",
   "/mexico-city-visual-search": "mexico-city-visual-search.html",
+  "/paris-hotels": "paris-hotels.html",
+  "/paris-neighborhood-stays": "paris-neighborhood-stays.html",
+  "/paris-visual-search": "paris-visual-search.html",
 };
 function isIndexablePublicPath(p) {
   if (!p) return false;
@@ -1370,7 +1402,7 @@ function marketingOrigin(req) {
     .trim()
     .replace(/:\d+$/, "");
   if (host) return `${proto}://${host}`;
-  const base = (process.env.RENDER_EXTERNAL_URL || "https://www.travelboop.com").replace(/\/$/, "");
+  const base = (process.env.RENDER_EXTERNAL_URL || SITE_PUBLIC_ORIGIN).replace(/\/$/, "");
   return /^https?:\/\//i.test(base) ? base : `https://${base}`;
 }
 
@@ -1443,7 +1475,7 @@ function _legalHtml(title, body) {
   ${body}
   <p class="muted">TravelByVibe is in beta — details here are a simple overview, not legal advice, and we may update them as the product evolves. Operated by TravelBoop, LLC.</p>
   <div class="foot">
-    <a href="/privacy">Privacy</a>·<a href="/terms">Terms</a>·<a href="mailto:beta@travelboop.com">Contact</a>
+    <a href="/privacy">Privacy</a>·<a href="/terms">Terms</a>·<a href="mailto:beta@travelbyvibe.com">Contact</a>
   </div>
 </div>
 </body>
@@ -1464,7 +1496,7 @@ app.get("/privacy", (_req, res) => {
     <h2>Partners</h2>
     <p>Hotel listings, photos, and prices come from our travel data and booking partners. Some features use Google’s AI services. We use trusted vendors for hosting, maps, email, and the anonymous stats and error tools above — each has their own privacy terms.</p>
     <h2>Your choices</h2>
-    <p>During beta we may adjust how long we keep certain data. To ask a question or request deletion, email <a href="mailto:beta@travelboop.com">beta@travelboop.com</a> — we are a small team and will reply as soon as we can.</p>`;
+    <p>During beta we may adjust how long we keep certain data. To ask a question or request deletion, email <a href="mailto:beta@travelbyvibe.com">beta@travelbyvibe.com</a> — we are a small team and will reply as soon as we can.</p>`;
   res.setHeader("Content-Type", "text/html; charset=utf-8");
   res.setHeader("Cache-Control", "public, max-age=600, s-maxage=3600");
   res.send(_legalHtml("Privacy", body));
@@ -4077,7 +4109,7 @@ app.get("/api/nbhd-img", async (req, res) => {
     const upstream = await fetch(cacheKey, {
       redirect: "follow",
       headers: {
-        "User-Agent": "TravelBoop/1.0 (+https://www.travelboop.com)",
+        "User-Agent": `TravelByVibe/1.0 (+${SITE_PUBLIC_ORIGIN})`,
         Accept: "image/*",
       },
     });
@@ -5373,14 +5405,22 @@ function _clientIp(req) {
   return xff || req.ip || req.connection?.remoteAddress || "";
 }
 
-// In-app feedback form submissions. Required: { message }. Optional: { distinctId, email, sentiment, currentUrl, currentSearch }.
+// In-app feedback form submissions. Required: { message }. Optional: distinctId, email,
+// sentiment, currentUrl, currentSearch, currentCity, issueType, release, viewport, debugContext.
 // Writes to beta_feedback (Supabase). If SLACK_FEEDBACK_WEBHOOK is set we also
 // fan out a brief preview to Slack so the team sees feedback in real time.
+const { betaPosthogPersonUrl } = require("./scripts/beta-posthog-person-url");
+const BETA_ISSUE_TYPES = new Set(["bug", "ux", "ranking", "praise", "other"]);
+
 app.post("/api/feedback", async (req, res) => {
   try {
     const b = req.body || {};
     const message = String(b.message || "").trim().slice(0, 4000);
     if (!message) return res.status(400).json({ error: "message_required" });
+    const issueRaw = String(b.issueType || b.issue_type || "").trim().toLowerCase();
+    const issueType = BETA_ISSUE_TYPES.has(issueRaw) ? issueRaw : null;
+    let debugContext = b.debugContext || b.debug_context;
+    if (debugContext != null && typeof debugContext !== "object") debugContext = null;
     const row = {
       distinct_id:    String(b.distinctId || b.distinct_id || "").slice(0, 64) || null,
       user_email:     b.email ? String(b.email).trim().toLowerCase().slice(0, 200) : null,
@@ -5388,9 +5428,15 @@ app.post("/api/feedback", async (req, res) => {
       message,
       current_url:    String(b.currentUrl || b.current_url || "").slice(0, 500) || null,
       current_search: String(b.currentSearch || b.current_search || "").slice(0, 500) || null,
+      current_city:   String(b.currentCity || b.current_city || "").slice(0, 120) || null,
+      release:        String(b.release || "").slice(0, 80) || null,
+      viewport:       String(b.viewport || "").slice(0, 32) || null,
+      issue_type:     issueType,
+      debug_context:  debugContext,
       user_agent:     String(req.headers["user-agent"] || "").slice(0, 300) || null,
       ip_addr:        _clientIp(req).slice(0, 45) || null,
     };
+    const posthogPersonUrl = betaPosthogPersonUrl(row.distinct_id);
     if (supabaseAdmin) {
       const { error } = await supabaseAdmin.from("beta_feedback").insert(row);
       if (error) {
@@ -5403,11 +5449,16 @@ app.post("/api/feedback", async (req, res) => {
     // Fire-and-forget Slack mirror (optional — set SLACK_FEEDBACK_WEBHOOK to enable)
     if (process.env.SLACK_FEEDBACK_WEBHOOK) {
       const slackPayload = {
-        text: `*New beta feedback* ${row.sentiment ? `(${row.sentiment}/5)` : ""}\n` +
+        text: `*New beta feedback*${row.issue_type ? ` · \`${row.issue_type}\`` : ""}${row.sentiment ? ` (${row.sentiment}/5)` : ""}\n` +
               `> ${message.replace(/\n/g, "\n> ").slice(0, 500)}` +
               (row.user_email ? `\n_email:_ ${row.user_email}` : "") +
-              (row.current_url ? `\n_url:_ ${row.current_url}` : "") +
-              (row.current_search ? `\n_search:_ ${row.current_search}` : ""),
+              (row.distinct_id ? `\n_distinct_id:_ \`${row.distinct_id}\`` : "") +
+              (posthogPersonUrl ? `\n_posthog:_ ${posthogPersonUrl}` : "") +
+              (row.current_city ? `\n_city:_ ${row.current_city}` : "") +
+              (row.current_url ? `\n_page:_ ${row.current_url}` : "") +
+              (row.current_search ? `\n_search context:_ ${row.current_search}` : "") +
+              (row.release ? `\n_release:_ ${row.release}` : "") +
+              (row.viewport ? `\n_viewport:_ ${row.viewport}` : ""),
       };
       fetch(process.env.SLACK_FEEDBACK_WEBHOOK, {
         method: "POST",
@@ -5428,19 +5479,29 @@ app.post("/api/feedback", async (req, res) => {
             <p style="color:#666;font-size:12px;margin:0 0 16px">${escape(new Date().toUTCString())}</p>
             <blockquote style="border-left:3px solid #c9a96e;padding:8px 14px;margin:0 0 18px;background:#faf6ee;white-space:pre-wrap;font-size:14px;line-height:1.55">${escape(message)}</blockquote>
             <table style="font-size:12px;color:#444;border-collapse:collapse">
+              ${row.issue_type     ? `<tr><td style="padding:2px 8px 2px 0;color:#888">type</td><td>${escape(row.issue_type)}</td></tr>` : ""}
               ${row.user_email     ? `<tr><td style="padding:2px 8px 2px 0;color:#888">email</td><td>${escape(row.user_email)}</td></tr>`     : ""}
               ${row.distinct_id    ? `<tr><td style="padding:2px 8px 2px 0;color:#888">distinct_id</td><td><code>${escape(row.distinct_id)}</code></td></tr>` : ""}
+              ${posthogPersonUrl   ? `<tr><td style="padding:2px 8px 2px 0;color:#888">PostHog</td><td><a href="${escape(posthogPersonUrl)}">session replay</a></td></tr>` : ""}
+              ${row.current_city   ? `<tr><td style="padding:2px 8px 2px 0;color:#888">city</td><td>${escape(row.current_city)}</td></tr>` : ""}
               ${row.current_url    ? `<tr><td style="padding:2px 8px 2px 0;color:#888">on page</td><td>${escape(row.current_url)}</td></tr>`    : ""}
               ${row.current_search ? `<tr><td style="padding:2px 8px 2px 0;color:#888">searching</td><td>${escape(row.current_search)}</td></tr>` : ""}
+              ${row.release        ? `<tr><td style="padding:2px 8px 2px 0;color:#888">release</td><td><code>${escape(row.release)}</code></td></tr>` : ""}
+              ${row.viewport       ? `<tr><td style="padding:2px 8px 2px 0;color:#888">viewport</td><td>${escape(row.viewport)}</td></tr>` : ""}
               ${row.user_agent     ? `<tr><td style="padding:2px 8px 2px 0;color:#888">user-agent</td><td style="color:#999;font-size:11px">${escape(row.user_agent)}</td></tr>` : ""}
             </table>
             <p style="color:#999;font-size:11px;margin:20px 0 0">All submissions are also stored in <code>beta_feedback</code> in Supabase.</p>
           </div>`;
         const plain = `New beta feedback${sentLabel}\n\n` + message + "\n\n" +
+          (row.issue_type     ? `type: ${row.issue_type}\n` : "") +
           (row.user_email     ? `email: ${row.user_email}\n` : "") +
           (row.distinct_id    ? `distinct_id: ${row.distinct_id}\n` : "") +
+          (posthogPersonUrl   ? `posthog: ${posthogPersonUrl}\n` : "") +
+          (row.current_city   ? `city: ${row.current_city}\n` : "") +
           (row.current_url    ? `on page: ${row.current_url}\n` : "") +
-          (row.current_search ? `searching: ${row.current_search}\n` : "");
+          (row.current_search ? `searching: ${row.current_search}\n` : "") +
+          (row.release        ? `release: ${row.release}\n` : "") +
+          (row.viewport       ? `viewport: ${row.viewport}\n` : "");
         // Reply-To set to the user's email when present so you can reply directly.
         const replyTo = row.user_email || process.env.BETA_REPLY_TO || undefined;
         resend.emails.send({
@@ -5457,8 +5518,10 @@ app.post("/api/feedback", async (req, res) => {
     }
     trackServer(row.distinct_id, "feedback_submitted_server", {
       sentiment: row.sentiment,
+      issue_type: row.issue_type,
       has_email: !!row.user_email,
       message_length: message.length,
+      current_city: row.current_city,
     });
     res.json({ ok: true });
   } catch (e) {

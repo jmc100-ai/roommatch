@@ -1,7 +1,7 @@
 -- ─────────────────────────────────────────────────────────────────────────────
 -- Beta launch tables — feedback intake, consent ledger, invite roster
 -- Apply via Supabase SQL editor or `supabase db push`. Idempotent (uses IF NOT EXISTS).
--- Created 2026-05-07 as part of TravelBoop closed-beta launch.
+-- Created 2026-05-07 as part of TravelByVibe closed-beta launch (TravelBoop, LLC).
 -- ─────────────────────────────────────────────────────────────────────────────
 
 -- 1. beta_feedback — every in-app feedback button submission lands here.
@@ -14,6 +14,11 @@ CREATE TABLE IF NOT EXISTS beta_feedback (
   message         TEXT NOT NULL,        -- freeform body, capped at 4000 chars in API
   current_url     TEXT,
   current_search  TEXT,                 -- the active vsearch query (helps reproduce)
+  current_city    TEXT,                 -- added in add-beta-feedback-context.sql if missing
+  release         TEXT,
+  viewport        TEXT,
+  issue_type      TEXT,                 -- bug | ux | ranking | praise | other
+  debug_context   JSONB,                -- coarse repro (no query text)
   user_agent      TEXT,
   ip_addr         TEXT,                 -- last-resort identifier; not used for tracking
   created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()

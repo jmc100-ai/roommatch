@@ -7,6 +7,10 @@ services:
     startCommand: npm start
     healthCheckPath: /api/health
     envVars:
+      - key: SITE_PUBLIC_ORIGIN
+        value: https://www.travelbyvibe.com
+      - key: BETA_BASE_URL
+        value: https://www.travelbyvibe.com
       - key: LITEAPI_KEY
         sync: false
       - key: NODE_ENV

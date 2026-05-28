@@ -1,269 +1,246 @@
-# TravelBoop Closed Beta — Launch Checklist & Runbook
+# TravelByVibe closed beta — launch checklist & runbook
 
-**Status:** Code complete (branch). Awaiting env config + manual ops items below.
-**Beta size:** 50 invitees · **Access:** shared `SITE_PASSWORD` · **Launch city:** Mexico City
-**Source plan:** `.cursor/plans/travelboop_closed_beta_launch_*.plan.md`
+**Product:** TravelByVibe · **Site:** [travelbyvibe.com](https://www.travelbyvibe.com) (see `docs/DOMAIN.md` for legacy travelboop.com)  
+**Status:** Code ready for phased beta. Ops (Sentry/PostHog/Linear/invites) are manual.  
+**Cities:** Mexico City (primary) + Paris  
+**Last updated:** 2026-05-28
 
-> Open this file before each launch checkpoint and tick boxes. Coding is done; the rest is config + outreach.
-
----
-
-## 1. Render env vars to set before deploy
-
-Set these in the Render dashboard (Environment tab, then Manual Deploy):
-
-
-| Var                      | Value                                                 | Notes                                                                         |
-| ------------------------ | ----------------------------------------------------- | ----------------------------------------------------------------------------- |
-| `SITE_PASSWORD`          | a fresh password (NOT the dev one)                    | The one you'll email to all 50 testers. Rotate before launch.                 |
-| `INDEX_SECRET`           | (already set)                                         | Re-confirm before launch.                                                     |
-| `SENTRY_DSN_SERVER`      | DSN from Sentry → Settings → Projects → Server        | Free tier 5k errors/mo.                                                       |
-| `SENTRY_DSN_CLIENT`      | DSN from Sentry → Settings → Projects → Browser       | Public-by-design.                                                             |
-| `SENTRY_ENV`             | `production`                                          | Tagged on every event.                                                        |
-| `POSTHOG_PROJECT_KEY`    | "Project API Key" from PostHog → Project Settings     | Public, used in browser.                                                      |
-| `POSTHOG_API_KEY`        | same key                                              | Used by server-side `posthog-node` for the `vsearch_executed` mirror.         |
-| `POSTHOG_HOST`           | `https://us.i.posthog.com`                            | Default for US Cloud.                                                         |
-| `RESEND_API_KEY`         | from resend.com/api-keys                              | For sending invite/welcome/nudge emails (via `scripts/email/send-emails.js`). |
-| `BETA_PASSWORD`          | same value as `SITE_PASSWORD`                         | Used by email scripts to embed in the invite body.                            |
-| `BETA_FROM`              | `TravelBoop Beta <beta@travelboop.com>`               | Domain must be verified in Resend.                                            |
-| `BETA_REPLY_TO`          | `beta@travelboop.com`                                 | Where replies go.                                                             |
-| `BETA_CALENDAR_URL`      | (optional) e.g. `https://cal.com/your-handle`         | Embedded in emails.                                                           |
-| `SLACK_FEEDBACK_WEBHOOK` | (optional)                                            | Mirrors every `/api/feedback` POST to a Slack channel.                        |
-| `BETA_FEEDBACK_EMAIL`    | (optional, recommended) e.g. `you@example.com`        | Mirrors every `/api/feedback` POST to this address via Resend. Reply-To is set to the submitter's email when provided. Requires `RESEND_API_KEY` + `BETA_FROM`. |
-| `BETA_BANNER`            | (optional) e.g. "Slow searches today — fix in flight" | Shown sticky-top to all users when set.                                       |
-
-
-**Render-managed vars (already exist, just verify):**
-`LITEAPI_PROD_KEY`, `GEMINI_KEY`, `SUPABASE_URL`, `SUPABASE_SERVICE_KEY`, `SUPABASE_ANON_KEY`, `LITEAPI_WL_DOMAIN`, `MAPTILER_KEY`, `GEOAPIFY_KEY`, `RENDER_EXTERNAL_URL`.
+> Open this file before each launch checkpoint. Tick boxes in order.
 
 ---
 
-## 2. Supabase — apply beta migration
+## Phased rollout (recommended)
 
-Run once in the Supabase SQL editor (or `supabase db push`):
+
+| Phase                 | Size    | Goal                                 | Gate                                                            |
+| --------------------- | ------- | ------------------------------------ | --------------------------------------------------------------- |
+| **0 — Friends**       | 15–25   | Break obvious P0s, fix feedback loop | `/api/health/beta` all instrumentation `true`; 3-device QA done |
+| **1 — Closed beta**   | 50–100  | Boop funnel + search quality signal  | <2 open P0; p95 `response_ms` on `vsearch_executed` < 6s cold   |
+| **2 — Expanded beta** | 200–500 | Ranking + nbhd UX at scale           | Same + weekly Linear triage; PostHog replays reviewed           |
+
+
+Use one shared `SITE_PASSWORD` for phases 0–1; rotate before phase 2 or switch to per-cohort passwords if leaks are a concern.
+
+---
+
+## Gap audit (May 2026)
+
+### Already in the repo (ship after deploy + env)
+
+
+| Capability                                                                                         | Where                                                     |
+| -------------------------------------------------------------------------------------------------- | --------------------------------------------------------- |
+| PostHog `track()` + `identify(distinct_id)`                                                        | `client/app.js`                                           |
+| Funnel events `city_selected`, `boop_completed`, `vsearch_executed` (+ `response_ms`, `server_ms`) | `client/app.js`                                           |
+| Sentry browser + server, `setUser({ id: distinct_id })`                                            | `client/index.html`, `client/app.js`                      |
+| Feedback FAB + category + rich context → Supabase                                                  | `POST /api/feedback`                                      |
+| Slack/email mirrors with PostHog person link (if `POSTHOG_PROJECT_URL` set)                        | `server.js`                                               |
+| Beta consent + gate + rate limits                                                                  | `server.js`, `client/`                                    |
+| Marketing SEO cluster (CDMX + Paris)                                                               | `client/marketing/`, `docs/marketing-plan-beta-launch.md` |
+| JSON readiness probe                                                                               | `GET /api/health/beta`                                    |
+
+
+### You must do manually (not code)
+
+
+| Gap                         | Action                                                                                                         |
+| --------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| **PostHog session replay**  | PostHog → Project Settings → Recordings → enable; sample 100% for beta                                         |
+| **PostHog dashboards**      | Pin funnel: `beta_gate_passed` → `city_selected` → `boop_completed` → `vsearch_executed` → `find_book_clicked` |
+| **Sentry → Linear**         | Sentry → Settings → Integrations → Linear; auto-create issues for new errors                                   |
+| **Sentry alerts**           | Email/Slack on first seen issue in `production`                                                                |
+| **Linear project + labels** | `bug`, `ux`, `search-quality`, `paris`, `mexico-city`, `mobile`, `P0`/`P1`/`P2`                                |
+| **Supabase migrations**     | Run `add-beta-tables.sql` then `add-beta-feedback-context.sql`                                                 |
+| **Render env**              | Table in §1 below                                                                                              |
+| **Resend domain**           | Verify `beta@travelbyvibe.com` (or your from-domain)                                                             |
+| **UptimeRobot**             | Monitor `GET /api/health` (plain `ok`) — not `/api/health/beta`                                                |
+| **Tester recruitment**      | Friends + Reddit/city subs + PH Upcoming — see §3                                                              |
+| **Jam / Marker.io**         | Optional for phase 2 if Slack feedback lacks repro detail                                                      |
+
+
+### Deferred (post–500 users or public launch)
+
+- Per-user invite codes / magic links  
+- EU cookie banner  
+- CSP headers  
+- V2 search-quality CI redesign (`BETA_LAUNCH.md` §8)  
+- `og-image.png` designer pass
+
+---
+
+## 1. Render env vars (set before deploy)
+
+
+| Var                      | Value                                       | Notes                                                               |
+| ------------------------ | ------------------------------------------- | ------------------------------------------------------------------- |
+| `SITE_PASSWORD`          | fresh password                              | Email to testers; rotate between phases.                            |
+| `INDEX_SECRET`           | (already set)                               | Re-confirm.                                                         |
+| `SENTRY_DSN_SERVER`      | Sentry → Server DSN                         |                                                                     |
+| `SENTRY_DSN_CLIENT`      | Sentry → Browser DSN                        | Public-by-design.                                                   |
+| `SENTRY_ENV`             | `production`                                |                                                                     |
+| `POSTHOG_PROJECT_KEY`    | PostHog project API key                     | Browser.                                                            |
+| `POSTHOG_API_KEY`        | same key                                    | Server mirror (`feedback_submitted_server`, etc.).                  |
+| `POSTHOG_HOST`           | `https://us.i.posthog.com`                  |                                                                     |
+| `POSTHOG_PROJECT_URL`    | e.g. `https://us.posthog.com/project/12345` | **No trailing slash.** Powers replay links in feedback email/Slack. |
+| `RESEND_API_KEY`         | resend.com                                  | Invites + feedback email.                                           |
+| `BETA_PASSWORD`          | same as `SITE_PASSWORD`                     | Email scripts embed this.                                           |
+| `BETA_FROM`              | `TravelByVibe Beta <beta@travelbyvibe.com>`   | Domain verified in Resend (`travelbyvibe.com`).                       |
+| `BETA_REPLY_TO`          | `beta@travelbyvibe.com`                       |                                                                     |
+| `BETA_BASE_URL`          | `https://www.travelbyvibe.com`                | Invite links + marketing CTAs. **Set on Render 2026-05-28.**        |
+| `SITE_PUBLIC_ORIGIN`     | `https://www.travelbyvibe.com`                | Sitemap, OG fallback, outbound User-Agent. **Set on Render 2026-05-28.** |
+| `BETA_CALENDAR_URL`      | (optional) Cal.com / Calendly               | Nudge emails.                                                       |
+| `SLACK_FEEDBACK_WEBHOOK` | (recommended)                               | Real-time feedback mirror.                                          |
+| `BETA_FEEDBACK_EMAIL`    | (recommended)                               | Requires `RESEND_API_KEY` + `BETA_FROM`.                            |
+| `BETA_BANNER`            | (optional)                                  | Sticky status line for known issues.                                |
+
+
+**Verify after deploy:**
+
+```powershell
+.\scripts\beta-launch-verify.ps1
+# or:
+Invoke-RestMethod "https://www.travelbyvibe.com/api/health/beta"
+```
+
+Expect `instrumentation.sentry_server`, `posthog`, `site_gate`, `supabase_admin` all `true`. If `/api/health/beta` returns **401**, deploy the latest commit (allowlist for that route was added in-repo).
+
+**Domain note:** Canonical site is **travelbyvibe.com**. See `docs/DOMAIN.md`. Legacy travelboop.com should hit the same Render service or 301 to TravelByVibe.
+
+---
+
+## 2. Supabase migrations
+
+Run in SQL editor (order matters):
 
 ```sql
--- file: supabase/add-beta-tables.sql
--- creates: beta_feedback, beta_consents, beta_invitees
+-- 1) supabase/add-beta-tables.sql
+-- 2) supabase/add-beta-feedback-context.sql
 ```
+
+**Applied 2026-05-28:** `beta_*` tables present; `add_beta_feedback_context` migration added `current_city`, `issue_type`, `debug_context`, etc.
 
 Verify:
 
 ```sql
-SELECT count(*) FROM beta_feedback;   -- 0
-SELECT count(*) FROM beta_consents;   -- 0
-SELECT count(*) FROM beta_invitees;   -- 0 (will be populated as you invite people)
+SELECT count(*) FROM beta_feedback;
+SELECT column_name FROM information_schema.columns
+ WHERE table_name = 'beta_feedback' AND column_name IN ('current_city', 'issue_type', 'debug_context');
 ```
 
 ---
 
-## 3. Pre-launch manual setup (D items)
+## 3. Recruiting testers (200–500)
 
-### A8 · UptimeRobot
+**Do not use generic QA marketplaces** (UserTesting, Testlio) — you need real trip planners.
 
-- Create free account: [https://uptimerobot.com](https://uptimerobot.com)
-- Add HTTP(s) monitor: `https://www.travelboop.com/api/health` — interval 5 min
-- Set alert contact: SMS or Pushover or email-to-SMS
-- Verify "down" alert by stopping the Render service for 1 minute
 
-### C6 · Mailbox forwarding
+| Channel               | Target   | Notes                                                                                     |
+| --------------------- | -------- | ----------------------------------------------------------------------------------------- |
+| Personal network      | 50–100   | Highest activation; CDMX or Paris trip in next 90 days                                    |
+| Reddit                | 50–150   | `r/solotravel`, `r/travel`, `r/mexicocity`, `r/ParisTravelGuide` — honest builder post    |
+| Product Hunt Upcoming | waitlist | Brand + email capture                                                                     |
+| Travel micro-creators | 10–20    | 60s Boop demo; cap so you can reply                                                       |
+| Marketing landings    | ongoing  | UTM → `/?city=Paris` or `/?city=Mexico%20City` — see `docs/marketing-plan-beta-launch.md` |
 
-- Set up `hello@travelboop.com` → your inbox (DNS provider's email forwarding, free)
-- Same for `beta@`, `support@`
-- Configure Gmail "Send mail as" so replies go out from `beta@travelboop.com`
-- Send a test from each address (yourself → yourself) to verify SPF/DKIM/DMARC pass
 
-### C7 · Favicon polish
+**Roster:** `beta_invitees` table or a Notion sheet: `email, channel, invite_sent_at, distinct_id, feedback_count, status`.
 
-- Open `/` on Safari (Mac), check pinned-tab icon (the SVG renders in monochrome — tweak `fill` if needed)
-- Open `/` on iPhone, "Add to Home Screen" — verify the app icon
-- (Optional) Add a `favicon-192.png` for older Android home-screens
+**Invite email:** `node scripts/email/send-emails.js invite --csv invitees.csv --dry` then send for real.
 
-### D1 · Recruit 50 testers
-
-- 15 friends / family — DM invites (highest activation)
-- 15 from a single Twitter/LinkedIn post about the launch
-- 10 from one travel-niche community post (Reddit r/solotravel, Indie Hackers, etc.)
-- 10 reserved for week-2 referrals from happy testers
-
-### D2 · Roster spreadsheet (or Notion table)
-
-Columns: `name, email, channel, invite_sent_at, gate_passed_at, first_search_at, distinct_id, feedback_count, calls_scheduled, status`. Or skip the sheet and rely on the `beta_invitees` Supabase table you imported via CSV.
-
-### D3 · Invite email
-
-- Customize the copy in `scripts/email/send-emails.js` (function `templates`, key `invite`) if you want different tone
-- Dry-run: `node scripts/email/send-emails.js invite --csv invitees.csv --dry`
-- Send for real once testers are confirmed
-
-### D5 · Feedback channel
-
-- Create one of: Slack Connect channel, Discord server, or Telegram group
-- Set webhook URL as `SLACK_FEEDBACK_WEBHOOK` so in-app feedback mirrors there in real-time
-- Pin a welcome message: "Hi! Use the round Feedback button (bottom-right) for bug reports — it tags the page and search you were on. Use this channel for chatty stuff."
-
-### D6 · 1:1 calls
-
-- Set up Cal.com or Calendly free tier with a 30-min slot template
-- Set `BETA_CALENDAR_URL` env var so it gets embedded in welcome and nudge emails
-- Aim for 5–8 calls in week 1–2 with the most engaged testers
-
-### D7 · Linear project
-
-- Create project "TravelBoop Beta v1"
-- Triage feedback daily; tag `P0/P1/P2`
-- Use the Linear MCP integration in Cursor to create issues from chat
-
-### D8 · Beta exit criteria (lock these BEFORE launch)
-
-Default suggested targets (edit if you want different bar):
-
-- ≥ 35 of 50 invitees activate (one or more searches)
-- ≥ 15 power users (≥ 5 searches over 14 days)
-- < 5% of searches error or return zero results
-- p95 search latency < 4s warm, < 6s cold (verify via PostHog `vsearch_executed` event)
-- ≥ 5 Find & Book clicks per active user / week
-- NPS ≥ 30 from end-of-beta survey
-- Zero open P0 bugs, ≤ 3 open P1s
-
-### D9 · Lock the timeline
-
-Suggested 14-day cadence:
-
-- D-7: All P0 code merged + deployed (this is done)
-- D-3: Manual QA on real devices (B4) + booking E2E (B6)
-- D-2: Dry run with 3 friends; fix anything they hit
-- D-0: **Tuesday 10am local** — send 50 invites
-- D+1: Monitor every search; reply to all feedback within 4h
-- D+3: Day-2 nudge to non-activators (`node scripts/email/send-emails.js welcome`)
-- D+7: Week-1 nudge (`node scripts/email/send-emails.js nudge`) + book 1:1 calls
-- D+14: Send post-survey; review exit criteria; decide extend / open public / keep iterating
+Pin in Slack/Discord: *Use the Feedback button (bottom-right) for bugs — it attaches city, session id, and category. Chat here for general discussion.*
 
 ---
 
-## 4. Quality gates (B items — most are manual)
+## 4. AI agent bug-fix loop
 
-### B3 · Cold-start TTFB measurement
+1. **Sentry** creates Linear issue (stack + release + `user.id` = `distinct_id`).
+2. **PostHog** → Persons → paste `distinct_id` → watch session replay before the report.
+3. **Slack/email feedback** includes PostHog link when `POSTHOG_PROJECT_URL` is set.
+4. **Agent** reproduces with city + Boop path; run `node scripts/test-search-quality.js` for regressions.
+5. **Human** approves PR → commit → push → **Render deploy** → re-verify on prod.
 
-- Trigger a Render redeploy to force cold start
-- Within 10 seconds of `/api/health` returning 200, run:
-  ```powershell
-  Measure-Command { Invoke-WebRequest -UseBasicParsing "https://roommatch-1fg5.onrender.com/api/vsearch?city=Mexico%20City&query=walk%20in%20shower&distinct_id=cold-test" }
-  ```
-- Repeat 5 times back-to-back, capture p95
-- Update CLAUDE.md "V2 Search Latency" section with the new baseline
+Linear issue template (paste into project description):
+
+```
+City: Mexico City | Paris
+Category: bug | ux | search-quality
+Distinct ID: <from feedback>
+PostHog: <link>
+Steps:
+Expected:
+Actual:
+```
+
+---
+
+## 5. Pre-launch quality gates
 
 ### B4 · Mobile QA
 
-- **iPhone Safari** (latest iOS, 375pt width): Boop wizard → results → hotel detail → Find & Book click. Lightbox swipes? Date picker reachable? Map markers tappable?
-- **Android Chrome** (Pixel/Samsung): same flow.
-- **iPad Safari** (portrait + landscape): does the two-column hotel detail page lay out cleanly?
-- **iPhone SE** specifically — narrowest common viewport. Vibe quintuple cards stack?
+iPhone Safari, Android Chrome, iPad: Boop → results → hotel detail → Find & Book. Nbhd map tappable?
 
-### B5 · Cross-browser smoke (1h)
+### B6 · Booking E2E
 
-Walk one full search end-to-end on each:
-
-- Chrome (Mac or Win) — desktop
-- Safari (Mac)
-- Firefox
-- Edge
-
-### B6 · Booking flow E2E
-
-- Search MX City for "modern bathroom with rainfall shower"
-- Click Find & Book on top result → verify URL has `?utm_source=travelboop_beta&...&tb_distinct=...`
-- Verify WL page loads with correct hotel + dates pre-filled
-- Repeat for 2 more random hotels (one with offerId, one without)
-
----
-
-## 5. Day-1 launch checklist (E)
+Find & Book URL includes `utm_source=travelbyvibe`, `utm_medium=beta`, `utm_campaign=closed_beta_2026`, `tb_distinct=...`.
 
 ### T-24h
 
-- All P0 items above complete and deployed to Render main
-- Hit `https://www.travelboop.com/api/debug-sentry` — verify error appears in Sentry within 30s
-- Open PostHog → Live Events — see `beta_gate_passed` when you load `/`
-- PostHog dashboard: pin a funnel chart `city_selected → boop_completed → vsearch_executed → find_book_clicked`
-- Sentry → Alerts: "any new error" → email yourself
-- UptimeRobot active and tested
-- Run a manual `pg_dump` (or trigger Supabase snapshot) for belt-and-suspenders backup
-- `SITE_PASSWORD` rotated to the beta value
-
-### T-2h
-
-- Walk full flow on prod from a fresh browser (incognito) — gate password works, consent modal appears, search works, feedback button sends
-- Same on phone
-- Slack/Discord channel created + pinned
-- Have your monitoring tabs open: Render logs, Sentry issues, PostHog Live Events, your inbox, the feedback channel
+- `GET /api/debug-sentry?secret=...` → error in Sentry within 30s  
+- PostHog Live Events: `beta_gate_passed`, `boop_completed`, `vsearch_executed`  
+- Feedback test → row in `beta_feedback` + Slack/email  
+- UptimeRobot on `/api/health`  
+- `SITE_PASSWORD` rotated to beta value
 
 ### T-0
 
-- Run: `node scripts/email/send-emails.js invite --csv invitees.csv`
-- Post in Slack: "🚀 Beta is live. Watching everything."
-- Sit at desk for 4 hours, watch Sentry + feedback like a hawk
+- Send invites  
+- Monitor 4h: Sentry, PostHog Live, feedback channel, Render logs
 
 ---
 
-## 6. Post-launch weekly cadence (F)
+## 6. Exit criteria (edit before launch)
 
+**Phase 1 (50 users):**
 
-| Cadence            | What                                                                                      |
-| ------------------ | ----------------------------------------------------------------------------------------- |
-| **Daily (week 1)** | Read every feedback message, reply same-day, triage Sentry, glance at PostHog funnel      |
-| **Weekly**         | Ship one release with the top fixes, send progress digest to all 50, book 2 new 1:1 calls |
-| **End of week 2**  | Send NPS survey (Tally form, link in email). Score against D8 exit criteria.              |
-| **End of week 4**  | Decision point — extend beta, expand to 200, or open public                               |
+- ≥ 35 activate (≥1 `vsearch_executed`)  
+- ≥ 15 power users (≥5 searches / 14 days)  
+- p95 `response_ms` on `vsearch_executed` < 6s (cold), < 4s (warm)  
+- ≥ 5 Find & Book clicks / active user / week  
+- Zero open P0; ≤ 3 P1
 
+**Phase 2 (500 users):** same metrics scaled; add NPS survey (Tally) at day 14.
 
 ---
 
-## 7. What this codebase NOW has (for reference)
+## 7. Ops stack summary
 
 
-| Capability                                   | File(s)                                                    | Env required                                      |
-| -------------------------------------------- | ---------------------------------------------------------- | ------------------------------------------------- |
-| API rate limiting (per-IP)                   | `server.js` lines ~860-895                                 | none                                              |
-| API beta gate (cookie + INDEX_SECRET bypass) | `server.js` lines ~898-918                                 | `SITE_PASSWORD`                                   |
-| Helmet + tightened CORS + cookie hardening   | `server.js` lines ~830-855                                 | none                                              |
-| Sentry server tracking                       | `server.js` top + bottom                                   | `SENTRY_DSN_SERVER`                               |
-| Sentry browser tracking                      | `client/index.html` head + injected DSN                    | `SENTRY_DSN_CLIENT`                               |
-| PostHog client analytics                     | `client/index.html` snippet + `track()` in `client/app.js` | `POSTHOG_PROJECT_KEY`                             |
-| PostHog server mirror (vsearch_executed)     | `server.js` `trackServer()`                                | `POSTHOG_API_KEY`                                 |
-| In-app feedback button + modal               | `client/index.html` + `client/app.js` end                  | DB migration                                      |
-| `/api/feedback` endpoint                     | `server.js` end                                            | DB migration                                      |
-| Beta consent modal (one-time)                | `client/index.html` + `client/app.js`                      | DB migration                                      |
-| `/api/beta-consent` endpoint                 | `server.js` end                                            | DB migration                                      |
-| BETA_BANNER sticky banner                    | `client/index.html` + `app.js` `initBetaBanner()`          | `BETA_BANNER`                                     |
-| UTM + tb_distinct on Find & Book             | `client/app.js` `buildBookUrl()`                           | none                                              |
-| `find_book_clicked` PostHog event            | `client/app.js` `_tbFireFindBookClick`                     | `POSTHOG_PROJECT_KEY`                             |
-| Standalone `/privacy` & `/terms`             | `server.js` lines ~990-1100                                | none (public, indexable)                          |
-| Open Graph + Twitter cards                   | `client/index.html` head                                   | (drop a `og-default.png` 1200x630 into `client/`) |
-| Footer marketing + legal links               | `client/index.html` footer                                 | none                                              |
-| `/api/debug-sentry` test endpoint            | `server.js` end                                            | `SENTRY_DSN_SERVER`                               |
-| MX City search quality tests                 | `scripts/search-test-lib.js` IDs 100-112                   | `SUPABASE_SERVICE_KEY`                            |
-| k6 load test                                 | `scripts/load-test/vsearch.js`                             | k6 binary                                         |
-| GitHub Actions CI                            | `.github/workflows/ci.yml`                                 | repo secrets                                      |
-| Resend email scripts                         | `scripts/email/send-emails.js`                             | `RESEND_API_KEY`, `BETA_PASSWORD`                 |
+| Purpose                    | Tool                                       |
+| -------------------------- | ------------------------------------------ |
+| Analytics + session replay | PostHog                                    |
+| Crashes                    | Sentry                                     |
+| Tasks / agent queue        | Linear                                     |
+| In-app reports             | Built-in feedback → Supabase + Slack/email |
+| Beta users                 | Invites + Reddit + marketing pages         |
+| Optional richer reports    | Jam (phase 2 only if needed)               |
 
 
 ---
 
-## 8. Coding items deliberately NOT done (deferred)
+## 8. Code reference (what shipped)
 
 
-| Item                               | Why                                                                    | When to revisit                               |
-| ---------------------------------- | ---------------------------------------------------------------------- | --------------------------------------------- |
-| EU cookie consent banner           | Closed beta is US-only initially                                       | Before public launch                          |
-| `/og-default.png` (1200x630 image) | Needs a designer or screenshot session                                 | Before public launch — placeholder URL is set |
-| CSP headers                        | Many third-party scripts (Sentry, PostHog, Maptiler) need allowlisting | Before public launch                          |
-| Per-user invite codes              | Shared password is fine for 50 trusted users                           | If/when graduating to 200+ open beta          |
-| Magic-link auth                    | Same reasoning                                                         | Public launch + user accounts                 |
-| `npm audit fix` for moderate vulns | The 3 vulns are in dev-only deps                                       | Roll into a chore PR post-launch              |
-| Search-quality tests redesigned for V2 | Suite was authored for V1 strict feature-flag counts (e.g. "double sinks → exactly 33 hotels"). V2 returns all city hotels ranked by similarity, so exact-count assertions always fail. CI job runs but is marked `continue-on-error: true` so the workflow stays green. Search itself is verified healthy via prod smoke tests. | Post-launch chore — redesign to score top-N relevance (e.g. top-3 result names match a fixture set, or top result has score > 80) instead of row count |
+| Capability                | File(s)                                                         |
+| ------------------------- | --------------------------------------------------------------- |
+| Funnel events             | `client/app.js`                                                 |
+| Rich `/api/feedback`      | `server.js`                                                     |
+| PostHog person URL helper | `scripts/beta-posthog-person-url.js`                            |
+| Health readiness JSON     | `GET /api/health/beta`                                          |
+| Feedback UI category      | `client/index.html`                                             |
+| Migrations                | `supabase/add-beta-tables.sql`, `add-beta-feedback-context.sql` |
+| Marketing plan            | `docs/marketing-plan-beta-launch.md`                            |
 
 
 ---
 
-*Last updated: 2026-05-07. Touch this file when you check items off.*
+*Touch this file when you check items off or change phase targets.*

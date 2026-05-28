@@ -18,7 +18,7 @@ k6 run scripts/load-test/vsearch.js
 
 Against prod with the beta gate on (recommended for realism):
 ```
-k6 run -e BASE_URL=https://www.travelboop.com -e GATE_PW=your-beta-password scripts/load-test/vsearch.js
+k6 run -e BASE_URL=https://www.travelbyvibe.com -e GATE_PW=your-beta-password scripts/load-test/vsearch.js
 ```
 
 Quick smoke (10 VUs, 60s soak):

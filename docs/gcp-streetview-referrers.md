@@ -6,8 +6,10 @@ Paste each line as its own referrer restriction in the Google Cloud Console (Map
 
 | Referrer pattern | Notes |
 |------------------|--------|
-| `https://www.travelboop.com/*` | Production |
-| `https://travelboop.com/*` | Apex |
+| `https://www.travelbyvibe.com/*` | Production (canonical) |
+| `https://travelbyvibe.com/*` | Apex |
+| `https://www.travelboop.com/*` | Legacy (until redirect retired) |
+| `https://travelboop.com/*` | Legacy apex |
 | `https://roommatch-1fg5.onrender.com/*` | Render production host |
 | `https://*.onrender.com/*` | Render preview deploys |
 | `http://localhost:*/*` | Local dev |

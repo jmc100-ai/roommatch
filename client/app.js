@@ -59,6 +59,27 @@
   }
   const _TB_DISTINCT_ID = _getOrMakeDistinctId();
   window._TB_DISTINCT_ID = _TB_DISTINCT_ID;
+  /** Client-side search round-trip ms (set when /api/vsearch returns). */
+  let _lastVsearchClientMs = null;
+
+  /** Coarse repro context for beta feedback (no query text — privacy). */
+  function _betaFeedbackContext() {
+    const w = window.innerWidth;
+    const h = window.innerHeight;
+    return {
+      currentCity: (typeof S !== 'undefined' && S.city) ? S.city : null,
+      release: window._RELEASE || null,
+      viewport: (w && h) ? `${w}x${h}` : null,
+      debugContext: {
+        path: location.pathname,
+        has_dates: !!(typeof S !== 'undefined' && S.checkin && S.checkout),
+        nbhd_filter: !!(typeof selectedNeighborhood !== 'undefined' && selectedNeighborhood && selectedNeighborhood.name),
+        last_search_ms: _lastVsearchClientMs,
+        server_handler_ms: (_lastVsearchStats && _lastVsearchStats.handler_wall_ms != null)
+          ? _lastVsearchStats.handler_wall_ms : null,
+      },
+    };
+  }
 
   function track(event, properties) {
     try {
@@ -143,7 +164,7 @@
     try {
       const u = new URL(urlStr);
       // Don't double-tag; preserve any UTM the partner might already inject.
-      if (!u.searchParams.get('utm_source'))   u.searchParams.set('utm_source',   'travelboop');
+      if (!u.searchParams.get('utm_source'))   u.searchParams.set('utm_source',   'travelbyvibe');
       if (!u.searchParams.get('utm_medium'))   u.searchParams.set('utm_medium',   'beta');
       if (!u.searchParams.get('utm_campaign')) u.searchParams.set('utm_campaign', 'closed_beta_2026');
       if (!u.searchParams.get('utm_content')) {
@@ -2015,6 +2036,15 @@
       document.body.classList.add('has-results');
     }
 
+    try {
+      track('boop_completed', {
+        city: S.city || null,
+        stay_vibe: profile.answers?.stayVibe || null,
+        nbhd_scene: profile.answers?.nbhdScene || null,
+        has_advanced_kw: !!advancedKw,
+      });
+    } catch (_) {}
+
     // BOOP v4 — skip nbhd + style selection; go straight to results.
     // User can still refine neighbourhood via the results-page refine strip.
     runBoopSearch(profile);
@@ -2525,6 +2555,7 @@
     }
     const prevCityKey = cityKey(S.city);
     S.city = city;
+    try { track('city_selected', { city }); } catch (_) {}
     document.getElementById('cityInput').value = city;
     updateHomePolaroids(city);
     document.getElementById('sv-city').textContent = city.length > 20 ? city.slice(0,18)+'…' : city;
@@ -4792,7 +4823,7 @@
           <h2>Partners</h2>
           <p>Hotels, photos, and prices come from travel partners. Some smart features use Google’s AI. Hosting, maps, email, and anonymous analytics each run through vendors with their own policies.</p>
           <h2>Questions or removals</h2>
-          <p>Email <a href="mailto:beta@travelboop.com">beta@travelboop.com</a> — we are a small team and will help as quickly as we can.</p>
+          <p>Email <a href="mailto:beta@travelbyvibe.com">beta@travelbyvibe.com</a> — we are a small team and will help as quickly as we can.</p>
           ${commonFoot}`,
       },
       terms: {
@@ -4818,8 +4849,8 @@
         html: `
           <p>We read every note we can — weird matches, slow searches, wild ideas, all of it helps.</p>
           <h2>Email</h2>
-          <p><a href="mailto:hello@travelboop.com">hello@travelboop.com</a> — general hellos and product thoughts.</p>
-          <p><a href="mailto:beta@travelboop.com">beta@travelboop.com</a> — beta access, privacy, or data questions.</p>
+          <p><a href="mailto:hello@travelbyvibe.com">hello@travelbyvibe.com</a> — general hellos and product thoughts.</p>
+          <p><a href="mailto:beta@travelbyvibe.com">beta@travelbyvibe.com</a> — beta access, privacy, or data questions.</p>
           <h2>Developers</h2>
           <p>Found a bug in the open-source pieces? <a href="https://github.com/jmc100-ai/roommatch/issues" target="_blank" rel="noopener noreferrer">Open an issue on GitHub</a>.</p>
           ${commonFoot}`,
@@ -5134,7 +5165,8 @@
       _lastVsearchUrl = `${BACKEND}/api/vsearch?` + new URLSearchParams(vsearchParams);
       _lastVsearchHotels = null;
       const resp = await fetch(_lastVsearchUrl);
-      console.log(`[perf] search response: ${Date.now() - _t0search}ms`);
+      _lastVsearchClientMs = Date.now() - _t0search;
+      console.log(`[perf] search response: ${_lastVsearchClientMs}ms`);
       await nbhdPickerScoresP.catch(() => {});
       if (!resp.ok) {
         let errMsg = `Search failed (${resp.status})`;
@@ -5310,6 +5342,9 @@
         nbhd_filter:    !!(typeof selectedNeighborhood !== 'undefined' && selectedNeighborhood && selectedNeighborhood.name),
         search_version: (typeof _lastVsearchUrl === 'string' && /search_version=v1/.test(_lastVsearchUrl)) ? 'v1' : 'v2',
         top_score:      top ? Math.round((top.vectorScore ?? top.score ?? 0)) : null,
+        response_ms:    _lastVsearchClientMs,
+        server_ms:      (_lastVsearchStats && _lastVsearchStats.handler_wall_ms != null)
+          ? _lastVsearchStats.handler_wall_ms : null,
       });
     } catch (_) {}
     // Prefetch street-view frames for the top hotel immediately — fire-and-forget so
@@ -10042,6 +10077,9 @@
     }
     if (btn) { btn.disabled = true; btn.textContent = 'Sending…'; }
     if (status) status.textContent = '';
+    const issueEl = document.getElementById('bf-issue-type');
+    const issueType = (issueEl?.value || 'other').trim();
+    const ctx = _betaFeedbackContext();
     try {
       const r = await fetch(`${BACKEND}/api/feedback`, {
         method: 'POST',
@@ -10051,9 +10089,14 @@
           message,
           email: (email?.value || '').trim() || null,
           sentiment: _betaSentiment,
+          issueType,
           distinctId: _TB_DISTINCT_ID,
           currentUrl: location.pathname, // strip query/hash
           currentSearch: (typeof S !== 'undefined' && (S.q || S.query)) || null,
+          currentCity: ctx.currentCity,
+          release: ctx.release,
+          viewport: ctx.viewport,
+          debugContext: ctx.debugContext,
         }),
       });
       if (!r.ok) throw new Error('HTTP ' + r.status);
@@ -10102,6 +10145,11 @@
     try {
       if (window.posthog && typeof window.posthog.identify === 'function') {
         window.posthog.identify(_TB_DISTINCT_ID, { release: window._RELEASE || undefined, env: window._ENV || undefined });
+      }
+    } catch (_) {}
+    try {
+      if (window.Sentry && typeof window.Sentry.setUser === 'function') {
+        window.Sentry.setUser({ id: _TB_DISTINCT_ID });
       }
     } catch (_) {}
     window.addEventListener('error', (e) => {

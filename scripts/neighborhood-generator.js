@@ -45,7 +45,7 @@ function withUnsplashUtm(url) {
   if (!url || typeof url !== "string") return url;
   if (!url.includes("unsplash.com")) return url;
   if (/utm_source=/.test(url)) return url;
-  return `${url}${url.includes("?") ? "&" : "?"}utm_source=travelboop&utm_medium=referral`;
+  return `${url}${url.includes("?") ? "&" : "?"}utm_source=travelbyvibe&utm_medium=referral`;
 }
 
 /** Stored on neighborhoods.photo_credit (JSON). */
@@ -733,7 +733,7 @@ async function fetchOsmBoundary(name, city, hintBbox = null) {
   let res;
   try {
     res = await fetch(url, {
-      headers: { "User-Agent": "TravelBoop/1.0 (https://www.travelboop.com; neighbourhood-boundary-lookup)" },
+      headers: { "User-Agent": "TravelByVibe/1.0 (https://www.travelbyvibe.com; neighbourhood-boundary-lookup)" },
       signal: AbortSignal.timeout(12000),
     });
   } catch (e) {

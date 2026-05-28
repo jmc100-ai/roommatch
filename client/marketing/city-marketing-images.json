@@ -1,0 +1,95 @@
+{
+  "generatedAt": "2026-05-21T12:00:00.000Z",
+  "notes": "One unique Wikimedia URL per cityscape slot. Room interiors stay generic Unsplash. Chicago ID 1477959858617 banned.",
+  "bannedUnsplashIds": [
+    "1477959858617-67f85cf4f1df",
+    "1521216774850-01bc1c5fe0da",
+    "1619872978981-e9885a014ba3",
+    "1514565131-fce0801e5785",
+    "1513635269975-59663e0ac1ad",
+    "1502602898657-3e91760cbb34",
+    "1511739001486-6bfe10ce785f",
+    "1496950866446-3253e1470e8e",
+    "1554907984-15263bfd63bd"
+  ],
+  "paris": {
+    "seine": {
+      "960": "https://upload.wikimedia.org/wikipedia/commons/thumb/8/81/Seine_and_Eiffel_Tower_from_Tour_Montparnasse%2C_Paris_July_2014.jpg/960px-Seine_and_Eiffel_Tower_from_Tour_Montparnasse%2C_Paris_July_2014.jpg",
+      "1920": "https://upload.wikimedia.org/wikipedia/commons/thumb/8/81/Seine_and_Eiffel_Tower_from_Tour_Montparnasse%2C_Paris_July_2014.jpg/1920px-Seine_and_Eiffel_Tower_from_Tour_Montparnasse%2C_Paris_July_2014.jpg",
+      "1280": "https://upload.wikimedia.org/wikipedia/commons/thumb/8/81/Seine_and_Eiffel_Tower_from_Tour_Montparnasse%2C_Paris_July_2014.jpg/1280px-Seine_and_Eiffel_Tower_from_Tour_Montparnasse%2C_Paris_July_2014.jpg"
+    },
+    "metro": {
+      "960": "https://upload.wikimedia.org/wikipedia/commons/thumb/a/a0/Paris_metro_sign.jpg/960px-Paris_metro_sign.jpg"
+    },
+    "mouffetard": {
+      "960": "https://upload.wikimedia.org/wikipedia/commons/thumb/b/bf/Paris_-_Rue_Mouffetard_-_2016.jpg/960px-Paris_-_Rue_Mouffetard_-_2016.jpg"
+    },
+    "louvre": {
+      "960": "https://upload.wikimedia.org/wikipedia/commons/thumb/d/df/View_of_Louvre_from_Jardin_des_Tuileries%2C_Paris_22_June_2014.jpg/960px-View_of_Louvre_from_Jardin_des_Tuileries%2C_Paris_22_June_2014.jpg",
+      "1400": "https://upload.wikimedia.org/wikipedia/commons/thumb/d/df/View_of_Louvre_from_Jardin_des_Tuileries%2C_Paris_22_June_2014.jpg/1400px-View_of_Louvre_from_Jardin_des_Tuileries%2C_Paris_22_June_2014.jpg"
+    },
+    "sacreCoeur": {
+      "960": "https://upload.wikimedia.org/wikipedia/commons/thumb/7/7a/Basilique_du_Sacr%C3%A9-C%C5%93ur%2C_Paris_7_May_2014.jpg/960px-Basilique_du_Sacr%C3%A9-C%C5%93ur%2C_Paris_7_May_2014.jpg"
+    },
+    "champs": {
+      "960": "https://upload.wikimedia.org/wikipedia/commons/thumb/7/7c/Paris_-_Avenue_des_Champs-%C3%89lys%C3%A9es_-_2016.jpg/960px-Paris_-_Avenue_des_Champs-%C3%89lys%C3%A9es_-_2016.jpg"
+    },
+    "pontDesArts": {
+      "960": "https://upload.wikimedia.org/wikipedia/commons/thumb/2/21/Paris_-_Pont_des_Arts_-_2016.jpg/960px-Paris_-_Pont_des_Arts_-_2016.jpg"
+    },
+    "notreDame": {
+      "960": "https://upload.wikimedia.org/wikipedia/commons/thumb/8/83/Notre-Dame_de_Paris%2C_4_October_2017.jpg/960px-Notre-Dame_de_Paris%2C_4_October_2017.jpg"
+    },
+    "garnier": {
+      "960": "https://upload.wikimedia.org/wikipedia/commons/thumb/d/de/Palais_Garnier%2C_Paris_16_March_2014.jpg/960px-Palais_Garnier%2C_Paris_16_March_2014.jpg",
+      "1920": "https://upload.wikimedia.org/wikipedia/commons/thumb/d/de/Palais_Garnier%2C_Paris_16_March_2014.jpg/1920px-Palais_Garnier%2C_Paris_16_March_2014.jpg",
+      "1280": "https://upload.wikimedia.org/wikipedia/commons/thumb/d/de/Palais_Garnier%2C_Paris_16_March_2014.jpg/1280px-Palais_Garnier%2C_Paris_16_March_2014.jpg"
+    },
+    "marais": {
+      "960": "https://upload.wikimedia.org/wikipedia/commons/thumb/5/54/Le_Marais%2C_Paris%2C_France_-_panoramio.jpg/960px-Le_Marais%2C_Paris%2C_France_-_panoramio.jpg"
+    },
+    "eiffel": {
+      "960": "https://upload.wikimedia.org/wikipedia/commons/thumb/3/30/Tour_Eiffel_Wikimedia_Commons_(cropped).jpg/960px-Tour_Eiffel_Wikimedia_Commons_(cropped).jpg",
+      "2000": "https://upload.wikimedia.org/wikipedia/commons/thumb/3/30/Tour_Eiffel_Wikimedia_Commons_(cropped).jpg/2000px-Tour_Eiffel_Wikimedia_Commons_(cropped).jpg"
+    }
+  },
+  "mexicoCity": {
+    "skyline": {
+      "960": "https://upload.wikimedia.org/wikipedia/commons/thumb/4/4f/Mexico_City_Skyline_%285604867225%29.jpg/960px-Mexico_City_Skyline_%285604867225%29.jpg",
+      "2000": "https://upload.wikimedia.org/wikipedia/commons/thumb/4/4f/Mexico_City_Skyline_%285604867225%29.jpg/2000px-Mexico_City_Skyline_%285604867225%29.jpg",
+      "1200": "https://upload.wikimedia.org/wikipedia/commons/thumb/4/4f/Mexico_City_Skyline_%285604867225%29.jpg/1200px-Mexico_City_Skyline_%285604867225%29.jpg",
+      "640": "https://upload.wikimedia.org/wikipedia/commons/thumb/4/4f/Mexico_City_Skyline_%285604867225%29.jpg/640px-Mexico_City_Skyline_%285604867225%29.jpg"
+    },
+    "bellasArtes": {
+      "960": "https://upload.wikimedia.org/wikipedia/commons/thumb/0/0a/Palacio_de_Bellas_Artes%2C_M%C3%A9xico_D.F.%2C_M%C3%A9xico%2C_2013-10-13%2C_DD_41.jpg/960px-Palacio_de_Bellas_Artes%2C_M%C3%A9xico_D.F.%2C_M%C3%A9xico%2C_2013-10-13%2C_DD_41.jpg",
+      "900": "https://upload.wikimedia.org/wikipedia/commons/thumb/0/0a/Palacio_de_Bellas_Artes%2C_M%C3%A9xico_D.F.%2C_M%C3%A9xico%2C_2013-10-13%2C_DD_41.jpg/900px-Palacio_de_Bellas_Artes%2C_M%C3%A9xico_D.F.%2C_M%C3%A9xico%2C_2013-10-13%2C_DD_41.jpg"
+    },
+    "bellasEvening": {
+      "960": "https://upload.wikimedia.org/wikipedia/commons/thumb/8/8a/Palaco_de_Bellas_Artes%2C_Mexico_City%2C_from_across_Eje_Central_Lazaro_Cardenas_in_evening.jpg/960px-Palaco_de_Bellas_Artes%2C_Mexico_City%2C_from_across_Eje_Central_Lazaro_Cardenas_in_evening.jpg"
+    },
+    "postal": {
+      "960": "https://upload.wikimedia.org/wikipedia/commons/thumb/8/81/Palacio_Postal%2C_M%C3%A9xico_D.F.%2C_M%C3%A9xico%2C_2013-10-16%2C_DD_59.JPG/960px-Palacio_Postal%2C_M%C3%A9xico_D.F.%2C_M%C3%A9xico%2C_2013-10-16%2C_DD_59.JPG"
+    },
+    "soumaya": {
+      "960": "https://upload.wikimedia.org/wikipedia/commons/thumb/d/dd/Museo_Soumaya%2C_Ciudad_de_M%C3%A9xico%2C_M%C3%A9xico%2C_2015-07-18%2C_DD_16.JPG/960px-Museo_Soumaya%2C_Ciudad_de_M%C3%A9xico%2C_M%C3%A9xico%2C_2015-07-18%2C_DD_16.JPG"
+    },
+    "azulejos": {
+      "960": "https://upload.wikimedia.org/wikipedia/commons/thumb/e/e3/Casa_de_los_Azulejos%2C_M%C3%A9xico_D.F.%2C_M%C3%A9xico%2C_2014-10-13%2C_DD_47.JPG/960px-Casa_de_los_Azulejos%2C_M%C3%A9xico_D.F.%2C_M%C3%A9xico%2C_2014-10-13%2C_DD_47.JPG"
+    },
+    "zocalo": {
+      "960": "https://upload.wikimedia.org/wikipedia/commons/thumb/6/6a/Zocalo_-_West_Side_-_Mexico_2024.jpg/960px-Zocalo_-_West_Side_-_Mexico_2024.jpg"
+    },
+    "coyoacan": {
+      "960": "https://upload.wikimedia.org/wikipedia/commons/thumb/3/33/Coyoac%C3%A1n_-_Plaza_Hidalgo%2C_Coyoacan_-_Mexico_2024.jpg/960px-Coyoac%C3%A1n_-_Plaza_Hidalgo%2C_Coyoacan_-_Mexico_2024.jpg"
+    },
+    "chapultepec": {
+      "960": "https://upload.wikimedia.org/wikipedia/commons/thumb/4/44/Old_Guard_House_-_Chapultepec_Castle_-_Mexico_2024.jpg/960px-Old_Guard_House_-_Chapultepec_Castle_-_Mexico_2024.jpg"
+    },
+    "garibaldi": {
+      "960": "https://upload.wikimedia.org/wikipedia/commons/thumb/d/de/Mariachi_playing_-_Plaza_Garibaldi_-_Mexico_2024.jpg/960px-Mariachi_playing_-_Plaza_Garibaldi_-_Mexico_2024.jpg"
+    },
+    "vasconcelos": {
+      "640": "https://upload.wikimedia.org/wikipedia/commons/thumb/3/3b/Vista_a%C3%A9rea_de_la_Biblioteca_Vasconcelos_03.jpg/640px-Vista_a%C3%A9rea_de_la_Biblioteca_Vasconcelos_03.jpg"
+    }
+  }
+}

@@ -11,14 +11,14 @@
   <meta property="og:site_name" content="TravelByVibe" />
   <meta property="og:title" content="TravelByVibe — Find your vibe" />
   <meta property="og:description" content="Describe the stay you want — we match real hotel photos and neighbourhood vibes so nothing feels like a surprise at check-in." />
-  <meta property="og:url" content="https://www.travelboop.com" />
-  <meta property="og:image" content="https://www.travelboop.com/og-image.png" />
+  <meta property="og:url" content="https://www.travelbyvibe.com" />
+  <meta property="og:image" content="https://www.travelbyvibe.com/og-image.png" />
   <meta property="og:image:width" content="1200" />
   <meta property="og:image:height" content="630" />
   <meta name="twitter:card" content="summary_large_image" />
   <meta name="twitter:title" content="TravelByVibe — Find your vibe" />
   <meta name="twitter:description" content="Pick your area and your room vibe with real hotel photos — friendly, fast, built for travellers." />
-  <meta name="twitter:image" content="https://www.travelboop.com/og-image.png" />
+  <meta name="twitter:image" content="https://www.travelbyvibe.com/og-image.png" />
   <meta name="theme-color" content="#0c0c0e" />
   <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
   <link rel="apple-touch-icon" href="/favicon.svg" />
@@ -59,6 +59,10 @@
             return event;
           },
         });
+        try {
+          var tid = localStorage.getItem("TB_DISTINCT_ID");
+          if (tid && window.Sentry.setUser) window.Sentry.setUser({ id: tid });
+        } catch (_) {}
       };
       document.head.appendChild(s);
     })();
@@ -113,7 +117,15 @@
   <div class="beta-modal-card">
     <button type="button" class="beta-modal-close" onclick="closeBetaFeedback()" aria-label="Close">&times;</button>
     <h2 id="bf-title" class="beta-modal-title">Tell us what you think</h2>
-    <p class="beta-modal-sub">Anything broken, confusing, or just delightful — we read every message.</p>
+    <p class="beta-modal-sub">Anything broken, confusing, or just delightful — we read every message. Include what you clicked and what you expected.</p>
+    <label class="beta-modal-label" for="bf-issue-type">What is this about?</label>
+    <select id="bf-issue-type" class="beta-modal-input beta-modal-select" aria-label="Feedback category">
+      <option value="bug">Something broke</option>
+      <option value="ux">Confusing or hard to use</option>
+      <option value="ranking">Search results felt wrong</option>
+      <option value="praise">This worked well</option>
+      <option value="other">Other</option>
+    </select>
     <div class="beta-sentiment" role="radiogroup" aria-label="How was your experience?">
       <button type="button" class="beta-sent-btn" data-sent="1" onclick="setBetaSentiment(1)" aria-label="Bad">😖</button>
       <button type="button" class="beta-sent-btn" data-sent="2" onclick="setBetaSentiment(2)" aria-label="Meh">😕</button>
@@ -148,7 +160,7 @@
   <div class="beta-modal-veil"></div>
   <div class="beta-modal-card">
     <h2 id="bc-title" class="beta-modal-title">Welcome to the TravelByVibe beta</h2>
-    <p class="beta-modal-sub">Three quick things before you dive in:</p>
+    <p class="beta-modal-sub">A few things before you dive in:</p>
     <ul class="beta-consent-list">
       <li>We are still polishing — you may see rough edges, tweaks, and new ideas as we go.</li>
       <li>We use anonymous usage stats and crash reports to make the product better. Your search words are not sent in tracking links.</li>
@@ -760,7 +772,7 @@
     <span class="footer-sep">·</span>
     <a href="/terms">Terms</a>
     <span class="footer-sep">·</span>
-    <a href="mailto:beta@travelboop.com">Contact</a>
+    <a href="mailto:beta@travelbyvibe.com">Contact</a>
   </span>
 </footer>
 

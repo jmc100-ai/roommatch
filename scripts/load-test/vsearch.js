@@ -6,7 +6,7 @@
 //   k6 run scripts/load-test/vsearch.js
 //
 // Run with custom target & gate cookie (prod):
-//   k6 run -e BASE_URL=https://www.travelboop.com -e GATE_PW=your-beta-password scripts/load-test/vsearch.js
+//   k6 run -e BASE_URL=https://www.travelbyvibe.com -e GATE_PW=your-beta-password scripts/load-test/vsearch.js
 //
 // Tune profile via env (with defaults):
 //   k6 run -e VUS_PEAK=25 -e DURATION_S=300 scripts/load-test/vsearch.js

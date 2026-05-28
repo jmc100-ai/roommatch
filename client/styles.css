@@ -6548,6 +6548,17 @@
       border-color: rgba(201,169,110,0.7);
       transform: scale(1.06);
     }
+    .beta-modal-label {
+      display: block;
+      font-size: 12px;
+      font-weight: 500;
+      color: rgba(232,228,220,0.65);
+      margin: 0 0 6px;
+    }
+    .beta-modal-select {
+      margin-bottom: 14px;
+      cursor: pointer;
+    }
     .beta-modal-textarea, .beta-modal-input {
       width: 100%;
       padding: 11px 12px;

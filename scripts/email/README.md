@@ -5,15 +5,15 @@ One file (`send-emails.js`), four flows, all backed by Resend.
 ## Setup
 
 1. Create a Resend account: https://resend.com (free tier: 100 emails/day, 3000/month).
-2. Add your sending domain (`travelboop.com`) and finish DNS verification.
+2. Add your sending domain (`travelbyvibe.com`) and finish DNS verification.
 3. Generate an API key.
 4. Set in `.env`:
    ```
    RESEND_API_KEY=re_...
    BETA_PASSWORD=the-password-you-rotated-for-beta
-   BETA_FROM="TravelBoop Beta <beta@travelboop.com>"
-   BETA_REPLY_TO=beta@travelboop.com
-   BETA_BASE_URL=https://www.travelboop.com
+   BETA_FROM="TravelByVibe Beta <beta@travelbyvibe.com>"
+   BETA_REPLY_TO=beta@travelbyvibe.com
+   BETA_BASE_URL=https://www.travelbyvibe.com
    BETA_CALENDAR_URL=https://cal.com/your-handle    # optional
    ```
 5. Apply the DB migration: `supabase/add-beta-tables.sql` (creates `beta_invitees`).

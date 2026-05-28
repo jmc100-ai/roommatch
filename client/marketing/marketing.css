@@ -56,7 +56,8 @@ a:hover { color: #fff; }
   text-decoration: none;
 }
 .mbrand:hover { color: var(--accent-soft); }
-.brand-vibe { color: var(--accent); }
+.mbrand { color: var(--text); }
+.mbrand .brand-vibe { color: var(--accent); }
 .mnav {
   display: flex;
   flex-wrap: wrap;
@@ -531,3 +532,23 @@ li { margin-bottom: 0.35rem; }
   line-height: 1.6;
 }
 .mfoot a { color: rgba(232, 213, 176, 0.9); }
+.mcheck {
+  margin: 20px 0 0;
+  padding: 0;
+  list-style: none;
+  max-width: 42rem;
+}
+.mcheck li {
+  position: relative;
+  padding: 10px 0 10px 28px;
+  border-bottom: 1px solid var(--border);
+  font-size: 15px;
+  color: rgba(244, 240, 232, 0.88);
+}
+.mcheck li::before {
+  content: "✓";
+  position: absolute;
+  left: 0;
+  color: var(--accent);
+  font-weight: 600;
+}

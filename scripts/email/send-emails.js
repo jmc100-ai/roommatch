@@ -12,7 +12,7 @@
  * CSV columns (header required): email,first_name
  *
  * Env required: RESEND_API_KEY, BETA_PASSWORD (the gate password to share),
- *               BETA_FROM (default beta@travelboop.com), BETA_REPLY_TO (default
+ *               BETA_FROM (default beta@travelbyvibe.com), BETA_REPLY_TO (default
  *               same), BETA_CALENDAR_URL (optional, e.g. https://cal.com/jmc).
  *
  * Free Resend tier = 100 emails/day, 3000/month — perfect for 50 invitees.
@@ -31,10 +31,10 @@ const { Resend } = require("resend");
 const { createClient } = require("@supabase/supabase-js");
 
 const RESEND_KEY      = process.env.RESEND_API_KEY || "";
-const BETA_FROM       = process.env.BETA_FROM      || "TravelByVibe Beta <beta@travelboop.com>";
-const BETA_REPLY_TO   = process.env.BETA_REPLY_TO  || "beta@travelboop.com";
+const BETA_FROM       = process.env.BETA_FROM      || "TravelByVibe Beta <beta@travelbyvibe.com>";
+const BETA_REPLY_TO   = process.env.BETA_REPLY_TO  || "beta@travelbyvibe.com";
 const BETA_PASSWORD   = process.env.BETA_PASSWORD  || process.env.SITE_PASSWORD || "";
-const BETA_BASE_URL   = process.env.BETA_BASE_URL  || "https://www.travelboop.com";
+const BETA_BASE_URL   = process.env.BETA_BASE_URL  || "https://www.travelbyvibe.com";
 const BETA_CALENDAR   = process.env.BETA_CALENDAR_URL || "";
 
 if (!RESEND_KEY) {

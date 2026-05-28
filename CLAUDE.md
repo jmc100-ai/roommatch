@@ -3,7 +3,7 @@
 ## What This Is
 RoomMatch is a hotel room visual search engine. Users describe their ideal hotel room in natural language ("modern bathroom with double sinks and soaking tub") and get back ranked hotel results with matching room photos.
 
-Live at: **https://www.travelboop.com**
+Live at: **https://www.travelbyvibe.com** (legacy **travelboop.com** may redirect — see `docs/DOMAIN.md`)
 GitHub: **https://github.com/jmc100-ai/roommatch**
 Render service: **https://roommatch-1fg5.onrender.com** (service ID: srv-d6s27b75r7bs738737fg)
 Supabase project ID: **dmgxrcmdihgsffvqllms**
@@ -94,7 +94,8 @@ SOFT_FLAG_HOTEL_CAP    — max hotels scanned for coverage in soft mode (default
 UNSPLASH_KEY           — (not yet set) free key from unsplash.com/developers — needed for neighborhood card photos
 SITE_PASSWORD          — (not yet set) simple password gate for the frontend; omit to disable gate (API routes never gated)
 LITEAPI_WL_DOMAIN      — LiteAPI white-label domain WITHOUT scheme, e.g. `travelboop.nuitee.link`. Server prefixes `https://` and serves via `/api/config` AND injects into `window._WL_BASE_URL` in served HTML so `buildBookUrl()` in client/app.js has it on first render. Empty/unset → "Find & Book" buttons fall back to a Google search.
-MAPTILER_KEY           — Maptiler API key (free tier: 100k tile loads/month at maptiler.com). Powers the neighbourhood-vibe-page map module (MapLibre GL). Server exposes via `/api/config` AND injects into `window._MAPTILER_KEY` in served HTML so the map can boot before any /api/config fetch. **Must be restricted by HTTP referrer in the Maptiler dashboard** (Allowed origins: `travelboop.com`, `www.travelboop.com`, `roommatch-1fg5.onrender.com`, `localhost:*`). Unset → map falls back to OSM raster tiles (works but lower quality + against OSM tile usage policy at scale).
+MAPTILER_KEY           — Maptiler API key (free tier: 100k tile loads/month at maptiler.com). Powers the neighbourhood-vibe-page map module (MapLibre GL). Server exposes via `/api/config` AND injects into `window._MAPTILER_KEY` in served HTML so the map can boot before any /api/config fetch. **Must be restricted by HTTP referrer in the Maptiler dashboard** (Allowed origins: `travelbyvibe.com`, `www.travelbyvibe.com`, `travelboop.com`, `www.travelboop.com`, `roommatch-1fg5.onrender.com`, `localhost:*`). Unset → map falls back to OSM raster tiles (works but lower quality + against OSM tile usage policy at scale).
+SITE_PUBLIC_ORIGIN     — Canonical public URL (default `https://www.travelbyvibe.com`). Used for sitemap fallback, outbound User-Agent, marketing defaults.
 META_SYNC_LIMIT        — top-N hotels for which `/api/vsearch` (V2 path) fetches LiteAPI metadata synchronously before sending the response. Default `30`. Lower = faster TTFB, more cards initially show with placeholder name until lazy-load arrives. The remainder are listed in `data.deferred_meta_ids` and lazy-fetched by the client via `/api/hotels-meta`. See "V2 Search Latency" section below.
 NLP_INTENT_TIMEOUT_MS  — `buildFactIntentLLM` (Gemini 2.5 flash-lite) call timeout in ms. Default `3000`. On timeout we fall back to the deterministic regex router (`v2-facts-1`); fine for most queries. Raise only if you see frequent `(router=v2-facts-1)` in logs and the regex is missing important facts. **Note (May 2026):** persistent `v2_intent_cache` table now means timeouts become a one-time event per unique query — the first successful LLM call seeds the cache and every subsequent search across all instances gets the high-quality LLM intent instantly. See "NLP intent cache" section below.
 HOTEL_VIBE_BLEND_WEIGHT — weight of the facts-based hotel-vibe score in V2's primary sort signal. Default `0.20` (80% room match + 20% hotel vibe). Set `0` to make hotelScore display-only. See "HOTEL VIBE MODEL" section.
@@ -120,9 +121,9 @@ POSTHOG_API_KEY         — same key, used by `posthog-node` for server-side mir
 POSTHOG_HOST            — default `https://us.i.posthog.com`.
 RESEND_API_KEY          — Resend transactional email API key (used by `scripts/email/send-emails.js`).
 BETA_PASSWORD           — same value as `SITE_PASSWORD`, embedded by the email script in invites.
-BETA_FROM               — From: header for outbound emails (e.g. `TravelBoop Beta <beta@travelboop.com>`).
+BETA_FROM               — From: header for outbound emails (e.g. `TravelByVibe Beta <beta@travelbyvibe.com>`).
 BETA_REPLY_TO           — Reply-To: header.
-BETA_BASE_URL           — base URL embedded in invite emails. Defaults to `https://www.travelboop.com`.
+BETA_BASE_URL           — base URL embedded in invite emails. Defaults to `https://www.travelbyvibe.com`.
 BETA_CALENDAR_URL       — optional Cal.com / Calendly URL embedded in nudge / call-invite emails.
 BETA_BANNER             — optional sticky-top banner text shown to all users until dismissed (e.g. "Slow searches today — fix in flight"). Empty/unset → no banner.
 SLACK_FEEDBACK_WEBHOOK  — optional. When set, every `POST /api/feedback` mirrors a brief preview to Slack.
@@ -132,12 +133,12 @@ BETA_FEEDBACK_EMAIL     — optional. When set (and RESEND_API_KEY + BETA_FROM a
 ### Beta-launch architecture notes
 - **API beta gate**: when `SITE_PASSWORD` is set, every `/api/*` request requires the `rm_gate` cookie issued by `POST /auth` (or `INDEX_SECRET` in body / `x-index-secret` header). Allowlist: `/api/health`, `/api/config`, `/api/public-config`. Returns `401 { error: "beta_gate_required" }` on failure.
 - **Rate limits** (per-IP, 60s window): `/api/vsearch` 60/min, `/api/rates` 30/min, `/api/hotels-meta` 90/min, admin/backfill routes 10/min, all other `/api/*` 240/min. Hits return `429 { error: "rate_limited" }`.
-- **CORS** is allowlisted to `travelboop.com`, `www.travelboop.com`, the Render URL, and localhost. No more `origin: "*"`.
+- **CORS** is allowlisted to `travelbyvibe.com`, `www.travelbyvibe.com`, legacy `travelboop.com`, the Render URL, and localhost. No more `origin: "*"`.
 - **helmet** is enabled with default headers (HSTS, frameguard, noSniff, etc.). CSP is intentionally off until we have time to write a correct policy that allows Sentry/PostHog/MapLibre/inline injected config.
 - **`rm_gate` cookie** is `HttpOnly; SameSite=Lax`, with `Secure` set when `x-forwarded-proto=https`.
 - **PII stripping** applied at every layer: server Sentry strips query strings + cookies + auth headers in `beforeSend`; browser Sentry strips query strings; PostHog `sanitize_properties` strips query/fragment from any URL-shaped property; client `track()` never includes the actual search query text.
 - **Feedback flow**: `POST /api/feedback` → `beta_feedback` table + optional Slack webhook (`SLACK_FEEDBACK_WEBHOOK`) + optional Resend email (`BETA_FEEDBACK_EMAIL`). Both fan-outs are fire-and-forget so they never block the API response. **Consent flow**: one-time modal on first gate pass → `POST /api/beta-consent` → `beta_consents` table (idempotent on `distinct_id`).
-- **Booking attribution**: `buildBookUrl()` always appends `utm_source=travelboop`, `utm_medium=beta`, `utm_campaign=closed_beta_2026`, `utm_content=room_offer|hotel_page`, and `tb_distinct=<persistent browser uuid>` so we can attribute LiteAPI conversions back to a search session if a partner ever shares booking data.
+- **Booking attribution**: `buildBookUrl()` always appends `utm_source=travelbyvibe`, `utm_medium=beta`, `utm_campaign=closed_beta_2026`, `utm_content=room_offer|hotel_page`, and `tb_distinct=<persistent browser uuid>` so we can attribute LiteAPI conversions back to a search session if a partner ever shares booking data.
 
 ### White-label booking links (Find & Book buttons)
 - All "Find & Book" CTAs (search results card, room rows, hotel detail page sidebar + mobile sticky bar) call `buildBookUrl(hotel, roomTypeId)` in `client/app.js`.
