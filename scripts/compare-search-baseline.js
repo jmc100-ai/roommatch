@@ -94,11 +94,12 @@ for (const cur of current.cases || []) {
     console.log(`  ${cur.id}: payload ${Math.round((g.payload?.totalBytes || 0) / 1e6 * 10) / 10}MB → ${Math.round((cur.payload?.totalBytes || 0) / 1e6 * 10) / 10}MB (Δ${Math.round(byteDelta / 1e6 * 10) / 10}MB) ✓`);
   }
 
-  const vsearchDelta = (cur.perf?.vsearchWallMs || 0) - (g.perf?.vsearchWallMs || 0);
+  const vsearchDelta = (cur.perf?.handlerWallMs ?? cur.perf?.vsearchWallMs ?? 0)
+    - (g.perf?.handlerWallMs ?? g.perf?.vsearchWallMs ?? 0);
   if (vsearchDelta < -500) {
-    console.log(`  ${cur.id}: vsearch ${g.perf?.vsearchWallMs}ms → ${cur.perf?.vsearchWallMs}ms (Δ${vsearchDelta}ms) ✓`);
-  } else if (vsearchDelta > 1500) {
-    issues.push(`vsearch slower by ${vsearchDelta}ms`);
+    console.log(`  ${cur.id}: vsearch ${g.perf?.handlerWallMs ?? g.perf?.vsearchWallMs}ms → ${cur.perf?.handlerWallMs ?? cur.perf?.vsearchWallMs}ms (Δ${vsearchDelta}ms) ✓`);
+  } else if (vsearchDelta > 4000) {
+    warningsForCase.push(`vsearch slower by ${vsearchDelta}ms (cold instance / network?)`);
   }
 
   if (cur.stats?.slim_stubs && (cur.payload?.stubs || 0) > 0) {

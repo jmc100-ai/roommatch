@@ -24,3 +24,10 @@ services:
         sync: false
       - key: SOFT_FLAG_HOTEL_CAP
         sync: false
+      # Search perf flags (May 2026) — slim JSON stubs, parallel rates, nbhd BOOP L2 cache
+      - key: CLIENT_PARALLEL_RATES
+        value: "1"
+      - key: VSEARCH_SLIM_STUBS
+        value: "1"
+      - key: NBHD_BOOP_CACHE
+        value: "1"
