@@ -452,7 +452,7 @@ function prefetchHotelMetaBackground(hotelIds) {
     .catch(e => console.warn(`[hotel-meta] background warm failed: ${e.message}`));
 }
 
-/** UI caption only ("Neutral" when |pm| <= 32); ranking uses every slider step. */
+/** UI caption only ("Somewhat" when |pm| <= 32); ranking uses every slider step. */
 const BOOP_PRICE_MATTERS_NEUTRAL_BAND = 32;
 /** Max points off blended score at |pm|=100 for 5★ / top-tier $ (value-seeking). */
 const BOOP_PRICE_VALUE_PENALTY_MAX = 24;

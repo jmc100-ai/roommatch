@@ -1814,16 +1814,16 @@
     renderBoopQuestion();
   }
 
-  /** Stay-vibe screen: -100 less … 0 neutral … +100 price very important (Match+Price blend). */
+  /** Stay-vibe screen: -100 less … 0 somewhat … +100 price very important (Match+Price blend). */
   function boopPriceMattersCaption(n) {
     const v = Math.max(-100, Math.min(100, Number(n) || 0));
     if (v <= -33) return 'Less important';
     if (v >= 33) return 'Very important';
-    return 'Neutral';
+    return 'Somewhat';
   }
 
   function boopPriceMattersCaptionIsNeutral(n) {
-    return boopPriceMattersCaption(n) === 'Neutral';
+    return boopPriceMattersCaption(n) === 'Somewhat';
   }
 
   function syncBoopPriceMatterNeutralHint(n) {
@@ -1837,7 +1837,7 @@
     const v = Math.max(-100, Math.min(100, Number(n) || 0));
     if (v >= 33) return 'Price Matters - More';
     if (v <= -33) return 'Price Matters - Less';
-    return 'Price Matters - Neutral';
+    return 'Price Matters - Somewhat';
   }
 
   let _priceMattersInputTimer = null;
@@ -7375,7 +7375,7 @@
   /** When price slider is neutral, room lead ≥ this beats similar nbhd (pts). */
   const BOOP_ROOM_DOMINANCE_GAP = 15;
   const BOOP_NBHD_SIMILAR_MAX = 8;
-  /** Slider within ±32 = "Neutral" caption; no strong Boop price signal. */
+  /** Slider within ±32 = "Somewhat" caption; no strong Boop price signal. */
   const BOOP_PRICE_NEUTRAL_BAND = 32;
   /**
    * Best Match + live rates + neutral slider: light nudge toward cheaper hotels
