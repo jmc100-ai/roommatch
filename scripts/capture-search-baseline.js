@@ -169,13 +169,13 @@ function mergeRates(hotels, ratesData) {
   return Number(ratesData.pricedCount) || 0;
 }
 
-function summarizeHotel(h) {
+function summarizeHotel(h, ctx = {}) {
   return {
     id: String(h.id),
     vectorScore: h.vectorScore ?? null,
     hotelScore: h.hotelScore ?? null,
     nbhd_fit_pct: h.nbhd_fit_pct ?? null,
-    roomMatch: bestMatchRoomScore(h),
+    roomMatch: bestMatchRoomScore(h, ctx),
     price: h.price != null ? Math.round(h.price) : null,
     name: (h.name || "").slice(0, 40) || null,
     hasRooms: (h.roomTypes || []).length > 0,
@@ -253,7 +253,7 @@ async function runCase(caseDef) {
   const serverTop10 = hotels.slice(0, 10).map((h) => String(h.id));
 
   const { hotels: sorted } = sortHotelsBestMatch(hotels, data.stats || {}, profile, ctx);
-  const top10 = sorted.slice(0, 10).map(summarizeHotel);
+  const top10 = sorted.slice(0, 10).map((h) => summarizeHotel(h, ctx));
   const ps = payloadStats(data.hotels || []);
 
   return {

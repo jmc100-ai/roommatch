@@ -7460,8 +7460,21 @@
     return Math.min(MATCH_LIVE_RATE_LUXURY_TRIM_MAX, (ratio - MATCH_LIVE_RATE_PRICE_RATIO) * 4.5);
   }
 
-  /** Best Match sort basis — same % as the room vibe badge on each card. */
+  /** Best Match sort basis — best priced room % when rates are loaded (see lib/client-match-sort.js). */
   function bestMatchRoomScore(h) {
+    const allRooms = h?.roomTypes || [];
+    if (_pricesLoaded && _hasDateSearch && h?.roomPrices && allRooms.length) {
+      const pricedScored = allRooms.filter(
+        (rt) => rt.roomTypeId != null && h.roomPrices[rt.roomTypeId] != null && (rt.score || 0) > 0
+      );
+      if (pricedScored.length > 0) {
+        return Math.max(...pricedScored.map((rt) => rt.score || 0));
+      }
+      if (h.price != null) {
+        const bestRoom = Math.max(0, ...allRooms.map((rt) => rt.score || 0));
+        if (bestRoom > 0) return bestRoom;
+      }
+    }
     const room = roomVibeMatchDisplayPct(h);
     return room > 0 ? room : (h.vectorScore || 0);
   }
