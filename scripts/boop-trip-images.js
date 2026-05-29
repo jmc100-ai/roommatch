@@ -17,6 +17,7 @@ const { photoSearchCityPhrase } = require("./neighborhood-vibe-data");
 
 const GEMINI_MODEL = "gemini-2.5-flash-lite";
 const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`;
+const PROMPT_VERSION = "v1";
 const MIN_GEMINI_SCORE = 6;
 const MAX_CANDIDATES = 8;
 const GEMINI_BATCH_SIZE = 4;
@@ -412,6 +413,83 @@ async function resolveSlot(slotId, city, opts = {}) {
   };
 }
 
+/** Load cached trip wizard images for a city (null when missing). */
+async function loadBoopTripImagesFromDb(db, city) {
+  if (!db || !city) return null;
+  const { data, error } = await db
+    .from("boop_trip_images")
+    .select("city, images, meta, prompt_version, generated_at")
+    .eq("city", String(city).trim())
+    .maybeSingle();
+  if (error) {
+    console.warn(`[boop-trip-images] db read failed for ${city}: ${error.message}`);
+    return null;
+  }
+  if (!data?.images || typeof data.images !== "object") return null;
+  if (data.prompt_version && data.prompt_version !== PROMPT_VERSION) return null;
+  const images = data.images;
+  if (!images.first && !images.repeat && !images.expert) return null;
+  return {
+    city: data.city || city,
+    images: {
+      first: images.first || null,
+      repeat: images.repeat || null,
+      expert: images.expert || null,
+    },
+    meta: data.meta || null,
+    generated_at: data.generated_at || null,
+    db_cached: true,
+  };
+}
+
+/** Upsert trip wizard images after a fresh Gemini/Places run. */
+async function saveBoopTripImagesToDb(db, city, result) {
+  if (!db || !city || !result?.images) return;
+  const row = {
+    city: String(city).trim(),
+    images: result.images,
+    meta: result.meta || null,
+    prompt_version: PROMPT_VERSION,
+    generated_at: new Date().toISOString(),
+  };
+  const { error } = await db.from("boop_trip_images").upsert(row, { onConflict: "city" });
+  if (error) console.warn(`[boop-trip-images] db write failed for ${city}: ${error.message}`);
+}
+
+/**
+ * Return cached row or compute + persist. Used by city rollout and admin backfill.
+ * @returns {Promise<{ city, images, meta, db_cached?: boolean }>}
+ */
+async function ensureBoopTripImages(city, db, opts = {}) {
+  const {
+    force = false,
+    log = console.log,
+    placesKey = process.env.GOOGLE_PLACES_KEY || null,
+    unsplashKey = process.env.UNSPLASH_KEY || null,
+    geminiKey = process.env.GEMINI_KEY || null,
+  } = opts;
+
+  const resolvedCity = String(city || "").trim();
+  if (!resolvedCity) throw new Error("city required");
+
+  if (!force && db) {
+    const cached = await loadBoopTripImagesFromDb(db, resolvedCity);
+    if (cached) {
+      log(`[boop-trip-images] ${resolvedCity}: db cache hit`);
+      return cached;
+    }
+  }
+
+  const t0 = Date.now();
+  const result = await fetchTripWizardImages(resolvedCity, { placesKey, unsplashKey, geminiKey });
+  if (db) await saveBoopTripImagesToDb(db, resolvedCity, result);
+  log(
+    `[boop-trip-images] ${resolvedCity}: computed first=${result.meta?.first?.source} ` +
+    `repeat=${result.meta?.repeat?.source} expert=${result.meta?.expert?.source} in ${Date.now() - t0}ms`
+  );
+  return { ...result, db_cached: false };
+}
+
 /**
  * @returns {Promise<{ first: object, repeat: object, expert: object, city: string }>}
  */
@@ -445,6 +523,10 @@ const LITMUS_MEXICO_CITY = {
 
 module.exports = {
   fetchTripWizardImages,
+  loadBoopTripImagesFromDb,
+  saveBoopTripImagesToDb,
+  ensureBoopTripImages,
+  PROMPT_VERSION,
   STATIC_FALLBACKS,
   LITMUS_MEXICO_CITY,
   SLOT_BRIEFS,

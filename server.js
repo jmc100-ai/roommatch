@@ -4150,15 +4150,33 @@ app.get("/api/boop-trip-images", async (req, res) => {
     const city = await resolveCityName(
       cityInput,
       supabaseAdmin || supabase,
-      ["neighborhoods", "indexed_cities", "hotels_cache", "v2_indexed_cities"]
+      ["neighborhoods", "indexed_cities", "hotels_cache", "v2_indexed_cities", "boop_trip_images"]
     );
     const ck = city.toLowerCase();
     const lat = parseFloat(req.query.lat);
     const lng = parseFloat(req.query.lng);
     const cacheKey = `${ck}|${Number.isFinite(lat) ? lat : ""}|${Number.isFinite(lng) ? lng : ""}`;
-    const hit = _boopTripImgCache.get(cacheKey);
-    if (hit && Date.now() - hit.at < BOOP_TRIP_CACHE_MS) {
-      return res.json({ city, images: hit.images, meta: hit.meta, cached: true });
+    const sec = req.headers["x-index-secret"] || req.query.secret;
+    const forceRefresh = req.query.refresh === "1" && sec && sec === process.env.INDEX_SECRET;
+    const db = supabaseAdmin || supabase;
+
+    if (!forceRefresh) {
+      const hit = _boopTripImgCache.get(cacheKey);
+      if (hit && Date.now() - hit.at < BOOP_TRIP_CACHE_MS) {
+        return res.json({ city, images: hit.images, meta: hit.meta, cached: true, db_cached: !!hit.db_cached });
+      }
+      if (db) {
+        const row = await loadBoopTripImages().loadBoopTripImagesFromDb(db, city);
+        if (row) {
+          _boopTripImgCache.set(cacheKey, {
+            at: Date.now(),
+            images: row.images,
+            meta: row.meta,
+            db_cached: true,
+          });
+          return res.json({ city, images: row.images, meta: row.meta, cached: true, db_cached: true });
+        }
+      }
     }
 
     const t0 = Date.now();
@@ -4169,17 +4187,20 @@ app.get("/api/boop-trip-images", async (req, res) => {
       lat: Number.isFinite(lat) ? lat : undefined,
       lng: Number.isFinite(lng) ? lng : undefined,
     });
+    if (db) await loadBoopTripImages().saveBoopTripImagesToDb(db, city, result);
     _boopTripImgCache.set(cacheKey, {
       at: Date.now(),
       images: result.images,
       meta: result.meta,
+      db_cached: false,
     });
     console.log(
       `[boop-trip-images] ${city}: first=${result.meta?.first?.source} repeat=${result.meta?.repeat?.source} ` +
       `expert=${result.meta?.expert?.source} in ${Date.now() - t0}ms` +
+      (forceRefresh ? " (refresh)" : " (computed)") +
       (result.meta?.expert?.geminiScore != null ? ` expert_score=${result.meta.expert.geminiScore}` : "")
     );
-    res.json({ city, images: result.images, meta: result.meta, cached: false });
+    res.json({ city, images: result.images, meta: result.meta, cached: false, db_cached: false });
   } catch (e) {
     console.error("[boop-trip-images]", e.message);
     res.status(500).json({ error: e.message });

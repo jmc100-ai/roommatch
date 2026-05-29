@@ -73,7 +73,7 @@ async function testApi(city) {
     const ok = !!url;
     console.log(
       `  ${slot.padEnd(7)} ${ok ? green("OK") : red("MISS")} ` +
-      `source=${meta?.source || "?"} cached=${!!data.cached}`
+      `source=${meta?.source || "?"} cached=${!!data.cached} db=${!!data.db_cached}`
     );
   }
   return data;

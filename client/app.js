@@ -1479,8 +1479,8 @@
     );
   }
 
-  /** Load city-specific trip card photos; resolves when decoded (or fetch failed). */
-  function prefetchBoopTripWizardImages(city) {
+  /** Load city-specific trip card photos. Resolves when API returns (not image decode). */
+  function prefetchBoopTripWizardImages(city, { preloadImages = false } = {}) {
     const cityK = cityKey(city);
     if (!cityK) return Promise.resolve();
     if (BOOP_WIZARD_IMAGES[cityK]?.trip?.first) return Promise.resolve();
@@ -1502,7 +1502,13 @@
               repeat: images.repeat || null,
               expert: images.expert || null,
             };
-            await boopPreloadTripWizardImages(BOOP_WIZARD_IMAGES[cityK].trip);
+            if (preloadImages) {
+              await boopPreloadTripWizardImages(BOOP_WIZARD_IMAGES[cityK].trip);
+            }
+            const q = BOOP_QUESTIONS[BOOP.idx];
+            if (q?.id === 'trip' && document.getElementById('st-boop')?.style.display !== 'none') {
+              renderBoopQuestion();
+            }
           }
         }
       } catch (_) {
@@ -1657,7 +1663,7 @@
     const qIdx = BOOP_QUESTIONS.findIndex(q => q.id === qId);
     BOOP.idx = qIdx >= 0 ? qIdx : 0;
     showFlowStep('boop');
-    if (qId === 'trip' && S.city) await prefetchBoopTripWizardImages(S.city);
+    if (qId === 'trip' && S.city) prefetchBoopTripWizardImages(S.city);
     renderBoopQuestion();
     refreshStory('boop');
   }
@@ -1666,7 +1672,7 @@
     const saved = loadBoopProfileForCity(S.city);
     BOOP.saved = saved;
     resetBoopState();
-    if (S.city) await prefetchBoopTripWizardImages(S.city);
+    if (S.city) prefetchBoopTripWizardImages(S.city);
     renderBoopQuestion();
   }
 
@@ -2295,7 +2301,7 @@
     // we display the flow as an overlay. showFlowStep wires the panel display
     // toggles; the .boop-overlay-mode CSS handles the rest.
     showFlowStep('boop');
-    if (stepKey === 'trip') await prefetchBoopTripWizardImages(S.city);
+    if (stepKey === 'trip') prefetchBoopTripWizardImages(S.city);
     renderBoopQuestion();
     // Trap scroll on the results page while the overlay is open.
     if (typeof window !== 'undefined') window.scrollTo({ top: 0 });
@@ -2611,7 +2617,7 @@
     S.hotelQ = null;
     S.mustHaves = null;
     clearNbhdPickerMatchCache();
-    const tripImagesP = prefetchBoopTripWizardImages(city);
+    prefetchBoopTripWizardImages(city);
     prefetchBoopWizardImages(city);
 
     // BOOP v4 — saved-profile review screen temporarily disabled; always send
@@ -2621,7 +2627,6 @@
     const saved = loadBoopProfileForCity(city);
     if (saved) S.boopProfile = saved;
 
-    await tripImagesP;
     await startBoopStep();
     refreshStory('boop');
     showFlowStep('boop');
@@ -2857,6 +2862,28 @@
     if (n && !isPlaceholderHotelTitle(n, h.id)) return n;
     const city = String(h.city || S.city || '').trim();
     return city ? `Hotel in ${city}` : 'Hotel';
+  }
+
+  /** Vibe tour headline — prefers real LiteAPI name; never raw `lp…` ids. */
+  function vibeTourHotelTitle(h) {
+    const t = hotelDisplayTitle(h);
+    return t === 'Hotel' ? 'Your matched hotel' : t;
+  }
+
+  /** Fetch LiteAPI name/photo for the tour hero when server deferred its meta batch. */
+  async function ensureTourHotelMeta(hotel) {
+    if (!hotel?.id) return hotel;
+    const sid = String(hotel.id);
+    if (!isPlaceholderHotelTitle(hotel.name, sid)) return hotel;
+    try {
+      const r = await fetch(`${BACKEND}/api/hotels-meta?ids=${encodeURIComponent(sid)}`);
+      if (!r.ok) return hotel;
+      const d = await r.json();
+      if (d?.hotels) applyMetaInPlace(d.hotels);
+      return (_lastHotels || []).find((h) => String(h.id) === sid) || hotel;
+    } catch (_) {
+      return hotel;
+    }
   }
 
   /** Property-type chips + "Serviced residences" when name says Residences but DB type is still hotel (distinct listing from same brand hotel). */
@@ -6584,6 +6611,7 @@
   function buildVibeTourHTML(hotels, svUrls = []) {
     if (!hotels?.length) return '';
     const h = hotels[0];
+    const hotelTitle = vibeTourHotelTitle(h);
     const nbhd = h.primary_nbhd || selectedNeighborhood || null;
     const room = topRoomForVibeTour(h);
     const roomPhoto = firstUsablePhoto(room?.photos) || h.mainPhoto || '';
@@ -6623,7 +6651,7 @@
         key:`sv-${i}`,
         kind:'neighborhood',
         kicker:`Neighborhood vibe match ${nbhdVibe > 0 ? `${nbhdVibe}%` : '—'} - ${nbhdName}`,
-        title:h.name || 'Your matched hotel',
+        title:hotelTitle,
         copy:i === 0
           ? (nbhdDesc + ' Here is the actual sidewalk and façades near this hotel (outdoor Street View).')
           : 'Same corner, different angle — a slow look up and down the block.',
@@ -6642,7 +6670,7 @@
         key:`neighborhood-${i}`,
         kind:'neighborhood',
         kicker:`Neighborhood vibe match ${nbhdVibe > 0 ? `${nbhdVibe}%` : '—'} - ${nbhdName}`,
-        title:h.name || 'Your matched hotel',
+        title:hotelTitle,
         copy:i === 0
           ? 'Curated stills from the area cards — texture, parks, and street energy after the live curb views.'
           : 'Another outdoor-forward glimpse of the district around this match.',
@@ -6674,9 +6702,9 @@
           key:`hotel-arrival-${i}`,
           kind:'hotel',
           kicker:`Hotel vibe match ${hotelVibeLabel}`,
-          title:h.name || 'Your matched hotel',
+          title:hotelTitle,
           copy:i === 0
-            ? (h.name || 'This hotel') + ` is the strongest current hotel match for your trip vibe (${hotelVibeLabel}).`
+            ? hotelTitle + ` is the strongest current hotel match for your trip vibe (${hotelVibeLabel}).`
             : 'Another exterior angle before we go indoors or to the room.',
           caption:i === 0 ? 'Approach and façade.' : 'Hotel from the street side.',
           photo:p.url,
@@ -6700,7 +6728,7 @@
       key:`room-${i}`,
       kind:'room',
       kicker:`Room vibe match ${roomVibe > 0 ? `${roomVibe}%` : '—'} - ${roomName}`,
-      title:h.name || 'Your matched hotel',
+      title:hotelTitle,
       copy:i === 0
         ? (room ? 'Open the door to the room type we would show first based on your visual room vibe.' : 'Room photos are limited for this hotel, but it still matched your broader stay vibe.')
         : 'Keep looking through the room details: sleep area, bathroom, light, texture, and view when available.',
@@ -6717,7 +6745,7 @@
         key:'title-card',
         kind:'title',
         kicker:`Hotel vibe match: ${hotelVibe}%`,
-        title:h.name || 'Your matched hotel',
+        title:hotelTitle,
         nbhdLabel:'',
         showNbhdLine:false,
         titleMeta:[
@@ -6828,7 +6856,7 @@
   }
 
   function buildVibeTourLoadingHTML(hotel) {
-    const name = escHtml(hotel?.name || 'Your matched hotel');
+    const name = escHtml(vibeTourHotelTitle(hotel));
     return `<section class="vibe-tour vibe-tour--loading" id="vibe-tour" aria-busy="true" aria-label="Preparing street-level tour">
       <div class="vibe-tour-loading-topbar">
         <button type="button" class="vibe-tour-icon-btn" onclick="closeVibeTourPopup()">Close</button>
@@ -6872,7 +6900,8 @@
     const hotelId = hotels[0]?.id;
     if (hotelId != null) _vibeTourLeadId = String(hotelId);
     if (hotelId && Object.prototype.hasOwnProperty.call(_svFrameCache, hotelId)) {
-      openVibeTourPopup(hotels, _svFrameCache[hotelId]);
+      const tourHero = await ensureTourHotelMeta(hotels[0]);
+      openVibeTourPopup([tourHero, ...hotels.slice(1)], _svFrameCache[hotelId]);
       return;
     }
     const ov = ensureVibeTourOverlay();
@@ -6895,7 +6924,14 @@
     const minLoadMs = 720;
     const t0 = Date.now();
     console.log(`[perf] street-view fetch start`);
-    const svUrls = await fetchStreetViewFrames(hotelId);
+    const metaP = ensureTourHotelMeta(hotels[0]);
+    const svP = fetchStreetViewFrames(hotelId);
+    const tourHero = await metaP;
+    const tourHotels = [tourHero, ...hotels.slice(1)];
+    _vibeTourLastHotels = tourHotels;
+    const subEl = ov.querySelector('.vibe-tour-loading-sub');
+    if (subEl) subEl.textContent = vibeTourHotelTitle(tourHero);
+    const svUrls = await svP;
     const elapsed = Date.now() - t0;
     console.log(`[perf] street-view fetch done: ${elapsed}ms (${svUrls.length} urls, cache=${elapsed < 5 ? 'HIT' : 'MISS'})`);
     if (elapsed < minLoadMs && _vibeTourVisible) {
@@ -6911,7 +6947,7 @@
     }
     if (!_vibeTourVisible) return;
     console.log(`[perf] tour popup open`);
-    openVibeTourPopup(hotels, svUrls);
+    openVibeTourPopup(tourHotels, svUrls);
   }
 
   function openVibeTourForHotel(hotelId) {

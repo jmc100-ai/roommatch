@@ -32,7 +32,8 @@ DECLARE
     'v2_room_inventory',
     'v2_room_feature_facts',
     'v2_room_types_index',
-    'v2_intent_cache'
+    'v2_intent_cache',
+    'boop_trip_images'
   ];
   beta_tables text[] := ARRAY[
     'beta_feedback',

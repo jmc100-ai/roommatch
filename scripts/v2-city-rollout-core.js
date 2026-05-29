@@ -2,6 +2,7 @@
  * Shared V2 city rollout logic (local CLI + Render POST /api/v2/city-rollout).
  */
 const ng = require("./neighborhood-generator");
+const { ensureBoopTripImages } = require("./boop-trip-images");
 
 const COUNTRY_CODES = {
   "mexico city": "MX",
@@ -155,6 +156,19 @@ async function runNeighborhoods(city, db, { regenerate, log = console.log } = {}
     process.env.FLICKR_KEY || null,
   );
   log(`  vibe rows updated: ${n}`);
+
+  log("  boop trip wizard images…");
+  try {
+    await ensureBoopTripImages(city, db, {
+      force: !!regenerate,
+      log,
+      placesKey: process.env.GOOGLE_PLACES_KEY || null,
+      unsplashKey: process.env.UNSPLASH_KEY || null,
+      geminiKey: process.env.GEMINI_KEY || null,
+    });
+  } catch (e) {
+    log(`  boop trip images failed (non-fatal): ${e.message}`);
+  }
 }
 
 async function cleanupV1(city, db, { dryRun = false, log = console.log } = {}) {
