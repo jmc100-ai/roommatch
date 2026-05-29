@@ -3801,6 +3801,17 @@
       color: var(--accent2);
       font-weight: 500;
     }
+    .boop-price-matter-neutral-hint {
+      text-align: center;
+      font-size: 11px;
+      line-height: 1.45;
+      color: var(--muted);
+      margin-top: 8px;
+      font-weight: 400;
+    }
+    .boop-price-matter-neutral-hint[hidden] {
+      display: none;
+    }
     /* Must-haves step: slightly tighter spacing under headline (title matches other steps) */
     .boop-wrap--deal .boop-q-head { margin-bottom:6px; }
     .boop-wrap--deal .boop-q-sub { margin-top:4px; font-size:12px; line-height:1.45; }
