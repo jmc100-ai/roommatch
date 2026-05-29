@@ -1816,6 +1816,14 @@
     return 'Neutral';
   }
 
+  /** Results stay-vibe chip subline (revert: set VIBE_CHIP_SHOW_PRICE_MATTERS false). */
+  function boopPriceMattersChipSubline(n) {
+    const v = Math.max(-100, Math.min(100, Number(n) || 0));
+    if (v >= 33) return 'Price Matters - More';
+    if (v <= -33) return 'Price Matters - Less';
+    return 'Price Matters - Neutral';
+  }
+
   let _priceMattersInputTimer = null;
   function boopPriceMattersInput(v) {
     const n = Math.max(-100, Math.min(100, parseInt(v, 10) || 0));
@@ -1830,6 +1838,9 @@
     }
     const el = document.getElementById('boop-price-matter-cur');
     if (el) el.textContent = boopPriceMattersCaption(n);
+    if (VIBE_CHIP_SHOW_PRICE_MATTERS && document.body.classList.contains('has-results')) {
+      renderVibeChips();
+    }
     if (!document.body.classList.contains('has-results') || !_lastHotels?.length) return;
     // User is explicitly re-weighting price — release the vibe-tour #1 pin so a
     // luxury hero (e.g. Hilton suite) cannot stay locked at the top.
@@ -2058,6 +2069,8 @@
   // ── Vibe chips on results toolbar ────────────────────────────────
   // Steps that surface as taps on the results-page chip strip.
   const VIBE_CHIP_STEPS = ['trip', 'stayVibe', 'nbhdScene', 'musthaves'];
+  /** Experiment: stay-vibe chip shows price slider as a second line. Set false to revert. */
+  const VIBE_CHIP_SHOW_PRICE_MATTERS = true;
   /** Card steps opened from results vibe chips (not must-haves). */
   const BOOP_CHIP_OVERLAY_CARD_STEPS = ['trip', 'stayVibe', 'nbhdScene'];
 
@@ -2204,7 +2217,11 @@
       const optId = ans[stepKey];
       const opt = (q?.options || []).find(o => o.id === optId);
       if (opt) {
-        chips.push(_chipHtml(stepKey, opt.emoji || '', opt.title || opt.label || '', false));
+        const title = opt.title || opt.label || '';
+        const subline = (stepKey === 'stayVibe' && VIBE_CHIP_SHOW_PRICE_MATTERS)
+          ? boopPriceMattersChipSubline(ans.priceMatters)
+          : '';
+        chips.push(_chipHtml(stepKey, opt.emoji || '', title, false, subline));
       } else {
         chips.push(_chipHtml(stepKey, '', _emptyChipLabelFor(stepKey), true));
       }
@@ -2220,14 +2237,21 @@
     return '+ Add';
   }
 
-  function _chipHtml(stepKey, icon, label, isEmpty) {
+  function _chipHtml(stepKey, icon, label, isEmpty, subline) {
     const safeLabel = escHtml(label);
     const safeStep = escHtml(stepKey);
     if (isEmpty) {
       return `<button type="button" class="vibe-chip vibe-chip-empty" data-vibe-step="${safeStep}" onclick="openBoopFromChip('${safeStep}')">${safeLabel}</button>`;
     }
     const iconHtml = icon ? `<span class="vibe-chip-icon">${escHtml(icon)}</span>` : '';
-    return `<button type="button" class="vibe-chip" data-vibe-step="${safeStep}" onclick="openBoopFromChip('${safeStep}')" aria-label="Edit ${safeLabel}">${iconHtml}<span class="vibe-chip-text">${safeLabel}</span><span class="vibe-chip-pencil" aria-hidden="true">✎</span></button>`;
+    const safeSubline = subline ? escHtml(subline) : '';
+    const stacked = !!safeSubline;
+    const ariaExtra = stacked ? `, ${safeSubline}` : '';
+    const textHtml = stacked
+      ? `<span class="vibe-chip-text vibe-chip-text--stacked"><span class="vibe-chip-line1">${safeLabel}</span><span class="vibe-chip-line2">${safeSubline}</span></span>`
+      : `<span class="vibe-chip-text">${safeLabel}</span>`;
+    const stackedClass = stacked ? ' vibe-chip--stacked' : '';
+    return `<button type="button" class="vibe-chip${stackedClass}" data-vibe-step="${safeStep}" onclick="openBoopFromChip('${safeStep}')" aria-label="Edit ${safeLabel}${ariaExtra}">${iconHtml}${textHtml}<span class="vibe-chip-pencil" aria-hidden="true">✎</span></button>`;
   }
 
   /** Clear legacy inline margin from old resultCount alignment (removed — caused overlap). */

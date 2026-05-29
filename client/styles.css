@@ -5310,14 +5310,23 @@
         max-width: none;
         width: 100%;
         justify-content: flex-start;
-        padding: 7px 10px;
+        padding: 8px 10px;
         font-size: 12px;
         box-sizing: border-box;
+        min-height: 46px;
+        border-radius: 14px;
+        align-items: center;
       }
-      #st-results .cmd-row-vibe.vibe-chips-mobile-2row .vibe-chip-text {
+      #st-results .cmd-row-vibe.vibe-chips-mobile-2row .vibe-chip-text:not(.vibe-chip-text--stacked) {
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
+      }
+      #st-results .cmd-row-vibe.vibe-chips-mobile-2row .vibe-chip-line1 {
+        font-size: 12px;
+      }
+      #st-results .cmd-row-vibe.vibe-chips-mobile-2row .vibe-chip-line2 {
+        font-size: 9px;
       }
       .cmd-row-vibe .vibe-row-actions { display: none; }
       /* Mobile dates uses same .cmd-seg shell as City / Neighbourhood; value line only (no "Dates:" in text) */
@@ -5367,6 +5376,14 @@
       flex-wrap: nowrap;
       min-width: 0;
     }
+    /* Results toolbar: uniform chip height (matches stay-vibe + price subline). */
+    #st-results .vibe-chip-row .vibe-chip {
+      min-height: 46px;
+      box-sizing: border-box;
+      border-radius: 14px;
+      padding: 8px 13px;
+      align-items: center;
+    }
     .vibe-chip {
       display: inline-flex;
       align-items: center;
@@ -5398,6 +5415,44 @@
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
+    }
+    /* Stay-vibe chip: title + price-matters subline (revert: VIBE_CHIP_SHOW_PRICE_MATTERS=false in app.js) */
+    .vibe-chip.vibe-chip--stacked {
+      white-space: normal;
+      max-width: 280px;
+    }
+    .vibe-chip-text--stacked {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 2px;
+      min-width: 0;
+      white-space: normal;
+      overflow: visible;
+      text-overflow: unset;
+    }
+    .vibe-chip-line1 {
+      font-size: 13px;
+      font-weight: 500;
+      line-height: 1.25;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 100%;
+    }
+    .vibe-chip-line2 {
+      font-size: 10px;
+      font-weight: 400;
+      line-height: 1.2;
+      color: rgba(232, 228, 220, 0.62);
+      letter-spacing: 0.01em;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 100%;
+    }
+    .vibe-chip:hover .vibe-chip-line2 {
+      color: rgba(216, 178, 122, 0.85);
     }
     .vibe-chip-pencil {
       opacity: 0;
