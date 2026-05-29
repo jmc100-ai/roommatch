@@ -7257,11 +7257,16 @@
    */
   const MATCH_LIVE_RATE_NUDGE_MAX = 18;
   const MATCH_LIVE_RATE_ROOM_GAP = 14;
+  /** When max pairwise price ≥3× cohort median, allow nudge across larger room gaps. */
+  const MATCH_LIVE_RATE_ROOM_GAP_OUTLIER = 28;
   /** Extra nudge when one hotel is ≥2.2× cohort median price with similar room match. */
   const MATCH_LIVE_RATE_RATIO_BOOST = 12;
   const MATCH_LIVE_RATE_PRICE_RATIO = 2.2;
   /** Subtract from sort score when neutral slider + live price ≫ cohort median (St Regis class). */
-  const MATCH_LIVE_RATE_LUXURY_TRIM_MAX = 14;
+  const MATCH_LIVE_RATE_LUXURY_TRIM_MAX = 28;
+  /** Escalating penalty band when live price ≥3× cohort median (neutral slider). */
+  const MATCH_LIVE_RATE_OUTLIER_RATIO = 3;
+  const MATCH_LIVE_RATE_OUTLIER_PENALTY_MAX = 45;
 
   function valueSeekingLuxuryLean(h, pct) {
     if (pct && h.price != null && Number.isFinite(Number(h.price))) {
@@ -7371,8 +7376,12 @@
     const priceRatio = med > 0 ? maxP / med : 1;
 
     const roomGap = Math.abs(roomB - roomA);
-    const roomGapLimit = MATCH_LIVE_RATE_ROOM_GAP
-      + (priceRatio >= 2.5 ? Math.min(14, (priceRatio - 2) * 5) : 0);
+    let roomGapLimit = MATCH_LIVE_RATE_ROOM_GAP;
+    if (priceRatio >= MATCH_LIVE_RATE_OUTLIER_RATIO) {
+      roomGapLimit = MATCH_LIVE_RATE_ROOM_GAP_OUTLIER;
+    } else if (priceRatio >= 2.5) {
+      roomGapLimit = MATCH_LIVE_RATE_ROOM_GAP + Math.min(14, (priceRatio - 2) * 5);
+    }
     if (roomGap > roomGapLimit) return 0;
 
     const nudgeScale = priceRatio >= MATCH_LIVE_RATE_PRICE_RATIO
@@ -7389,13 +7398,25 @@
     return diff;
   }
 
-  /** Flat trim on blended sort score for extreme live prices (neutral slider only). */
-  function neutralLuxuryPriceTrim(h, pricePercentiles, pm) {
+  function cohortMedianPrice(pricePercentiles) {
+    return (pricePercentiles.p10 + pricePercentiles.p90) / 2;
+  }
+
+  function hotelPriceToMedianRatio(h, pricePercentiles) {
+    if (!pricePercentiles || h.price == null) return 1;
+    const med = cohortMedianPrice(pricePercentiles);
+    if (med <= 0) return 1;
+    return Number(h.price) / med;
+  }
+
+  /** Flat + escalating trim on blended sort score for expensive live rates (neutral slider). */
+  function neutralLivePricePenalty(h, pricePercentiles, pm) {
     if (Math.abs(pm) > BOOP_PRICE_NEUTRAL_BAND || !pricePercentiles || h.price == null) return 0;
-    const med = (pricePercentiles.p10 + pricePercentiles.p90) / 2;
-    if (med <= 0) return 0;
-    const ratio = Number(h.price) / med;
+    const ratio = hotelPriceToMedianRatio(h, pricePercentiles);
     if (ratio <= MATCH_LIVE_RATE_PRICE_RATIO) return 0;
+    if (ratio >= MATCH_LIVE_RATE_OUTLIER_RATIO) {
+      return Math.min(MATCH_LIVE_RATE_OUTLIER_PENALTY_MAX, (ratio - 2) * 12);
+    }
     return Math.min(MATCH_LIVE_RATE_LUXURY_TRIM_MAX, (ratio - MATCH_LIVE_RATE_PRICE_RATIO) * 4.5);
   }
 
@@ -7585,14 +7606,17 @@
       const sortScore = (h) => {
         let s = boopPriceAdjustBlendedScore(blendedMatchScore(h), h, pm, pricePercentiles);
         if (pmNeutral && pricePercentiles) {
-          s -= neutralLuxuryPriceTrim(h, pricePercentiles, pm);
+          s -= neutralLivePricePenalty(h, pricePercentiles, pm);
         }
         return s;
       };
       hotels.sort((a, b) => {
         const roomA = roomMatchScore(a);
         const roomB = roomMatchScore(b);
-        if (Math.abs(pm) <= BOOP_PRICE_NEUTRAL_BAND) {
+        // When live rates exist on neutral slider, never short-circuit on room
+        // dominance — let sortScore + price nudge decide (Ritz 100% vs 77% @ 15× price).
+        const skipRoomDominance = pmNeutral && pricePercentiles;
+        if (Math.abs(pm) <= BOOP_PRICE_NEUTRAL_BAND && !skipRoomDominance) {
           const nbhdA = a.nbhd_fit_pct;
           const nbhdB = b.nbhd_fit_pct;
           const nbhdGap = (nbhdA != null && nbhdB != null) ? Math.abs(nbhdB - nbhdA) : 0;
@@ -7668,7 +7692,7 @@
           console.log(
             `[client-rank-debug] match-sort top-15 pm=${pm} strength=${pmStrength.toFixed(2)} `
             + `wNbhd=${wNbhd.toFixed(3)} (base=${wNbhdBase.toFixed(3)}) rates=${!!pricePercentiles} `
-            + `liveRateNudge=${pmNeutral && !!pricePercentiles ? `±${MATCH_LIVE_RATE_NUDGE_MAX} if room≤${MATCH_LIVE_RATE_ROOM_GAP}pt` : "off"} `
+            + `liveRateNudge=${pmNeutral && !!pricePercentiles ? `±${MATCH_LIVE_RATE_NUDGE_MAX} room≤${MATCH_LIVE_RATE_ROOM_GAP}pt (≤${MATCH_LIVE_RATE_ROOM_GAP_OUTLIER} if ≥${MATCH_LIVE_RATE_OUTLIER_RATIO}× med)` : "off"} `
             + `pin=${_vibeTourLeadId || "—"}:\n` + dbg.join("\n")
           );
         }
