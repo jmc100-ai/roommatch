@@ -17,6 +17,31 @@
 const { buildFactIntent, buildFactIntentLLM, scoreFactSet, mergeStayVibeIntoIntent, STAY_VIBE_TO_VISUAL_STYLE } = require("./fact-catalog");
 const { normalizePolygonRing, pointInPolygon, bboxFromRing } = require("./neighborhood-vibe-data");
 
+function slimStubsEnabled() {
+  return process.env.VSEARCH_SLIM_STUBS === "1" || process.env.VSEARCH_SLIM_STUBS === "true";
+}
+
+/** Minimal stub rows — drops empty strings, catalog photo arrays, heavy nbhd attributes. */
+function slimStubPayload(h) {
+  const out = {
+    id: h.id,
+    vectorScore: h.vectorScore,
+    isMatched: h.isMatched,
+    property_type: h.property_type,
+    roomTypes: [],
+  };
+  if (h.hotelScore != null) out.hotelScore = h.hotelScore;
+  if (h.nbhd_fit_pct != null) out.nbhd_fit_pct = h.nbhd_fit_pct;
+  if (h.mainPhoto) out.mainPhoto = h.mainPhoto;
+  if (h.primary_nbhd) {
+    out.primary_nbhd = { id: h.primary_nbhd.id, name: h.primary_nbhd.name };
+    if (h.nbhd_fit_pct == null && h.primary_nbhd.vibe_short) {
+      out.primary_nbhd.vibe_short = h.primary_nbhd.vibe_short;
+    }
+  }
+  return out;
+}
+
 // ── Phase-A in-memory cache (per city, 5-minute TTL) ─────────────────────────
 // Avoids re-fetching 3,500+ hotel cache rows + 9,600+ index rows on every search.
 const _phaseACache = new Map(); // city → { ts, hotelRows, indexRows }
@@ -550,6 +575,7 @@ async function runV2Search({ req, supabase, supabaseAdmin, resolveCityName }) {
   let nbhdFitByHotelId = null;
   let nbhdPrimaryByHotel = new Map(); // hotel_id → neighborhood_id (ALL hotels)
   let nbhdHoodRows = [];              // neighborhood rows with id, name, vibe_short, attributes
+  let nbhdCacheHit = false;
   const boopParam = req.query.boop_profile;
   if (nbhdRankWeight > 0 && boopParam && rankedHotels.length) {
     try {
@@ -589,6 +615,7 @@ async function runV2Search({ req, supabase, supabaseAdmin, resolveCityName }) {
       nbhdFitByHotelId   = nbhdResult.nbhdFitByHotelId;
       nbhdPrimaryByHotel = nbhdResult.primaryByHotel;
       nbhdHoodRows       = nbhdResult.hoodRows;
+      nbhdCacheHit       = !!nbhdResult.nbhd_cache_hit;
       if (nbhdFitByHotelId?.size) {
         console.log(`[v2] nbhd_boop_rank: weight=${nbhdRankWeight} nbhd_scores=${nbhdFitByHotelId.size} primary_assignments=${nbhdPrimaryByHotel.size}`);
 
@@ -1348,6 +1375,10 @@ async function runV2Search({ req, supabase, supabaseAdmin, resolveCityName }) {
     console.warn(`[v2] deduped ${beforeDedupe - hotels.length} duplicate hotel_id row(s) in vsearch payload`);
   }
 
+  if (slimStubsEnabled()) {
+    hotels = hotels.map((h) => ((h.roomTypes || []).length > 0 ? h : slimStubPayload(h)));
+  }
+
   const nbhdBlendApplied = !!(nbhdFitByHotelId?.size > 0 && nbhdRankWeight > 0);
 
   console.log(
@@ -1390,6 +1421,8 @@ async function runV2Search({ req, supabase, supabaseAdmin, resolveCityName }) {
         nbhd_rank_weight_config:  Number.isFinite(rawNbhdW) ? rawNbhdW : undefined,
         nbhd_rank_weight_active:  nbhdRankWeight,
         nbhd_blend_applied:       nbhdBlendApplied,
+        slim_stubs:               slimStubsEnabled(),
+        nbhd_cache_hit:           nbhdCacheHit,
         price_matters:            priceMatters,
         luxury_pref:              luxuryPref,
         price_matters_star_penalty_applied: false,

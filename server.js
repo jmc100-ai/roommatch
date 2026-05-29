@@ -1378,6 +1378,7 @@ function serveAppHtml(res) {
   const rel = safe(SENTRY_RELEASE);
   const env = safe(process.env.SENTRY_ENV || "production");
   const bb  = safe(process.env.BETA_BANNER || "");
+  const pr  = (process.env.CLIENT_PARALLEL_RATES === "1" || process.env.CLIENT_PARALLEL_RATES === "true") ? "1" : "0";
   const html = _readIndexHtml()
     .replace(/__WL_BASE_URL__/g, wl)
     .replace(/__MAPTILER_KEY__/g, mt)
@@ -1386,7 +1387,8 @@ function serveAppHtml(res) {
     .replace(/__POSTHOG_HOST__/g, phh)
     .replace(/__RELEASE__/g, rel)
     .replace(/__ENV__/g, env)
-    .replace(/__BETA_BANNER__/g, bb);
+    .replace(/__BETA_BANNER__/g, bb)
+    .replace(/__PARALLEL_RATES__/g, pr);
   res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
   res.setHeader("Pragma", "no-cache");
   res.setHeader("Expires", "0");
@@ -1547,6 +1549,9 @@ app.get("/api/config", (req, res) => {
   res.json({
     wl_base_url:   _wlBaseUrlFromEnv(),
     maptiler_key:  _maptilerKeyFromEnv(),
+    parallel_rates: process.env.CLIENT_PARALLEL_RATES === "1" || process.env.CLIENT_PARALLEL_RATES === "true",
+    slim_stubs:    process.env.VSEARCH_SLIM_STUBS === "1" || process.env.VSEARCH_SLIM_STUBS === "true",
+    nbhd_boop_cache: process.env.NBHD_BOOP_CACHE === "1" || process.env.NBHD_BOOP_CACHE === "true",
   });
 });
 
@@ -4160,6 +4165,7 @@ app.get("/api/boop-trip-images", async (req, res) => {
     const result = await loadBoopTripImages().fetchTripWizardImages(city, {
       placesKey: process.env.GOOGLE_PLACES_KEY || null,
       unsplashKey: process.env.UNSPLASH_KEY || null,
+      geminiKey: process.env.GEMINI_KEY || null,
       lat: Number.isFinite(lat) ? lat : undefined,
       lng: Number.isFinite(lng) ? lng : undefined,
     });
@@ -4170,7 +4176,8 @@ app.get("/api/boop-trip-images", async (req, res) => {
     });
     console.log(
       `[boop-trip-images] ${city}: first=${result.meta?.first?.source} repeat=${result.meta?.repeat?.source} ` +
-      `expert=${result.meta?.expert?.source} in ${Date.now() - t0}ms`
+      `expert=${result.meta?.expert?.source} in ${Date.now() - t0}ms` +
+      (result.meta?.expert?.geminiScore != null ? ` expert_score=${result.meta.expert.geminiScore}` : "")
     );
     res.json({ city, images: result.images, meta: result.meta, cached: false });
   } catch (e) {

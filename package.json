@@ -8,7 +8,9 @@
     "dev": "nodemon server.js",
     "test:search-api": "node scripts/test-search-quality.js",
     "test:search-ui": "playwright test tests/search-ui.spec.js",
-    "test:search-all": "npm run test:search-api && npm run test:search-ui"
+    "test:search-all": "npm run test:search-api && npm run test:search-ui",
+    "baseline:capture": "node scripts/capture-search-baseline.js",
+    "baseline:compare": "node scripts/compare-search-baseline.js --capture"
   },
   "engines": {
     "node": "20"

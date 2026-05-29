@@ -158,6 +158,11 @@
     return (window._WL_BASE_URL || '').replace(/\/$/, '');
   }
 
+  function _parallelRatesEnabled() {
+    const v = window._PARALLEL_RATES;
+    return v === '1' || v === 1 || v === true;
+  }
+
   /** Append UTM + tb_distinct to any LiteAPI WL URL so we can attribute booking
    *  conversions back to the search/result that produced the click. */
   function _withBookAttribution(urlStr, hotel, roomTypeId) {
@@ -5145,6 +5150,9 @@
     const nbhdPickerScoresP = prefetchNbhdPickerMatchMap(S.city);
     const _t0search = Date.now();
     console.log(`[perf] search start`);
+    const ratesPrefetch = (hasDates && _parallelRatesEnabled())
+      ? _fetchRatesPayload(city, checkin, checkout, reqId)
+      : null;
     try {
       const vsearchParams = { query, city };
       if (activePoly) {
@@ -5227,7 +5235,7 @@
         }
         lazyFetchVisibleStubPhotos(reqId);   // immediately fill stub cards with room photos
         if (hasDates) {
-          fetchPrices(city, checkin, checkout, reqId);
+          fetchPrices(city, checkin, checkout, reqId, [], ratesPrefetch);
         } else {
           // No dates — unlock price sort buttons immediately, no availability state
           _pricesLoaded = true;
@@ -5451,7 +5459,23 @@
   }
 
   // Fires parallel to vsearch. reqId lets us discard stale responses if user re-searches.
-  async function fetchPrices(city, checkin, checkout, reqId, hotelIds = []) {
+  async function _fetchRatesPayload(city, checkin, checkout, reqId) {
+    const params = new URLSearchParams({ city, checkin, checkout, currency: getRatesCurrencyPref() });
+    const ratesUrl = `${BACKEND}/api/rates?` + params;
+    const resp = await Promise.race([
+      fetch(ratesUrl),
+      new Promise((_, reject) => {
+        setTimeout(() => reject(new Error('rates request timed out')), FETCH_RATES_TIMEOUT_MS);
+      }),
+    ]);
+    if (reqId !== _ratesReqId) return { stale: true };
+    if (!resp.ok) return { error: true, status: resp.status };
+    const data = await resp.json();
+    if (reqId !== _ratesReqId) return { stale: true };
+    return { data };
+  }
+
+  async function fetchPrices(city, checkin, checkout, reqId, hotelIds = [], ratesPrefetch = null) {
     _setPriceBtnsState(false);  // show spinner only while fetch is in flight
     _setRatesStatus('loading', 'Checking live rates…');
     // Signals revealResultsWhenReady() that rates have landed (success OR
@@ -5465,17 +5489,33 @@
       }
     };
     try {
-      const params = new URLSearchParams({ city, checkin, checkout, currency: getRatesCurrencyPref() });
-      if (hotelIds.length > 0) params.set('hotelIds', hotelIds.join(','));
-      const ratesUrl = `${BACKEND}/api/rates?` + params;
-      const resp = await Promise.race([
-        fetch(ratesUrl),
-        new Promise((_, reject) => {
-          setTimeout(() => reject(new Error('rates request timed out')), FETCH_RATES_TIMEOUT_MS);
-        }),
-      ]);
-      if (reqId !== _ratesReqId) return;  // stale — a new search was started
-      if (!resp.ok) {
+      let payload;
+      if (ratesPrefetch) {
+        payload = await ratesPrefetch;
+      } else {
+        const params = new URLSearchParams({ city, checkin, checkout, currency: getRatesCurrencyPref() });
+        if (hotelIds.length > 0) params.set('hotelIds', hotelIds.join(','));
+        const ratesUrl = `${BACKEND}/api/rates?` + params;
+        const resp = await Promise.race([
+          fetch(ratesUrl),
+          new Promise((_, reject) => {
+            setTimeout(() => reject(new Error('rates request timed out')), FETCH_RATES_TIMEOUT_MS);
+          }),
+        ]);
+        if (reqId !== _ratesReqId) return;
+        if (!resp.ok) {
+          _fetchingPrices = false;
+          for (const h of _lastHotels) { h.price = null; }
+          _pricesLoaded = true;
+          _setPriceBtnsState(true);
+          _setRatesStatus('', 'Rates unavailable — add dates again or sort by match');
+          return;
+        }
+        payload = { data: await resp.json() };
+      }
+
+      if (payload?.stale || reqId !== _ratesReqId) return;
+      if (payload?.error) {
         _fetchingPrices = false;
         for (const h of _lastHotels) { h.price = null; }
         _pricesLoaded = true;
@@ -5483,8 +5523,8 @@
         _setRatesStatus('', 'Rates unavailable — add dates again or sort by match');
         return;
       }
-      const data = await resp.json();
-      if (reqId !== _ratesReqId) return;
+
+      const data = payload.data;
       _fetchingPrices = false;
       applyPrices(data.prices || {}, data.roomPrices || {}, data.currency || getRatesCurrencyPref(), data.pricedCount || 0, data);
       // V2 search only fetches photos for the top GALLERY_LIMIT (250) hotels.
