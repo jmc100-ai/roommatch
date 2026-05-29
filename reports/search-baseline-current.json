@@ -1,0 +1,1939 @@
+{
+  "capturedAt": "2026-05-29T16:08:52.035Z",
+  "baseUrl": "https://roommatch-1fg5.onrender.com",
+  "caseCount": 12,
+  "cases": [
+    {
+      "id": "ritz_mxc_dated",
+      "city": "Mexico City",
+      "dates": "2026-06-18→2026-06-25",
+      "perf": {
+        "vsearchWallMs": 13636,
+        "vsearchBytes": 1673910,
+        "ratesWallMs": 1567,
+        "ratesBytes": 104372,
+        "handlerWallMs": 13022,
+        "perfMs": {
+          "nlp_intent_ms": 247,
+          "resolve_city_ms": 325,
+          "phase_a_ms": 2517,
+          "scoring_ms": 2912,
+          "post_boop_ms": 3115,
+          "phase_b_ms": 8115,
+          "total_since_phase_a_ms": 11812,
+          "wall_ms": 12138
+        },
+        "metaSyncMs": 882
+      },
+      "payload": {
+        "total": 3497,
+        "stubs": 3186,
+        "full": 311,
+        "stubBytes": 529522,
+        "fullBytes": 1094372,
+        "totalBytes": 1623894
+      },
+      "stats": {
+        "nbhd_rank_weight": 0.6875,
+        "slim_stubs": true,
+        "nbhd_cache_hit": true
+      },
+      "top10": [
+        {
+          "id": "lp1ce969",
+          "vectorScore": 79,
+          "hotelScore": 88,
+          "nbhd_fit_pct": 95,
+          "roomMatch": 79,
+          "price": 747,
+          "name": "Sofitel Mexico City Reforma",
+          "hasRooms": true,
+          "stubHasNbhdAttrs": true,
+          "primary_nbhd_name": "Paseo de la Reforma"
+        },
+        {
+          "id": "lp4316f",
+          "vectorScore": 60,
+          "hotelScore": 58,
+          "nbhd_fit_pct": 95,
+          "roomMatch": 60,
+          "price": 72,
+          "name": null,
+          "hasRooms": true,
+          "stubHasNbhdAttrs": true,
+          "primary_nbhd_name": "Paseo de la Reforma"
+        },
+        {
+          "id": "lp65576801",
+          "vectorScore": 60,
+          "hotelScore": 61,
+          "nbhd_fit_pct": 95,
+          "roomMatch": 60,
+          "price": 98,
+          "name": null,
+          "hasRooms": true,
+          "stubHasNbhdAttrs": true,
+          "primary_nbhd_name": "Paseo de la Reforma"
+        },
+        {
+          "id": "lp1a0a86",
+          "vectorScore": 60,
+          "hotelScore": 47,
+          "nbhd_fit_pct": 95,
+          "roomMatch": 60,
+          "price": 118,
+          "name": null,
+          "hasRooms": true,
+          "stubHasNbhdAttrs": true,
+          "primary_nbhd_name": "Paseo de la Reforma"
+        },
+        {
+          "id": "lp655a14e2",
+          "vectorScore": 60,
+          "hotelScore": 55,
+          "nbhd_fit_pct": 95,
+          "roomMatch": 60,
+          "price": 132,
+          "name": null,
+          "hasRooms": true,
+          "stubHasNbhdAttrs": true,
+          "primary_nbhd_name": "Paseo de la Reforma"
+        },
+        {
+          "id": "lp726ba",
+          "vectorScore": 60,
+          "hotelScore": 66,
+          "nbhd_fit_pct": 95,
+          "roomMatch": 60,
+          "price": 137,
+          "name": "Hotel Block Suites",
+          "hasRooms": true,
+          "stubHasNbhdAttrs": true,
+          "primary_nbhd_name": "Paseo de la Reforma"
+        },
+        {
+          "id": "lp6558421e",
+          "vectorScore": 72,
+          "hotelScore": 73,
+          "nbhd_fit_pct": 95,
+          "roomMatch": 72,
+          "price": 236,
+          "name": "Casa Pani",
+          "hasRooms": true,
+          "stubHasNbhdAttrs": true,
+          "primary_nbhd_name": "Paseo de la Reforma"
+        },
+        {
+          "id": "lp234e5",
+          "vectorScore": 60,
+          "hotelScore": 66,
+          "nbhd_fit_pct": 95,
+          "roomMatch": 60,
+          "price": 143,
+          "name": null,
+          "hasRooms": true,
+          "stubHasNbhdAttrs": true,
+          "primary_nbhd_name": "Paseo de la Reforma"
+        },
+        {
+          "id": "lp1d8f0",
+          "vectorScore": 60,
+          "hotelScore": 58,
+          "nbhd_fit_pct": 95,
+          "roomMatch": 60,
+          "price": 150,
+          "name": null,
+          "hasRooms": true,
+          "stubHasNbhdAttrs": true,
+          "primary_nbhd_name": "Paseo de la Reforma"
+        },
+        {
+          "id": "lp655bad73",
+          "vectorScore": 51,
+          "hotelScore": 52,
+          "nbhd_fit_pct": 95,
+          "roomMatch": 51,
+          "price": 46,
+          "name": null,
+          "hasRooms": true,
+          "stubHasNbhdAttrs": true,
+          "primary_nbhd_name": "Paseo de la Reforma"
+        }
+      ],
+      "top10Ids": "lp1ce969,lp4316f,lp65576801,lp1a0a86,lp655a14e2,lp726ba,lp6558421e,lp234e5,lp1d8f0,lp655bad73",
+      "serverTop10Ids": "lp657a6c4d,lp65573614,lp1ce969,lp4bab4,lp656ef771,lp6558421e,lp655540c6,lp656c99aa,lp656c9782,lp65588d82",
+      "pricedCount": 488
+    },
+    {
+      "id": "value_mxc_dated",
+      "city": "Mexico City",
+      "dates": "2026-06-18→2026-06-25",
+      "perf": {
+        "vsearchWallMs": 10559,
+        "vsearchBytes": 1547067,
+        "ratesWallMs": 19046,
+        "ratesBytes": 104372,
+        "handlerWallMs": 10186,
+        "perfMs": {
+          "resolve_city_ms": 292,
+          "phase_a_ms": 0,
+          "nlp_intent_ms": 577,
+          "scoring_ms": 690,
+          "post_boop_ms": 1007,
+          "phase_b_ms": 4794,
+          "total_since_phase_a_ms": 9696,
+          "wall_ms": 9988
+        },
+        "metaSyncMs": 192
+      },
+      "payload": {
+        "total": 3497,
+        "stubs": 3215,
+        "full": 282,
+        "stubBytes": 534427,
+        "fullBytes": 962683,
+        "totalBytes": 1497110
+      },
+      "stats": {
+        "nbhd_rank_weight": 0.6875,
+        "slim_stubs": true,
+        "nbhd_cache_hit": false
+      },
+      "top10": [
+        {
+          "id": "lp3e1a2",
+          "vectorScore": 100,
+          "hotelScore": null,
+          "nbhd_fit_pct": 71,
+          "roomMatch": 100,
+          "price": 199,
+          "name": null,
+          "hasRooms": true,
+          "stubHasNbhdAttrs": true,
+          "primary_nbhd_name": "Juárez"
+        },
+        {
+          "id": "lp1a04a8",
+          "vectorScore": 86,
+          "hotelScore": 66,
+          "nbhd_fit_pct": 95,
+          "roomMatch": 86,
+          "price": 96,
+          "name": "City Express by Marriott Ciudad de Méxic",
+          "hasRooms": true,
+          "stubHasNbhdAttrs": true,
+          "primary_nbhd_name": "Centro Histórico"
+        },
+        {
+          "id": "lp3c8ba",
+          "vectorScore": 86,
+          "hotelScore": 67,
+          "nbhd_fit_pct": 95,
+          "roomMatch": 86,
+          "price": 175,
+          "name": "Holiday Inn Zona Centro by IHG",
+          "hasRooms": true,
+          "stubHasNbhdAttrs": true,
+          "primary_nbhd_name": "Centro Histórico"
+        },
+        {
+          "id": "lp657ea3e8",
+          "vectorScore": 86,
+          "hotelScore": 76,
+          "nbhd_fit_pct": 95,
+          "roomMatch": 86,
+          "price": 235,
+          "name": "Casa Herrmann Suites",
+          "hasRooms": true,
+          "stubHasNbhdAttrs": true,
+          "primary_nbhd_name": "Centro Histórico"
+        },
+        {
+          "id": "lpf8be5",
+          "vectorScore": 86,
+          "hotelScore": null,
+          "nbhd_fit_pct": 67,
+          "roomMatch": 86,
+          "price": 118,
+          "name": null,
+          "hasRooms": false,
+          "stubHasNbhdAttrs": false,
+          "primary_nbhd_name": "Coyoacán"
+        },
+        {
+          "id": "lp100aa1",
+          "vectorScore": 86,
+          "hotelScore": 73,
+          "nbhd_fit_pct": 82,
+          "roomMatch": 86,
+          "price": 280,
+          "name": null,
+          "hasRooms": true,
+          "stubHasNbhdAttrs": true,
+          "primary_nbhd_name": "Paseo de la Reforma"
+        },
+        {
+          "id": "lp4bab4",
+          "vectorScore": 83,
+          "hotelScore": 79,
+          "nbhd_fit_pct": 82,
+          "roomMatch": 83,
+          "price": 2115,
+          "name": null,
+          "hasRooms": true,
+          "stubHasNbhdAttrs": true,
+          "primary_nbhd_name": "Paseo de la Reforma"
+        },
+        {
+          "id": "lp10f642",
+          "vectorScore": 86,
+          "hotelScore": null,
+          "nbhd_fit_pct": 65,
+          "roomMatch": 86,
+          "price": 79,
+          "name": null,
+          "hasRooms": false,
+          "stubHasNbhdAttrs": false,
+          "primary_nbhd_name": "Condesa"
+        },
+        {
+          "id": "lp6557b7ec",
+          "vectorScore": 89,
+          "hotelScore": null,
+          "nbhd_fit_pct": 65,
+          "roomMatch": 89,
+          "price": 124,
+          "name": null,
+          "hasRooms": false,
+          "stubHasNbhdAttrs": false,
+          "primary_nbhd_name": "Condesa"
+        },
+        {
+          "id": "lpeeeaf",
+          "vectorScore": 86,
+          "hotelScore": null,
+          "nbhd_fit_pct": 62,
+          "roomMatch": 86,
+          "price": 82,
+          "name": null,
+          "hasRooms": false,
+          "stubHasNbhdAttrs": false,
+          "primary_nbhd_name": null
+        }
+      ],
+      "top10Ids": "lp3e1a2,lp1a04a8,lp3c8ba,lp657ea3e8,lpf8be5,lp100aa1,lp4bab4,lp10f642,lp6557b7ec,lpeeeaf",
+      "serverTop10Ids": "lp657a6c4d,lp3e1a2,lp656c9f29,lp6585d08e,lp6588c05f,lp3c8ba,lp1a04a8,lp657ea3e8,lp658001dc,lp65753b9e",
+      "pricedCount": 488
+    },
+    {
+      "id": "splurge_mxc_dated",
+      "city": "Mexico City",
+      "dates": "2026-07-01→2026-07-05",
+      "perf": {
+        "vsearchWallMs": 17095,
+        "vsearchBytes": 1611233,
+        "ratesWallMs": 23646,
+        "ratesBytes": 103387,
+        "handlerWallMs": 16280,
+        "perfMs": {
+          "nlp_intent_ms": 311,
+          "resolve_city_ms": 481,
+          "phase_a_ms": 0,
+          "scoring_ms": 617,
+          "post_boop_ms": 1306,
+          "phase_b_ms": 7701,
+          "total_since_phase_a_ms": 15714,
+          "wall_ms": 16195
+        },
+        "metaSyncMs": 81
+      },
+      "payload": {
+        "total": 3497,
+        "stubs": 3233,
+        "full": 264,
+        "stubBytes": 538804,
+        "fullBytes": 1022627,
+        "totalBytes": 1561431
+      },
+      "stats": {
+        "nbhd_rank_weight": 0.6875,
+        "slim_stubs": true,
+        "nbhd_cache_hit": false
+      },
+      "top10": [
+        {
+          "id": "lp65573614",
+          "vectorScore": 100,
+          "hotelScore": 91,
+          "nbhd_fit_pct": 95,
+          "roomMatch": 100,
+          "price": 3242,
+          "name": "The Ritz-Carlton, Mexico City",
+          "hasRooms": true,
+          "stubHasNbhdAttrs": true,
+          "primary_nbhd_name": "Paseo de la Reforma"
+        },
+        {
+          "id": "lp1ce969",
+          "vectorScore": 94,
+          "hotelScore": 89,
+          "nbhd_fit_pct": 95,
+          "roomMatch": 94,
+          "price": 725,
+          "name": "Sofitel Mexico City Reforma",
+          "hasRooms": true,
+          "stubHasNbhdAttrs": true,
+          "primary_nbhd_name": "Paseo de la Reforma"
+        },
+        {
+          "id": "lp4bab4",
+          "vectorScore": 84,
+          "hotelScore": 85,
+          "nbhd_fit_pct": 95,
+          "roomMatch": 84,
+          "price": 3226,
+          "name": "The St. Regis Mexico City",
+          "hasRooms": true,
+          "stubHasNbhdAttrs": true,
+          "primary_nbhd_name": "Paseo de la Reforma"
+        },
+        {
+          "id": "lp65588d82",
+          "vectorScore": 77,
+          "hotelScore": 71,
+          "nbhd_fit_pct": 95,
+          "roomMatch": 77,
+          "price": 638,
+          "name": "Volga, Member of Preferred Hotels & Reso",
+          "hasRooms": true,
+          "stubHasNbhdAttrs": true,
+          "primary_nbhd_name": "Paseo de la Reforma"
+        },
+        {
+          "id": "lp65574bcd",
+          "vectorScore": 71,
+          "hotelScore": 72,
+          "nbhd_fit_pct": 95,
+          "roomMatch": 71,
+          "price": 605,
+          "name": "Andaz Condesa Mexico City, By Hyatt",
+          "hasRooms": true,
+          "stubHasNbhdAttrs": true,
+          "primary_nbhd_name": "Condesa"
+        },
+        {
+          "id": "lp65582fc6",
+          "vectorScore": 77,
+          "hotelScore": 75,
+          "nbhd_fit_pct": 95,
+          "roomMatch": 77,
+          "price": 414,
+          "name": "Hyatt Regency Mexico City Insurgentes WT",
+          "hasRooms": true,
+          "stubHasNbhdAttrs": true,
+          "primary_nbhd_name": "Condesa"
+        },
+        {
+          "id": "lp53191",
+          "vectorScore": 71,
+          "hotelScore": 78,
+          "nbhd_fit_pct": 92,
+          "roomMatch": 71,
+          "price": 1572,
+          "name": null,
+          "hasRooms": true,
+          "stubHasNbhdAttrs": true,
+          "primary_nbhd_name": "Roma Norte"
+        },
+        {
+          "id": "lp656c98ec",
+          "vectorScore": 71,
+          "hotelScore": 66,
+          "nbhd_fit_pct": 92,
+          "roomMatch": 71,
+          "price": 771,
+          "name": null,
+          "hasRooms": true,
+          "stubHasNbhdAttrs": true,
+          "primary_nbhd_name": "Roma Norte"
+        },
+        {
+          "id": "lp3721c",
+          "vectorScore": 64,
+          "hotelScore": 64,
+          "nbhd_fit_pct": 95,
+          "roomMatch": 64,
+          "price": 647,
+          "name": null,
+          "hasRooms": true,
+          "stubHasNbhdAttrs": true,
+          "primary_nbhd_name": "Condesa"
+        },
+        {
+          "id": "lp656c9bfa",
+          "vectorScore": 71,
+          "hotelScore": 69,
+          "nbhd_fit_pct": 92,
+          "roomMatch": 71,
+          "price": 555,
+          "name": null,
+          "hasRooms": true,
+          "stubHasNbhdAttrs": true,
+          "primary_nbhd_name": "Roma Norte"
+        }
+      ],
+      "top10Ids": "lp65573614,lp1ce969,lp4bab4,lp65588d82,lp65574bcd,lp65582fc6,lp53191,lp656c98ec,lp3721c,lp656c9bfa",
+      "serverTop10Ids": "lp65573614,lp657a6c4d,lp1ce969,lp4bab4,lp6557b7ec,lp65577ecf,lp65582fc6,lp65588d82,lp65888115,lp31a94",
+      "pricedCount": 485
+    },
+    {
+      "id": "cozy_leafy_no_dates",
+      "city": "Mexico City",
+      "dates": "none",
+      "perf": {
+        "vsearchWallMs": 5035,
+        "vsearchBytes": 1532827,
+        "ratesWallMs": null,
+        "ratesBytes": null,
+        "handlerWallMs": 4667,
+        "perfMs": {
+          "nlp_intent_ms": 82,
+          "resolve_city_ms": 131,
+          "phase_a_ms": 0,
+          "scoring_ms": 717,
+          "post_boop_ms": 792,
+          "phase_b_ms": 2672,
+          "total_since_phase_a_ms": 4532,
+          "wall_ms": 4664
+        },
+        "metaSyncMs": 2
+      },
+      "payload": {
+        "total": 3497,
+        "stubs": 3220,
+        "full": 277,
+        "stubBytes": 537827,
+        "fullBytes": 944361,
+        "totalBytes": 1482188
+      },
+      "stats": {
+        "nbhd_rank_weight": 0.6875,
+        "slim_stubs": true,
+        "nbhd_cache_hit": false
+      },
+      "top10": [
+        {
+          "id": "lp6584bf96",
+          "vectorScore": 100,
+          "hotelScore": 88,
+          "nbhd_fit_pct": 95,
+          "roomMatch": 100,
+          "price": null,
+          "name": "Hacienda Gobernadores – Boutique Stay in",
+          "hasRooms": true,
+          "stubHasNbhdAttrs": true,
+          "primary_nbhd_name": "Condesa"
+        },
+        {
+          "id": "lp656c9ed6",
+          "vectorScore": 94,
+          "hotelScore": 87,
+          "nbhd_fit_pct": 95,
+          "roomMatch": 94,
+          "price": null,
+          "name": "Casa Altata Hotel Boutique",
+          "hasRooms": true,
+          "stubHasNbhdAttrs": true,
+          "primary_nbhd_name": "Condesa"
+        },
+        {
+          "id": "lpb6b6f",
+          "vectorScore": 93,
+          "hotelScore": 87,
+          "nbhd_fit_pct": 95,
+          "roomMatch": 93,
+          "price": null,
+          "name": "Distrito Condesa Rooms and Studios",
+          "hasRooms": true,
+          "stubHasNbhdAttrs": true,
+          "primary_nbhd_name": "Condesa"
+        },
+        {
+          "id": "lp73122",
+          "vectorScore": 93,
+          "hotelScore": 86,
+          "nbhd_fit_pct": 95,
+          "roomMatch": 93,
+          "price": null,
+          "name": "KALI Escandón Mexico City",
+          "hasRooms": true,
+          "stubHasNbhdAttrs": true,
+          "primary_nbhd_name": "Condesa"
+        },
+        {
+          "id": "lp290b95",
+          "vectorScore": 87,
+          "hotelScore": 74,
+          "nbhd_fit_pct": 95,
+          "roomMatch": 87,
+          "price": null,
+          "name": "Casa Comtesse",
+          "hasRooms": true,
+          "stubHasNbhdAttrs": true,
+          "primary_nbhd_name": "Condesa"
+        },
+        {
+          "id": "lp6587fbec",
+          "vectorScore": 83,
+          "hotelScore": 89,
+          "nbhd_fit_pct": 95,
+          "roomMatch": 83,
+          "price": null,
+          "name": "Cholula Condesa Hotel by Lumina",
+          "hasRooms": true,
+          "stubHasNbhdAttrs": true,
+          "primary_nbhd_name": "Condesa"
+        },
+        {
+          "id": "lp4081d",
+          "vectorScore": 83,
+          "hotelScore": 66,
+          "nbhd_fit_pct": 95,
+          "roomMatch": 83,
+          "price": null,
+          "name": "BelAir Unique, a Wyndham Hotel",
+          "hasRooms": true,
+          "stubHasNbhdAttrs": true,
+          "primary_nbhd_name": "Condesa"
+        },
+        {
+          "id": "lp6562276b",
+          "vectorScore": 83,
+          "hotelScore": 62,
+          "nbhd_fit_pct": 95,
+          "roomMatch": 83,
+          "price": null,
+          "name": "Excelente ubicacion en colonia Del Valle",
+          "hasRooms": true,
+          "stubHasNbhdAttrs": true,
+          "primary_nbhd_name": "Condesa"
+        },
+        {
+          "id": "lp65746cfc",
+          "vectorScore": 83,
+          "hotelScore": 51,
+          "nbhd_fit_pct": 95,
+          "roomMatch": 83,
+          "price": null,
+          "name": "Habitación en Morada Luna Condesa 4",
+          "hasRooms": true,
+          "stubHasNbhdAttrs": true,
+          "primary_nbhd_name": "Condesa"
+        },
+        {
+          "id": "lp655dc5d5",
+          "vectorScore": 83,
+          "hotelScore": 38,
+          "nbhd_fit_pct": 95,
+          "roomMatch": 83,
+          "price": null,
+          "name": "Habitación Privada para disfrutar en la ",
+          "hasRooms": true,
+          "stubHasNbhdAttrs": true,
+          "primary_nbhd_name": "Condesa"
+        }
+      ],
+      "top10Ids": "lp6584bf96,lp656c9ed6,lpb6b6f,lp73122,lp290b95,lp6587fbec,lp4081d,lp6562276b,lp65746cfc,lp655dc5d5",
+      "serverTop10Ids": "lp6584bf96,lp656c9ed6,lpb6b6f,lp73122,lp6587fbec,lp290b95,lp658876dd,lp23189,lp6588e364,lp22702b",
+      "pricedCount": null
+    },
+    {
+      "id": "distinct_hip_paris",
+      "city": "Paris",
+      "dates": "2026-06-20→2026-06-24",
+      "perf": {
+        "vsearchWallMs": 7971,
+        "vsearchBytes": 1854091,
+        "ratesWallMs": 3752,
+        "ratesBytes": 142706,
+        "handlerWallMs": 7669,
+        "perfMs": {
+          "nlp_intent_ms": 30,
+          "resolve_city_ms": 84,
+          "phase_a_ms": 2501,
+          "scoring_ms": 3476,
+          "post_boop_ms": 4366,
+          "phase_b_ms": 5408,
+          "total_since_phase_a_ms": 6883,
+          "wall_ms": 6968
+        },
+        "metaSyncMs": 698
+      },
+      "payload": {
+        "total": 4975,
+        "stubs": 4722,
+        "full": 253,
+        "stubBytes": 835362,
+        "fullBytes": 951010,
+        "totalBytes": 1786372
+      },
+      "stats": {
+        "nbhd_rank_weight": 0.6875,
+        "slim_stubs": true,
+        "nbhd_cache_hit": false
+      },
+      "top10": [
+        {
+          "id": "lp1bbc1",
+          "vectorScore": 43,
+          "hotelScore": 56,
+          "nbhd_fit_pct": 95,
+          "roomMatch": 48,
+          "price": 631,
+          "name": "Maison Astor Paris, Curio Collection by ",
+          "hasRooms": true,
+          "stubHasNbhdAttrs": true,
+          "primary_nbhd_name": "Montmartre"
+        },
+        {
+          "id": "lp6f7a6",
+          "vectorScore": 12,
+          "hotelScore": 68,
+          "nbhd_fit_pct": 95,
+          "roomMatch": 13,
+          "price": 351,
+          "name": "Maison Barbès",
+          "hasRooms": true,
+          "stubHasNbhdAttrs": true,
+          "primary_nbhd_name": "Montmartre"
+        },
+        {
+          "id": "lp2093b9",
+          "vectorScore": 16,
+          "hotelScore": 68,
+          "nbhd_fit_pct": 95,
+          "roomMatch": 20,
+          "price": 530,
+          "name": "Paris j'Adore Hotel & Spa",
+          "hasRooms": true,
+          "stubHasNbhdAttrs": true,
+          "primary_nbhd_name": "Montmartre"
+        },
+        {
+          "id": "lp1e426",
+          "vectorScore": 63,
+          "hotelScore": 67,
+          "nbhd_fit_pct": 68,
+          "roomMatch": 70,
+          "price": 446,
+          "name": "Solly Hôtel Paris",
+          "hasRooms": true,
+          "stubHasNbhdAttrs": true,
+          "primary_nbhd_name": "Opéra / Grands Boulevards"
+        },
+        {
+          "id": "lp32e6f",
+          "vectorScore": 0,
+          "hotelScore": 68,
+          "nbhd_fit_pct": 95,
+          "roomMatch": 0,
+          "price": 235,
+          "name": "Hotel Apolonia Paris Montmartre; Sure Ho",
+          "hasRooms": true,
+          "stubHasNbhdAttrs": true,
+          "primary_nbhd_name": "Montmartre"
+        },
+        {
+          "id": "lpceb74",
+          "vectorScore": 0,
+          "hotelScore": 68,
+          "nbhd_fit_pct": 95,
+          "roomMatch": 0,
+          "price": 249,
+          "name": null,
+          "hasRooms": true,
+          "stubHasNbhdAttrs": true,
+          "primary_nbhd_name": "Montmartre"
+        },
+        {
+          "id": "lp2cc15",
+          "vectorScore": 0,
+          "hotelScore": 68,
+          "nbhd_fit_pct": 95,
+          "roomMatch": 0,
+          "price": 231,
+          "name": null,
+          "hasRooms": true,
+          "stubHasNbhdAttrs": true,
+          "primary_nbhd_name": "Montmartre"
+        },
+        {
+          "id": "lp6e970",
+          "vectorScore": 0,
+          "hotelScore": 68,
+          "nbhd_fit_pct": 95,
+          "roomMatch": 0,
+          "price": 158,
+          "name": null,
+          "hasRooms": true,
+          "stubHasNbhdAttrs": true,
+          "primary_nbhd_name": "Montmartre"
+        },
+        {
+          "id": "lp5a4a6",
+          "vectorScore": 0,
+          "hotelScore": 57,
+          "nbhd_fit_pct": 95,
+          "roomMatch": 0,
+          "price": 234,
+          "name": null,
+          "hasRooms": true,
+          "stubHasNbhdAttrs": true,
+          "primary_nbhd_name": "Montmartre"
+        },
+        {
+          "id": "lp655797af",
+          "vectorScore": 0,
+          "hotelScore": 57,
+          "nbhd_fit_pct": 95,
+          "roomMatch": 0,
+          "price": 164,
+          "name": null,
+          "hasRooms": true,
+          "stubHasNbhdAttrs": true,
+          "primary_nbhd_name": "Montmartre"
+        }
+      ],
+      "top10Ids": "lp1bbc1,lp6f7a6,lp2093b9,lp1e426,lp32e6f,lpceb74,lp2cc15,lp6e970,lp5a4a6,lp655797af",
+      "serverTop10Ids": "lp37617,lp1bbc1,lp816ca,lp19c58,lp4740d,lp2093b9,lp46714,lp6f7a6,lp1e426,lp82ead",
+      "pricedCount": 911
+    },
+    {
+      "id": "grid_sleek_buzz",
+      "city": "Mexico City",
+      "dates": "2026-06-18→2026-06-25",
+      "perf": {
+        "vsearchWallMs": 7458,
+        "vsearchBytes": 1537735,
+        "ratesWallMs": 8849,
+        "ratesBytes": 104372,
+        "handlerWallMs": 7283,
+        "perfMs": {
+          "nlp_intent_ms": 0,
+          "resolve_city_ms": 117,
+          "phase_a_ms": 0,
+          "scoring_ms": 983,
+          "post_boop_ms": 1282,
+          "phase_b_ms": 3794,
+          "total_since_phase_a_ms": 7082,
+          "wall_ms": 7200
+        },
+        "metaSyncMs": 80
+      },
+      "payload": {
+        "total": 3497,
+        "stubs": 3208,
+        "full": 289,
+        "stubBytes": 533229,
+        "fullBytes": 954860,
+        "totalBytes": 1488089
+      },
+      "stats": {
+        "nbhd_rank_weight": 0.6875,
+        "slim_stubs": true,
+        "nbhd_cache_hit": false
+      },
+      "top10": [
+        {
+          "id": "lp1a04a8",
+          "vectorScore": 77,
+          "hotelScore": 67,
+          "nbhd_fit_pct": 95,
+          "roomMatch": 77,
+          "price": 96,
+          "name": "City Express by Marriott Ciudad de Méxic",
+          "hasRooms": true,
+          "stubHasNbhdAttrs": true,
+          "primary_nbhd_name": "Centro Histórico"
+        },
+        {
+          "id": "lp656c9e25",
+          "vectorScore": 71,
+          "hotelScore": 76,
+          "nbhd_fit_pct": 95,
+          "roomMatch": 77,
+          "price": 135,
+          "name": "Novotel México City Centro Histórico",
+          "hasRooms": true,
+          "stubHasNbhdAttrs": true,
+          "primary_nbhd_name": "Centro Histórico"
+        },
+        {
+          "id": "lp62620",
+          "vectorScore": 65,
+          "hotelScore": 78,
+          "nbhd_fit_pct": 95,
+          "roomMatch": 71,
+          "price": 118,
+          "name": "Hotel Lepanto Reforma",
+          "hasRooms": true,
+          "stubHasNbhdAttrs": true,
+          "primary_nbhd_name": "Centro Histórico"
+        },
+        {
+          "id": "lp72f1f",
+          "vectorScore": 65,
+          "hotelScore": 69,
+          "nbhd_fit_pct": 95,
+          "roomMatch": 71,
+          "price": 118,
+          "name": "Holiday Inn Express - Mexico Basilica by",
+          "hasRooms": true,
+          "stubHasNbhdAttrs": true,
+          "primary_nbhd_name": "Centro Histórico"
+        },
+        {
+          "id": "lp74fa1",
+          "vectorScore": 71,
+          "hotelScore": 68,
+          "nbhd_fit_pct": 95,
+          "roomMatch": 71,
+          "price": 120,
+          "name": "Hotel El Salvador",
+          "hasRooms": true,
+          "stubHasNbhdAttrs": true,
+          "primary_nbhd_name": "Centro Histórico"
+        },
+        {
+          "id": "lp1d2f85",
+          "vectorScore": 49,
+          "hotelScore": 48,
+          "nbhd_fit_pct": 95,
+          "roomMatch": 67,
+          "price": 82,
+          "name": "Hostal Casa MX Alameda - Hostel",
+          "hasRooms": true,
+          "stubHasNbhdAttrs": true,
+          "primary_nbhd_name": "Centro Histórico"
+        },
+        {
+          "id": "lp6556e8cf",
+          "vectorScore": 71,
+          "hotelScore": 70,
+          "nbhd_fit_pct": 95,
+          "roomMatch": 77,
+          "price": 178,
+          "name": "KALI Centro Mexico City",
+          "hasRooms": true,
+          "stubHasNbhdAttrs": true,
+          "primary_nbhd_name": "Centro Histórico"
+        },
+        {
+          "id": "lp6558ae7e",
+          "vectorScore": 66,
+          "hotelScore": 51,
+          "nbhd_fit_pct": 95,
+          "roomMatch": 66,
+          "price": 36,
+          "name": "Hotel Unico",
+          "hasRooms": true,
+          "stubHasNbhdAttrs": true,
+          "primary_nbhd_name": "Centro Histórico"
+        },
+        {
+          "id": "lp4f0c6",
+          "vectorScore": 62,
+          "hotelScore": 58,
+          "nbhd_fit_pct": 95,
+          "roomMatch": 67,
+          "price": 105,
+          "name": "Exe Alameda Reforma",
+          "hasRooms": true,
+          "stubHasNbhdAttrs": true,
+          "primary_nbhd_name": "Centro Histórico"
+        },
+        {
+          "id": "lp655671a1",
+          "vectorScore": 62,
+          "hotelScore": 57,
+          "nbhd_fit_pct": 95,
+          "roomMatch": 67,
+          "price": 109,
+          "name": "Hotel MX lagunilla CDMX, Trademark Colle",
+          "hasRooms": true,
+          "stubHasNbhdAttrs": true,
+          "primary_nbhd_name": "Centro Histórico"
+        }
+      ],
+      "top10Ids": "lp1a04a8,lp656c9e25,lp62620,lp72f1f,lp74fa1,lp1d2f85,lp6556e8cf,lp6558ae7e,lp4f0c6,lp655671a1",
+      "serverTop10Ids": "lp3158b,lp657ea3e8,lp658298fe,lp1a04a8,lp65701b29,lp656c9e25,lp6556e8cf,lpb2ab9,lp246dd,lp74fa1",
+      "pricedCount": 488
+    },
+    {
+      "id": "grid_cozy_calm",
+      "city": "Mexico City",
+      "dates": "2026-06-18→2026-06-25",
+      "perf": {
+        "vsearchWallMs": 9575,
+        "vsearchBytes": 1638649,
+        "ratesWallMs": 5733,
+        "ratesBytes": 104372,
+        "handlerWallMs": 9121,
+        "perfMs": {
+          "nlp_intent_ms": 0,
+          "resolve_city_ms": 302,
+          "phase_a_ms": 0,
+          "scoring_ms": 421,
+          "post_boop_ms": 606,
+          "phase_b_ms": 3006,
+          "total_since_phase_a_ms": 8808,
+          "wall_ms": 9110
+        },
+        "metaSyncMs": 6
+      },
+      "payload": {
+        "total": 3497,
+        "stubs": 3229,
+        "full": 268,
+        "stubBytes": 538248,
+        "fullBytes": 1050435,
+        "totalBytes": 1588683
+      },
+      "stats": {
+        "nbhd_rank_weight": 0.6875,
+        "slim_stubs": true,
+        "nbhd_cache_hit": false
+      },
+      "top10": [
+        {
+          "id": "lp98d29",
+          "vectorScore": 100,
+          "hotelScore": 71,
+          "nbhd_fit_pct": 95,
+          "roomMatch": 100,
+          "price": 167,
+          "name": "Fiesta Americana Mexico Toreo",
+          "hasRooms": true,
+          "stubHasNbhdAttrs": true,
+          "primary_nbhd_name": "Polanco"
+        },
+        {
+          "id": "lp656785a8",
+          "vectorScore": 100,
+          "hotelScore": null,
+          "nbhd_fit_pct": 65,
+          "roomMatch": 100,
+          "price": 254,
+          "name": null,
+          "hasRooms": false,
+          "stubHasNbhdAttrs": false,
+          "primary_nbhd_name": "Coyoacán"
+        },
+        {
+          "id": "lpfc697",
+          "vectorScore": 100,
+          "hotelScore": null,
+          "nbhd_fit_pct": 65,
+          "roomMatch": 100,
+          "price": 318,
+          "name": null,
+          "hasRooms": false,
+          "stubHasNbhdAttrs": false,
+          "primary_nbhd_name": "Coyoacán"
+        },
+        {
+          "id": "lp6558421e",
+          "vectorScore": 93,
+          "hotelScore": 80,
+          "nbhd_fit_pct": 89,
+          "roomMatch": 93,
+          "price": 236,
+          "name": "Casa Pani",
+          "hasRooms": true,
+          "stubHasNbhdAttrs": true,
+          "primary_nbhd_name": "Paseo de la Reforma"
+        },
+        {
+          "id": "lp62d96",
+          "vectorScore": 100,
+          "hotelScore": 77,
+          "nbhd_fit_pct": 95,
+          "roomMatch": 100,
+          "price": 960,
+          "name": "Residence L´ Heritage Hipólito Taine by ",
+          "hasRooms": true,
+          "stubHasNbhdAttrs": true,
+          "primary_nbhd_name": "Polanco"
+        },
+        {
+          "id": "lp73122",
+          "vectorScore": 93,
+          "hotelScore": null,
+          "nbhd_fit_pct": 78,
+          "roomMatch": 93,
+          "price": 149,
+          "name": null,
+          "hasRooms": true,
+          "stubHasNbhdAttrs": true,
+          "primary_nbhd_name": "Condesa"
+        },
+        {
+          "id": "lp24f0b",
+          "vectorScore": 90,
+          "hotelScore": 78,
+          "nbhd_fit_pct": 81,
+          "roomMatch": 90,
+          "price": 322,
+          "name": null,
+          "hasRooms": true,
+          "stubHasNbhdAttrs": true,
+          "primary_nbhd_name": "Juárez"
+        },
+        {
+          "id": "lp656c9ed6",
+          "vectorScore": 94,
+          "hotelScore": null,
+          "nbhd_fit_pct": 78,
+          "roomMatch": 94,
+          "price": 304,
+          "name": null,
+          "hasRooms": true,
+          "stubHasNbhdAttrs": true,
+          "primary_nbhd_name": "Condesa"
+        },
+        {
+          "id": "lp41057",
+          "vectorScore": 87,
+          "hotelScore": 77,
+          "nbhd_fit_pct": 95,
+          "roomMatch": 87,
+          "price": 246,
+          "name": "St Isidro Suites Corporate Housing SPA &",
+          "hasRooms": true,
+          "stubHasNbhdAttrs": true,
+          "primary_nbhd_name": "Polanco"
+        },
+        {
+          "id": "lpf8be5",
+          "vectorScore": 85,
+          "hotelScore": null,
+          "nbhd_fit_pct": 65,
+          "roomMatch": 85,
+          "price": 118,
+          "name": null,
+          "hasRooms": false,
+          "stubHasNbhdAttrs": false,
+          "primary_nbhd_name": "Coyoacán"
+        }
+      ],
+      "top10Ids": "lp98d29,lp656785a8,lpfc697,lp6558421e,lp62d96,lp73122,lp24f0b,lp656c9ed6,lp41057,lpf8be5",
+      "serverTop10Ids": "lp6586754c,lp6584bf96,lp656c9978,lp65546faf,lp656785a8,lp8412d,lpfc697,lp7df86,lp6580361f,lp6558421e",
+      "pricedCount": 488
+    },
+    {
+      "id": "grid_distinct_hip",
+      "city": "Mexico City",
+      "dates": "none",
+      "perf": {
+        "vsearchWallMs": 9573,
+        "vsearchBytes": 1541670,
+        "ratesWallMs": null,
+        "ratesBytes": null,
+        "handlerWallMs": 8997,
+        "perfMs": {
+          "nlp_intent_ms": 217,
+          "resolve_city_ms": 309,
+          "phase_a_ms": 0,
+          "scoring_ms": 520,
+          "post_boop_ms": 1229,
+          "phase_b_ms": 3410,
+          "total_since_phase_a_ms": 8504,
+          "wall_ms": 8814
+        },
+        "metaSyncMs": 94
+      },
+      "payload": {
+        "total": 3497,
+        "stubs": 3220,
+        "full": 277,
+        "stubBytes": 537385,
+        "fullBytes": 953923,
+        "totalBytes": 1491308
+      },
+      "stats": {
+        "nbhd_rank_weight": 0.6875,
+        "slim_stubs": true,
+        "nbhd_cache_hit": false
+      },
+      "top10": [
+        {
+          "id": "lp656c9e84",
+          "vectorScore": 84,
+          "hotelScore": 51,
+          "nbhd_fit_pct": 95,
+          "roomMatch": 84,
+          "price": null,
+          "name": "Hotel Puerta Roja Rome",
+          "hasRooms": true,
+          "stubHasNbhdAttrs": true,
+          "primary_nbhd_name": "Roma Norte"
+        },
+        {
+          "id": "lpbb18c",
+          "vectorScore": 83,
+          "hotelScore": 73,
+          "nbhd_fit_pct": 87,
+          "roomMatch": 98,
+          "price": null,
+          "name": "Casa Kanabri Hostal Boutique",
+          "hasRooms": true,
+          "stubHasNbhdAttrs": true,
+          "primary_nbhd_name": "Juárez"
+        },
+        {
+          "id": "lp657724b9",
+          "vectorScore": 86,
+          "hotelScore": 82,
+          "nbhd_fit_pct": 92,
+          "roomMatch": 86,
+          "price": null,
+          "name": "Don Jacinto Stay&Sip",
+          "hasRooms": true,
+          "stubHasNbhdAttrs": true,
+          "primary_nbhd_name": "Condesa"
+        },
+        {
+          "id": "lpa8229",
+          "vectorScore": 76,
+          "hotelScore": 72,
+          "nbhd_fit_pct": 92,
+          "roomMatch": 84,
+          "price": null,
+          "name": "Hotel San Fernando",
+          "hasRooms": true,
+          "stubHasNbhdAttrs": true,
+          "primary_nbhd_name": "Condesa"
+        },
+        {
+          "id": "lp84028",
+          "vectorScore": 69,
+          "hotelScore": 63,
+          "nbhd_fit_pct": 95,
+          "roomMatch": 77,
+          "price": null,
+          "name": "La Valise Mexico City, Member of Small L",
+          "hasRooms": true,
+          "stubHasNbhdAttrs": true,
+          "primary_nbhd_name": "Roma Norte"
+        },
+        {
+          "id": "lp656c7b46",
+          "vectorScore": 82,
+          "hotelScore": 71,
+          "nbhd_fit_pct": 92,
+          "roomMatch": 82,
+          "price": null,
+          "name": "Tanat Art Hotel",
+          "hasRooms": true,
+          "stubHasNbhdAttrs": true,
+          "primary_nbhd_name": "Condesa"
+        },
+        {
+          "id": "lp9dd7c",
+          "vectorScore": 73,
+          "hotelScore": 82,
+          "nbhd_fit_pct": 92,
+          "roomMatch": 81,
+          "price": null,
+          "name": "Hotel VIVE MX wtc CDMX, Trademark Collec",
+          "hasRooms": true,
+          "stubHasNbhdAttrs": true,
+          "primary_nbhd_name": "Condesa"
+        },
+        {
+          "id": "lp6587f414",
+          "vectorScore": 70,
+          "hotelScore": 57,
+          "nbhd_fit_pct": 95,
+          "roomMatch": 70,
+          "price": null,
+          "name": "Chihuahua Boutique Centric Studio & Loft",
+          "hasRooms": true,
+          "stubHasNbhdAttrs": true,
+          "primary_nbhd_name": "Roma Norte"
+        },
+        {
+          "id": "lp100580",
+          "vectorScore": 70,
+          "hotelScore": 37,
+          "nbhd_fit_pct": 95,
+          "roomMatch": 70,
+          "price": null,
+          "name": "Urban Loft",
+          "hasRooms": true,
+          "stubHasNbhdAttrs": true,
+          "primary_nbhd_name": "Roma Norte"
+        },
+        {
+          "id": "lp65881fa3",
+          "vectorScore": 74,
+          "hotelScore": 65,
+          "nbhd_fit_pct": 92,
+          "roomMatch": 74,
+          "price": null,
+          "name": "Maison Lezard",
+          "hasRooms": true,
+          "stubHasNbhdAttrs": true,
+          "primary_nbhd_name": "Condesa"
+        }
+      ],
+      "top10Ids": "lp656c9e84,lpbb18c,lp657724b9,lpa8229,lp84028,lp656c7b46,lp9dd7c,lp6587f414,lp100580,lp65881fa3",
+      "serverTop10Ids": "lp656c9e84,lpbb18c,lp657724b9,lpa8229,lp84028,lp656c7b46,lp9dd7c,lp6587f414,lp100580,lp65881fa3",
+      "pricedCount": null
+    },
+    {
+      "id": "grid_value_leafy",
+      "city": "Mexico City",
+      "dates": "2026-06-18→2026-06-25",
+      "perf": {
+        "vsearchWallMs": 9210,
+        "vsearchBytes": 1577036,
+        "ratesWallMs": 5918,
+        "ratesBytes": 104372,
+        "handlerWallMs": 9081,
+        "perfMs": {
+          "nlp_intent_ms": 0,
+          "resolve_city_ms": 285,
+          "phase_a_ms": 0,
+          "scoring_ms": 419,
+          "post_boop_ms": 1095,
+          "phase_b_ms": 3120,
+          "total_since_phase_a_ms": 8717,
+          "wall_ms": 9003
+        },
+        "metaSyncMs": 74
+      },
+      "payload": {
+        "total": 3497,
+        "stubs": 3215,
+        "full": 282,
+        "stubBytes": 536904,
+        "fullBytes": 990000,
+        "totalBytes": 1526904
+      },
+      "stats": {
+        "nbhd_rank_weight": 0.6875,
+        "slim_stubs": true,
+        "nbhd_cache_hit": false
+      },
+      "top10": [
+        {
+          "id": "lp3e1a2",
+          "vectorScore": 100,
+          "hotelScore": null,
+          "nbhd_fit_pct": 62,
+          "roomMatch": 100,
+          "price": 199,
+          "name": null,
+          "hasRooms": false,
+          "stubHasNbhdAttrs": false,
+          "primary_nbhd_name": "Juárez"
+        },
+        {
+          "id": "lp10f642",
+          "vectorScore": 86,
+          "hotelScore": 68,
+          "nbhd_fit_pct": 95,
+          "roomMatch": 86,
+          "price": 79,
+          "name": "Hotel Harare",
+          "hasRooms": true,
+          "stubHasNbhdAttrs": true,
+          "primary_nbhd_name": "Condesa"
+        },
+        {
+          "id": "lpf8be5",
+          "vectorScore": 86,
+          "hotelScore": null,
+          "nbhd_fit_pct": 77,
+          "roomMatch": 86,
+          "price": 118,
+          "name": null,
+          "hasRooms": true,
+          "stubHasNbhdAttrs": true,
+          "primary_nbhd_name": "Coyoacán"
+        },
+        {
+          "id": "lp65559d54",
+          "vectorScore": 83,
+          "hotelScore": null,
+          "nbhd_fit_pct": 74,
+          "roomMatch": 83,
+          "price": 113,
+          "name": null,
+          "hasRooms": false,
+          "stubHasNbhdAttrs": false,
+          "primary_nbhd_name": "Polanco"
+        },
+        {
+          "id": "lp1cab8d",
+          "vectorScore": 86,
+          "hotelScore": null,
+          "nbhd_fit_pct": 77,
+          "roomMatch": 86,
+          "price": 186,
+          "name": null,
+          "hasRooms": true,
+          "stubHasNbhdAttrs": true,
+          "primary_nbhd_name": "Coyoacán"
+        },
+        {
+          "id": "lpeeeaf",
+          "vectorScore": 86,
+          "hotelScore": null,
+          "nbhd_fit_pct": 62,
+          "roomMatch": 86,
+          "price": 82,
+          "name": null,
+          "hasRooms": false,
+          "stubHasNbhdAttrs": false,
+          "primary_nbhd_name": null
+        },
+        {
+          "id": "lp655bada1",
+          "vectorScore": 86,
+          "hotelScore": null,
+          "nbhd_fit_pct": 62,
+          "roomMatch": 86,
+          "price": 98,
+          "name": null,
+          "hasRooms": false,
+          "stubHasNbhdAttrs": false,
+          "primary_nbhd_name": null
+        },
+        {
+          "id": "lp8f26a",
+          "vectorScore": 86,
+          "hotelScore": null,
+          "nbhd_fit_pct": 77,
+          "roomMatch": 86,
+          "price": 206,
+          "name": null,
+          "hasRooms": true,
+          "stubHasNbhdAttrs": true,
+          "primary_nbhd_name": "Coyoacán"
+        },
+        {
+          "id": "lp657651cd",
+          "vectorScore": 86,
+          "hotelScore": null,
+          "nbhd_fit_pct": 57,
+          "roomMatch": 86,
+          "price": 94,
+          "name": null,
+          "hasRooms": false,
+          "stubHasNbhdAttrs": false,
+          "primary_nbhd_name": "San Rafael"
+        },
+        {
+          "id": "lp231dd",
+          "vectorScore": 86,
+          "hotelScore": null,
+          "nbhd_fit_pct": 62,
+          "roomMatch": 86,
+          "price": 201,
+          "name": null,
+          "hasRooms": false,
+          "stubHasNbhdAttrs": false,
+          "primary_nbhd_name": "Juárez"
+        }
+      ],
+      "top10Ids": "lp3e1a2,lp10f642,lpf8be5,lp65559d54,lp1cab8d,lpeeeaf,lp655bada1,lp8f26a,lp657651cd,lp231dd",
+      "serverTop10Ids": "lp65573614,lp657a6c4d,lp3e1a2,lp656c9f29,lp6585d08e,lp1ce969,lp658695f9,lp10f642,lp85197,lp65884151",
+      "pricedCount": 488
+    },
+    {
+      "id": "grid_sleek_scenic",
+      "city": "Mexico City",
+      "dates": "2026-06-18→2026-06-25",
+      "perf": {
+        "vsearchWallMs": 7204,
+        "vsearchBytes": 1665595,
+        "ratesWallMs": 1838,
+        "ratesBytes": 104372,
+        "handlerWallMs": 6853,
+        "perfMs": {
+          "nlp_intent_ms": 0,
+          "resolve_city_ms": 87,
+          "phase_a_ms": 0,
+          "scoring_ms": 863,
+          "post_boop_ms": 938,
+          "phase_b_ms": 2489,
+          "total_since_phase_a_ms": 6693,
+          "wall_ms": 6780
+        },
+        "metaSyncMs": 70
+      },
+      "payload": {
+        "total": 3497,
+        "stubs": 3201,
+        "full": 296,
+        "stubBytes": 532214,
+        "fullBytes": 1083710,
+        "totalBytes": 1615924
+      },
+      "stats": {
+        "nbhd_rank_weight": 0.6875,
+        "slim_stubs": true,
+        "nbhd_cache_hit": false
+      },
+      "top10": [
+        {
+          "id": "lp65573614",
+          "vectorScore": 100,
+          "hotelScore": 91,
+          "nbhd_fit_pct": 95,
+          "roomMatch": 100,
+          "price": 1553,
+          "name": "The Ritz-Carlton, Mexico City",
+          "hasRooms": true,
+          "stubHasNbhdAttrs": true,
+          "primary_nbhd_name": "Paseo de la Reforma"
+        },
+        {
+          "id": "lp1ce969",
+          "vectorScore": 94,
+          "hotelScore": 89,
+          "nbhd_fit_pct": 95,
+          "roomMatch": 94,
+          "price": 747,
+          "name": "Sofitel Mexico City Reforma",
+          "hasRooms": true,
+          "stubHasNbhdAttrs": true,
+          "primary_nbhd_name": "Paseo de la Reforma"
+        },
+        {
+          "id": "lp4bab4",
+          "vectorScore": 84,
+          "hotelScore": 85,
+          "nbhd_fit_pct": 95,
+          "roomMatch": 84,
+          "price": 2115,
+          "name": "The St. Regis Mexico City",
+          "hasRooms": true,
+          "stubHasNbhdAttrs": true,
+          "primary_nbhd_name": "Paseo de la Reforma"
+        },
+        {
+          "id": "lp65588d82",
+          "vectorScore": 77,
+          "hotelScore": 71,
+          "nbhd_fit_pct": 95,
+          "roomMatch": 77,
+          "price": 855,
+          "name": "Volga, Member of Preferred Hotels & Reso",
+          "hasRooms": true,
+          "stubHasNbhdAttrs": true,
+          "primary_nbhd_name": "Paseo de la Reforma"
+        },
+        {
+          "id": "lp2d851",
+          "vectorScore": 77,
+          "hotelScore": 66,
+          "nbhd_fit_pct": 95,
+          "roomMatch": 77,
+          "price": 394,
+          "name": "Hotel Imperial Reforma",
+          "hasRooms": true,
+          "stubHasNbhdAttrs": true,
+          "primary_nbhd_name": "Paseo de la Reforma"
+        },
+        {
+          "id": "lp3158b",
+          "vectorScore": 90,
+          "hotelScore": 82,
+          "nbhd_fit_pct": 89,
+          "roomMatch": 90,
+          "price": 358,
+          "name": "Hilton Mexico City Reforma",
+          "hasRooms": true,
+          "stubHasNbhdAttrs": true,
+          "primary_nbhd_name": "Centro Histórico"
+        },
+        {
+          "id": "lp6559106e",
+          "vectorScore": 77,
+          "hotelScore": 56,
+          "nbhd_fit_pct": 95,
+          "roomMatch": 77,
+          "price": 337,
+          "name": "Suites Mine",
+          "hasRooms": true,
+          "stubHasNbhdAttrs": true,
+          "primary_nbhd_name": "Paseo de la Reforma"
+        },
+        {
+          "id": "lp23157",
+          "vectorScore": 64,
+          "hotelScore": 67,
+          "nbhd_fit_pct": 95,
+          "roomMatch": 64,
+          "price": 2186,
+          "name": "Four Seasons Hotel Mexico City",
+          "hasRooms": true,
+          "stubHasNbhdAttrs": true,
+          "primary_nbhd_name": "Paseo de la Reforma"
+        },
+        {
+          "id": "lp3df30",
+          "vectorScore": 77,
+          "hotelScore": 71,
+          "nbhd_fit_pct": 95,
+          "roomMatch": 77,
+          "price": 258,
+          "name": "City Express Suites by Marriott Ciudad d",
+          "hasRooms": true,
+          "stubHasNbhdAttrs": true,
+          "primary_nbhd_name": "Paseo de la Reforma"
+        },
+        {
+          "id": "lp2f760",
+          "vectorScore": 71,
+          "hotelScore": 65,
+          "nbhd_fit_pct": 95,
+          "roomMatch": 71,
+          "price": 382,
+          "name": "Grand Fiesta Americana Chapultepec",
+          "hasRooms": true,
+          "stubHasNbhdAttrs": true,
+          "primary_nbhd_name": "Paseo de la Reforma"
+        }
+      ],
+      "top10Ids": "lp65573614,lp1ce969,lp4bab4,lp65588d82,lp2d851,lp3158b,lp6559106e,lp23157,lp3df30,lp2f760",
+      "serverTop10Ids": "lp65573614,lp657a6c4d,lp1ce969,lp4bab4,lp65588d82,lp65888115,lp31a94,lp853a2,lp2f760,lp657a8511",
+      "pricedCount": 488
+    },
+    {
+      "id": "grid_paris_calm",
+      "city": "Paris",
+      "dates": "2026-06-18→2026-06-25",
+      "perf": {
+        "vsearchWallMs": 5073,
+        "vsearchBytes": 1903729,
+        "ratesWallMs": 2439,
+        "ratesBytes": 100206,
+        "handlerWallMs": 4841,
+        "perfMs": {
+          "nlp_intent_ms": 0,
+          "resolve_city_ms": 95,
+          "phase_a_ms": 0,
+          "scoring_ms": 546,
+          "post_boop_ms": 667,
+          "phase_b_ms": 2126,
+          "total_since_phase_a_ms": 4739,
+          "wall_ms": 4835
+        },
+        "metaSyncMs": 4
+      },
+      "payload": {
+        "total": 4975,
+        "stubs": 4722,
+        "full": 253,
+        "stubBytes": 833241,
+        "fullBytes": 1002701,
+        "totalBytes": 1835942
+      },
+      "stats": {
+        "nbhd_rank_weight": 0.6875,
+        "slim_stubs": true,
+        "nbhd_cache_hit": false
+      },
+      "top10": [
+        {
+          "id": "lp6571e294",
+          "vectorScore": 79,
+          "hotelScore": 93,
+          "nbhd_fit_pct": 95,
+          "roomMatch": 79,
+          "price": 326,
+          "name": null,
+          "hasRooms": true,
+          "stubHasNbhdAttrs": true,
+          "primary_nbhd_name": "Saint-Germain-des-Prés"
+        },
+        {
+          "id": "lp4ca6f",
+          "vectorScore": 87,
+          "hotelScore": 100,
+          "nbhd_fit_pct": 95,
+          "roomMatch": 87,
+          "price": 418,
+          "name": "Madrigal",
+          "hasRooms": true,
+          "stubHasNbhdAttrs": true,
+          "primary_nbhd_name": "Saint-Germain-des-Prés"
+        },
+        {
+          "id": "lp2b678",
+          "vectorScore": 89,
+          "hotelScore": 100,
+          "nbhd_fit_pct": 90,
+          "roomMatch": 89,
+          "price": 393,
+          "name": null,
+          "hasRooms": true,
+          "stubHasNbhdAttrs": true,
+          "primary_nbhd_name": "Le Marais"
+        },
+        {
+          "id": "lp6558dd27",
+          "vectorScore": 85,
+          "hotelScore": 93,
+          "nbhd_fit_pct": 90,
+          "roomMatch": 85,
+          "price": 356,
+          "name": null,
+          "hasRooms": true,
+          "stubHasNbhdAttrs": true,
+          "primary_nbhd_name": "Le Marais"
+        },
+        {
+          "id": "lp2a21e",
+          "vectorScore": 80,
+          "hotelScore": 100,
+          "nbhd_fit_pct": 90,
+          "roomMatch": 80,
+          "price": 307,
+          "name": null,
+          "hasRooms": true,
+          "stubHasNbhdAttrs": true,
+          "primary_nbhd_name": "Le Marais"
+        },
+        {
+          "id": "lp2bcc8",
+          "vectorScore": 77,
+          "hotelScore": null,
+          "nbhd_fit_pct": 90,
+          "roomMatch": 77,
+          "price": 291,
+          "name": null,
+          "hasRooms": true,
+          "stubHasNbhdAttrs": true,
+          "primary_nbhd_name": "Le Marais"
+        },
+        {
+          "id": "lp1ed4c",
+          "vectorScore": 77,
+          "hotelScore": 73,
+          "nbhd_fit_pct": 90,
+          "roomMatch": 77,
+          "price": 292,
+          "name": null,
+          "hasRooms": true,
+          "stubHasNbhdAttrs": true,
+          "primary_nbhd_name": "Le Marais"
+        },
+        {
+          "id": "lp3a10e",
+          "vectorScore": 80,
+          "hotelScore": 100,
+          "nbhd_fit_pct": 90,
+          "roomMatch": 80,
+          "price": 324,
+          "name": null,
+          "hasRooms": true,
+          "stubHasNbhdAttrs": true,
+          "primary_nbhd_name": "Le Marais"
+        },
+        {
+          "id": "lp231ba",
+          "vectorScore": 80,
+          "hotelScore": 100,
+          "nbhd_fit_pct": 90,
+          "roomMatch": 80,
+          "price": 326,
+          "name": null,
+          "hasRooms": true,
+          "stubHasNbhdAttrs": true,
+          "primary_nbhd_name": "Le Marais"
+        },
+        {
+          "id": "lp219bbd",
+          "vectorScore": 72,
+          "hotelScore": 88,
+          "nbhd_fit_pct": 90,
+          "roomMatch": 72,
+          "price": 238,
+          "name": null,
+          "hasRooms": true,
+          "stubHasNbhdAttrs": true,
+          "primary_nbhd_name": "Le Marais"
+        }
+      ],
+      "top10Ids": "lp6571e294,lp4ca6f,lp2b678,lp6558dd27,lp2a21e,lp2bcc8,lp1ed4c,lp3a10e,lp231ba,lp219bbd",
+      "serverTop10Ids": "lp3ce4c,lp44eaf,lp44ee8,lp466fb,lp656ce43e,lp6576b8af,lp65860694,lp82c9e,lp9d6b3,lpc1bda",
+      "pricedCount": 649
+    },
+    {
+      "id": "grid_paris_buzz",
+      "city": "Paris",
+      "dates": "none",
+      "perf": {
+        "vsearchWallMs": 3681,
+        "vsearchBytes": 1928244,
+        "ratesWallMs": null,
+        "ratesBytes": null,
+        "handlerWallMs": 3539,
+        "perfMs": {
+          "nlp_intent_ms": 0,
+          "resolve_city_ms": 59,
+          "phase_a_ms": 0,
+          "scoring_ms": 519,
+          "post_boop_ms": 624,
+          "phase_b_ms": 1437,
+          "total_since_phase_a_ms": 3402,
+          "wall_ms": 3461
+        },
+        "metaSyncMs": 74
+      },
+      "payload": {
+        "total": 4975,
+        "stubs": 4688,
+        "full": 287,
+        "stubBytes": 829557,
+        "fullBytes": 1031464,
+        "totalBytes": 1861021
+      },
+      "stats": {
+        "nbhd_rank_weight": 0.6875,
+        "slim_stubs": true,
+        "nbhd_cache_hit": false
+      },
+      "top10": [
+        {
+          "id": "lp656db2ba",
+          "vectorScore": 90,
+          "hotelScore": 85,
+          "nbhd_fit_pct": 95,
+          "roomMatch": 90,
+          "price": null,
+          "name": "HIGHSTAY - Luxury Serviced Apartments - ",
+          "hasRooms": true,
+          "stubHasNbhdAttrs": true,
+          "primary_nbhd_name": "Le Marais"
+        },
+        {
+          "id": "lp656db5ed",
+          "vectorScore": 90,
+          "hotelScore": 84,
+          "nbhd_fit_pct": 95,
+          "roomMatch": 90,
+          "price": null,
+          "name": "HIGHSTAY - Luxury Serviced Apartments - ",
+          "hasRooms": true,
+          "stubHasNbhdAttrs": true,
+          "primary_nbhd_name": "Le Marais"
+        },
+        {
+          "id": "lp65729ea3",
+          "vectorScore": 90,
+          "hotelScore": 84,
+          "nbhd_fit_pct": 95,
+          "roomMatch": 90,
+          "price": null,
+          "name": "Beauquartier - Marais Bourg Tibourg",
+          "hasRooms": true,
+          "stubHasNbhdAttrs": true,
+          "primary_nbhd_name": "Le Marais"
+        },
+        {
+          "id": "lp657793db",
+          "vectorScore": 90,
+          "hotelScore": 84,
+          "nbhd_fit_pct": 95,
+          "roomMatch": 90,
+          "price": null,
+          "name": "Beauquartier - Marais Pastourelle",
+          "hasRooms": true,
+          "stubHasNbhdAttrs": true,
+          "primary_nbhd_name": "Le Marais"
+        },
+        {
+          "id": "lp1f54d",
+          "vectorScore": 96,
+          "hotelScore": 71,
+          "nbhd_fit_pct": 95,
+          "roomMatch": 96,
+          "price": null,
+          "name": "ibis Paris Nation Davout",
+          "hasRooms": true,
+          "stubHasNbhdAttrs": true,
+          "primary_nbhd_name": "Le Marais"
+        },
+        {
+          "id": "lp6582d332",
+          "vectorScore": 85,
+          "hotelScore": 84,
+          "nbhd_fit_pct": 95,
+          "roomMatch": 85,
+          "price": null,
+          "name": "Nestay Sentier",
+          "hasRooms": true,
+          "stubHasNbhdAttrs": true,
+          "primary_nbhd_name": "Le Marais"
+        },
+        {
+          "id": "lp339b41",
+          "vectorScore": 85,
+          "hotelScore": 77,
+          "nbhd_fit_pct": 95,
+          "roomMatch": 85,
+          "price": null,
+          "name": "Hotel So Marais",
+          "hasRooms": true,
+          "stubHasNbhdAttrs": true,
+          "primary_nbhd_name": "Le Marais"
+        },
+        {
+          "id": "lp656ca4eb",
+          "vectorScore": 85,
+          "hotelScore": 77,
+          "nbhd_fit_pct": 95,
+          "roomMatch": 85,
+          "price": null,
+          "name": "Hotel Camelia Nation",
+          "hasRooms": true,
+          "stubHasNbhdAttrs": true,
+          "primary_nbhd_name": "Le Marais"
+        },
+        {
+          "id": "lpaa596",
+          "vectorScore": 90,
+          "hotelScore": 84,
+          "nbhd_fit_pct": 95,
+          "roomMatch": 90,
+          "price": null,
+          "name": "Residhome Paris Gare de Lyon - Jacquelin",
+          "hasRooms": true,
+          "stubHasNbhdAttrs": true,
+          "primary_nbhd_name": "Le Marais"
+        },
+        {
+          "id": "lp655553dc",
+          "vectorScore": 80,
+          "hotelScore": 84,
+          "nbhd_fit_pct": 95,
+          "roomMatch": 80,
+          "price": null,
+          "name": "HIGHSTAY - Luxury Serviced Apartments - ",
+          "hasRooms": true,
+          "stubHasNbhdAttrs": true,
+          "primary_nbhd_name": "Le Marais"
+        }
+      ],
+      "top10Ids": "lp656db2ba,lp656db5ed,lp65729ea3,lp657793db,lp1f54d,lp6582d332,lp339b41,lp656ca4eb,lpaa596,lp655553dc",
+      "serverTop10Ids": "lp656db2ba,lp656db5ed,lp65729ea3,lp657793db,lp1f54d,lp6582d332,lp339b41,lp656ca4eb,lpaa596,lp655553dc",
+      "pricedCount": null
+    }
+  ]
+}

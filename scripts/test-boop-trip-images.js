@@ -33,6 +33,7 @@ async function testModule(city) {
   const r = await fetchTripWizardImages(city, {
     placesKey: process.env.GOOGLE_PLACES_KEY || null,
     unsplashKey: process.env.UNSPLASH_KEY || null,
+    geminiKey: process.env.GEMINI_KEY || null,
   });
   for (const slot of ["first", "repeat", "expert"]) {
     const url = r.images[slot];
@@ -40,7 +41,9 @@ async function testModule(city) {
     const ok = !!url && (isHttpUrl(url) || url.startsWith("images/"));
     console.log(
       `  ${slot.padEnd(7)} ${ok ? green("OK") : red("MISS")} ` +
-      `source=${meta?.source || "?"} ${meta?.placeName ? `place="${meta.placeName}"` : ""}`
+      `source=${meta?.source || "?"} ` +
+      (meta?.geminiScore != null ? `score=${meta.geminiScore} ` : "") +
+      (meta?.placeName ? `place="${meta.placeName}"` : "")
     );
     if (url) console.log(`           ${url.slice(0, 90)}${url.length > 90 ? "…" : ""}`);
   }
