@@ -6301,16 +6301,28 @@
     return bestRoomScore > 0 ? Math.round(bestRoomScore) : Math.round(h?.vectorScore || 0);
   }
 
+  function roomsSectionFeaturedLabel() {
+    if (_currentSort === 'price') return 'LOWEST PRICED ROOM';
+    if (_currentSort === 'match+price') return 'TOP VALUE ROOM';
+    return 'BEST MATCHING ROOM';
+  }
+
   /** Upper-left badge on the featured (best matching) room photo strip. */
   function featuredRoomVibeBadgeHTML(hotel, rt) {
     const rowScore = Math.round(Number(rt?.score) || 0);
-    const hotelRoom = Math.round(Number(hotel?.vectorScore) || 0);
-    // This row's score when present; else hotel-level room match (stub lazy-load sets score=0).
-    const displayPct = rowScore > 0 ? rowScore : hotelRoom;
-    if (displayPct > 0) {
-      return `<span class="room-featured-vibe-badge">Room vibe - ${displayPct}% match</span>`;
+    if (rowScore > 0) {
+      return `<span class="room-featured-vibe-badge">Room vibe - ${rowScore}% match</span>`;
     }
-    return `<span class="room-featured-vibe-badge room-featured-vibe-badge--low">Room vibe - browse</span>`;
+    // Stub lazy-load sets score=0; fall back to hotel-level room signal when we have one.
+    const hotelRoom = roomVibeMatchDisplayPct(hotel);
+    if (hotelRoom > 0) {
+      return `<span class="room-featured-vibe-badge">Room vibe - ${hotelRoom}% match</span>`;
+    }
+    // Outside Phase-B gallery — photos exist but no vibe score was computed.
+    if (_currentSort === 'price') {
+      return `<span class="room-featured-vibe-badge room-featured-vibe-badge--low">Available room</span>`;
+    }
+    return `<span class="room-featured-vibe-badge room-featured-vibe-badge--low">Room vibe - not ranked</span>`;
   }
 
   /** Keep overlay pill when a room photo fails to load (never replace cell innerHTML). */
@@ -7961,14 +7973,15 @@
     }
 
     return `${noAvailNotice}
-      <div class="hotel-divider-band">BEST MATCHING ROOM</div>
+      <div class="hotel-divider-band">${roomsSectionFeaturedLabel()}</div>
       ${featuredHTML}
       ${othersSection}`;
   }
 
   // When the user has "Available only" on, push bookable scored rooms to the
-  // front so the featured ("BEST MATCHING ROOM") slot shows something with a
-  // real vibe score that's also bookable. Priority order:
+  // front so the featured room slot shows something with a real vibe score
+  // that's also bookable (except on Best Price — cheapest priced room wins).
+  // Priority order:
   //   1. scored + priced   — best of both worlds
   //   2. scored + unpriced — has vibe match (better than a 0-score bookable room)
   //   3. unscored + priced — bookable but no vibe score (e.g. enrichHotelRates rooms)
@@ -7976,6 +7989,19 @@
   // When filter is off, sort all rooms by score descending.
   function sortRoomsForCard(rooms, hotel) {
     if (!rooms || rooms.length === 0) return rooms || [];
+
+    if (_currentSort === 'price' && _hasDateSearch && _pricesLoaded && hotel?.roomPrices) {
+      const priced = rooms.filter(
+        (rt) => rt?.roomTypeId != null && hotel.roomPrices[rt.roomTypeId] != null
+      );
+      if (priced.length) {
+        const cheapestFirst = [...priced].sort(
+          (a, b) => (hotel.roomPrices[a.roomTypeId] || 0) - (hotel.roomPrices[b.roomTypeId] || 0)
+        );
+        const rest = rooms.filter((rt) => !priced.includes(rt));
+        return cheapestFirst.concat(rest);
+      }
+    }
 
     const scoredFirst = [...rooms].sort((a, b) => (b.score || 0) - (a.score || 0));
 
