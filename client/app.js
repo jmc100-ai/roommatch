@@ -390,6 +390,11 @@
   let _showAvailOnly  = true;   // toggle: only show available rooms (default on when dates entered)
   let _requireFreeCancel = false; // Boop "Free cancellation" must-have: filter using /api/rates policies
   let _propTypeFilter = 'all'; // dropdown: all | hotel | apartment | vacation_home | villa | hostel
+  /** Nightly budget filter (desktop chip; mobile wired, button hidden until later). */
+  let _budgetFilter = { mode: 'any' };
+  const BUDGET_SESSION_KEY = 'budgetFilter'; // legacy — cleared on reset; no longer persisted
+  const BUDGET_LUXURY_MIN_STARS = 4.5;
+  const BUDGET_UNDER_PRESETS = [150, 250, 400, 600];
   const RATES_CURRENCIES = ['USD', 'EUR', 'GBP', 'CAD', 'AUD', 'MXN'];
   const RM_CURRENCY_KEY = 'rm_rates_currency';
   function getRatesCurrencyPref() {
@@ -777,6 +782,7 @@
       document.getElementById('discovery-flow').style.display = '';
     }
     if (id === 'city')  {
+      resetBudgetFilter();
       document.getElementById('story').classList.remove('show');
       showFlowStep('city');
       syncCityTripSheetBackUi();
@@ -2099,6 +2105,22 @@
     spacious: '🏠',
     work_desk: '💼',
   };
+  /** Short labels for mobile must-haves chip human summary. */
+  const MUSTHAVE_CHIP_SHORT = {
+    free_cancellation: 'Free cancel',
+    balcony: 'Balcony',
+    spa_bathroom: 'Spa bath',
+    spacious: 'Spacious',
+    work_desk: 'Work desk',
+  };
+  const FINE_TUNE_MUSTHAVE_VISIBLE = 4;
+  const FINE_TUNE_BUDGET_CARDS = [
+    { id: 'any', label: 'Any budget', sub: '' },
+    { id: 'under_150', label: 'Under $150', sub: 'per night' },
+    { id: 'under_250', label: 'Under $250', sub: 'per night' },
+    { id: 'under_400', label: 'Under $400', sub: 'per night' },
+    { id: 'luxury_400', label: 'Luxury $400+', sub: 'per night' },
+  ];
   /** Results command bar party-size labels + persisted profile. */
   const PARTY_SIZE_LABELS = { solo: '1 person', couple: '2 people', group: '3+ people' };
 
@@ -2213,6 +2235,12 @@
     const chips = [];
     for (const stepKey of VIBE_CHIP_STEPS) {
       if (stepKey === 'musthaves') {
+        if (isMobileCmdTripUi()) {
+          const summary = finetuneChipSummary();
+          const isEmpty = summary === '+ Must-haves';
+          chips.push(_musthaveChipHtml(summary, isEmpty, budgetFilterChipLabel(_budgetFilter)));
+          continue;
+        }
         const mh = BOOP_QUESTIONS.find(q => q.id === 'musthaves');
         const pickedOpts = (mh?.options || []).filter(o => dealbreakers.has(o.id));
         if (pickedOpts.length === 0) {
@@ -2244,6 +2272,572 @@
       }
     }
     row.innerHTML = chips.join('');
+    syncBudgetChipUI();
+  }
+
+  // ── Nightly budget filter (desktop chip; mobile wired, button hidden) ─────
+  let _budgetOutsideCloseBound = false;
+
+  function resetBudgetFilter() {
+    _budgetFilter = { mode: 'any' };
+    try { sessionStorage.removeItem(BUDGET_SESSION_KEY); } catch (_) {}
+    syncBudgetChipUI();
+    closeBudgetPop();
+  }
+
+  function normalizeBudgetFilter(f) {
+    if (!f || f.mode === 'any') return { mode: 'any' };
+    if (f.mode === 'luxury') return { mode: 'luxury' };
+    if (f.mode === 'under') {
+      const n = Number(f.underMax);
+      if (BUDGET_UNDER_PRESETS.includes(n)) return { mode: 'under', underMax: n };
+    }
+    if (f.mode === 'range') {
+      const min = f.min != null && Number.isFinite(Number(f.min)) ? Math.max(0, Math.round(Number(f.min))) : null;
+      const max = f.max != null && Number.isFinite(Number(f.max)) ? Math.max(0, Math.round(Number(f.max))) : null;
+      if (min == null && max == null) return { mode: 'any' };
+      if (min != null && max != null && min > max) return { mode: 'any' };
+      return { mode: 'range', min, max };
+    }
+    return { mode: 'any' };
+  }
+
+  function budgetFilterChipLabel(f) {
+    const filter = f || _budgetFilter || { mode: 'any' };
+    if (filter.mode === 'any') return 'Any budget';
+    if (filter.mode === 'luxury') return 'Luxury only';
+    if (filter.mode === 'under') return `<$${filter.underMax}`;
+    if (filter.mode === 'range') {
+      const { min, max } = filter;
+      if (min != null && max != null) return `$${min}–$${max}`;
+      if (min != null) return `$${min}+`;
+      if (max != null) return `<$${max}`;
+    }
+    return 'Any budget';
+  }
+
+  function budgetFilterIsActive(f) {
+    return (f || _budgetFilter || {}).mode !== 'any';
+  }
+
+  function syncBudgetChipUI() {
+    const btn = document.getElementById('budgetChipBtn');
+    if (!btn) return;
+    const label = budgetFilterChipLabel(_budgetFilter);
+    btn.textContent = label;
+    btn.setAttribute('aria-label', `Nightly budget: ${label}`);
+    const active = budgetFilterIsActive(_budgetFilter);
+    btn.classList.toggle('vibe-chip-empty', !active);
+    btn.classList.toggle('budget-chip-btn--active', active);
+  }
+
+  function bindBudgetOutsideClose() {
+    if (_budgetOutsideCloseBound) return;
+    _budgetOutsideCloseBound = true;
+    document.addEventListener('click', (e) => {
+      const w = document.getElementById('budgetChipWrap');
+      if (!w || !w.classList.contains('budget-chip-open')) return;
+      if (!w.contains(e.target)) closeBudgetPop();
+    });
+  }
+
+  function closeBudgetPop() {
+    const w = document.getElementById('budgetChipWrap');
+    const pop = document.getElementById('budgetPop');
+    const btn = document.getElementById('budgetChipBtn');
+    if (w) w.classList.remove('budget-chip-open');
+    if (btn) btn.setAttribute('aria-expanded', 'false');
+    if (pop) pop.setAttribute('aria-hidden', 'true');
+  }
+
+  function syncBudgetPopDraftFromFilter() {
+    const f = _budgetFilter || { mode: 'any' };
+    const minEl = document.getElementById('budgetDraftMin');
+    const maxEl = document.getElementById('budgetDraftMax');
+    if (minEl) minEl.value = '';
+    if (maxEl) maxEl.value = '';
+    let radioVal = 'any';
+    if (f.mode === 'luxury') radioVal = 'luxury';
+    else if (f.mode === 'under') radioVal = `under_${f.underMax}`;
+    else if (f.mode === 'range') {
+      if (minEl && f.min != null) minEl.value = String(f.min);
+      if (maxEl && f.max != null) maxEl.value = String(f.max);
+      radioVal = '';
+    }
+    document.querySelectorAll('input[name="budgetDraft"]').forEach((el) => {
+      el.checked = el.value === radioVal;
+    });
+    const hint = document.getElementById('budgetPopHint');
+    if (hint) {
+      hint.hidden = !!(S.checkin && S.checkout && S.checkin < S.checkout);
+    }
+  }
+
+  function onBudgetDraftRadioChange() {
+    const minEl = document.getElementById('budgetDraftMin');
+    const maxEl = document.getElementById('budgetDraftMax');
+    if (minEl) minEl.value = '';
+    if (maxEl) maxEl.value = '';
+  }
+
+  function onBudgetDraftRangeInput() {
+    document.querySelectorAll('input[name="budgetDraft"]').forEach((el) => { el.checked = false; });
+  }
+
+  function readBudgetDraftFromPop() {
+    const minEl = document.getElementById('budgetDraftMin');
+    const maxEl = document.getElementById('budgetDraftMax');
+    const minRaw = minEl?.value?.trim();
+    const maxRaw = maxEl?.value?.trim();
+    const min = minRaw !== '' && minRaw != null ? Math.max(0, parseInt(minRaw, 10)) : null;
+    const max = maxRaw !== '' && maxRaw != null ? Math.max(0, parseInt(maxRaw, 10)) : null;
+    const hasRange = (minRaw !== '' && minRaw != null) || (maxRaw !== '' && maxRaw != null);
+    if (hasRange) {
+      if ((minRaw !== '' && !Number.isFinite(min)) || (maxRaw !== '' && !Number.isFinite(max))) {
+        return { error: 'Enter valid whole-dollar amounts.' };
+      }
+      if (min != null && max != null && min > max) {
+        return { error: 'Min cannot be greater than max.' };
+      }
+      return normalizeBudgetFilter({ mode: 'range', min, max });
+    }
+    const checked = document.querySelector('input[name="budgetDraft"]:checked');
+    const val = checked?.value || 'any';
+    if (val === 'any') return { mode: 'any' };
+    if (val === 'luxury') return { mode: 'luxury' };
+    if (val.startsWith('under_')) {
+      return normalizeBudgetFilter({ mode: 'under', underMax: parseInt(val.slice(6), 10) });
+    }
+    return { mode: 'any' };
+  }
+
+  function toggleBudgetPop(ev) {
+    if (ev) {
+      ev.stopPropagation();
+      ev.preventDefault();
+    }
+    bindBudgetOutsideClose();
+    closeCmdPartyPopover();
+    closeSortMorePop();
+    const w = document.getElementById('budgetChipWrap');
+    if (!w) return;
+    const opening = !w.classList.contains('budget-chip-open');
+    if (opening) syncBudgetPopDraftFromFilter();
+    w.classList.toggle('budget-chip-open', opening);
+    const btn = document.getElementById('budgetChipBtn');
+    const pop = document.getElementById('budgetPop');
+    if (btn) btn.setAttribute('aria-expanded', opening ? 'true' : 'false');
+    if (pop) pop.setAttribute('aria-hidden', opening ? 'false' : 'true');
+  }
+
+  function applyBudgetFilter() {
+    const next = readBudgetDraftFromPop();
+    if (next.error) {
+      flashMsg(next.error);
+      return;
+    }
+    _budgetFilter = next;
+    closeBudgetPop();
+    syncBudgetChipUI();
+    if (_lastHotels?.length) {
+      _displayedCount = 10;
+      renderSorted();
+    }
+  }
+
+  function hotelNightlyPrice(h) {
+    if (h?.price == null || !Number.isFinite(Number(h.price))) return null;
+    return Number(h.price);
+  }
+
+  function hotelPassesBudgetFilter(h) {
+    const f = _budgetFilter || { mode: 'any' };
+    if (f.mode === 'any') return true;
+    if (f.mode === 'luxury') {
+      const stars = Number(h?.starRating);
+      return Number.isFinite(stars) && stars >= BUDGET_LUXURY_MIN_STARS;
+    }
+    if (f.mode === 'under' || f.mode === 'range') {
+      if (!_pricesLoaded || !_hasDateSearch) return true;
+      const p = hotelNightlyPrice(h);
+      if (p == null) return false;
+      if (f.mode === 'under') return p <= f.underMax;
+      if (f.min != null && p < f.min) return false;
+      if (f.max != null && p > f.max) return false;
+      return true;
+    }
+    return true;
+  }
+
+  // ── Mobile fine-tune sheet (must-haves chip, ≤640px) ─────────────────────
+  let _fineTuneDraft = null;
+  let _fineTuneBodyScrollY = 0;
+
+  function lockFineTuneBodyScroll() {
+    _fineTuneBodyScrollY = window.scrollY || document.documentElement.scrollTop || 0;
+    document.body.style.position = 'fixed';
+    document.body.style.top = `-${_fineTuneBodyScrollY}px`;
+    document.body.style.left = '0';
+    document.body.style.right = '0';
+    document.body.style.width = '100%';
+    document.body.classList.add('fine-tune-sheet-open');
+  }
+
+  function unlockFineTuneBodyScroll() {
+    document.body.classList.remove('fine-tune-sheet-open');
+    document.body.style.position = '';
+    document.body.style.top = '';
+    document.body.style.left = '';
+    document.body.style.right = '';
+    document.body.style.width = '';
+    window.scrollTo(0, _fineTuneBodyScrollY);
+  }
+
+  function resetFineTuneScroll() {
+    const scroll = document.getElementById('fine-tune-scroll');
+    if (!scroll) return;
+    scroll.scrollTop = 0;
+    requestAnimationFrame(() => {
+      scroll.scrollTop = 0;
+      requestAnimationFrame(() => { scroll.scrollTop = 0; });
+    });
+  }
+
+  function finetuneChipSummary() {
+    const profile = _activeBoopProfileForChips() || {};
+    const dealbreakers = new Set(Array.isArray(profile.dealbreakers) ? profile.dealbreakers : []);
+    const mhQ = BOOP_QUESTIONS.find(q => q.id === 'musthaves');
+    const parts = [];
+    for (const o of (mhQ?.options || [])) {
+      if (dealbreakers.has(o.id)) parts.push(MUSTHAVE_CHIP_SHORT[o.id] || o.label);
+    }
+    if (parts.length === 0) return '+ Must-haves';
+    if (parts.length <= 2) return parts.join(' + ');
+    return `${parts[0]} + ${parts.length - 1} more`;
+  }
+
+  function _musthaveChipHtml(label, isEmpty, budgetSubline) {
+    const safeLabel = escHtml(label);
+    const safeBudget = escHtml(budgetSubline || budgetFilterChipLabel(_budgetFilter));
+    const textHtml = `<span class="vibe-chip-text vibe-chip-text--stacked"><span class="vibe-chip-line1">${safeLabel}</span><span class="vibe-chip-line2">${safeBudget}</span></span>`;
+    const ariaLabel = escHtml(`Edit preferences: ${label}, ${budgetSubline || budgetFilterChipLabel(_budgetFilter)}`);
+    const emptyClass = isEmpty ? ' vibe-chip-empty' : '';
+    if (isEmpty) {
+      return `<button type="button" class="vibe-chip vibe-chip--stacked${emptyClass}" data-vibe-step="musthaves" onclick="openFineTuneSheet()" aria-label="${ariaLabel}">${textHtml}</button>`;
+    }
+    return `<button type="button" class="vibe-chip vibe-chip--stacked" data-vibe-step="musthaves" onclick="openFineTuneSheet()" aria-label="${ariaLabel}">${textHtml}<span class="vibe-chip-pencil" aria-hidden="true">✎</span></button>`;
+  }
+
+  function budgetFilterToMobileCardId(f) {
+    const filter = f || { mode: 'any' };
+    if (filter.mode === 'any') return 'any';
+    if (filter.mode === 'under' && [150, 250, 400].includes(filter.underMax)) return `under_${filter.underMax}`;
+    if (filter.mode === 'range' && filter.min === 400 && filter.max == null) return 'luxury_400';
+    if (filter.mode === 'under' || filter.mode === 'range') return 'custom';
+    return 'any';
+  }
+
+  function mobileCardIdToBudgetFilter(cardId, customMin, customMax) {
+    if (!cardId || cardId === 'any') return { mode: 'any' };
+    if (cardId === 'luxury_400') return normalizeBudgetFilter({ mode: 'range', min: 400, max: null });
+    if (cardId.startsWith('under_')) {
+      return normalizeBudgetFilter({ mode: 'under', underMax: parseInt(cardId.slice(6), 10) });
+    }
+    if (cardId === 'custom') {
+      const minRaw = (customMin || '').trim();
+      const maxRaw = (customMax || '').trim();
+      const min = minRaw !== '' ? Math.max(0, parseInt(minRaw, 10)) : null;
+      const max = maxRaw !== '' ? Math.max(0, parseInt(maxRaw, 10)) : null;
+      if ((minRaw !== '' && !Number.isFinite(min)) || (maxRaw !== '' && !Number.isFinite(max))) {
+        return { error: 'Enter valid whole-dollar amounts.' };
+      }
+      if (min != null && max != null && min > max) return { error: 'Min cannot be greater than max.' };
+      if (minRaw === '' && maxRaw === '') return { mode: 'any' };
+      return normalizeBudgetFilter({ mode: 'range', min, max });
+    }
+    return { mode: 'any' };
+  }
+
+  function hydrateFineTuneDraftFromState() {
+    const profile = _activeBoopProfileForChips()
+      || (S.city ? loadBoopProfileForCity(S.city) : null)
+      || {};
+    const cardId = budgetFilterToMobileCardId(_budgetFilter);
+    const f = _budgetFilter || { mode: 'any' };
+    let customMin = '';
+    let customMax = '';
+    if (cardId === 'custom' && f.mode === 'range') {
+      if (f.min != null) customMin = String(f.min);
+      if (f.max != null) customMax = String(f.max);
+    }
+    _fineTuneDraft = {
+      budgetCard: cardId,
+      customMin,
+      customMax,
+      customOpen: cardId === 'custom',
+      showMoreMusthaves: false,
+      dealbreakers: new Set(Array.isArray(profile.dealbreakers) ? profile.dealbreakers : []),
+      freetext: (profile.freetext || '').slice(0, 250),
+      availOnly: !!(_showAvailOnly && _hasDateSearch),
+    };
+  }
+
+  function fineTuneSelectionCount() {
+    if (!_fineTuneDraft) return 0;
+    return _fineTuneDraft.dealbreakers.size;
+  }
+
+  function updateFineTuneFooterCount() {
+    const el = document.getElementById('fine-tune-count');
+    if (!el) return;
+    const n = fineTuneSelectionCount();
+    el.textContent = n === 1 ? '1 selected' : `${n} selected`;
+  }
+
+  function renderFineTuneSheet(opts = {}) {
+    const scroll = document.getElementById('fine-tune-scroll');
+    if (!scroll || !_fineTuneDraft) return;
+    const preserveScroll = opts.preserveScroll !== false;
+    const prevScrollTop = preserveScroll ? scroll.scrollTop : 0;
+    const d = _fineTuneDraft;
+    const mhQ = BOOP_QUESTIONS.find(q => q.id === 'musthaves');
+    const options = mhQ?.options || [];
+    const visibleCount = d.showMoreMusthaves ? options.length : FINE_TUNE_MUSTHAVE_VISIBLE;
+    const budgetCardsHtml = FINE_TUNE_BUDGET_CARDS.map((c) => {
+      const active = d.budgetCard === c.id;
+      return `<button type="button" class="fine-tune-budget-card${active ? ' active' : ''}" aria-pressed="${active ? 'true' : 'false'}" onclick="fineTunePickBudgetCard('${c.id}')">
+        <span class="fine-tune-budget-card-dot" aria-hidden="true"></span>
+        <span class="fine-tune-budget-card-label">${escHtml(c.label)}</span>
+        ${c.sub ? `<span class="fine-tune-budget-card-sub">${escHtml(c.sub)}</span>` : ''}
+      </button>`;
+    }).join('');
+    const musthaveRowsHtml = options.slice(0, visibleCount).map((o) => {
+      const active = d.dealbreakers.has(o.id);
+      const img = boopGetDynamicImage('musthaves', o.id, o.image || 'https://images.unsplash.com/photo-1477959858617-67f85cf4f1df?auto=format&fit=crop&w=1200&q=80');
+      return `<button type="button" class="fine-tune-mh-row${active ? ' active' : ''}" aria-pressed="${active ? 'true' : 'false'}" onclick="fineTuneToggleMusthave('${o.id}')">
+        <span class="fine-tune-mh-thumb"><img src="${img}" alt="" loading="lazy" /></span>
+        <span class="fine-tune-mh-text">
+          <span class="fine-tune-mh-title">${escHtml(o.label)}</span>
+          <span class="fine-tune-mh-hint">${escHtml(o.hint || '')}</span>
+        </span>
+        <span class="fine-tune-mh-toggle" aria-hidden="true">${active ? '✓' : '+'}</span>
+      </button>`;
+    }).join('');
+    const showMoreBtn = options.length > FINE_TUNE_MUSTHAVE_VISIBLE && !d.showMoreMusthaves
+      ? `<button type="button" class="fine-tune-show-more" onclick="fineTuneShowMoreMusthaves()">Show more <span aria-hidden="true">⌄</span></button>`
+      : '';
+    const datesHint = (S.checkin && S.checkout && S.checkin < S.checkout)
+      ? ''
+      : '<p class="fine-tune-budget-dates-hint">Add travel dates to filter by nightly rate.</p>';
+    const availDisabled = !_hasDateSearch;
+    scroll.innerHTML = `
+      <section class="fine-tune-section fine-tune-section--first">
+        <div class="fine-tune-section-head">
+          <span class="fine-tune-section-icon" aria-hidden="true">🏷</span>
+          <div>
+            <h3 class="fine-tune-section-title">Budget <span class="fine-tune-opt">(optional)</span></h3>
+            <p class="fine-tune-section-sub">Choose your nightly budget range.</p>
+          </div>
+        </div>
+        <div class="fine-tune-budget-cards">${budgetCardsHtml}</div>
+        ${datesHint}
+        <button type="button" class="fine-tune-custom-toggle${d.customOpen ? ' open' : ''}" aria-expanded="${d.customOpen ? 'true' : 'false'}" onclick="fineTuneToggleCustomBudget()">
+          Custom range <span class="fine-tune-chev" aria-hidden="true">⌄</span>
+        </button>
+        <div class="fine-tune-custom-range${d.customOpen ? ' open' : ''}" id="fine-tune-custom-range">
+          <label class="fine-tune-range-field">
+            <span>Min</span>
+            <input type="number" min="0" step="1" inputmode="numeric" placeholder="Min" value="${escHtml(d.customMin)}" oninput="fineTuneCustomRangeInput('min', this.value)" />
+          </label>
+          <label class="fine-tune-range-field">
+            <span>Max</span>
+            <input type="number" min="0" step="1" inputmode="numeric" placeholder="Max" value="${escHtml(d.customMax)}" oninput="fineTuneCustomRangeInput('max', this.value)" />
+          </label>
+        </div>
+      </section>
+      <section class="fine-tune-section">
+        <div class="fine-tune-section-head">
+          <span class="fine-tune-section-icon" aria-hidden="true">✦</span>
+          <div>
+            <h3 class="fine-tune-section-title">What matters most?</h3>
+            <p class="fine-tune-section-sub">Tap to add your must-have preferences.</p>
+          </div>
+        </div>
+        <div class="fine-tune-mh-list">${musthaveRowsHtml}</div>
+        ${showMoreBtn}
+      </section>
+      <section class="fine-tune-section">
+        <div class="fine-tune-section-head">
+          <span class="fine-tune-section-icon" aria-hidden="true">✎</span>
+          <div>
+            <h3 class="fine-tune-section-title">Anything else? <span class="fine-tune-opt">(optional)</span></h3>
+            <p class="fine-tune-section-sub">Street energy, character, views, or small details — tell us anything else that matters.</p>
+          </div>
+        </div>
+        <div class="fine-tune-extras-wrap">
+          <textarea class="fine-tune-extras" id="fine-tune-extras" maxlength="250" placeholder="e.g. quiet side street, small boutique hotel, dark room for better sleep, great coffee nearby" oninput="fineTuneExtrasInput(this.value)">${escHtml(d.freetext)}</textarea>
+          <span class="fine-tune-char-count" id="fine-tune-char-count">${d.freetext.length}/250</span>
+        </div>
+      </section>
+      <section class="fine-tune-section fine-tune-section--avail">
+        <div class="fine-tune-section-head fine-tune-section-head--row">
+          <span class="fine-tune-section-icon" aria-hidden="true">📅</span>
+          <div class="fine-tune-avail-copy">
+            <h3 class="fine-tune-section-title">Available only</h3>
+            <p class="fine-tune-section-sub">Only show available properties</p>
+          </div>
+          <label class="toggle-switch fine-tune-avail-toggle${availDisabled ? ' disabled' : ''}">
+            <input type="checkbox" id="fine-tune-avail" ${d.availOnly ? 'checked' : ''} ${availDisabled ? 'disabled' : ''} onchange="fineTuneAvailChange(this.checked)" />
+            <span class="toggle-track"></span>
+          </label>
+        </div>
+      </section>`;
+    scroll.scrollTop = preserveScroll ? prevScrollTop : 0;
+    updateFineTuneFooterCount();
+  }
+
+  function openFineTuneSheet(ev) {
+    if (ev) { ev.preventDefault(); ev.stopPropagation(); }
+    if (!S.city) { flashMsg('Pick a city first'); return; }
+    if (!isMobileCmdTripUi()) {
+      openBoopFromChip('musthaves');
+      return;
+    }
+    closeCmdTripSheet();
+    closeCmdPartyPopover();
+    closeBudgetPop();
+    closeSortMorePop();
+    hydrateFineTuneDraftFromState();
+    const host = document.getElementById('fine-tune-sheet-host');
+    if (!host) return;
+    renderFineTuneSheet({ preserveScroll: false });
+    host.hidden = false;
+    host.classList.add('is-open');
+    host.setAttribute('aria-hidden', 'false');
+    lockFineTuneBodyScroll();
+    resetFineTuneScroll();
+  }
+
+  function closeFineTuneSheet(ev) {
+    if (ev) { ev.preventDefault(); ev.stopPropagation(); }
+    const host = document.getElementById('fine-tune-sheet-host');
+    if (!host) return;
+    host.hidden = true;
+    host.classList.remove('is-open');
+    host.setAttribute('aria-hidden', 'true');
+    unlockFineTuneBodyScroll();
+    _fineTuneDraft = null;
+  }
+
+  function fineTunePickBudgetCard(cardId) {
+    if (!_fineTuneDraft) return;
+    _fineTuneDraft.budgetCard = cardId;
+    if (cardId !== 'custom') {
+      _fineTuneDraft.customOpen = false;
+      _fineTuneDraft.customMin = '';
+      _fineTuneDraft.customMax = '';
+    }
+    renderFineTuneSheet();
+  }
+
+  function fineTuneToggleCustomBudget() {
+    if (!_fineTuneDraft) return;
+    _fineTuneDraft.customOpen = !_fineTuneDraft.customOpen;
+    if (_fineTuneDraft.customOpen) _fineTuneDraft.budgetCard = 'custom';
+    renderFineTuneSheet();
+  }
+
+  function fineTuneCustomRangeInput(which, val) {
+    if (!_fineTuneDraft) return;
+    if (which === 'min') _fineTuneDraft.customMin = val;
+    else _fineTuneDraft.customMax = val;
+    _fineTuneDraft.budgetCard = 'custom';
+  }
+
+  function fineTuneToggleMusthave(id) {
+    if (!_fineTuneDraft) return;
+    if (_fineTuneDraft.dealbreakers.has(id)) _fineTuneDraft.dealbreakers.delete(id);
+    else _fineTuneDraft.dealbreakers.add(id);
+    renderFineTuneSheet();
+  }
+
+  function fineTuneShowMoreMusthaves() {
+    if (!_fineTuneDraft) return;
+    _fineTuneDraft.showMoreMusthaves = true;
+    renderFineTuneSheet();
+  }
+
+  function fineTuneExtrasInput(val) {
+    if (!_fineTuneDraft) return;
+    _fineTuneDraft.freetext = (val || '').slice(0, 250);
+    const counter = document.getElementById('fine-tune-char-count');
+    const ta = document.getElementById('fine-tune-extras');
+    if (ta && ta.value !== _fineTuneDraft.freetext) ta.value = _fineTuneDraft.freetext;
+    if (counter) counter.textContent = `${_fineTuneDraft.freetext.length}/250`;
+  }
+
+  function fineTuneAvailChange(checked) {
+    if (!_fineTuneDraft) return;
+    _fineTuneDraft.availOnly = !!checked;
+  }
+
+  function clearFineTuneDraft(ev) {
+    if (ev) { ev.preventDefault(); ev.stopPropagation(); }
+    if (!_fineTuneDraft) return;
+    _fineTuneDraft.budgetCard = 'any';
+    _fineTuneDraft.customMin = '';
+    _fineTuneDraft.customMax = '';
+    _fineTuneDraft.customOpen = false;
+    _fineTuneDraft.dealbreakers = new Set();
+    _fineTuneDraft.freetext = '';
+    _fineTuneDraft.availOnly = false;
+    renderFineTuneSheet();
+  }
+
+  function applyFineTunePreferences(ev) {
+    if (ev) { ev.preventDefault(); ev.stopPropagation(); }
+    if (!_fineTuneDraft) return;
+    const d = _fineTuneDraft;
+    const nextBudget = mobileCardIdToBudgetFilter(d.budgetCard, d.customMin, d.customMax);
+    if (nextBudget.error) {
+      flashMsg(nextBudget.error);
+      return;
+    }
+    const prevProfile = _activeBoopProfileForChips() || {};
+    const prevDealbreakers = JSON.stringify(Array.isArray(prevProfile.dealbreakers) ? prevProfile.dealbreakers.sort() : []);
+    const nextDealbreakers = JSON.stringify(Array.from(d.dealbreakers).sort());
+    const prevFreetext = (prevProfile.freetext || '').trim();
+    const nextFreetext = (d.freetext || '').trim();
+    const searchInputsChanged = prevDealbreakers !== nextDealbreakers || prevFreetext !== nextFreetext;
+
+    _budgetFilter = nextBudget;
+    syncBudgetChipUI();
+
+    const profile = {
+      answers: { ...(prevProfile.answers || { group_size: 'couple' }) },
+      prefs: { ...(prevProfile.prefs || {}) },
+      dealbreakers: Array.from(d.dealbreakers),
+      freetext: nextFreetext,
+      advancedKeywords: prevProfile.advancedKeywords || null,
+      updatedAt: Date.now(),
+    };
+    S.boopProfile = profile;
+    if (S.city) saveBoopProfileForCity(S.city, profile);
+
+    const availCheck = document.getElementById('availOnlyCheck');
+    if (availCheck) availCheck.checked = !!d.availOnly;
+    _showAvailOnly = !!d.availOnly;
+
+    closeFineTuneSheet();
+    renderVibeChips();
+
+    if (searchInputsChanged) {
+      clearNbhdPickerMatchCache();
+      runBoopSearch(profile);
+    } else if (_lastHotels?.length) {
+      _displayedCount = 10;
+      renderSorted();
+    }
   }
 
   function _emptyChipLabelFor(stepKey) {
@@ -2286,6 +2880,10 @@
   // so the look/feel matches the first-time flow.
   async function openBoopFromChip(stepKey) {
     if (!S.city) { flashMsg('Pick a city first'); return; }
+    if (stepKey === 'musthaves' && isMobileCmdTripUi()) {
+      openFineTuneSheet();
+      return;
+    }
     const allSteps = ['trip', 'stayVibe', 'nbhdScene', 'musthaves'];
     let idx = allSteps.indexOf(stepKey);
     if (idx < 0) idx = BOOP_QUESTIONS.findIndex(q => q.id === stepKey);
@@ -2336,6 +2934,12 @@
   if (typeof document !== 'undefined') {
     document.addEventListener('keydown', (e) => {
       if (e.key !== 'Escape') return;
+      const fineTune = document.getElementById('fine-tune-sheet-host');
+      if (fineTune && fineTune.classList.contains('is-open')) {
+        e.preventDefault();
+        closeFineTuneSheet();
+        return;
+      }
       const tripSheet = document.getElementById('cmd-trip-sheet-host');
       if (tripSheet && tripSheet.classList.contains('is-open')) {
         e.preventDefault();
@@ -2346,6 +2950,12 @@
       if (pw && pw.classList.contains('cmd-party-open')) {
         e.preventDefault();
         closeCmdPartyPopover();
+        return;
+      }
+      const bw = document.getElementById('budgetChipWrap');
+      if (bw && bw.classList.contains('budget-chip-open')) {
+        e.preventDefault();
+        closeBudgetPop();
         return;
       }
       if (document.body.classList.contains('boop-overlay-mode')) {
@@ -2632,6 +3242,7 @@
     S.hotelQ = null;
     S.mustHaves = null;
     clearNbhdPickerMatchCache();
+    resetBudgetFilter();
     prefetchBoopTripWizardImages(city);
     prefetchBoopWizardImages(city);
 
@@ -4838,6 +5449,7 @@
     _displayedCount = 10;
     hideBanner();
     setStatus('');
+    resetBudgetFilter();
     // Return to discovery flow
     showFlowStep('city');
     document.getElementById('story').classList.remove('show');
@@ -4984,6 +5596,9 @@
     ensureCmdTripSheetHost();
     initTopnavMenuAndStatic();
     scheduleSyncAvailFilterMount();
+    syncBudgetChipUI();
+    // Clear any legacy persisted budget from a prior tab session
+    try { sessionStorage.removeItem(BUDGET_SESSION_KEY); } catch (_) {}
     // Restore property-type filter from sessionStorage
     try {
       const saved = sessionStorage.getItem('propTypeFilter');
@@ -6209,9 +6824,7 @@
     // Update the result count to show pricing coverage. Reflect the
     // availability filter so the count matches what the user actually sees
     // (otherwise we'd say "Showing 10 of 3497" while only ~150 cards render).
-    const visibleHotels = (_showAvailOnly && _hasDateSearch && _pricesLoaded)
-      ? _lastHotels.filter(hotelPassesAvailFilter)
-      : _lastHotels;
+    const visibleHotels = _lastHotels.length ? getSortedHotelsForDisplay() : _lastHotels;
     const total = visibleHotels.length;
     const showing = Math.min(_displayedCount, total);
     const remaining = total - _displayedCount;
@@ -6242,7 +6855,7 @@
   function syncSortMoreTriggerAccent() {
     const btn = document.getElementById('sortMoreTrigger');
     if (!btn) return;
-    const onSurface = _currentSort === 'match' || _currentSort === 'match+price';
+    const onSurface = _currentSort === 'match' || _currentSort === 'price' || _currentSort === 'match+price';
     btn.classList.toggle('sort-more-trigger--accent', !onSurface);
   }
 
@@ -7568,7 +8181,10 @@
   }
 
   function getSortedHotelsForDisplay() {
-    let hotels = [..._lastHotels].filter(hotelPassesAvailFilter).filter(hotelPassesFreeCancelFilter);
+    let hotels = [..._lastHotels]
+      .filter(hotelPassesAvailFilter)
+      .filter(hotelPassesFreeCancelFilter)
+      .filter(hotelPassesBudgetFilter);
     if (_nbhdFilter) {
       hotels = hotels.filter(h => h?.primary_nbhd?.name === _nbhdFilter);
     }
@@ -8151,7 +8767,7 @@
     });
   }
 
-  /** Desktop: filters stay in sort bar. Mobile: move both into nbhd strip. */
+  /** Desktop: filters stay in sort bar. Mobile: prop-type in nbhd strip; avail in fine-tune sheet. */
   function syncAvailFilterMount() {
     const avail        = document.getElementById('availFilter');
     const propType     = document.getElementById('propTypeFilter');
@@ -8159,11 +8775,11 @@
     const stripSlot    = document.getElementById('nbhd-refine-avail-slot');
     if (!desktopMount) return;
     const mobile = typeof window.matchMedia !== 'undefined' && window.matchMedia('(max-width: 640px)').matches;
-    [propType, avail].forEach(el => {
-      if (!el) return;
-      if (mobile && stripSlot) stripSlot.appendChild(el);
-      else desktopMount.appendChild(el);
-    });
+    if (propType) {
+      if (mobile && stripSlot) stripSlot.appendChild(propType);
+      else desktopMount.appendChild(propType);
+    }
+    if (avail) desktopMount.appendChild(avail);
   }
 
   window.addEventListener('resize', scheduleSyncAvailFilterMount);

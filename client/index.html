@@ -625,6 +625,32 @@
         <span class="vibe-row-label">Your vibe</span>
         <div class="vibe-row-main">
           <div class="vibe-chip-row" id="vibe-chip-row"></div>
+          <!-- Desktop nightly budget chip (mobile: wired in app.js, button hidden until later prompt) -->
+          <div class="budget-chip-wrap budget-chip-wrap--desktop" id="budgetChipWrap">
+            <button type="button" class="budget-chip-btn vibe-chip vibe-chip-empty" id="budgetChipBtn" onclick="toggleBudgetPop(event)" aria-expanded="false" aria-haspopup="dialog" aria-controls="budgetPop">Any budget</button>
+            <div class="budget-pop" id="budgetPop" role="dialog" aria-label="Nightly budget" aria-hidden="true" onclick="event.stopPropagation()">
+              <div class="budget-pop-title">Nightly budget</div>
+              <label class="budget-pop-opt"><input type="radio" name="budgetDraft" value="any" checked onchange="onBudgetDraftRadioChange()"> Any budget</label>
+              <label class="budget-pop-opt"><input type="radio" name="budgetDraft" value="under_150" onchange="onBudgetDraftRadioChange()"> Under $150</label>
+              <label class="budget-pop-opt"><input type="radio" name="budgetDraft" value="under_250" onchange="onBudgetDraftRadioChange()"> Under $250</label>
+              <label class="budget-pop-opt"><input type="radio" name="budgetDraft" value="under_400" onchange="onBudgetDraftRadioChange()"> Under $400</label>
+              <label class="budget-pop-opt"><input type="radio" name="budgetDraft" value="under_600" onchange="onBudgetDraftRadioChange()"> Under $600</label>
+              <label class="budget-pop-opt"><input type="radio" name="budgetDraft" value="luxury" onchange="onBudgetDraftRadioChange()"> Luxury only</label>
+              <div class="budget-pop-or" aria-hidden="true"><span>OR</span></div>
+              <div class="budget-pop-range">
+                <label class="budget-pop-range-field">
+                  <span class="budget-pop-range-label">Min</span>
+                  <input type="number" class="budget-pop-range-input" id="budgetDraftMin" min="0" step="1" inputmode="numeric" placeholder="Min" oninput="onBudgetDraftRangeInput()" />
+                </label>
+                <label class="budget-pop-range-field">
+                  <span class="budget-pop-range-label">Max</span>
+                  <input type="number" class="budget-pop-range-input" id="budgetDraftMax" min="0" step="1" inputmode="numeric" placeholder="Max" oninput="onBudgetDraftRangeInput()" />
+                </label>
+              </div>
+              <p class="budget-pop-hint" id="budgetPopHint" hidden>Add travel dates to filter by nightly rate.</p>
+              <button type="button" class="budget-pop-apply" onclick="applyBudgetFilter()">Apply</button>
+            </div>
+          </div>
           <div class="vibe-row-actions">
             <button type="button" class="vibe-search-btn" onclick="cmdSearch()" title="Re-run the current search">
               <span class="vibe-search-icon" aria-hidden="true">↻</span> Search
@@ -686,12 +712,10 @@
     <button type="button" class="sort-btn sort-btn--mob-surface active" data-sort="match" onclick="setSortBy('match')">Best Match</button>
     <!-- Match + Price hidden (May 2026) — restore button to re-enable; sort logic unchanged in app.js -->
     <!-- <button type="button" class="sort-btn sort-btn--mob-surface" data-sort="match+price" onclick="setSortBy('match+price')">Match + Price</button> -->
+    <button type="button" class="sort-btn sort-btn--mob-surface" data-sort="price" onclick="setSortBy('price')">Best Price</button>
     <div class="sort-more-wrap" id="sortMoreWrap">
       <button type="button" class="sort-more-trigger" id="sortMoreTrigger" onclick="toggleSortMorePop(event)" aria-expanded="false" aria-haspopup="true" aria-controls="sortMorePop">All<span class="sort-more-arr" aria-hidden="true"> ▾</span></button>
       <div class="sort-more-pop" id="sortMorePop" role="menu">
-        <button type="button" class="sort-btn" role="menuitem" data-sort="match" onclick="setSortBy('match')">Best Match</button>
-        <!-- <button type="button" class="sort-btn" role="menuitem" data-sort="match+price" onclick="setSortBy('match+price')">Match + Price</button> -->
-        <button type="button" class="sort-btn" role="menuitem" data-sort="price" onclick="setSortBy('price')">Best Price</button>
         <button type="button" class="sort-btn" role="menuitem" data-sort="rating" onclick="setSortBy('rating')">Guest Rating</button>
         <button type="button" class="sort-btn" role="menuitem" data-sort="stars" onclick="setSortBy('stars')">Stars</button>
       </div>
@@ -810,6 +834,27 @@
     </div>
     <div class="cmd-trip-sheet-ft">
       <button type="button" class="cmd-trip-sheet-apply" onclick="cmdApplyTripSheet(event)">Update results</button>
+    </div>
+  </div>
+</div>
+
+<!-- Mobile fine-tune preferences sheet (must-haves chip, ≤640px) -->
+<div class="fine-tune-sheet-host" id="fine-tune-sheet-host" hidden aria-hidden="true">
+  <div class="fine-tune-sheet-backdrop" onclick="closeFineTuneSheet(event)" aria-hidden="true"></div>
+  <div class="fine-tune-sheet" id="fine-tune-sheet" role="dialog" aria-modal="true" aria-labelledby="fine-tune-sheet-title" onclick="event.stopPropagation()">
+    <div class="fine-tune-top">
+      <div class="fine-tune-grabber" aria-hidden="true"></div>
+      <div class="fine-tune-hdr">
+        <h2 class="fine-tune-title" id="fine-tune-sheet-title">Fine-tune your <em>stay</em></h2>
+        <p class="fine-tune-sub">Add what matters most to you. We'll shape your results.</p>
+        <button type="button" class="fine-tune-close" onclick="closeFineTuneSheet(event)" aria-label="Close">×</button>
+      </div>
+    </div>
+    <div class="fine-tune-scroll" id="fine-tune-scroll"></div>
+    <div class="fine-tune-ft" id="fine-tune-ft">
+      <button type="button" class="fine-tune-clear" onclick="clearFineTuneDraft(event)">Clear all</button>
+      <span class="fine-tune-count" id="fine-tune-count" aria-live="polite">0 selected</span>
+      <button type="button" class="fine-tune-apply" onclick="applyFineTunePreferences(event)">Apply preferences</button>
     </div>
   </div>
 </div>
