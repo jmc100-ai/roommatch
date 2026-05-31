@@ -237,6 +237,33 @@
     return list.slice(1, 1 + limit);
   }
 
+  /** Top Picks + More Hotels — may rank outside sync meta top-N; always prefetch these. */
+  function getCuratedHighlightHotelIds(sorted) {
+    const list = sorted || [];
+    const picks = selectTopPicks(list);
+    const more = selectMoreHotels(list, picks, MORE_HOTELS_COUNT);
+    const out = [];
+    const seen = new Set();
+    const add = (h) => {
+      const id = hotelKey(h);
+      if (!id || seen.has(id)) return;
+      seen.add(id);
+      out.push(id);
+    };
+    add(picks.overall);
+    add(picks.room_match);
+    add(picks.area_fit);
+    add(picks.stylish);
+    for (const h of more) add(h);
+    return out;
+  }
+
+  function repaintCuratedPanel() {
+    if (!isV2Mode() || getV2Subview() !== VIEW_CURATED) return;
+    if (document.getElementById('st-results')?.classList.contains('results-pending')) return;
+    paintV2Panel();
+  }
+
   function overallMatchPct(h) {
     if (!h) return 0;
     const b = bridge();
@@ -271,11 +298,14 @@
     const b = bridge();
     const sym = b ? b.ratesCurrencySymbol() : '$';
     const ui = b?.getSearchUiState?.() || {};
+    const datesEntered = !!(ui.datesEntered || ui.hasDateSearch);
     if (h?.price != null && Number.isFinite(Number(h.price))) {
       return `From ${sym}${Number(h.price).toLocaleString()} / night`;
     }
-    if (ui.hasDateSearch && !ui.pricesLoaded) return 'Checking rates…';
-    if (ui.hasDateSearch) return 'Add dates for rates';
+    if (datesEntered && (ui.fetchingPrices || (!ui.pricesLoaded && !ui.ratesFetchDone))) {
+      return 'Checking rates…';
+    }
+    if (datesEntered && ui.pricesLoaded) return 'No rates for your dates';
     return 'Add dates for rates';
   }
 
@@ -705,21 +735,9 @@
     openSeeAllFullList();
   }
 
+  /** Top-pick / more-hotels cards — same full detail page as classic search cards. */
   function openOffer(hotelId, pickId) {
-    const b = bridge();
-    if (!b) return;
-    _scrollRestoreY = window.scrollY || 0;
-    _offerState = { hotelId, pickId };
-    const root = document.getElementById('st-v2-hotel-offer');
-    if (!root) return;
-    if (document.body) document.body.classList.add('has-v2-hotel-offer');
-    root.hidden = false;
-    root.setAttribute('aria-hidden', 'false');
-    renderOfferSheet(hotelId, pickId);
-    window.scrollTo(0, 0);
-    try {
-      history.pushState({ v2Offer: hotelId, pick: pickId }, '', location.pathname + location.search);
-    } catch (_) {}
+    openFullDetail(hotelId, pickId);
   }
 
   function closeOffer(opts) {
@@ -740,9 +758,31 @@
     }
   }
 
-  function openFullDetail(hotelId) {
+  function findHotelById(hotelId) {
+    const id = String(hotelId);
     const b = bridge();
-    if (b?.openHotelDetailPage) b.openHotelDetailPage(hotelId);
+    return (b?.getLastHotels?.() || []).find((h) => hotelKey(h) === id)
+      || (_ctx?.sortedHotels || []).find((h) => hotelKey(h) === id)
+      || null;
+  }
+
+  /** Pick context + metric for blended hotel detail (full page + search rooms). */
+  function buildDetailPageOpts(hotelId, pickId) {
+    if (!pickId) return {};
+    const hotel = findHotelById(hotelId);
+    const slot = PICK_SLOTS.find((s) => s.id === pickId) || PICK_SLOTS[0];
+    return {
+      sr2_pick: pickId,
+      sr2_badge: slot.badge,
+      sr2_metric_label: slot.metricLabel,
+      sr2_match_pct: pickMetricPct(hotel, pickId),
+    };
+  }
+
+  function openFullDetail(hotelId, pickId) {
+    const b = bridge();
+    if (!b?.openHotelDetailPage) return;
+    b.openHotelDetailPage(hotelId, buildDetailPageOpts(hotelId, pickId));
   }
 
   function openVibeTour(hotelId) {
@@ -815,6 +855,8 @@
     pickMetricPct,
     overallMatchPct,
     selectMoreHotels,
+    getCuratedHighlightHotelIds,
+    repaintCuratedPanel,
     MORE_HOTELS_COUNT,
     getV2Subview,
     resetToCuratedView,

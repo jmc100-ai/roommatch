@@ -124,7 +124,10 @@
   let _ratesArrivalPromise = null;
   let _ratesArrivalResolve = null;
   let _initialRenderHappened = false;
-  const RATES_GATE_TIMEOUT_MS = 5000;
+  /** First paint waits for /api/rates (Mexico City can take 10–20s). */
+  const RATES_GATE_TIMEOUT_MS = 20000;
+  const RATES_GATE_POLL_MS = 250;
+  let _ratesFetchDone = false;
   /** Hard cap so "Checking live rates…" cannot spin forever if /api/rates hangs. */
   const FETCH_RATES_TIMEOUT_MS = 120000;
   let _ratesStatusFadeTimers = [];
@@ -161,6 +164,295 @@
   function _parallelRatesEnabled() {
     const v = window._PARALLEL_RATES;
     return v === '1' || v === 1 || v === true;
+  }
+
+  function _userHasTravelDates() {
+    return !!(S.checkin && S.checkout && S.checkin < S.checkout);
+  }
+
+  function _refreshV2CuratedAfterRates() {
+    try {
+      window.SearchResultsV2?.repaintCuratedPanel?.();
+    } catch (_) { /* V2 optional */ }
+    repaintHotelDetailRoomsIfOpen();
+  }
+
+  function _searchHotelForDetail(hotelId) {
+    if (!hotelId) return null;
+    const id = String(hotelId);
+    return (_lastHotels || []).find((h) => h && String(h.id) === id) || null;
+  }
+
+  function _hotelDetailRoomsInnerHTML(searchHotel, pageOpts) {
+    if (!searchHotel || !(searchHotel.roomTypes || []).length) return '';
+    const pickKind = pageOpts?.sr2_pick || null;
+    let rooms = sortRoomsForCard([...(searchHotel.roomTypes || [])], searchHotel);
+    if (pickKind === 'room_match' && rooms.length > 1) {
+      rooms = [...rooms].sort((a, b) => (b.score || 0) - (a.score || 0));
+    }
+    const isStub = (searchHotel.roomTypes || []).length === 0;
+    const hasHotelAvail = searchHotel.price != null;
+    const notice = (isStub && hasHotelAvail && _showAvailOnly && _hasDateSearch && _pricesLoaded)
+      ? '<div class="no-avail-notice">Available for your dates — room photos not in our visual index yet</div>'
+      : '';
+    return roomsSectionHTML(
+      rooms,
+      searchHotel.hotelScore ?? searchHotel.vectorScore,
+      searchHotel.roomPrices,
+      _hasDateSearch,
+      notice,
+      -1,
+      searchHotel
+    );
+  }
+
+  function hotelDetailPickContextHTML(pageOpts) {
+    if (!pageOpts?.sr2_pick || pageOpts.sr2_badge == null) return '';
+    const pct = pageOpts.sr2_match_pct != null ? Math.round(pageOpts.sr2_match_pct) : 0;
+    return `<div class="hpage-pick-context hpage-pick-context--inline" role="status">
+      <span class="hpage-pick-ring" aria-label="${pct} percent match">${pct}%</span>
+      <div>
+        <p class="hpage-pick-title">${escHtml(pageOpts.sr2_badge)}</p>
+        <p class="hpage-pick-sub">${escHtml(pageOpts.sr2_metric_label || '')} for this search</p>
+      </div>
+    </div>`;
+  }
+
+  const FACT_LABEL_OVERRIDES = {
+    private_balcony: 'Balcony or view',
+    ergonomic_workspace: 'Work desk',
+    double_sinks: 'Double sinks',
+    walk_in_shower: 'Walk-in shower',
+    rainfall_shower: 'Rainfall shower',
+    soaking_tub: 'Soaking tub',
+    bathtub: 'Bathtub',
+    visual_style_sleek_polished: 'Sleek & polished',
+    visual_style_cozy_warm: 'Warm & cozy',
+    visual_style_vibrant_eclectic: 'Distinct & characterful',
+    area_pool: 'Pool',
+    area_bar: 'Bar / lounge',
+    area_rooftop: 'Rooftop',
+  };
+
+  function humanizeFactKeyClient(factKey) {
+    if (!factKey) return '';
+    if (FACT_LABEL_OVERRIDES[factKey]) return FACT_LABEL_OVERRIDES[factKey];
+    return String(factKey)
+      .replace(/^visual_style_/, '')
+      .replace(/^area_/, '')
+      .replace(/_/g, ' ')
+      .replace(/\b\w/g, (c) => c.toUpperCase());
+  }
+
+  /** Phase-1 fallback when match_breakdown is missing from the hotel row. */
+  function clientMatchBreakdownFromHotel(h) {
+    if (!h) return null;
+    const roomPct = roomVibeMatchDisplayPct(h);
+    const hotelPct = h.hotelScore != null ? Math.round(h.hotelScore) : null;
+    const nbhdPct = h.nbhd_fit_pct != null ? Math.round(h.nbhd_fit_pct) : null;
+    const wNbhdBase = typeof _lastVsearchStats?.nbhd_rank_weight === 'number'
+      ? _lastVsearchStats.nbhd_rank_weight
+      : 0;
+    const wNbhd = effectiveNbhdWeightForPriceMatters(wNbhdBase, boopPriceMattersForSort());
+    const overallPct = overallMatchDisplayPct(h);
+    const mustKeys = [...(S.mustHaves || [])];
+    const detected = _lastVsearchStats?.detected_fact_keys || [];
+    const must_haves = mustKeys.map((fact_key) => ({
+      fact_key,
+      label: humanizeFactKeyClient(fact_key),
+      status: 'none',
+    }));
+    const met = 0;
+    return {
+      overall_pct: overallPct,
+      room_pct: roomPct,
+      hotel_pct: hotelPct,
+      nbhd_pct: nbhdPct,
+      must_haves_summary: mustKeys.length ? { met, total: mustKeys.length } : null,
+      must_haves,
+      query_features: detected
+        .filter((fk) => !mustKeys.includes(fk))
+        .slice(0, 6)
+        .map((fact_key) => ({ fact_key, label: humanizeFactKeyClient(fact_key), pct: 0 })),
+      hotel_character_facts: [],
+      nbhd_signals: null,
+      primary_nbhd_name: h.primary_nbhd?.name || null,
+      _client_fallback: true,
+    };
+  }
+
+  function resolveMatchBreakdown(searchHotel) {
+    if (!searchHotel) return null;
+    if (searchHotel.match_breakdown) return searchHotel.match_breakdown;
+    return clientMatchBreakdownFromHotel(searchHotel);
+  }
+
+  function hpageVibeBarRow(label, pct, opts) {
+    opts = opts || {};
+    if (pct == null || pct < 0) return '';
+    const v = Math.max(0, Math.min(100, Math.round(pct)));
+    const dim = opts.dim ? ' hpage-vibe-bar-row--dim' : '';
+    const sub = opts.sub ? `<span class="hpage-vibe-bar-sub">${escHtml(opts.sub)}</span>` : '';
+    return `<div class="hpage-vibe-bar-row${dim}">
+      <div class="hpage-vibe-bar-head">
+        <span class="hpage-vibe-bar-label">${escHtml(label)}</span>
+        <span class="hpage-vibe-bar-val">${v}%</span>
+      </div>
+      <div class="hpage-vibe-bar-track" aria-hidden="true"><i style="width:${v}%"></i></div>
+      ${sub}
+    </div>`;
+  }
+
+  function hotelDetailBoopPillsHTML() {
+    const profile = getEffectiveBoopProfileForScoring();
+    const answers = profile?.answers || {};
+    const pills = [];
+    const nbhdOpt = BOOP_QUESTIONS.find((q) => q.id === 'nbhdScene')?.options
+      ?.find((o) => o.id === answers.nbhdScene);
+    if (nbhdOpt) pills.push(nbhdOpt.title || nbhdOpt.label);
+    const vibeOpt = BOOP_QUESTIONS.find((q) => q.id === 'stayVibe')?.options
+      ?.find((o) => o.id === answers.stayVibe);
+    if (vibeOpt) pills.push(vibeOpt.title || vibeOpt.label);
+    const mustQ = BOOP_QUESTIONS.find((q) => q.id === 'musthaves');
+    const picked = new Set(answers.musthaves || []);
+    (mustQ?.options || []).filter((o) => picked.has(o.id)).forEach((o) => pills.push(o.label));
+    if (!pills.length) return '';
+    return `<div class="hpage-vibe-boop">
+      <div class="hpage-vibe-boop-label">Your Boop</div>
+      <div class="hpage-vibe-boop-pills">${pills.map((p) => `<span class="hpage-vibe-pill">${escHtml(p)}</span>`).join('')}</div>
+    </div>`;
+  }
+
+  function hotelDetailMustHaveChipsHTML(mb) {
+    const items = mb?.must_haves || [];
+    if (!items.length) return '';
+    const summary = mb.must_haves_summary;
+    const head = summary
+      ? `Must-haves <span class="hpage-vibe-must-count">${summary.met}/${summary.total} met</span>`
+      : 'Must-haves';
+    const chips = items.map((m) => {
+      const cls = m.status === 'met' ? 'hpage-must-chip--met' : 'hpage-must-chip--miss';
+      const icon = m.status === 'met' ? '✓' : '—';
+      return `<span class="hpage-must-chip ${cls}">${icon} ${escHtml(m.label)}</span>`;
+    }).join('');
+    return `<div class="hpage-vibe-must">
+      <div class="hpage-vibe-subtitle">${head}</div>
+      <div class="hpage-must-chips">${chips}</div>
+    </div>`;
+  }
+
+  function hotelDetailVibeBreakdownHTML(searchHotel, pageOpts) {
+    const mb = resolveMatchBreakdown(searchHotel);
+    if (!mb) return '';
+
+    const overall = mb.overall_pct != null ? Math.round(mb.overall_pct) : null;
+    const pickBanner = hotelDetailPickContextHTML(pageOpts);
+    const nbhdSub = mb.primary_nbhd_name || searchHotel?.primary_nbhd?.name || '';
+
+    let hotelBarLabel = 'Hotel character';
+    const topChar = (mb.hotel_character_facts || [])[0];
+    if (topChar?.label) hotelBarLabel = `Hotel · ${topChar.label}`;
+
+    const pillarItems = [
+      hpageVibeBarRow('Room vibe', mb.room_pct),
+      mb.hotel_pct != null ? hpageVibeBarRow(hotelBarLabel, mb.hotel_pct) : '',
+      mb.nbhd_pct != null
+        ? hpageVibeBarRow('Neighbourhood', mb.nbhd_pct, { sub: nbhdSub })
+        : '',
+    ];
+    if (mb.must_haves_summary?.total > 0) {
+      const { met, total } = mb.must_haves_summary;
+      pillarItems.push(
+        hpageVibeBarRow(
+          'Must-haves',
+          Math.round((met / total) * 100),
+          { sub: `${met}/${total} met` }
+        )
+      );
+    }
+    const pillarFiltered = pillarItems.filter(Boolean);
+    const pillarsVisible = pillarFiltered.slice(0, 3).join('');
+    const pillarsExtra = pillarFiltered.slice(3).join('');
+
+    const ns = mb.nbhd_signals;
+    const nbhdSignalsHTML = ns
+      ? `<div class="hpage-vibe-nbhd-signals">
+          <div class="hpage-vibe-subtitle">Neighbourhood signals${nbhdSub ? ` · ${escHtml(nbhdSub)}` : ''}</div>
+          ${hpageVibeBarRow('Walkability', ns.walkability, { dim: true })}
+          ${hpageVibeBarRow('Trendy & cafés', ns.trendy_cafes, { dim: true })}
+          ${hpageVibeBarRow('Culture & landmarks', ns.culture_landmarks, { dim: true })}
+          ${hpageVibeBarRow('Nightlife', ns.nightlife, { dim: true })}
+          ${hpageVibeBarRow('Calm & green', ns.calm_green, { dim: true })}
+        </div>`
+      : '';
+
+    const charFacts = (mb.hotel_character_facts || []).slice(0, 5);
+    const charHTML = charFacts.length
+      ? `<div class="hpage-vibe-char-facts">
+          <div class="hpage-vibe-subtitle">Hotel style signals</div>
+          ${charFacts.map((f) => hpageVibeBarRow(f.label, f.pct, { dim: true })).join('')}
+        </div>`
+      : '';
+
+    const qFeat = (mb.query_features || []).filter((f) => f.pct > 0).slice(0, 4);
+    const queryFeatHTML = qFeat.length
+      ? `<div class="hpage-vibe-query-feats">
+          <div class="hpage-vibe-subtitle">Search features detected</div>
+          ${qFeat.map((f) => hpageVibeBarRow(f.label, f.pct, { dim: true })).join('')}
+        </div>`
+      : '';
+
+    const fallbackNote = mb._client_fallback
+      ? '<p class="hpage-vibe-note">Run a vibe search to see full must-have and neighbourhood signal detail.</p>'
+      : '';
+
+    const moreParts = [
+      pillarsExtra ? `<div class="hpage-vibe-pillars">${pillarsExtra}</div>` : '',
+      hotelDetailMustHaveChipsHTML(mb),
+      nbhdSignalsHTML,
+      charHTML,
+      queryFeatHTML,
+      hotelDetailBoopPillsHTML(),
+      fallbackNote,
+    ].filter(Boolean);
+    const moreCount = moreParts.length;
+    const expandBtnHTML = moreCount > 0
+      ? `<button type="button" class="hpage-vibe-expand-btn" data-more-count="${moreCount}" onclick="toggleHpageVibeDetails(this)" aria-expanded="false" aria-controls="hpage-vibe-more">Show all match details (${moreCount} more)</button>`
+      : '';
+    const moreHTML = moreCount > 0
+      ? `<div class="hpage-vibe-more" id="hpage-vibe-more" hidden>${moreParts.join('')}</div>${expandBtnHTML}`
+      : '';
+
+    return `<section class="hp-section hpage-vibe-breakdown" aria-labelledby="hpage-vibe-breakdown-title">
+      <div class="hpage-vibe-breakdown-head">
+        <div>
+          <h2 id="hpage-vibe-breakdown-title" class="hpage-vibe-title">How this hotel matches your vibe</h2>
+          <p class="hpage-vibe-lead">Based on your search${getEffectiveBoopProfileForScoring() ? ' and Boop profile' : ''}</p>
+        </div>
+        ${overall != null ? `<div class="hpage-vibe-overall-ring" aria-label="${overall} percent overall match">${overall}%<span>overall</span></div>` : ''}
+      </div>
+      ${pickBanner}
+      <div class="hpage-vibe-pillars">${pillarsVisible}</div>
+      ${moreHTML}
+    </section>`;
+  }
+
+  function hotelDetailRoomsSectionHTML(searchHotel, pageOpts) {
+    const inner = _hotelDetailRoomsInnerHTML(searchHotel, pageOpts);
+    if (!inner) return '';
+    const title = pageOpts?.sr2_pick ? 'Rooms for your vibe' : 'Rooms';
+    return `<div class="hp-section hpage-rooms-wrap">
+      <div class="hp-section-title">${title}</div>
+      <div class="hpage-rooms" id="hpage-rooms">${inner}</div>
+    </div>`;
+  }
+
+  function repaintHotelDetailRoomsIfOpen() {
+    if (!_detailHotelId) return;
+    const searchHotel = _searchHotelForDetail(_detailHotelId);
+    const roomsEl = document.getElementById('hpage-rooms');
+    if (!roomsEl || !searchHotel) return;
+    repaintHotelDetailPageRooms();
   }
 
   /** Append UTM + tb_distinct to any LiteAPI WL URL so we can attribute booking
@@ -5377,34 +5669,49 @@
 
     const t0 = Date.now();
     const ratesP = _ratesArrivalPromise || Promise.resolve();
+    const deadline = t0 + RATES_GATE_TIMEOUT_MS;
     await Promise.race([
       ratesP,
-      new Promise(r => setTimeout(r, RATES_GATE_TIMEOUT_MS))
+      (async () => {
+        while (Date.now() < deadline) {
+          if (_pricesLoaded || (_ratesFetchDone && !_fetchingPrices)) return;
+          await new Promise((r) => setTimeout(r, RATES_GATE_POLL_MS));
+        }
+      })(),
     ]);
     const waited = Date.now() - t0;
     if (waited > 50) {
       console.log(
-        `[reveal] gated render waited ${waited}ms for rates (loaded=${_pricesLoaded} availOnly=${_showAvailOnly})`
+        `[reveal] gated render waited ${waited}ms for rates (loaded=${_pricesLoaded} done=${_ratesFetchDone} fetching=${_fetchingPrices} availOnly=${_showAvailOnly})`
       );
     }
 
     await finishPaint();
   }
 
+  function _ratesStatusMessage() {
+    if (_pricesLoaded) return { state: 'done', text: '✓ Live rates' };
+    if (_fetchingPrices) return { state: 'loading', text: 'Checking live rates…' };
+    if (_ratesFetchDone && _userHasTravelDates()) {
+      return { state: '', text: 'Rates unavailable — add dates again or sort by match' };
+    }
+    return { state: '', text: '' };
+  }
+
   /** Clear #ratesStatus loading spinner when this rates request is finished. */
   function _resolveRatesLoadingUi() {
     const el = document.getElementById('ratesStatus');
     if (!el?.classList.contains('loading')) return false;
-    if (_pricesLoaded) _setRatesStatus('done', '✓ Live rates');
-    else _setRatesStatus('', 'Rates unavailable — add dates again or sort by match');
+    const msg = _ratesStatusMessage();
+    _setRatesStatus(msg.state, msg.text);
     return true;
   }
 
   /** After first results paint, align #ratesStatus with whether prices already landed. */
   function _syncRatesStatusAfterReveal() {
     if (_resolveRatesLoadingUi()) return;
-    if (_pricesLoaded) _setRatesStatus('done', '✓ Live rates');
-    else if (!_fetchingPrices && S.checkin && S.checkout) _setRatesStatus('', '');
+    const msg = _ratesStatusMessage();
+    if (msg.text) _setRatesStatus(msg.state, msg.text);
   }
 
   function startSearch() {
@@ -6192,6 +6499,7 @@
     _pricesLoaded   = false;
     _fetchingPrices = !!hasDates;
     _hasDateSearch  = false;
+    _ratesFetchDone = false;
     _showAvailOnly  = false;
     // Reset the gated-first-render machinery for this search. When dates are
     // entered we create a fresh rates-arrival promise that fetchPrices() will
@@ -6285,6 +6593,8 @@
   }
 
   async function fetchPrices(city, checkin, checkout, reqId, hotelIds = [], ratesPrefetch = null) {
+    const hadDates = !!(checkin && checkout && checkin < checkout);
+    _ratesFetchDone = false;
     _setPriceBtnsState(false);  // show spinner only while fetch is in flight
     _setRatesStatus('loading', 'Checking live rates…');
     // Signals revealResultsWhenReady() that rates have landed (success OR
@@ -6315,7 +6625,8 @@
         if (!resp.ok) {
           _fetchingPrices = false;
           for (const h of _lastHotels) { h.price = null; }
-          _pricesLoaded = true;
+          _pricesLoaded = false;
+          _hasDateSearch = hadDates;
           _setPriceBtnsState(true);
           _setRatesStatus('', 'Rates unavailable — add dates again or sort by match');
           return;
@@ -6327,7 +6638,8 @@
       if (payload?.error) {
         _fetchingPrices = false;
         for (const h of _lastHotels) { h.price = null; }
-        _pricesLoaded = true;
+        _pricesLoaded = false;
+        _hasDateSearch = hadDates;
         _setPriceBtnsState(true);
         _setRatesStatus('', 'Rates unavailable — add dates again or sort by match');
         return;
@@ -6349,19 +6661,24 @@
       if (reqId === _ratesReqId) {
         _fetchingPrices = false;
         for (const h of _lastHotels) { h.price = null; }
-        _pricesLoaded = true;
+        _pricesLoaded = false;
+        _hasDateSearch = hadDates;
         _setPriceBtnsState(true);
         _setRatesStatus('', 'Rates unavailable — add dates again or sort by match');
         updateFreeCancelHint();
+        _refreshV2CuratedAfterRates();
       }
     } finally {
       _signalRatesArrived();
       // Safety net: if applyPrices returned early (before first paint) or threw,
       // ensure the loading label/spinner cannot stick after this request ends.
       if (reqId === _ratesReqId) {
+        _ratesFetchDone = true;
         _fetchingPrices = false;
-        _setPriceBtnsState(_pricesLoaded);
-        _resolveRatesLoadingUi();
+        _setPriceBtnsState(true);
+        const msg = _ratesStatusMessage();
+        if (msg.text) _setRatesStatus(msg.state, msg.text);
+        _refreshV2CuratedAfterRates();
       }
     }
   }
@@ -6424,7 +6741,8 @@
         bindFeaturedStripNavs(roomsEl);
       }
     }
-
+    window.SearchResultsV2?.repaintCuratedPanel?.();
+    repaintHotelDetailRoomsIfOpen();
   }
 
   // ── Lazy hotel-meta fetch ──────────────────────────────────────────────────
@@ -6491,7 +6809,24 @@
       ? getSortedHotelsForDisplay()
       : _lastHotels;
     const allStubs = ranked.filter(h => h?.id && Array.isArray(h.roomTypes) && h.roomTypes.length === 0);
-    const targets = allStubs.slice(0, MAX_PREFETCH).map(h => String(h.id));
+    const targets = [];
+    const seen = new Set();
+    const pushStub = (h) => {
+      if (!h?.id || !Array.isArray(h.roomTypes) || h.roomTypes.length !== 0) return;
+      const sid = String(h.id);
+      if (seen.has(sid)) return;
+      seen.add(sid);
+      targets.push(sid);
+    };
+    const byId = new Map(ranked.map((h) => [String(h.id), h]));
+    for (const sid of curatedHighlightIdList()) {
+      const h = byId.get(sid) || _lastHotels.find((x) => String(x.id) === sid);
+      if (h) pushStub(h);
+    }
+    for (const h of allStubs) {
+      pushStub(h);
+      if (targets.length >= MAX_PREFETCH) break;
+    }
     console.log(`[stub-prefetch] _lastHotels=${_lastHotels.length}, stubs=${allStubs.length}, prefetching=${targets.length}`);
     if (!targets.length) return;
     const ourReqId = ++_visibleStubReqId;
@@ -6509,6 +6844,7 @@
       if (ourReqId !== _visibleStubReqId || searchReqId !== _ratesReqId) { console.log('[stub-prefetch] stale after json, bailing'); return; }
       const merged = d?.hotels ? applyStubRoomsInPlace(d.hotels) : 0;
       console.log(`[stub-prefetch] merged=${merged} in ${Date.now()-t0}ms total`);
+      if (merged > 0) window.SearchResultsV2?.repaintCuratedPanel?.();
     } catch (e) { console.warn('[stub-prefetch] error:', e.message); }
   }
 
@@ -6703,34 +7039,60 @@
     heroEl.innerHTML = heroImgs;
   }
 
+  function hotelNeedsLiteMeta(h) {
+    if (!h?.id) return false;
+    const sid = String(h.id);
+    return isPlaceholderHotelTitle(h.name, sid) || !h.mainPhoto;
+  }
+
+  function curatedHighlightIdList() {
+    const SR = window.SearchResultsV2;
+    if (!SR?.getCuratedHighlightHotelIds || typeof getSortedHotelsForDisplay !== 'function') return [];
+    return SR.getCuratedHighlightHotelIds(getSortedHotelsForDisplay());
+  }
+
   function prioritizeMetaIds(deferredIds) {
     const urgent = [];
     const urgentSet = new Set();
     const ranked = (_lastHotels.length && typeof getSortedHotelsForDisplay === 'function')
       ? getSortedHotelsForDisplay()
       : _lastHotels;
+    const pushUrgent = (sid) => {
+      if (!sid || urgentSet.has(sid)) return;
+      urgentSet.add(sid);
+      urgent.push(sid);
+    };
+    for (const sid of curatedHighlightIdList()) {
+      const h = ranked.find((x) => x && String(x.id) === sid);
+      if (!h || hotelNeedsLiteMeta(h)) pushUrgent(sid);
+    }
     for (const h of ranked.slice(0, 50)) {
       if (!h?.id) continue;
       const sid = String(h.id);
-      if (!h.mainPhoto || isPlaceholderHotelTitle(h.name, sid)) {
-        if (!urgentSet.has(sid)) {
-          urgentSet.add(sid);
-          urgent.push(sid);
-        }
-      }
+      if (hotelNeedsLiteMeta(h)) pushUrgent(sid);
     }
     const rest = (deferredIds || []).filter((id) => !urgentSet.has(String(id)));
     return urgent.length ? [...urgent, ...rest] : rest;
   }
 
-  /** Lazy-fetch LiteAPI names/photos for visible Best Match top cards missing meta. */
+  /** Lazy-fetch LiteAPI names/photos for visible cards missing meta (incl. Top Picks). */
   function lazyFetchSortedTopMeta() {
     if (!_lastHotels.length || typeof getSortedHotelsForDisplay !== 'function') return;
     const ids = [];
-    for (const h of getSortedHotelsForDisplay().slice(0, 30)) {
-      if (!h?.id) continue;
-      const sid = String(h.id);
-      if (isPlaceholderHotelTitle(h.name, sid) || !h.mainPhoto) ids.push(sid);
+    const seen = new Set();
+    const push = (sid) => {
+      if (!sid || seen.has(sid)) return;
+      seen.add(sid);
+      ids.push(sid);
+    };
+    const ranked = getSortedHotelsForDisplay();
+    const byId = new Map(ranked.map((h) => [String(h.id), h]));
+    for (const sid of curatedHighlightIdList()) {
+      const h = byId.get(sid) || _lastHotels.find((x) => String(x.id) === sid);
+      if (!h || hotelNeedsLiteMeta(h)) push(sid);
+    }
+    for (const h of ranked.slice(0, 30)) {
+      if (hotelNeedsLiteMeta(h)) push(String(h.id));
     }
     if (ids.length) lazyFetchHotelMeta(ids, _ratesReqId);
   }
@@ -6802,6 +7164,8 @@
   // subsequent re-renders (sort, filter) keep the metadata.
   function applyMetaInPlace(metaMap) {
     if (!metaMap || typeof metaMap !== 'object') return;
+    const highlightSet = new Set(curatedHighlightIdList());
+    let repaintCurated = false;
     for (const h of _lastHotels) {
       const sid = String(h.id);
       const m = metaMap[sid] ?? metaMap[h.id];
@@ -6853,7 +7217,9 @@
           }
         }
       }
+      if (highlightSet.has(sid)) repaintCurated = true;
     }
+    if (repaintCurated) window.SearchResultsV2?.repaintCuratedPanel?.();
   }
 
   function applyPrices(priceMap, roomPriceMap, currency, pricedCount, ratesData = {}) {
@@ -6962,6 +7328,7 @@
       ? `Showing ${showing} of ${total} hotels${pricedNote}`
       : `${total} hotel${total !== 1 ? 's' : ''}${pricedNote}`;
     syncVibeSearchAlignment();
+    _refreshV2CuratedAfterRates();
   }
 
   function closeSortMorePop() {
@@ -9179,6 +9546,8 @@
   // Saved view state so closing the detail page restores the user's prior
   // results/discovery view + scroll position without re-running search.
   let _detailReturnState = null;      // { results: bool, scrollY: number }
+  let _detailPageOpts = null;         // sr2 pick context + preserved for room repaint
+  let _hpageOtherRoomIdx = null;      // expanded other-room index (1+), null = panel closed
   let _hpCarouselIdx  = 0;
   let _hpLightboxIdx  = 0;
   let _hpLightboxUrls = [];
@@ -9217,6 +9586,7 @@
         hotel_id:  String(hotelId),
         from_pop:  !!fromPop,
         scroll_to: scrollTo || null,
+        sr2_pick:  opts.sr2_pick || null,
         city:      (S && S.city) || null,
       });
     } catch (_) {}
@@ -9226,6 +9596,13 @@
       if (scrollTo === 'reviews') _hpScrollToReviews({ smooth: true });
       return;
     }
+
+    _detailPageOpts = {
+      sr2_pick: opts.sr2_pick || null,
+      sr2_badge: opts.sr2_badge || null,
+      sr2_metric_label: opts.sr2_metric_label || null,
+      sr2_match_pct: opts.sr2_match_pct != null ? opts.sr2_match_pct : null,
+    };
 
     // Capture return state on first transition into the page (not on popstate forward).
     if (!fromPop) {
@@ -9237,6 +9614,7 @@
 
     _detailHotelId   = hotelId;
     _detailHotelData = null;
+    _hpageOtherRoomIdx = null;
     _hpCarouselIdx   = 0;
     _hpLightboxIdx   = 0;
 
@@ -9256,7 +9634,13 @@
     if (!fromPop) {
       const href = _detailHrefFor(hotelId);
       try {
-        history.pushState({ hotelDetail: hotelId }, '', href);
+        history.pushState({
+          hotelDetail: hotelId,
+          sr2_pick: _detailPageOpts.sr2_pick,
+          sr2_badge: _detailPageOpts.sr2_badge,
+          sr2_metric_label: _detailPageOpts.sr2_metric_label,
+          sr2_match_pct: _detailPageOpts.sr2_match_pct,
+        }, '', href);
       } catch (_) {}
     }
 
@@ -9271,7 +9655,8 @@
       const data = await _detailInflight.get(hotelId);
       if (_detailHotelId !== hotelId) return; // user navigated away
       _detailHotelData = data;
-      root.innerHTML = hotelDetailPageHTML(data);
+      root.innerHTML = hotelDetailPageHTML(data, _detailPageOpts);
+      hpageSyncOtherRoomActiveStates();
       _attachHpReviewsObserver(hotelId);
       // Defer scroll to reviews until after layout settles.
       if (scrollTo === 'reviews') {
@@ -9321,6 +9706,8 @@
       window.scrollTo(0, 0);
     }
     _detailReturnState = null;
+    _detailPageOpts = null;
+    _hpageOtherRoomIdx = null;
 
     // Reset URL to root (or wherever we returned to).
     if (!fromPop) {
@@ -9336,7 +9723,16 @@
     if (onDetailUrl) {
       // Forward into a hotel page (e.g. user pressed Forward).
       const id = _detailHotelIdFromPath();
-      if (id && id !== _detailHotelId) openHotelDetailPage(id, { _fromPopstate: true });
+      if (id && id !== _detailHotelId) {
+        const st = history.state || {};
+        openHotelDetailPage(id, {
+          _fromPopstate: true,
+          sr2_pick: st.sr2_pick || null,
+          sr2_badge: st.sr2_badge || null,
+          sr2_metric_label: st.sr2_metric_label || null,
+          sr2_match_pct: st.sr2_match_pct != null ? st.sr2_match_pct : null,
+        });
+      }
     } else if (_detailHotelId) {
       // Back out of a hotel page.
       closeHotelDetailPage({ _fromPopstate: true });
@@ -9379,10 +9775,10 @@
     return `<div class="hp-address-row"><span class="hp-address-pin" aria-hidden="true">📍</span><span class="hp-address-text">${escHtml(line)}</span>${mapLink}</div>`;
   }
 
-  function _hpMosaicCellHTML(url, idx, extraClass, showAllBtn) {
+  function _hpMosaicCellHTML(url, idx, extraClass, showAllBtn, photoTotal) {
     if (!url) return `<div class="hp-mosaic-cell hp-mosaic-empty ${extraClass || ''}" aria-hidden="true"></div>`;
     const showAll = showAllBtn
-      ? `<span class="hp-mosaic-show-all" onclick="event.stopPropagation();openHpLightbox(0)">Show all pictures</span>`
+      ? `<span class="hp-mosaic-show-all" onclick="event.stopPropagation();openHpLightbox(0)"><span class="hp-mosaic-show-all-icon" aria-hidden="true">📷</span> View all photos (${photoTotal || ''})</span>`
       : '';
     return `<button type="button" class="hp-mosaic-cell ${extraClass || ''}" onclick="openHpLightbox(${idx})" aria-label="View photo ${idx + 1}">
       <img src="${escHtml(url)}" alt="" loading="${idx === 0 ? 'eager' : 'lazy'}" onerror="this.parentElement.classList.add('hp-mosaic-empty')">
@@ -9412,16 +9808,430 @@
     if (!n) return `<div class="hp-hero-placeholder"></div>`;
     const countClass = `hp-mosaic--count-${Math.min(n, 5)}`;
     const showAllOnLast = n > 1;
+    const total = n;
     if (n === 1) {
-      return `<div class="hp-mosaic ${countClass}">${_hpMosaicCellHTML(allPhotos[0], 0, 'hp-mosaic-main', false)}</div>`;
+      return `<div class="hp-mosaic ${countClass}">${_hpMosaicCellHTML(allPhotos[0], 0, 'hp-mosaic-main', false, total)}</div>`;
     }
     return `<div class="hp-mosaic ${countClass}">
-      ${_hpMosaicCellHTML(allPhotos[0], 0, 'hp-mosaic-main', false)}
-      ${_hpMosaicCellHTML(allPhotos[1], 1, 'hp-mosaic-sub hp-mosaic-sub--a', false)}
-      ${_hpMosaicCellHTML(allPhotos[2], 2, 'hp-mosaic-sub hp-mosaic-sub--b', false)}
-      ${_hpMosaicCellHTML(allPhotos[3], 3, 'hp-mosaic-sub hp-mosaic-sub--c', false)}
-      ${_hpMosaicCellHTML(allPhotos[4], 4, 'hp-mosaic-sub hp-mosaic-sub--d', showAllOnLast)}
+      ${_hpMosaicCellHTML(allPhotos[0], 0, 'hp-mosaic-main', false, total)}
+      ${_hpMosaicCellHTML(allPhotos[1], 1, 'hp-mosaic-sub hp-mosaic-sub--a', false, total)}
+      ${_hpMosaicCellHTML(allPhotos[2], 2, 'hp-mosaic-sub hp-mosaic-sub--b', false, total)}
+      ${_hpMosaicCellHTML(allPhotos[3], 3, 'hp-mosaic-sub hp-mosaic-sub--c', false, total)}
+      ${_hpMosaicCellHTML(allPhotos[4], 4, 'hp-mosaic-sub hp-mosaic-sub--d', showAllOnLast, total)}
     </div>`;
+  }
+
+  function hpageCarouselWrap(innerHTML, label) {
+    return `<div class="hpage-carousel" data-hpage-carousel aria-label="${escAttr(label || 'Carousel')}">
+      <button type="button" class="hpage-carousel-nav hpage-carousel-nav--prev" aria-label="Previous" onclick="hpageCarouselNav(this,-1)">&#8249;</button>
+      <div class="hpage-carousel-track">${innerHTML}</div>
+      <button type="button" class="hpage-carousel-nav hpage-carousel-nav--next" aria-label="Next" onclick="hpageCarouselNav(this,1)">&#8250;</button>
+    </div>`;
+  }
+
+  function hpageCarouselNav(btn, dir) {
+    const wrap = btn?.closest?.('[data-hpage-carousel]');
+    const track = wrap?.querySelector('.hpage-carousel-track');
+    if (!track) return;
+    const item = track.querySelector('.hpage-vibe-card, .hpage-other-room-card');
+    const gap = 12;
+    const step = item ? item.offsetWidth + gap : Math.max(160, track.clientWidth * 0.85);
+    track.scrollBy({ left: dir * step, behavior: 'smooth' });
+  }
+
+  function hpageSyncOtherRoomActiveStates() {
+    document.querySelectorAll('.hpage-other-room-card').forEach((card) => {
+      const idx = parseInt(card.dataset.roomIdx, 10);
+      const on = _hpageOtherRoomIdx != null && idx === _hpageOtherRoomIdx;
+      card.classList.toggle('hpage-other-room-card--active', on);
+      card.setAttribute('aria-pressed', on ? 'true' : 'false');
+      card.setAttribute('aria-expanded', on ? 'true' : 'false');
+    });
+  }
+
+  function hpageSelectRoom(roomIdx) {
+    const d = _detailHotelData;
+    if (!d) return;
+    const idx = parseInt(roomIdx, 10);
+    if (!idx || idx < 1) return;
+    _hpageOtherRoomIdx = _hpageOtherRoomIdx === idx ? null : idx;
+    const searchHotel = hotelDetailSearchContext(d);
+    const slot = document.getElementById('hpage-other-room-detail');
+    if (!slot || !searchHotel) return;
+    if (_hpageOtherRoomIdx == null) {
+      slot.hidden = true;
+      slot.setAttribute('aria-hidden', 'true');
+      slot.innerHTML = '';
+    } else {
+      slot.hidden = false;
+      slot.setAttribute('aria-hidden', 'false');
+      slot.innerHTML = hotelDetailOtherRoomDetailInnerHTML(searchHotel, d, _hpageOtherRoomIdx);
+      slot.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+    hpageSyncOtherRoomActiveStates();
+  }
+
+  function hotelDetailRatingLabel(rating) {
+    const r = parseFloat(rating);
+    if (!r || r <= 0) return '';
+    if (r >= 9) return 'Excellent';
+    if (r >= 8) return 'Great';
+    if (r >= 7) return 'Good';
+    return 'Rated';
+  }
+
+  function buildHotelDetailVibeCards(searchHotel, pageOpts) {
+    const mb = resolveMatchBreakdown(searchHotel);
+    if (!mb) return [];
+    const cards = [];
+    const seen = new Set();
+    const add = (icon, phrase, pct) => {
+      if (pct == null || pct < 0 || !phrase) return;
+      const key = phrase.toLowerCase();
+      if (seen.has(key)) return;
+      seen.add(key);
+      cards.push({ icon, phrase, pct: Math.round(pct) });
+    };
+    if (mb.room_pct != null) add('☀', 'Room vibe · bright & spacious', mb.room_pct);
+    for (const f of (mb.query_features || []).filter((x) => x.pct >= 40)) {
+      add('☀', f.label, f.pct);
+    }
+    for (const f of (mb.hotel_character_facts || []).filter((x) => x.pct >= 35)) {
+      add('🛋', f.label, f.pct);
+    }
+    if (mb.nbhd_pct != null) {
+      add('🚶', mb.primary_nbhd_name ? `Near ${mb.primary_nbhd_name}` : 'Neighbourhood fit', mb.nbhd_pct);
+    }
+    const ns = mb.nbhd_signals;
+    if (ns?.walkability >= 50) add('🚶', 'Walkable area', ns.walkability);
+    if (ns?.culture_landmarks >= 50) add('🏛', 'Culture & landmarks nearby', ns.culture_landmarks);
+    if (pageOpts?.sr2_badge && pageOpts.sr2_match_pct != null) {
+      add('✦', pageOpts.sr2_badge, pageOpts.sr2_match_pct);
+    }
+    if (mb.hotel_pct != null) add('✦', 'Hotel character match', mb.hotel_pct);
+    return cards.sort((a, b) => b.pct - a.pct).slice(0, 5);
+  }
+
+  function hotelDetailVibeCardsHTML(searchHotel, pageOpts) {
+    const cards = buildHotelDetailVibeCards(searchHotel, pageOpts);
+    if (!cards.length) return '';
+    const cells = cards.map((c) => `
+      <div class="hpage-vibe-card">
+        <span class="hpage-vibe-card-icon" aria-hidden="true">${c.icon}</span>
+        <p class="hpage-vibe-card-phrase">${escHtml(c.phrase)}</p>
+        <p class="hpage-vibe-card-pct">${c.pct}% match</p>
+      </div>`).join('');
+    const boopNote = getEffectiveBoopProfileForScoring()
+      ? 'Based on your search and Boop profile'
+      : 'Based on your search';
+    return `<section class="hp-section hpage-why-vibe" aria-labelledby="hpage-why-vibe-title">
+      <h2 id="hpage-why-vibe-title" class="hpage-section-label">Why this hotel matches your vibe</h2>
+      ${hpageCarouselWrap(cells, 'Why this hotel matches your vibe')}
+      <p class="hpage-vibe-cards-foot">${boopNote} <span class="hpage-vibe-info" title="Scores reflect your query, Boop answers, and indexed room photos">ⓘ</span></p>
+    </section>`;
+  }
+
+  function hotelDetailMatchAttrRowsHTML(mb, searchHotel) {
+    if (!mb) return '';
+    const rows = [];
+    const nbhdSub = mb.primary_nbhd_name || searchHotel?.primary_nbhd?.name || '';
+    if (mb.room_pct != null) {
+      rows.push({ icon: '🛏', label: 'Room vibe', sub: 'Best matching room', pct: mb.room_pct });
+    }
+    const topFeat = (mb.query_features || []).filter((f) => f.pct > 0).sort((a, b) => b.pct - a.pct)[0];
+    if (topFeat) rows.push({ icon: '☀', label: 'Natural light', sub: topFeat.label, pct: topFeat.pct });
+    if (mb.nbhd_pct != null) {
+      rows.push({ icon: '📍', label: 'Neighbourhood', sub: nbhdSub || 'Area fit', pct: mb.nbhd_pct });
+    }
+    if (mb.hotel_pct != null) {
+      rows.push({ icon: '💼', label: 'Hotel style', sub: 'Property character', pct: mb.hotel_pct });
+    }
+    return rows.map((r) => `
+      <div class="hpage-match-attr">
+        <span class="hpage-match-attr-icon" aria-hidden="true">${r.icon}</span>
+        <div class="hpage-match-attr-text">
+          <span class="hpage-match-attr-label">${escHtml(r.label)}</span>
+          <span class="hpage-match-attr-sub">${escHtml(r.sub)}</span>
+        </div>
+        <span class="hpage-match-attr-pct">${r.pct}%</span>
+      </div>`).join('');
+  }
+
+  function hotelDetailMatchSidebarHTML(d, searchHotel, pageOpts) {
+    const mb = resolveMatchBreakdown(searchHotel);
+    const overall = mb?.overall_pct != null ? Math.round(mb.overall_pct) : overallMatchDisplayPct(searchHotel || {});
+    const stars = '★'.repeat(Math.min(Math.max(Math.round(d.star_rating || 0), 0), 5));
+    const rating = d.guest_rating > 0 ? parseFloat(d.guest_rating).toFixed(1) : null;
+    const ratingLabel = rating ? hotelDetailRatingLabel(d.guest_rating) : '';
+    const hotelIdAttr = escHtml(String(d.hotel_id));
+    const bookHotel = {
+      id: d.hotel_id,
+      name: d.name,
+      city: S.city,
+      ...(searchHotel || {}),
+    };
+    return `<aside class="hpage-sidebar hpage-match-card" aria-label="Match summary">
+      <div class="hpage-match-ring-wrap">
+        <div class="hpage-match-ring" style="--match-pct:${overall}">
+          <span class="hpage-match-ring-val">${overall}%</span>
+          <span class="hpage-match-ring-lbl">match</span>
+        </div>
+      </div>
+      ${stars || rating ? `<div class="hpage-match-rating-row">
+        ${stars ? `<span class="hp-stars hpage-match-stars">${stars}</span>` : ''}
+        ${rating ? `<span class="hpage-match-rating-num">${rating} ${escHtml(ratingLabel)}</span>` : ''}
+      </div>` : ''}
+      <p class="hpage-match-reviews-meta" id="hpage-sb-review-count">${rating ? 'Guest reviews' : ''}</p>
+      <div class="hpage-match-attrs">${hotelDetailMatchAttrRowsHTML(mb, searchHotel)}</div>
+      <div class="hpage-sb-ctas">
+        ${bookLinkHTML(bookHotel, null, 'hotel_detail', { className: 'hpage-cta hpage-cta--primary', label: 'Find &amp; Book →' })}
+        <button type="button" class="hpage-cta hpage-cta--vibe" onclick="openVibeTourForHotel('${hotelIdAttr}')"><span aria-hidden="true">✦</span> Take a Vibe Tour</button>
+        <button type="button" class="hpage-share-btn hpage-share-btn--link" onclick="copyHotelDetailLink(this)">Share this match</button>
+      </div>
+    </aside>`;
+  }
+
+  function hotelDetailIntroHTML(d, searchHotel) {
+    const displayName = hotelDisplayTitle({ name: d.name, id: d.hotel_id, city: d.city });
+    const nbhdName = d.primary_nbhd?.name || searchHotel?.primary_nbhd?.name || '';
+    const cityPart = d.city ? `${nbhdName ? `${nbhdName}, ` : ''}${d.city}` : nbhdName;
+    const pills = [];
+    if (nbhdName) pills.push(`<span class="hpage-intro-pill">📍 ${escHtml(nbhdName)}</span>`);
+    const profile = getEffectiveBoopProfileForScoring();
+    const trip = profile?.answers?.trip;
+    const tripLabels = { first: 'Great for first visits', repeat: 'Great for return visits', expert: 'Great if you know the city' };
+    if (trip && tripLabels[trip]) pills.push(`<span class="hpage-intro-pill">💼 ${escHtml(tripLabels[trip])}</span>`);
+    const vibeOpt = BOOP_QUESTIONS.find((q) => q.id === 'stayVibe')?.options
+      ?.find((o) => o.id === profile?.answers?.stayVibe);
+    if (vibeOpt && !trip) pills.push(`<span class="hpage-intro-pill">${escHtml(vibeOpt.title || vibeOpt.label)}</span>`);
+    return `<div class="hpage-intro" role="group" aria-label="Hotel overview">
+      <h1 class="hpage-intro-name">${escHtml(displayName)}</h1>
+      ${cityPart ? `<p class="hpage-intro-loc"><span aria-hidden="true">📍</span> ${escHtml(cityPart)}</p>` : ''}
+      ${pills.length ? `<div class="hpage-intro-pills">${pills.join('')}</div>` : ''}
+    </div>`;
+  }
+
+  function isDetailPseudoRoom(rt) {
+    const n = String(rt?.name || '').trim().toLowerCase();
+    return n === '__hotel_public__';
+  }
+
+  function hotelDetailSortedRooms(searchHotel) {
+    const indexed = (searchHotel?.roomTypes || []).filter((rt) => !isDetailPseudoRoom(rt));
+    let rooms = sortRoomsForCard([...indexed], searchHotel);
+    if (_detailPageOpts?.sr2_pick === 'room_match' && rooms.length > 1) {
+      rooms = [...rooms].sort((a, b) => (b.score || 0) - (a.score || 0));
+    }
+    return rooms;
+  }
+
+  function hotelDetailRoomPanelHTML(searchHotel, d, rt) {
+    const photos = rt.photos || [];
+    const hero = photos[0];
+    const thumbs = photos.slice(1, 5);
+    const extra = Math.max(0, photos.length - 5);
+    const lbIdx = (url) => {
+      const i = _hpDetailPhotos.indexOf(url);
+      return i >= 0 ? i : 0;
+    };
+    const score = Math.round(rt.score || roomVibeMatchDisplayPct(searchHotel));
+    const bookHotel = { id: d.hotel_id, name: d.name, city: S.city, ...searchHotel };
+    const sym = ratesCurrencySymbol(_priceCurrency);
+    const price = rt.roomTypeId != null && searchHotel.roomPrices?.[rt.roomTypeId] != null
+      ? `${sym}${searchHotel.roomPrices[rt.roomTypeId].toLocaleString()}<span class="hpage-room-price-per">/night</span>`
+      : '';
+    const bullets = hotelDetailRoomWhyBullets(searchHotel, rt);
+    const thumbHTML = thumbs.map((url, i) => {
+      const overlay = i === thumbs.length - 1 && extra > 0
+        ? `<span class="hpage-room-thumb-more">+${extra}</span>` : '';
+      return `<button type="button" class="hpage-room-thumb" onclick="openHpLightbox(${lbIdx(url)})"><img src="${escHtml(url)}" alt="" loading="lazy">${overlay}</button>`;
+    }).join('');
+    return `<div class="hpage-best-room-grid">
+      <div class="hpage-best-room-photos">
+        ${hero ? `<button type="button" class="hpage-best-room-hero" onclick="openHpLightbox(${lbIdx(hero)})"><img src="${escHtml(hero)}" alt="" loading="eager"></button>` : '<div class="hpage-best-room-hero hpage-best-room-hero--ph"></div>'}
+        <div class="hpage-best-room-thumbs">${thumbHTML}</div>
+      </div>
+      <div class="hpage-best-room-info">
+        ${score > 0 ? `<span class="hpage-room-match-pill">${score}% room match</span>` : ''}
+        <h3 class="hpage-best-room-name">${escHtml(rt.name || 'Room')}</h3>
+        <div class="hpage-room-specs">
+          ${rt.beds ? `<span>${escHtml(rt.beds)}</span>` : ''}
+          ${rt.size ? `<span>${escHtml(rt.size)}</span>` : ''}
+          ${price ? `<span class="hpage-room-spec-price">${price}</span>` : ''}
+        </div>
+        ${bullets.length ? `<div class="hpage-room-why">
+          <p class="hpage-room-why-title">Why you'll love it</p>
+          <ul>${bullets.map((b) => `<li>${escHtml(b)}</li>`).join('')}</ul>
+        </div>` : ''}
+        ${bookLinkHTML(bookHotel, rt.roomTypeId, 'room_row', { className: 'hpage-cta hpage-cta--primary hpage-cta--book-room', label: 'Book This Room →' })}
+      </div>
+    </div>`;
+  }
+
+  function hotelDetailOtherRoomDetailInnerHTML(searchHotel, d, roomIdx) {
+    const rooms = hotelDetailSortedRooms(searchHotel);
+    const rt = rooms[roomIdx];
+    if (!rt) return '';
+    return `<div class="hpage-other-room-detail-head">
+      <h3 class="hpage-other-room-detail-title">${escHtml(rt.name || 'Room')}</h3>
+      <button type="button" class="hpage-other-room-detail-close" onclick="hpageCloseOtherRoom()" aria-label="Close room details">✕</button>
+    </div>
+    ${hotelDetailRoomPanelHTML(searchHotel, d, rt)}`;
+  }
+
+  function hpageCloseOtherRoom() {
+    _hpageOtherRoomIdx = null;
+    const slot = document.getElementById('hpage-other-room-detail');
+    if (slot) {
+      slot.hidden = true;
+      slot.setAttribute('aria-hidden', 'true');
+      slot.innerHTML = '';
+    }
+    hpageSyncOtherRoomActiveStates();
+  }
+
+  function hotelDetailRoomWhyBullets(searchHotel, rt) {
+    const mb = resolveMatchBreakdown(searchHotel);
+    const bullets = [];
+    for (const m of (mb?.must_haves || []).filter((x) => x.status === 'met').slice(0, 2)) {
+      bullets.push(m.label);
+    }
+    for (const f of (mb?.query_features || []).filter((x) => x.pct >= 70).slice(0, 2)) {
+      if (!bullets.includes(f.label)) bullets.push(f.label);
+    }
+    if (rt?.score >= 70 && bullets.length < 3) bullets.push('Strong visual match for your search');
+    if (!bullets.length && rt?.score > 0) bullets.push(`${rt.score}% room vibe alignment with your query`);
+    return bullets.slice(0, 4);
+  }
+
+  function hotelDetailBestRoomHTML(searchHotel, d) {
+    if (!searchHotel?.roomTypes?.length) return '';
+    const rooms = hotelDetailSortedRooms(searchHotel);
+    const rt = rooms[0];
+    if (!rt) return '';
+    return `<section class="hp-section hpage-best-room" id="hpage-best-room" aria-labelledby="hpage-best-room-title">
+      <p class="hpage-best-room-badge" id="hpage-best-room-title">Your best room match</p>
+      ${hotelDetailRoomPanelHTML(searchHotel, d, rt)}
+    </section>`;
+  }
+
+  function hotelDetailOtherRoomsHTML(searchHotel, d) {
+    if (!searchHotel?.roomTypes || searchHotel.roomTypes.length < 2) return '';
+    const rooms = hotelDetailSortedRooms(searchHotel);
+    const others = rooms.slice(1, 8);
+    const total = rooms.length;
+    const cards = others.map((rt, i) => {
+      const photo = (rt.photos || [])[0];
+      const score = Math.round(rt.score || 0);
+      const roomIdx = i + 1;
+      const active = _hpageOtherRoomIdx === roomIdx ? ' hpage-other-room-card--active' : '';
+      const expanded = _hpageOtherRoomIdx === roomIdx ? 'true' : 'false';
+      return `<article class="hpage-other-room-card${active}" role="button" tabindex="0" data-room-idx="${roomIdx}" aria-pressed="${expanded}" aria-expanded="${expanded}" onclick="hpageSelectRoom(${roomIdx})" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();hpageSelectRoom(${roomIdx});}">
+        ${photo ? `<img class="hpage-other-room-img" src="${escHtml(photo)}" alt="" loading="lazy">` : '<div class="hpage-other-room-img hpage-other-room-img--ph"></div>'}
+        ${score > 0 ? `<span class="hpage-other-room-pct-badge">${score}% match</span>` : ''}
+        <div class="hpage-other-room-body">
+          <p class="hpage-other-room-name">${escHtml(rt.name || 'Room')}</p>
+        </div>
+      </article>`;
+    }).join('');
+    const detailOpen = _hpageOtherRoomIdx != null;
+    const detailHTML = detailOpen
+      ? `<div id="hpage-other-room-detail" class="hpage-other-room-detail" role="region" aria-label="Selected room details">${hotelDetailOtherRoomDetailInnerHTML(searchHotel, d, _hpageOtherRoomIdx)}</div>`
+      : '<div id="hpage-other-room-detail" class="hpage-other-room-detail" hidden aria-hidden="true"></div>';
+    return `<section class="hp-section hpage-other-rooms" aria-labelledby="hpage-other-rooms-title">
+      <div class="hpage-other-rooms-head">
+        <h2 id="hpage-other-rooms-title" class="hpage-section-label">Other room options</h2>
+        ${total > 2 ? `<button type="button" class="hpage-link-btn" onclick="document.getElementById('hpage-best-room')?.scrollIntoView({behavior:'smooth'})">View all ${total} room types →</button>` : ''}
+      </div>
+      ${hpageCarouselWrap(cards, 'Other room options')}
+      ${detailHTML}
+    </section>`;
+  }
+
+  function hotelDetailNbhdHTML(d, searchHotel) {
+    const nbhd = searchHotel?.primary_nbhd || d.primary_nbhd;
+    if (!nbhd?.name && !nbhd?.vibe_short) return '';
+    const desc = nbhd.vibe_long || nbhd.vibe_short || '';
+    const cityHoods = (typeof NEIGHBORHOODS !== 'undefined' && S.city && NEIGHBORHOODS[S.city])
+      ? NEIGHBORHOODS[S.city] : [];
+    const full = cityHoods.find((h) => h.name === nbhd.name);
+    const text = full?.vibe_long || desc;
+    const pois = [
+      { icon: '🚶', time: 'Nearby', place: 'Walkable streets & cafés' },
+      { icon: '🏛', time: 'Explore', place: 'Culture & landmarks' },
+      { icon: '🍽', time: 'Local', place: 'Restaurants & nightlife' },
+      { icon: '✈', time: 'Transit', place: 'City connections' },
+    ];
+    const poiHTML = pois.map((p) => `
+      <div class="hpage-nbhd-poi">
+        <span class="hpage-nbhd-poi-icon" aria-hidden="true">${p.icon}</span>
+        <span class="hpage-nbhd-poi-time">${escHtml(p.time)}</span>
+        <span class="hpage-nbhd-poi-place">${escHtml(p.place)}</span>
+      </div>`).join('');
+    return `<section class="hp-section hpage-nbhd-block" aria-labelledby="hpage-nbhd-title">
+      <h2 id="hpage-nbhd-title" class="hpage-section-label">About the neighbourhood</h2>
+      <div class="hpage-nbhd-grid">
+        <div class="hpage-nbhd-copy">
+          ${text ? `<p>${escHtml(text)}</p>` : ''}
+          <button type="button" class="hpage-link-btn" onclick="closeHotelDetailPage();goToStep('nbhd')">Explore the area →</button>
+        </div>
+        <div class="hpage-nbhd-pois">${poiHTML}</div>
+      </div>
+    </section>`;
+  }
+
+  function hotelDetailSearchContext(d) {
+    const h = _searchHotelForDetail(d.hotel_id);
+    if (h?.roomTypes?.length) return h;
+    if (!d?.room_types?.length) return h || null;
+    return {
+      ...(h || {}),
+      id: d.hotel_id,
+      name: d.name,
+      city: d.city,
+      roomTypes: d.room_types
+        .filter((rt) => String(rt.room_name || '').trim().toLowerCase() !== '__hotel_public__')
+        .map((rt) => ({
+          name: rt.room_name,
+          photos: rt.photos || [],
+          score: 0,
+          roomTypeId: null,
+          size: '',
+          beds: '',
+          amenities: [],
+        })),
+      roomPrices: h?.roomPrices || {},
+      vectorScore: h?.vectorScore || 0,
+      hotelScore: h?.hotelScore ?? null,
+      nbhd_fit_pct: h?.nbhd_fit_pct ?? null,
+      primary_nbhd: d.primary_nbhd || h?.primary_nbhd,
+      match_breakdown: h?.match_breakdown,
+    };
+  }
+
+  function repaintHotelDetailPageRooms() {
+    if (!_detailHotelId || !_detailHotelData) return;
+    const d = _detailHotelData;
+    const searchHotel = hotelDetailSearchContext(d);
+    if (!searchHotel) return;
+    const best = document.getElementById('hpage-best-room');
+    if (best) {
+      const html = hotelDetailBestRoomHTML(searchHotel, d);
+      if (html) best.outerHTML = html;
+    }
+    const other = document.querySelector('.hpage-other-rooms');
+    if (other) {
+      const html = hotelDetailOtherRoomsHTML(searchHotel, d);
+      if (html) other.outerHTML = html;
+      else other.remove();
+    } else if (_hpageOtherRoomIdx != null) {
+      const slot = document.getElementById('hpage-other-room-detail');
+      if (slot) {
+        slot.hidden = false;
+        slot.setAttribute('aria-hidden', 'false');
+        slot.innerHTML = hotelDetailOtherRoomDetailInnerHTML(searchHotel, d, _hpageOtherRoomIdx);
+      }
+    }
   }
 
   function hotelDetailLightboxHTML(allPhotos) {
@@ -9455,36 +10265,29 @@
 
   function hotelDetailPageSkeletonHTML() {
     return `
-      <div class="hpage-topbar">
-        <button class="hpage-back" onclick="closeHotelDetailPage()" aria-label="Back">‹ Back</button>
-      </div>
-      <header class="hpage-head hpage-head--desktop hp-skeleton" style="height:88px;margin:16px 24px 0;border-radius:8px"></header>
-      <div class="hpage-hero hp-skeleton"></div>
-      <div class="hpage-grid">
-        <div class="hpage-content">
-          <div class="hp-meta hp-meta--mobile">
-            <div class="hp-skeleton" style="height:24px;width:60%;margin-bottom:8px;border-radius:6px"></div>
-            <div class="hp-skeleton" style="height:14px;width:40%;border-radius:6px"></div>
-          </div>
-          <div class="hp-section">
-            <div class="hp-skeleton" style="height:12px;width:30%;margin-bottom:10px;border-radius:4px"></div>
-            <div class="hp-skeleton" style="height:60px;border-radius:8px"></div>
-          </div>
-          <div class="hp-section">
-            <div class="hp-skeleton" style="height:12px;width:30%;margin-bottom:10px;border-radius:4px"></div>
-            <div style="display:flex;gap:8px;flex-wrap:wrap">${Array(6).fill('<div class="hp-skeleton" style="height:28px;width:80px;border-radius:100px"></div>').join('')}</div>
-          </div>
+      <div class="hpage hpage-v3">
+        <div class="hpage-topbar">
+          <button class="hpage-back" onclick="closeHotelDetailPage()" aria-label="Back">← Back</button>
         </div>
-        <aside class="hpage-sidebar">
-          <div class="hp-skeleton" style="height:120px;border-radius:12px"></div>
-        </aside>
+        <div class="hpage-hero hp-skeleton" style="min-height:320px;margin:0 24px;border-radius:14px"></div>
+        <div class="hpage-intro-band">
+          <div class="hp-skeleton" style="height:40px;width:72%;margin:16px 0 8px;border-radius:8px"></div>
+        </div>
+        <div class="hpage-body">
+          <div class="hpage-main">
+            <div class="hp-skeleton" style="height:200px;border-radius:12px;margin-bottom:16px"></div>
+            <div class="hp-skeleton" style="height:280px;border-radius:12px"></div>
+          </div>
+          <aside class="hpage-sidebar hp-skeleton" style="min-height:360px;border-radius:16px"></aside>
+        </div>
       </div>`;
   }
 
-  function hotelDetailPageHTML(d) {
-    const stars   = '★'.repeat(Math.min(Math.max(Math.round(d.star_rating || 0), 0), 5));
+  function hotelDetailPageHTML(d, pageOpts) {
+    pageOpts = pageOpts || {};
+    const searchHotel = hotelDetailSearchContext(d);
+    pageOpts.searchHotel = searchHotel;
 
-    // Build full photo list: hotel_photos first, then room photos to fill gaps
     const allPhotos = [...(d.hotel_photos || [])];
     for (const rt of (d.room_types || [])) {
       for (const url of (rt.photos || [])) {
@@ -9495,119 +10298,68 @@
     }
     _hpDetailPhotos = allPhotos.slice();
 
-    const displayName = hotelDisplayTitle({ name: d.name, id: d.hotel_id, city: d.city });
     const carouselHTML = hotelDetailCarouselHTML(allPhotos);
     const mosaicHTML = hotelDetailMosaicHTML(allPhotos);
     const lightboxHTML = hotelDetailLightboxHTML(allPhotos);
+    const hotelIdAttr = escHtml(String(d.hotel_id));
+    const bookHotel = { id: d.hotel_id, name: d.name, city: S.city };
 
-    const propChip = propertyTypeChipsHTML(
-      { property_type: d.property_type, name: d.name },
-      'hp-proptype-chip'
-    );
-    const nbhdName = d.primary_nbhd?.name || '';
-    const nbhdChip = nbhdName
-      ? `<button class="hp-nbhd-chip" onclick="closeHotelDetailPage();goToStep('nbhd')" title="Explore this neighbourhood">📍 ${escHtml(nbhdName)}</button>` : '';
-    const ratingBadge = d.guest_rating > 0
-      ? `<button type="button" class="hp-rating hp-rating--btn" onclick="_hpScrollToReviews({smooth:true})" title="See guest reviews">${parseFloat(d.guest_rating).toFixed(1)}</button>`
-      : '';
-    const timesHTML = (d.check_in || d.check_out)
-      ? `<div class="hp-times">${d.check_in ? `<span>Check-in <strong>${escHtml(d.check_in)}</strong></span>` : ''}${d.check_out ? `<span>Check-out <strong>${escHtml(d.check_out)}</strong></span>` : ''}</div>` : '';
-
-    // Description
     const descHTML = d.description
-      ? `<div class="hp-section">
-          <div class="hp-section-title">About</div>
+      ? `<div class="hp-section hpage-about-hotel">
+          <h2 class="hpage-section-label">About this hotel</h2>
           <div class="hp-desc clamped" id="hp-desc-text">${escHtml(d.description)}</div>
           <button class="hp-desc-toggle" onclick="toggleHpDesc()">Read more</button>
          </div>` : '';
 
-    // Amenities
     const amenList = Array.isArray(d.amenities) ? d.amenities : [];
-    const amenFirst8 = amenList.slice(0, 8).map(a => `<span class="hp-amenity">${escHtml(a)}</span>`).join('');
-    const amenRest   = amenList.slice(8);
+    const amenFirst8 = amenList.slice(0, 8).map((a) => `<span class="hp-amenity">${escHtml(a)}</span>`).join('');
+    const amenRest = amenList.slice(8);
     const amenDataAll = amenRest.length > 0 ? ` data-all='${escHtml(JSON.stringify(amenList))}'` : '';
     const amenHTML = amenList.length > 0
       ? `<div class="hp-section">
-          <div class="hp-section-title">Amenities</div>
+          <h2 class="hpage-section-label">Amenities</h2>
           <div class="hp-amenities" id="hp-amenities-wrap"${amenDataAll}>${amenFirst8}</div>
           ${amenRest.length > 0 ? `<button class="hp-amenities-more" onclick="toggleHpAmenities()">+ ${amenRest.length} more</button>` : ''}
          </div>` : '';
 
-    // CTAs — primary "Find & Book" prebooks when offerId exists; secondary "Vibe tour" reuses modal flow.
-    const hotelIdAttr = escHtml(String(d.hotel_id));
-    const bookHotel = { id: d.hotel_id, name: d.name, city: S.city };
-    const ctaPrimary  = bookLinkHTML(bookHotel, null, 'hotel_detail', {
-      className: 'hpage-cta hpage-cta--primary',
-      label: 'Find &amp; Book →',
-    });
-    const ctaVibe     = `<button type="button" class="hpage-cta hpage-cta--secondary" onclick="openVibeTourForHotel('${hotelIdAttr}')">Vibe tour</button>`;
-
-    // Sidebar (desktop) — duplicates name + key meta + CTAs in a sticky rail.
-    const sidebarPriceLine = ''; // pricing comes from search-results state; not surfaced here yet.
-    const sidebarHTML = `
-      <aside class="hpage-sidebar">
-        <div class="hpage-sidebar-card">
-          <div class="hpage-sb-name">${escHtml(hotelDisplayTitle({ name: d.name, id: d.hotel_id, city: d.city }))}</div>
-          <div class="hpage-sb-sub">
-            ${stars ? `<span class="hp-stars">${stars}</span>` : ''}
-            ${ratingBadge}
-          </div>
-          ${nbhdChip ? `<div class="hpage-sb-row">${nbhdChip}</div>` : ''}
-          ${propChip ? `<div class="hpage-sb-row">${propChip}</div>` : ''}
-          ${timesHTML}
-          ${sidebarPriceLine}
-          <div class="hpage-sb-ctas">
-            ${ctaPrimary}
-            ${ctaVibe}
-          </div>
-          <div class="hpage-sb-share">
-            <button type="button" class="hpage-share-btn" onclick="copyHotelDetailLink(this)" title="Copy shareable link">Copy link</button>
-          </div>
-        </div>
-      </aside>`;
-
-    // Mobile sticky bottom bar — primary Find&Book + secondary Vibe tour.
     const mobileCTAHTML = `
       <div class="hpage-mobile-cta" role="group" aria-label="Hotel actions">
         ${bookLinkHTML(bookHotel, null, 'hotel_detail_mobile', {
           className: 'hpage-cta hpage-cta--primary hpage-cta--mobile',
           label: 'Find &amp; Book →',
         })}
-        <button type="button" class="hpage-cta hpage-cta--secondary hpage-cta--mobile hpage-cta--small" onclick="openVibeTourForHotel('${hotelIdAttr}')">Vibe tour</button>
+        <button type="button" class="hpage-cta hpage-cta--vibe hpage-cta--mobile" onclick="openVibeTourForHotel('${hotelIdAttr}')">Vibe tour</button>
       </div>`;
-
-    const addressHTML = _hpAddressRowHTML(d);
-    const subRowHTML = _hpMetaSubRowHTML(stars, ratingBadge, nbhdChip, propChip);
 
     return `
       ${lightboxHTML}
-      <div class="hpage-topbar">
-        <button class="hpage-back" onclick="closeHotelDetailPage()" aria-label="Back">‹ Back</button>
-        <div class="hpage-topbar-spacer"></div>
-      </div>
-      <header class="hpage-head hpage-head--desktop">
-        <h1 class="hp-name">${escHtml(displayName)}</h1>
-        ${addressHTML}
-        ${subRowHTML}
-        ${timesHTML}
-      </header>
-      <div class="hpage-hero">
-        <div class="hp-gallery-mobile">${carouselHTML}</div>
-        <div class="hp-gallery-desktop">${mosaicHTML}</div>
-      </div>
-      <div class="hpage-grid">
-        <div class="hpage-content">
-          <div class="hp-meta hp-meta--mobile">
-            <h1 class="hp-name">${escHtml(displayName)}</h1>
-            ${addressHTML}
-            ${subRowHTML}
-            ${timesHTML}
-          </div>
-          ${descHTML}
-          ${amenHTML}
-          ${hotelDetailReviewsSectionHTML(d)}
+      <div class="hpage hpage-v3">
+        <div class="hpage-topbar">
+          <button class="hpage-back" onclick="closeHotelDetailPage()" aria-label="Back">← Back</button>
         </div>
-        ${sidebarHTML}
+        <div class="hpage-hero">
+          <div class="hp-gallery-mobile">${carouselHTML}</div>
+          <div class="hp-gallery-desktop">${mosaicHTML}</div>
+        </div>
+        <div class="hpage-intro-band">
+          ${hotelDetailIntroHTML(d, searchHotel)}
+        </div>
+        <div class="hpage-body">
+          <div class="hpage-main hpage-main-top">
+            ${hotelDetailVibeCardsHTML(searchHotel, pageOpts)}
+            ${hotelDetailBestRoomHTML(searchHotel, d)}
+          </div>
+          ${hotelDetailMatchSidebarHTML(d, searchHotel, pageOpts)}
+          <div class="hpage-fullbleed">
+            ${hotelDetailOtherRoomsHTML(searchHotel, d)}
+          </div>
+          <div class="hpage-main hpage-main-tail">
+            ${hotelDetailNbhdHTML(d, searchHotel)}
+            ${descHTML}
+            ${amenHTML}
+            ${hotelDetailReviewsSectionHTML(d)}
+          </div>
+        </div>
       </div>
       ${mobileCTAHTML}`;
   }
@@ -9713,6 +10465,10 @@
       const reviews = Array.isArray(data?.reviews) ? data.reviews : [];
 
       _hpReviewsState.total = (typeof data?.total === 'number') ? data.total : _hpReviewsState.total;
+      const rcEl = document.getElementById('hpage-sb-review-count');
+      if (rcEl && _hpReviewsState.total != null && _hpReviewsState.total > 0) {
+        rcEl.textContent = `${_hpReviewsState.total.toLocaleString()} reviews`;
+      }
 
       if (_hpReviewsState.offset === 0 && reviews.length === 0) {
         body.innerHTML = `<div class="hp-reviews-empty">No reviews available yet for this property.</div>`;
@@ -9865,6 +10621,20 @@
     if (btn) btn.textContent = clamped ? 'Read more' : 'Show less';
   }
 
+  function toggleHpageVibeDetails(btn) {
+    const panel = document.getElementById('hpage-vibe-more');
+    if (!panel) return;
+    const expanding = panel.hasAttribute('hidden');
+    if (expanding) panel.removeAttribute('hidden');
+    else panel.setAttribute('hidden', '');
+    if (btn) {
+      const n = btn.dataset.moreCount || '';
+      const suffix = n ? ` (${n} more)` : '';
+      btn.textContent = expanding ? 'Show less match details' : `Show all match details${suffix}`;
+      btn.setAttribute('aria-expanded', expanding ? 'true' : 'false');
+    }
+  }
+
   function toggleHpAmenities() {
     const wrap = document.getElementById('hp-amenities-wrap');
     const btn  = wrap?.nextElementSibling;
@@ -9991,7 +10761,10 @@
     getLastHotels: () => _lastHotels,
     getSearchUiState: () => ({
       hasDateSearch: _hasDateSearch,
+      datesEntered: _userHasTravelDates(),
       pricesLoaded: _pricesLoaded,
+      fetchingPrices: _fetchingPrices,
+      ratesFetchDone: _ratesFetchDone,
       priceCurrency: _priceCurrency,
       showAvailOnly: _showAvailOnly,
       currentSort: _currentSort,

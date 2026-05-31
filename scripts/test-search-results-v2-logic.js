@@ -72,6 +72,22 @@ function testLensReorders() {
   console.log('  ok lensSort — quiet promotes calm hotel');
 }
 
+function testCuratedHighlightIds() {
+  const hotels = Array.from({ length: 12 }, (_, i) => ({
+    id: `h${i}`,
+    vectorScore: 100 - i,
+    nbhd_fit_pct: 40 + i,
+    hotelScore: 30 + i,
+    roomTypes: [{ score: 50 + i * 5 }],
+  }));
+  hotels[8].roomTypes[0].score = 100;
+  const ids = V2.getCuratedHighlightHotelIds(hotels);
+  assert(ids.includes('h0'), 'overall h0');
+  assert(ids.includes('h8'), 'best room match h8');
+  assert(ids.length >= 10 && new Set(ids).size === ids.length, `unique highlight ids: ${ids.length}`);
+  console.log('  ok getCuratedHighlightHotelIds — picks + more');
+}
+
 function testModeConstants() {
   assert(V2.MODE_CLASSIC === 'classic', 'MODE_CLASSIC');
   assert(V2.MODE_V2 === 'v2', 'MODE_V2');
@@ -86,6 +102,7 @@ function main() {
   testModeConstants();
   testSelectTopPicksUnique();
   testSelectMoreHotelsMatchesMainListRanks();
+  testCuratedHighlightIds();
   testLensReorders();
   console.log('\nAll passed.');
 }

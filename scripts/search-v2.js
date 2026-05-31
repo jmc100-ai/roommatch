@@ -15,6 +15,7 @@
  */
 
 const { buildFactIntent, buildFactIntentLLM, scoreFactSet, mergeStayVibeIntoIntent, STAY_VIBE_TO_VISUAL_STYLE } = require("./fact-catalog");
+const { buildMatchBreakdown } = require("../lib/match-breakdown");
 const { normalizePolygonRing, pointInPolygon, bboxFromRing } = require("./neighborhood-vibe-data");
 
 function slimStubsEnabled() {
@@ -32,6 +33,21 @@ function slimStubPayload(h) {
   };
   if (h.hotelScore != null) out.hotelScore = h.hotelScore;
   if (h.nbhd_fit_pct != null) out.nbhd_fit_pct = h.nbhd_fit_pct;
+  if (h.match_breakdown) {
+    const mb = h.match_breakdown;
+    out.match_breakdown = {
+      overall_pct: mb.overall_pct,
+      room_pct: mb.room_pct,
+      hotel_pct: mb.hotel_pct,
+      nbhd_pct: mb.nbhd_pct,
+      must_haves_summary: mb.must_haves_summary,
+      must_haves: (mb.must_haves || []).slice(0, 8),
+      query_features: (mb.query_features || []).slice(0, 6),
+      hotel_character_facts: (mb.hotel_character_facts || []).slice(0, 6),
+      nbhd_signals: mb.nbhd_signals,
+      primary_nbhd_name: mb.primary_nbhd_name,
+    };
+  }
   if (h.mainPhoto) out.mainPhoto = h.mainPhoto;
   if (h.primary_nbhd) {
     out.primary_nbhd = { id: h.primary_nbhd.id, name: h.primary_nbhd.name };
@@ -429,6 +445,7 @@ async function runV2Search({ req, supabase, supabaseAdmin, resolveCityName }) {
     ...(intent.soft_preferences || []).map((x) => x.fact_key),
   ].filter(Boolean);
   const hasFlags = detectedFactKeys.length > 0;
+  const hardFilterKeys = (intent.hard_filters || []).map((x) => x.fact_key).filter(Boolean);
 
   // intentType: "bathroom" when bathroom facts are in query (mirrors V1 extractIntentType)
   const intentType = detectedFactKeys.some((k) => BATHROOM_FACT_KEYS.has(k))
@@ -1209,6 +1226,28 @@ async function runV2Search({ req, supabase, supabaseAdmin, resolveCityName }) {
     }
   }
 
+  const breakdownCtx = {
+    nbhdRankWeight: nbhdFitByHotelId?.size > 0 ? nbhdRankWeight : 0,
+    mustHaveKeys: mustHaves,
+    hardFilterKeys,
+    detectedFactKeys,
+    hotelFactHits,
+    hotelVibeCovMap,
+    nbhdHoodRows,
+    stayVibe,
+    factWeightsRaw,
+  };
+  function matchBreakdownFor(hotelId, topScore, hotelScore, primaryNbhd, nbhdFitPct) {
+    return buildMatchBreakdown({
+      hotelId,
+      topScore,
+      hotelScore,
+      nbhdFitPct,
+      ...breakdownCtx,
+      primaryNbhd,
+    });
+  }
+
   // ── Build response payload ─────────────────────────────────────────────────
   let hotels = allHotels.map(({ hotel_id: hotelId, topScore, hotelVibePct, rawHotelVibe }) => {
     const meta       = hotelMeta.get(hotelId) || {};
@@ -1250,6 +1289,7 @@ async function runV2Search({ req, supabase, supabaseAdmin, resolveCityName }) {
         property_type: propertyType,
         primary_nbhd: primaryNbhd,
         ...(nbhdFitPct != null ? { nbhd_fit_pct: nbhdFitPct } : {}),
+        match_breakdown: matchBreakdownFor(hotelId, score, hotelScore, primaryNbhd, nbhdFitPct),
       };
     }
 
@@ -1354,6 +1394,7 @@ async function runV2Search({ req, supabase, supabaseAdmin, resolveCityName }) {
       property_type: propertyType,
       primary_nbhd: primaryNbhd,
       ...(nbhdFitPct != null ? { nbhd_fit_pct: nbhdFitPct } : {}),
+      match_breakdown: matchBreakdownFor(hotelId, score, hotelScore, primaryNbhd, nbhdFitPct),
       score_breakdown: {
         v2_room_match: score,
         v2_hotel_vibe: hotelScore,
