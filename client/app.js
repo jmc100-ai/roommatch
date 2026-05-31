@@ -183,7 +183,7 @@
   }
 
   /** Build a white-label deep link for a specific room offer (offerId) or hotel page. */
-  function buildBookUrl(hotel, roomTypeId) {
+  function buildBookUrl(hotel, roomTypeId, prebookId) {
     const wl = _wlBaseUrl();
     if (!wl) {
       // Fallback: Google search until white label is configured
@@ -192,7 +192,10 @@
       const q = [qName, hotel.city || '', 'hotel booking'].filter(Boolean).join(' ');
       return `https://www.google.com/search?q=${encodeURIComponent(q)}`;
     }
-    // If we have an offerId for this specific room → go straight to checkout
+    if (prebookId) {
+      return _withBookAttribution(`${wl}/booking?prebookId=${encodeURIComponent(prebookId)}`, hotel, roomTypeId);
+    }
+    // If we have an offerId for this specific room → checkout (WL can auto-prebook if we skip server prebook)
     const offerId = hotel.offerIds?.[roomTypeId];
     if (offerId) return _withBookAttribution(`${wl}/booking?offerId=${encodeURIComponent(offerId)}`, hotel, roomTypeId);
 
@@ -204,6 +207,100 @@
     if (S.checkout) params.set('checkout', S.checkout);
     params.set('occupancies', btoa(JSON.stringify([{ adults: 2, children: [] }])));
     return _withBookAttribution(`${wl}/hotels/${hotel.id}?${params.toString()}`, hotel, roomTypeId);
+  }
+
+  function _hotelForBook(hotelId) {
+    const id = String(hotelId || '');
+    const fromSearch = (_lastVsearchHotels || []).find(h => String(h.id) === id);
+    if (fromSearch) return { ...fromSearch, city: fromSearch.city || S.city };
+    if (_detailHotelData && String(_detailHotelData.hotel_id) === id) {
+      return {
+        id,
+        name: _detailHotelData.name,
+        offerIds: _detailHotelData.offerIds,
+        city: S.city,
+      };
+    }
+    return { id, city: S.city };
+  }
+
+  /** Book CTA — prebooks server-side when offerId exists, then opens WL checkout. */
+  async function goToBook(hotelId, roomTypeId, surface, ev) {
+    if (ev) {
+      ev.preventDefault();
+      if (typeof ev.stopPropagation === 'function') ev.stopPropagation();
+    }
+    fireFindBookClick(hotelId, roomTypeId, surface);
+    const hotel = _hotelForBook(hotelId);
+    const rid = roomTypeId != null && roomTypeId !== 'null' ? roomTypeId : null;
+    const offerId = rid != null ? hotel.offerIds?.[rid] : null;
+    const wl = _wlBaseUrl();
+    const btn = ev?.currentTarget;
+    const prevLabel = btn?.textContent;
+
+    if (offerId && wl) {
+      if (btn) {
+        btn.classList.add('book-btn--loading');
+        btn.setAttribute('aria-busy', 'true');
+        if (btn.tagName === 'BUTTON' || btn.classList.contains('book-btn') || btn.classList.contains('hpage-cta')) {
+          btn.textContent = 'Checking…';
+        }
+      }
+      try {
+        const res = await fetch('/api/prebook', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'same-origin',
+          body: JSON.stringify({ offerId: String(offerId) }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (res.ok && data.prebookId) {
+          track('prebook_succeeded', {
+            hotel_id: String(hotelId || ''),
+            room_type_id: rid,
+            surface: surface || 'unknown',
+          });
+          window.open(buildBookUrl(hotel, rid, data.prebookId), '_blank', 'noopener');
+          return false;
+        }
+        if (res.status === 429) flashMsg('Too many booking attempts — try again in a moment.');
+        else if (data.detail) flashMsg(String(data.detail).slice(0, 120));
+        else flashMsg('Rate unavailable — opening booking page…');
+        track('prebook_failed', {
+          hotel_id: String(hotelId || ''),
+          room_type_id: rid,
+          surface: surface || 'unknown',
+          status: res.status,
+        });
+      } catch (_) {
+        flashMsg('Could not confirm rate — opening booking page…');
+      } finally {
+        if (btn) {
+          btn.classList.remove('book-btn--loading');
+          btn.removeAttribute('aria-busy');
+          if (prevLabel) btn.textContent = prevLabel;
+        }
+      }
+    }
+
+    window.open(buildBookUrl(hotel, rid), '_blank', 'noopener');
+    return false;
+  }
+  window._tbGoToBook = goToBook;
+
+  /** Render a book CTA with server-side prebook on click (href is noscript fallback). */
+  function bookLinkHTML(hotel, roomTypeId, surface, opts = {}) {
+    const {
+      className = 'book-btn',
+      label = 'Book →',
+      stopPropagation = false,
+    } = opts;
+    const hotelId = escAttr(String(hotel?.id || ''));
+    const ridArg = roomTypeId != null ? `'${escAttr(String(roomTypeId))}'` : 'null';
+    const fallbackUrl = escHtml(buildBookUrl(hotel, roomTypeId));
+    const stop = stopPropagation ? 'event.stopPropagation();' : '';
+    const labelHtml = label.includes('&') ? label : escHtml(label);
+    return `<a class="${className}" href="${fallbackUrl}" target="_blank" rel="noopener" onclick="${stop}return window._tbGoToBook('${hotelId}', ${ridArg}, '${surface}', event)">${labelHtml}</a>`;
   }
 
   /** Fire-and-forget PostHog event for any "Find & Book" click. Inline-callable
@@ -2983,7 +3080,8 @@
     S.q = roomSeed;   // store as the active query so breadcrumbs + refinements work
     S.hotelQ = hotelSeed;
     S.mustHaves = mustHaves;
-    _vibeTourPending = true;
+    // Post-Boop auto vibe tour disabled — go straight to results (re-enable: _vibeTourPending = true)
+    _vibeTourPending = false;
     _vibeTourVisible = false;
     _vibeTourScene = 0;
     const fakeBtn = { disabled:false, textContent:'' };
@@ -5153,7 +5251,23 @@
     return parts.join('');
   }
 
+  /** Min time the "Finding hotels…" overlay stays up (replaces vibe-tour street-view dwell). */
+  const RESULTS_LOADING_MIN_MS = 720;
+  let _resultsLoadingShownAt = 0;
+
+  async function waitResultsLoadingMinDwell() {
+    if (!_resultsLoadingShownAt) return;
+    const elapsed = Date.now() - _resultsLoadingShownAt;
+    if (elapsed < RESULTS_LOADING_MIN_MS) {
+      await new Promise((r) => setTimeout(r, RESULTS_LOADING_MIN_MS - elapsed));
+    }
+  }
+
   function enterResultsLoadingMode() {
+    _resultsLoadingShownAt = Date.now();
+    try {
+      window.SearchResultsV2?.resetToCuratedView?.();
+    } catch (_) { /* V2 optional */ }
     // Always exit any chip-re-entry overlay before showing results so the
     // fixed backdrop / blur is removed and #discovery-flow can hide cleanly.
     document.body.classList.remove('boop-overlay-mode');
@@ -5189,6 +5303,9 @@
     if (availFilter) availFilter.style.display = 'none';
     scheduleSyncAvailFilterMount();
     window.scrollTo({ top: 0, behavior: 'smooth' });
+    try {
+      window.SearchResultsV2?.onSearchLoadingStart?.();
+    } catch (_) { /* V2 optional */ }
   }
 
   function exitResultsPendingMode() {
@@ -5199,6 +5316,13 @@
       slo.setAttribute('aria-hidden', 'true');
       slo.setAttribute('aria-busy', 'false');
     }
+    try {
+      if (window.SearchResultsV2?.applyLayout) {
+        window.SearchResultsV2.applyLayout();
+      } else if (window.SearchResultsV2?.paintV2Panel) {
+        window.SearchResultsV2.paintV2Panel();
+      }
+    } catch (_) { /* V2 optional */ }
   }
 
   /**
@@ -5218,7 +5342,8 @@
     const haveDates = !!(S.checkin && S.checkout);
     const needWait = haveDates && _fetchingPrices && !_pricesLoaded;
 
-    const finishPaint = () => {
+    const finishPaint = async () => {
+      await waitResultsLoadingMinDwell();
       exitResultsPendingMode();
       const resEl = document.getElementById('results');
       if (resEl) resEl.classList.remove('no-anim');
@@ -5229,7 +5354,7 @@
     };
 
     if (!needWait) {
-      finishPaint();
+      await finishPaint();
       return;
     }
 
@@ -5263,7 +5388,7 @@
       );
     }
 
-    finishPaint();
+    await finishPaint();
   }
 
   /** Clear #ratesStatus loading spinner when this rates request is finished. */
@@ -6044,8 +6169,10 @@
         fetchStreetViewFrames(prefetchId); // intentionally not awaited
       }
     }
-    const shouldOpenVibeTour = !!(_vibeTourPending && deduped.length && S.boopProfile);
-    _deferResultsRenderUntilTourClose = shouldOpenVibeTour;
+    // Post-Boop auto vibe tour disabled — show results immediately.
+    // Re-enable: shouldOpenVibeTour + _deferResultsRenderUntilTourClose + if block below.
+    // const shouldOpenVibeTour = !!(_vibeTourPending && deduped.length && S.boopProfile);
+    _deferResultsRenderUntilTourClose = false;
     _vibeTourPending = false;
     // Clear any stale vibe-tour pin from a previous search BEFORE the sort
     // runs. Without this, when the user redoes Boop with different answers
@@ -6099,15 +6226,16 @@
     });
     syncSortMoreTriggerAccent();
     syncSortDirectionIndicators();
-    if (shouldOpenVibeTour) {
-      if (resPre) resPre.classList.add('no-anim');
-      updateFreeCancelHint();
-      // Paint the hotel list (waits for rates when dated), then open the tour for
-      // getSortedHotelsForDisplay()[0] so the tour hero always matches list #1.
-      revealResultsWhenReady(openAutoVibeTourAfterFinalSort);
-      return;
-    }
+    // if (shouldOpenVibeTour) {
+    //   if (resPre) resPre.classList.add('no-anim');
+    //   updateFreeCancelHint();
+    //   revealResultsWhenReady(openAutoVibeTourAfterFinalSort);
+    //   return;
+    // }
     _vibeTourLeadId = null;
+    try {
+      window.SearchResultsV2?.resetToCuratedView?.();
+    } catch (_) { /* V2 optional */ }
     revealResultsWhenReady();
   }
 
@@ -6268,7 +6396,7 @@
           : `<div class="hotel-row-price-per" style="margin-top:4px">No rates</div>`;
       }
 
-      updateHotelVibeChipOnCard(h);
+      updateOverallMatchBubbleOnCard(h);
 
       // --- room rows: rebuild and inject using roomsSectionHTML ---
       const roomsEl = document.getElementById(`hotel-rooms-${h.id}`);
@@ -6537,7 +6665,7 @@
         const sym = ratesCurrencySymbol(_priceCurrency);
         priceEl.innerHTML = `${sym}${h.price.toLocaleString()}<span class="price-per">/night</span>`;
       }
-      updateHotelVibeChipOnCard(h);
+      updateOverallMatchBubbleOnCard(h);
     }
     console.log(`[perf] hotel-rates enrich: ${targets.length} targets, ${enriched} enriched, ${Date.now() - t0}ms`);
   }
@@ -7621,8 +7749,17 @@
       }
     }
     if (scrollToList) {
-      document.getElementById('results')?.querySelector('.hotel-card,.hotel-row')?.scrollIntoView({ behavior:'smooth', block:'start' });
+      const v2 = window.SearchResultsV2?.isV2Mode?.();
+      const target = v2
+        ? document.querySelector('#results-v2 .sr2-pick-card, #results-v2 .sr2-more-card')
+        : document.getElementById('results')?.querySelector('.hotel-card,.hotel-row');
+      target?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
+    try {
+      if (window.SearchResultsV2?.isV2Mode?.() && window.SearchResultsV2.applyLayout) {
+        window.SearchResultsV2.applyLayout();
+      }
+    } catch (_) { /* V2 optional */ }
   }
 
   function syncVibeTourFullscreenButton() {
@@ -7810,7 +7947,8 @@
 
   function hotelRowHTML(h) {
     const sym   = ratesCurrencySymbol(_priceCurrency);
-    const score = roomVibeMatchDisplayPct(h);
+    const overallPct = overallMatchDisplayPct(h);
+    const overallBubble = overallMatchBubbleHTML(h.id, overallPct);
     const hotelIdAttr = escHtml(String(h.id));
     // Show every indexed room regardless of "Available only" — the toggle is
     // a hotel-level filter (see hotelPassesAvailFilter), not a room-level one.
@@ -7876,17 +8014,16 @@
       <div class="hotel-row" id="hrow-${h.id}" onclick="toggleHotelRow('${h.id}')">
         ${thumbHTML}
         <div class="hotel-row-info">
-          <div class="hotel-row-name">${escHtml(hotelDisplayTitle(h))}</div>
+          <div class="hotel-row-title">
+            ${overallBubble}
+            <div class="hotel-row-name">${escHtml(hotelDisplayTitle(h))}</div>
+          </div>
           <div class="hotel-row-meta">${stars ? `<span style="color:var(--accent);font-size:10px">${stars}</span> · ` : ''}${h.address || h.city || ''}</div>
-          <div class="hotel-row-score">${rating}</div>
+          <div class="hotel-row-score">${rating}
+            <button type="button" class="hotel-row-tour-link" data-hotel-id="${hotelIdAttr}" onclick="event.stopPropagation();openVibeTourForHotel(this.dataset.hotelId)">Vibe tour</button>
+          </div>
         </div>
         <div class="hotel-row-previews">${previewsHTML}</div>
-        <div class="hotel-row-match">
-          <div class="hotel-row-match-pct">${score > 0 ? score + '%' : '—'}</div>
-          <div class="hotel-row-match-label">match</div>
-          ${topRoom ? `<div class="hotel-row-match-room">${topRoom.name}</div>` : ''}
-          <button type="button" class="hotel-row-tour-link" data-hotel-id="${hotelIdAttr}" onclick="event.stopPropagation();openVibeTourForHotel(this.dataset.hotelId)">Vibe tour</button>
-        </div>
         <div class="hotel-row-price" id="hotel-row-price-${h.id}">${priceHTML}</div>
         <span class="hotel-row-chevron">▼</span>
       </div>
@@ -8496,6 +8633,24 @@
     return hotels;
   }
 
+  function syncSearchResultsV2FromRender(hotels, total) {
+    const SR = window.SearchResultsV2;
+    if (!SR?.syncFromSearchContext) {
+      if (!window.__sr2MissingScriptLogged) {
+        window.__sr2MissingScriptLogged = true;
+        console.log(
+          '[SearchResultsV2] script not loaded — no curated UI. In DevTools → Network, confirm GET /search-results-v2.js is 200 (not HTML).'
+        );
+      }
+      return;
+    }
+    try {
+      SR.syncFromSearchContext({ hotels, sortedHotels: hotels, total });
+    } catch (e) {
+      console.log('[SearchResultsV2] sync failed', e);
+    }
+  }
+
   function renderSorted() {
     if (document.getElementById('st-results')?.classList.contains('results-pending')) return;
     const hotels = getSortedHotelsForDisplay();
@@ -8566,6 +8721,7 @@
     }
     updateFreeCancelHint();
     syncSortDirectionIndicators();
+    syncSearchResultsV2FromRender(hotels, total);
   }
 
   // ── showMoreRooms ─────────────────────────────────────────────────────────
@@ -8730,9 +8886,8 @@
     const fcMap = hotel.roomFreeCancel;
     const showFc = fcMap && (fcMap[rateId] === true || fcMap[String(rateId)] === true);
     const fcBadge = showFc ? '<span class="room-fc-badge">Free cancel</span>' : '';
-    const bookUrl = buildBookUrl(hotel, rateId);
-    const bookHTML = bookUrl
-      ? `<a class="book-btn book-btn--room" href="${bookUrl}" target="_blank" rel="noopener" onclick="event.stopPropagation()">Book →</a>`
+    const bookHTML = (hotel && buildBookUrl(hotel, rateId))
+      ? bookLinkHTML(hotel, rateId, 'rate_row', { className: 'book-btn book-btn--room', stopPropagation: true })
       : '';
     const hiddenClass = isHidden ? ' room-hidden' : '';
     return `
@@ -8974,34 +9129,41 @@
     return 'vbp-vlow';
   }
 
-  function hotelVibeChipHTML(hotelId, hotelVibe) {
+  const OVERALL_MATCH_BUBBLE_TITLE =
+    'Overall match — room photo match blended with neighbourhood fit when your area preference is active';
+
+  function overallMatchBubbleHTML(hotelId, pct) {
     const id = escHtml(String(hotelId));
-    const v = Math.round(Number(hotelVibe) || 0);
+    const v = Math.round(Number(pct) || 0);
     if (v <= 0) {
-      return `<span class="hotel-hotelvibe-chip hotel-hotelvibe-chip--hidden" id="hotel-hotelvibe-${id}" hidden></span>`;
+      return `<span class="match-bubble match-bubble--empty" id="hotel-overall-match-${id}" hidden aria-hidden="true"></span>`;
     }
-    const cls = _vibeClass(v);
-    const title = 'Hotel vibe — how the hotel\'s public spaces and amenities match your trip';
-    return `<span class="hotel-hotelvibe-chip vibe-pill ${cls}" id="hotel-hotelvibe-${id}" title="${escHtml(title)}"><b>${v}%</b></span>`;
+    return (
+      `<span class="match-bubble match-bubble--inline" id="hotel-overall-match-${id}" ` +
+      `title="${escHtml(OVERALL_MATCH_BUBBLE_TITLE)}" aria-label="Overall match ${v} percent">` +
+      `${v}%<small>Match</small></span>`
+    );
   }
 
-  function updateHotelVibeChipOnCard(h) {
+  function updateOverallMatchBubbleOnCard(h) {
     if (!h || h.id == null) return;
-    const el = document.getElementById(`hotel-hotelvibe-${h.id}`);
+    const el = document.getElementById(`hotel-overall-match-${h.id}`);
     if (!el) return;
-    const v = Math.round(h.hotelScore || 0);
+    const v = overallMatchDisplayPct(h);
     if (v <= 0) {
       el.hidden = true;
-      el.className = 'hotel-hotelvibe-chip hotel-hotelvibe-chip--hidden';
+      el.setAttribute('aria-hidden', 'true');
+      el.className = 'match-bubble match-bubble--empty';
       el.removeAttribute('title');
       el.innerHTML = '';
       return;
     }
     el.hidden = false;
-    const cls = _vibeClass(v);
-    el.className = `hotel-hotelvibe-chip vibe-pill ${cls}`;
-    el.title = 'Hotel vibe — how the hotel\'s public spaces and amenities match your trip';
-    el.innerHTML = `<b>${v}%</b>`;
+    el.setAttribute('aria-hidden', 'false');
+    el.className = 'match-bubble match-bubble--inline';
+    el.title = OVERALL_MATCH_BUBBLE_TITLE;
+    el.setAttribute('aria-label', `Overall match ${v} percent`);
+    el.innerHTML = `${v}%<small>Match</small>`;
   }
 
   // ── Hotel Details — full page (replaces the legacy slide-out panel) ────────
@@ -9371,10 +9533,13 @@
           ${amenRest.length > 0 ? `<button class="hp-amenities-more" onclick="toggleHpAmenities()">+ ${amenRest.length} more</button>` : ''}
          </div>` : '';
 
-    // CTAs — primary "Find & Book" goes to LiteAPI (existing buildBookUrl); secondary "Vibe tour" reuses the existing per-hotel vibe tour modal/flow.
+    // CTAs — primary "Find & Book" prebooks when offerId exists; secondary "Vibe tour" reuses modal flow.
     const hotelIdAttr = escHtml(String(d.hotel_id));
-    const bookUrl     = buildBookUrl({ id: d.hotel_id, name: d.name }, null);
-    const ctaPrimary  = `<a class="hpage-cta hpage-cta--primary" href="${escHtml(bookUrl)}" target="_blank" rel="noopener">Find &amp; Book →</a>`;
+    const bookHotel = { id: d.hotel_id, name: d.name, city: S.city };
+    const ctaPrimary  = bookLinkHTML(bookHotel, null, 'hotel_detail', {
+      className: 'hpage-cta hpage-cta--primary',
+      label: 'Find &amp; Book →',
+    });
     const ctaVibe     = `<button type="button" class="hpage-cta hpage-cta--secondary" onclick="openVibeTourForHotel('${hotelIdAttr}')">Vibe tour</button>`;
 
     // Sidebar (desktop) — duplicates name + key meta + CTAs in a sticky rail.
@@ -9404,7 +9569,10 @@
     // Mobile sticky bottom bar — primary Find&Book + secondary Vibe tour.
     const mobileCTAHTML = `
       <div class="hpage-mobile-cta" role="group" aria-label="Hotel actions">
-        <a class="hpage-cta hpage-cta--primary hpage-cta--mobile" href="${escHtml(bookUrl)}" target="_blank" rel="noopener">Find &amp; Book →</a>
+        ${bookLinkHTML(bookHotel, null, 'hotel_detail_mobile', {
+          className: 'hpage-cta hpage-cta--primary hpage-cta--mobile',
+          label: 'Find &amp; Book →',
+        })}
         <button type="button" class="hpage-cta hpage-cta--secondary hpage-cta--mobile hpage-cta--small" onclick="openVibeTourForHotel('${hotelIdAttr}')">Vibe tour</button>
       </div>`;
 
@@ -9805,18 +9973,71 @@
 
   // ── End Hotel Details Page ─────────────────────────────────────────────────
 
+  /** Blended match % for V2 "Best Overall" card (mirrors match-sort display signal). */
+  function overallMatchDisplayPct(h) {
+    const wNbhdBase = typeof _lastVsearchStats?.nbhd_rank_weight === 'number' ? _lastVsearchStats.nbhd_rank_weight : 0;
+    const pm = boopPriceMattersForSort();
+    const wNbhd = effectiveNbhdWeightForPriceMatters(wNbhdBase, pm);
+    const room = bestMatchRoomScore(h);
+    if (wNbhd > 0 && h.nbhd_fit_pct != null) {
+      return Math.round((1 - wNbhd) * room + wNbhd * h.nbhd_fit_pct);
+    }
+    return Math.round(room);
+  }
+
+  // Read-only bridge for SearchResultsV2 — keeps classic render/search logic in app.js.
+  window.RoomMatchResultsBridge = {
+    getSortedHotelsForDisplay: () => getSortedHotelsForDisplay(),
+    getLastHotels: () => _lastHotels,
+    getSearchUiState: () => ({
+      hasDateSearch: _hasDateSearch,
+      pricesLoaded: _pricesLoaded,
+      priceCurrency: _priceCurrency,
+      showAvailOnly: _showAvailOnly,
+      currentSort: _currentSort,
+    }),
+    escHtml,
+    hotelDisplayTitle,
+    roomVibeMatchDisplayPct,
+    hotelEffectiveScore,
+    overallMatchDisplayPct,
+    renderRoomsSection(hotel, pickKind) {
+      let rooms = sortRoomsForCard([...(hotel?.roomTypes || [])], hotel);
+      if (pickKind === 'room_match' && rooms.length > 1) {
+        rooms = [...rooms].sort((a, b) => (b.score || 0) - (a.score || 0));
+      }
+      const noAvail = '';
+      return roomsSectionHTML(
+        rooms,
+        hotel?.hotelScore,
+        hotel?.roomPrices,
+        _hasDateSearch,
+        noAvail,
+        -1,
+        hotel
+      );
+    },
+    bookLinkHTML,
+    ratesCurrencySymbol: (cur) => ratesCurrencySymbol(cur || _priceCurrency),
+    openHotelDetailPage,
+    openVibeTourForHotel,
+    bindFeaturedStripNavs,
+    buildBookUrl,
+    renderFullResultsList() {
+      renderSorted();
+    },
+  };
+
   function hotelHTML(h) {
     const stars    = '★'.repeat(Math.min(Math.max(Math.round(h.starRating || 0), 0), 5));
     const location = [h.address, h.city, h.country].filter(Boolean).join(', ');
     const rating   = h.rating > 0
       ? `<button type="button" class="hotel-guest-score" data-hotel-id="${escHtml(String(h.id))}" onclick="event.stopPropagation();openHotelDetailPage(this.dataset.hotelId, { scrollTo: 'reviews' })" title="See guest reviews"><strong>${parseFloat(h.rating).toFixed(1)}</strong> guest score</button>`
       : '';
-    const bookUrl  = buildBookUrl(h, null);
     const clipBadge = h.clipScore > 0 ? `<span class="clip-score-badge">&#9889; ${h.clipScore}% photo match</span>` : '';
     const hotelIdAttr = escHtml(String(h.id));
 
-    const hotelVibe = Math.round(h.hotelScore || 0);
-    const hotelVibeChip = hotelVibeChipHTML(h.id, hotelVibe);
+    const overallBubble = overallMatchBubbleHTML(h.id, overallMatchDisplayPct(h));
 
     // Neighbourhood pill — top-left of hero, click refocuses the results by nbhd.
     const nbhd     = h.primary_nbhd;
@@ -9891,8 +10112,8 @@
         <div class="hotel-header">
           <div class="hotel-header-left">
             <div class="hotel-name-row">
+              ${overallBubble}
               <div class="hotel-name" id="hotel-name-${h.id}">${escHtml(hotelDisplayTitle(h))}</div>
-              ${hotelVibeChip}
             </div>
             <div class="hotel-meta" id="hotel-meta-${h.id}">
               ${stars ? `<span class="stars">${stars}</span>` : ''}
@@ -9910,7 +10131,7 @@
               </div>
               <button type="button" class="hotel-tour-link" data-hotel-id="${hotelIdAttr}" onclick="openVibeTourForHotel(this.dataset.hotelId)">Vibe tour</button>
               <button type="button" class="hotel-details-btn" data-hotel-id="${hotelIdAttr}" onclick="openHotelDetailPage(this.dataset.hotelId)">Details</button>
-              <a class="book-btn" href="${bookUrl}" target="_blank" rel="noopener">Book →</a>
+              ${bookLinkHTML(h, null, 'card_header')}
             </div>
           </div>
         </div>
@@ -9954,11 +10175,8 @@
     // Featured room always gets a Book button (hotel page with dates if no specific
     // room price). Compact rows get one only when there's a matched price so the
     // collapsed list row isn't cluttered with buttons on unpriced rooms.
-    const roomBookUrl = (variant === 'featured' || hasPrice) && hotel
-      ? buildBookUrl(hotel, rt.roomTypeId)
-      : null;
-    const roomBookHTML = roomBookUrl
-      ? `<a class="book-btn book-btn--room" href="${roomBookUrl}" target="_blank" rel="noopener" onclick="event.stopPropagation()">Book →</a>`
+    const roomBookHTML = (variant === 'featured' || hasPrice) && hotel
+      ? bookLinkHTML(hotel, rt.roomTypeId, 'room_row', { className: 'book-btn book-btn--room', stopPropagation: true })
       : '';
 
     // ── Featured variant (top match room — scrollable strip, same indices as lightbox) ──

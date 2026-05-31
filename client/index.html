@@ -565,6 +565,7 @@
   <!-- Command bar -->
   <div class="cmd" id="cmd">
     <div class="cmd-inner">
+      <div class="cmd-location-row">
       <div class="cmd-row-where">
         <div class="cmd-seg cmd-mobile-visible" onclick="goToStep('city')">
           <div class="cmd-l">City</div>
@@ -620,6 +621,14 @@
         <span class="cmd-trip-summary-line" id="cmd-trip-summary-line">—</span>
         <span class="cmd-trip-summary-edit">Edit</span>
       </button>
+      <button
+        type="button"
+        class="results-ux-switch"
+        id="resultsUxSwitch"
+        aria-pressed="false"
+        title="Switch between Classic results and SearchResultsV2"
+      >SearchResultsV2</button>
+      </div><!-- /.cmd-location-row -->
       <!-- Revert 2-row mobile chips: remove class vibe-chips-mobile-2row below -->
       <div class="cmd-row-vibe vibe-chips-mobile-2row" id="cmd-row-vibe">
         <span class="vibe-row-label">Your vibe</span>
@@ -772,6 +781,7 @@
 
 <div class="results-stack" id="resultsStack">
   <div id="results"></div>
+  <div id="results-v2" class="results-v2-panel" hidden aria-hidden="true"></div>
   <div id="searchLoadingOverlay" class="search-loading-overlay" role="status" aria-hidden="true" aria-busy="false" aria-live="polite" aria-label="Search in progress">
     <div class="search-loading-overlay-veil" aria-hidden="true"></div>
     <div class="search-loading-card">
@@ -801,6 +811,9 @@
 
   </div><!-- /.results-inner -->
 </div><!-- /#st-results -->
+
+<!-- SearchResultsV2 — room-first offer sheet (Proposal B) -->
+<div id="st-v2-hotel-offer" class="sr2-offer-page" hidden aria-hidden="true"></div>
 
 <!-- Mobile edit-trip sheet (direct body child — sticky cmd + backdrop-filter break position:fixed inside .cmd) -->
 <div class="cmd-trip-sheet-host" id="cmd-trip-sheet-host" hidden aria-hidden="true">
@@ -860,6 +873,7 @@
 </div>
 
 <script src="/app.js" defer></script>
+<script src="/search-results-v2.js" defer onerror="console.error('[SearchResultsV2] FAILED to load /search-results-v2.js — check Network tab (404?)')"></script>
 
 <!-- Lightbox overlay -->
 <div id="lightbox" onclick="if(event.target.id==='lightbox')closeLightbox()">

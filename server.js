@@ -1242,12 +1242,13 @@ function rlHandler(req, res /*, next, options */) {
 }
 const _rlOpts = { standardHeaders: true, legacyHeaders: false, handler: rlHandler, skip: (req) => RL_SKIP.has(req.path || "") };
 const _rlSearch = rateLimit({ ..._rlOpts, windowMs: 60_000, max: 60 });   // /api/vsearch
-const _rlRates  = rateLimit({ ..._rlOpts, windowMs: 60_000, max: 30 });   // /api/rates
+const _rlRates  = rateLimit({ ..._rlOpts, windowMs: 60_000, max: 30 });   // /api/rates + /api/prebook
 const _rlMeta   = rateLimit({ ..._rlOpts, windowMs: 60_000, max: 90 });   // /api/hotels-meta
 const _rlAdmin  = rateLimit({ ..._rlOpts, windowMs: 60_000, max: 10 });   // /api/index-* + backfill
 const _rlGeneric = rateLimit({ ..._rlOpts, windowMs: 60_000, max: 240 }); // everything else /api/*
 app.use("/api/vsearch",      _rlSearch);
 app.use("/api/rates",        _rlRates);
+app.use("/api/prebook",      _rlRates);   // LiteAPI /rates/prebook proxy (checkout step 1)
 app.use("/api/hotel-rates",  _rlRates);   // single-hotel rates, same budget as batch
 app.use("/api/hotels-meta",  _rlMeta);
 app.use("/api/hotel-rooms",  _rlMeta);
@@ -3361,6 +3362,36 @@ async function liteRatesCall(hotelIds, checkin, checkout, currency = "USD") {
   return json?.data?.rates ?? json?.data ?? json?.rates ?? [];
 }
 
+/** LiteAPI booking step 1 — lock rate + return prebookId for WL checkout or /rates/book. */
+async function litePrebookCall(offerId, { usePaymentSdk = false, timeout = 30 } = {}) {
+  const liteRes = await fetch(`https://book.liteapi.travel/v3.0/rates/prebook?timeout=${timeout}`, {
+    method: "POST",
+    headers: { "X-API-Key": LITEAPI_KEY, "Content-Type": "application/json", accept: "application/json" },
+    body: JSON.stringify({ offerId: String(offerId), usePaymentSdk: !!usePaymentSdk }),
+  });
+  let json;
+  try { json = await liteRes.json(); } catch { json = null; }
+  if (liteRes.status === 429) {
+    const err = new Error("rate_limited");
+    err.status = 429;
+    throw err;
+  }
+  if (!liteRes.ok) {
+    const err = new Error("liteapi_prebook_" + liteRes.status);
+    err.status = liteRes.status;
+    err.liteapi = json?.error || json;
+    throw err;
+  }
+  const data = json?.data ?? json;
+  if (!data?.prebookId) {
+    const err = new Error("prebook_missing_id");
+    err.status = 502;
+    err.liteapi = json;
+    throw err;
+  }
+  return data;
+}
+
 // Merge a LiteAPI rates list into the accumulator maps in place. Used by both
 // the main batched call and the top-N detail pass. Existing entries are kept
 // when the new per-night is not strictly cheaper, so the detail pass can only
@@ -3641,6 +3672,39 @@ app.get("/api/hotel-rates", async (req, res) => {
     if (e.status === 429) return res.status(429).json({ error: "rate_limited" });
     console.error("[hotel-rates]", e.message);
     res.status(500).json({ error: "rates_error" });
+  }
+});
+
+// ── Prebook (LiteAPI checkout step 1) ─────────────────────────────────────────
+// POST /api/prebook  { offerId }  →  { prebookId, hotelId, checkin, checkout, currency, price }
+// Client redirects to WL: /booking?prebookId=… (skips WL-side auto-prebook).
+app.post("/api/prebook", async (req, res) => {
+  const offerId = String(req.body?.offerId || "").trim();
+  if (!offerId) return res.status(400).json({ error: "offerId_required" });
+  if (!LITEAPI_KEY) return res.status(503).json({ error: "liteapi_not_configured" });
+  try {
+    const data = await litePrebookCall(offerId, { usePaymentSdk: false });
+    const priceTotal = data.price ?? data.roomTypes?.[0]?.rates?.[0]?.retailRate?.total?.[0]?.amount ?? null;
+    console.log(`[prebook] ok prebookId=${data.prebookId} hotelId=${data.hotelId} currency=${data.currency} price=${priceTotal}`);
+    res.json({
+      prebookId: data.prebookId,
+      hotelId: data.hotelId,
+      checkin: data.checkin,
+      checkout: data.checkout,
+      currency: data.currency,
+      price: priceTotal,
+    });
+  } catch (e) {
+    if (e.status === 429) return res.status(429).json({ error: "rate_limited" });
+    const liteErr = e.liteapi;
+    const detail = liteErr?.description || liteErr?.message || null;
+    console.error("[prebook]", e.message, detail || "");
+    const status = e.status && e.status >= 400 && e.status < 600 ? e.status : 502;
+    res.status(status).json({
+      error: "prebook_failed",
+      code: liteErr?.code ?? null,
+      detail,
+    });
   }
 });
 
