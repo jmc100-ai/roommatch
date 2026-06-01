@@ -97,25 +97,21 @@
   }
 
   function readStoredMode() {
-    try {
-      return sessionStorage.getItem(STORAGE_KEY) === MODE_V2 ? MODE_V2 : MODE_CLASSIC;
-    } catch (_) {
-      return MODE_CLASSIC;
-    }
+    return MODE_V2;
   }
 
-  function writeStoredMode(mode) {
+  function writeStoredMode() {
     try {
-      sessionStorage.setItem(STORAGE_KEY, mode);
+      sessionStorage.setItem(STORAGE_KEY, MODE_V2);
     } catch (_) { /* private mode */ }
   }
 
   function getMode() {
-    return readStoredMode();
+    return MODE_V2;
   }
 
   function isV2Mode() {
-    return getMode() === MODE_V2;
+    return true;
   }
 
   function esc(s) {
@@ -259,7 +255,7 @@
   }
 
   function repaintCuratedPanel() {
-    if (!isV2Mode() || getV2Subview() !== VIEW_CURATED) return;
+    if (getV2Subview() !== VIEW_CURATED) return;
     if (document.getElementById('st-results')?.classList.contains('results-pending')) return;
     paintV2Panel();
   }
@@ -559,8 +555,7 @@
     resetToCuratedView();
     const st = document.getElementById('st-results');
     if (!st?.classList.contains('results-pending')) return;
-    if (isV2Mode()) applyLayout();
-    else paintV2Panel();
+    applyLayout();
   }
 
   /** Toggle DOM visibility only (no list re-render). */
@@ -568,22 +563,19 @@
     const st = document.getElementById('st-results');
     const classic = document.getElementById('results');
     const panel = document.getElementById('results-v2');
-    const btn = document.getElementById('resultsUxSwitch');
-    const v2 = isV2Mode();
-    const full = v2 && getV2Subview() === VIEW_FULL;
-    const curated = v2 && !full;
+    const full = getV2Subview() === VIEW_FULL;
+    const curated = !full;
     const bar = ensureFullListBar();
 
     if (st) {
-      st.classList.toggle('results-ux-mode-v2', v2);
-      st.classList.toggle('results-ux-mode-classic', !v2);
+      st.classList.add('results-ux-mode-v2');
+      st.classList.remove('results-ux-mode-classic');
       st.classList.toggle('sr2-view-full', full);
       st.classList.toggle('sr2-view-curated', curated);
     }
     if (classic) {
-      const showClassic = !v2 || full;
-      classic.hidden = !showClassic;
-      classic.setAttribute('aria-hidden', showClassic ? 'false' : 'true');
+      classic.hidden = !full;
+      classic.setAttribute('aria-hidden', full ? 'false' : 'true');
     }
     if (panel) {
       panel.hidden = !curated;
@@ -594,10 +586,6 @@
       bar.hidden = !full;
       bar.setAttribute('aria-hidden', full ? 'false' : 'true');
     }
-    if (btn) {
-      btn.textContent = v2 ? 'Classic UI' : 'SearchResultsV2';
-      btn.setAttribute('aria-pressed', v2 ? 'true' : 'false');
-    }
   }
 
   /**
@@ -606,12 +594,10 @@
    */
   function applyLayout(opts) {
     const pending = document.getElementById('st-results')?.classList.contains('results-pending');
-    const v2 = isV2Mode();
-    const full = v2 && getV2Subview() === VIEW_FULL;
-    const curated = v2 && !full;
+    const full = getV2Subview() === VIEW_FULL;
+    const curated = !full;
 
     applyLayoutClasses();
-    if (!v2 && !pending) closeOffer({ silent: true });
     if (curated) {
       paintV2Panel();
       return;
@@ -665,27 +651,11 @@
     paintV2Panel();
   }
 
-  function setMode(mode) {
-    const next = mode === MODE_V2 ? MODE_V2 : MODE_CLASSIC;
-    writeStoredMode(next);
-    if (next === MODE_V2) {
-      refreshCtx();
-    } else {
-      resetToCuratedView();
-    }
+  function setMode() {
+    writeStoredMode();
+    refreshCtx();
     applyLayout();
-    if (next === MODE_CLASSIC) bridge()?.renderFullResultsList?.();
-    return next;
-  }
-
-  function toggle(ev) {
-    if (ev) {
-      ev.preventDefault();
-      ev.stopPropagation();
-    }
-    const next = isV2Mode() ? MODE_CLASSIC : MODE_V2;
-    console.log('[SearchResultsV2] toggle →', next);
-    return setMode(next);
+    return MODE_V2;
   }
 
   function syncFromSearchContext(ctx) {
@@ -696,7 +666,7 @@
     }
     // Full list: renderSorted() in app.js already painted #results — do not
     // call applyLayout() here or we loop (applyLayout → renderSorted → sync → …).
-    if (isV2Mode() && getV2Subview() === VIEW_FULL) {
+    if (getV2Subview() === VIEW_FULL) {
       return;
     }
     applyLayout();
@@ -711,7 +681,6 @@
   }
 
   function openSeeAllFullList() {
-    if (!isV2Mode()) return;
     const keepY = window.scrollY || 0;
     _fullListScrollY = keepY;
     _v2Subview = VIEW_FULL;
@@ -724,7 +693,6 @@
   }
 
   function showCuratedView() {
-    if (!isV2Mode()) return;
     _v2Subview = VIEW_CURATED;
     applyLayout({ renderFullList: false });
     window.scrollTo({ top: _fullListScrollY || 0, behavior: 'smooth' });
@@ -813,17 +781,9 @@
     if (_offerState && !history.state?.v2Offer) closeOffer({ silent: true });
   }
 
-  function bindSwitcher() {
-    const btn = document.getElementById('resultsUxSwitch');
-    if (!btn || btn.dataset.sr2Bound === '1') return;
-    btn.dataset.sr2Bound = '1';
-    btn.removeAttribute('onclick');
-    btn.addEventListener('click', (ev) => toggle(ev));
-  }
-
   function init() {
     ensureModals();
-    bindSwitcher();
+    writeStoredMode();
     applyLayout();
     window.addEventListener('popstate', onPopState);
     document.addEventListener('keydown', (e) => {
@@ -842,7 +802,6 @@
     LENSES,
     getMode,
     setMode,
-    toggle,
     init,
     applyLayout,
     applyLayoutClasses,
