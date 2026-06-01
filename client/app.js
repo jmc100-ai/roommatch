@@ -5627,8 +5627,10 @@
   const RESULTS_LOADING_MIN_MS = 720;
   let _resultsLoadingShownAt = 0;
 
-  async function waitResultsLoadingMinDwell() {
+  async function waitResultsLoadingMinDwell(ratesWaitMs = 0) {
     if (!_resultsLoadingShownAt) return;
+    // Skip the artificial dwell when the user already waited on live rates.
+    if (ratesWaitMs >= 2500) return;
     const elapsed = Date.now() - _resultsLoadingShownAt;
     if (elapsed < RESULTS_LOADING_MIN_MS) {
       await new Promise((r) => setTimeout(r, RESULTS_LOADING_MIN_MS - elapsed));
@@ -5714,8 +5716,8 @@
     const haveDates = !!(S.checkin && S.checkout);
     const needWait = haveDates && _fetchingPrices && !_pricesLoaded;
 
-    const finishPaint = async () => {
-      await waitResultsLoadingMinDwell();
+    const finishPaint = async (ratesWaitMs = 0) => {
+      await waitResultsLoadingMinDwell(ratesWaitMs);
       exitResultsPendingMode();
       const resEl = document.getElementById('results');
       if (resEl) resEl.classList.remove('no-anim');
@@ -5723,6 +5725,7 @@
       renderSorted();
       _syncRatesStatusAfterReveal();
       if (typeof onReady === 'function') onReady();
+      _runPostRevealRatesWork(_ratesReqId);
     };
 
     if (!needWait) {
@@ -5766,7 +5769,7 @@
       );
     }
 
-    await finishPaint();
+    await finishPaint(waited);
   }
 
   function _ratesStatusMessage() {
@@ -6343,9 +6346,6 @@
     const nbhdPickerScoresP = prefetchNbhdPickerMatchMap(S.city);
     const _t0search = Date.now();
     console.log(`[perf] search start`);
-    const ratesPrefetch = (hasDates && _parallelRatesEnabled())
-      ? _fetchRatesPayload(city, checkin, checkout, reqId)
-      : null;
     try {
       const vsearchParams = { query, city };
       if (activePoly) {
@@ -6363,12 +6363,17 @@
       }
       if (SEARCH_VERSION_OVERRIDE) vsearchParams.search_version = SEARCH_VERSION_OVERRIDE;
       if (SEARCH_COMPARE_OVERRIDE) vsearchParams.compare = '1';
+      if (hasDates) {
+        vsearchParams.checkin = checkin;
+        vsearchParams.checkout = checkout;
+        vsearchParams.currency = getRatesCurrencyPref();
+      }
       _lastVsearchUrl = `${BACKEND}/api/vsearch?` + new URLSearchParams(vsearchParams);
       _lastVsearchHotels = null;
       const resp = await fetch(_lastVsearchUrl);
       _lastVsearchClientMs = Date.now() - _t0search;
       console.log(`[perf] search response: ${_lastVsearchClientMs}ms`);
-      await nbhdPickerScoresP.catch(() => {});
+      nbhdPickerScoresP.catch(() => {});
       if (!resp.ok) {
         let errMsg = `Search failed (${resp.status})`;
         try { const e = await resp.json(); errMsg = e.error || errMsg; } catch(_) {}
@@ -6401,6 +6406,7 @@
         console.info(
           '[perf] vsearch server',
           st.handler_wall_ms != null ? `handler=${st.handler_wall_ms}ms` : '',
+          st.rates_embed_ms != null ? `rates_embed=${st.rates_embed_ms}ms×${st.rates_embed_count || 0}` : '',
           st.meta_sync_ms != null ? `meta=${st.meta_sync_ms}ms×${st.meta_sync_count || '?'}` : '',
           st.perf_ms || ''
         );
@@ -6418,17 +6424,15 @@
       } else if (hotels.length) {
         setStatus('');
         console.log(`[perf] render called: ${Date.now() - _t0search}ms`);
-        render(hotels, hasDates);  // resets _pricesLoaded = false, sets _fetchingPrices
-        // Lazy-fetch metadata for hotels beyond META_SYNC_LIMIT (server returns
-        // their IDs in data.deferred_meta_ids). Server has already kicked off a
-        // background warm of these IDs so the cache is usually hot by the time
-        // we ask. Patches name / stars / location / rating in place per card.
-        if (Array.isArray(data.deferred_meta_ids) && data.deferred_meta_ids.length) {
-          lazyFetchHotelMeta(prioritizeMetaIds(data.deferred_meta_ids), reqId);
-        }
-        lazyFetchVisibleStubPhotos(reqId);   // immediately fill stub cards with room photos
-        if (hasDates) {
-          fetchPrices(city, checkin, checkout, reqId, [], ratesPrefetch);
+        render(hotels, hasDates);
+        if (hasDates && data.rates && typeof data.rates.prices === 'object') {
+          applyVsearchEmbeddedRates(data.rates, reqId);
+          if (data.rates.tail_pending) {
+            fetchPrices(city, checkin, checkout, reqId, [], null, { skipDetail: true, background: true });
+          }
+        } else if (hasDates) {
+          // Legacy fallback — older server builds without embedded full-city rates
+          fetchPrices(city, checkin, checkout, reqId, [], null, { skipDetail: true });
         } else {
           // No dates — unlock price sort buttons immediately, no availability state
           _pricesLoaded = true;
@@ -6580,14 +6584,12 @@
     _fetchingPrices = !!hasDates;
     _hasDateSearch  = false;
     _ratesFetchDone = false;
+    _backgroundRatesReqId++;
     _showAvailOnly  = false;
-    // Reset the gated-first-render machinery for this search. When dates are
-    // entered we create a fresh rates-arrival promise that fetchPrices() will
-    // resolve; revealResultsWhenReady() awaits it before the first paint so
-    // the list lands once with the price-aware sort applied.
+    // First paint waits for embedded rates inside vsearch (B1) or legacy fetchPrices.
     _initialRenderHappened = false;
     if (hasDates) {
-      _ratesArrivalPromise = new Promise(r => { _ratesArrivalResolve = r; });
+      _ratesArrivalPromise = new Promise((r) => { _ratesArrivalResolve = r; });
     } else {
       _ratesArrivalPromise = null;
       _ratesArrivalResolve = null;
@@ -6655,9 +6657,23 @@
     }
   }
 
+  function rankedHotelIdsForRates(hotels, cap = 200) {
+    const out = [];
+    for (const h of hotels || []) {
+      if (!h || h.id == null) continue;
+      const id = String(h.id).trim();
+      if (!id) continue;
+      out.push(id);
+      if (out.length >= cap) break;
+    }
+    return out;
+  }
+
   // Fires parallel to vsearch. reqId lets us discard stale responses if user re-searches.
-  async function _fetchRatesPayload(city, checkin, checkout, reqId) {
+  async function _fetchRatesPayload(city, checkin, checkout, reqId, hotelIds = [], opts = {}) {
     const params = new URLSearchParams({ city, checkin, checkout, currency: getRatesCurrencyPref() });
+    if (hotelIds.length > 0) params.set('hotelIds', hotelIds.join(','));
+    if (opts.skipDetail) params.set('skip_detail', '1');
     const ratesUrl = `${BACKEND}/api/rates?` + params;
     const resp = await Promise.race([
       fetch(ratesUrl),
@@ -6672,15 +6688,80 @@
     return { data };
   }
 
-  async function fetchPrices(city, checkin, checkout, reqId, hotelIds = [], ratesPrefetch = null) {
+  let _backgroundRatesReqId = 0;
+  let _postRevealWorkReqId = 0;
+
+  /** After first paint: visible meta + stub photos; optional rate follow-ups (capped). */
+  function _runPostRevealRatesWork(searchReqId) {
+    if (searchReqId !== _ratesReqId) return;
+    const workId = ++_postRevealWorkReqId;
+    const run = async () => {
+      if (workId !== _postRevealWorkReqId || searchReqId !== _ratesReqId) return;
+      lazyFetchSortedTopMeta();
+      await lazyFetchVisibleStubPhotos(searchReqId);
+      if (searchReqId !== _ratesReqId) return;
+      if (_hasDateSearch && _pricesLoaded) {
+        await lazyFetchStubRooms(searchReqId, { maxTargets: 25 });
+        if (searchReqId !== _ratesReqId) return;
+        enrichHotelRates(searchReqId);
+        _refreshV2CuratedAfterRates();
+      }
+    };
+    if (typeof requestIdleCallback === 'function') {
+      requestIdleCallback(run, { timeout: 1500 });
+    } else {
+      setTimeout(run, 0);
+    }
+  }
+
+  /** Apply full-city rates embedded in GET /api/vsearch (single round-trip). */
+  function applyVsearchEmbeddedRates(ratesPayload, reqId) {
+    const _resolveGate = () => {
+      if (_ratesArrivalResolve) {
+        const r = _ratesArrivalResolve;
+        _ratesArrivalResolve = null;
+        try { r(); } catch (_) {}
+      }
+    };
+    if (!ratesPayload?.prices || typeof ratesPayload.prices !== 'object') {
+      _ratesFetchDone = true;
+      _fetchingPrices = false;
+      _resolveGate();
+      return;
+    }
+    const t0 = Date.now();
+    applyPrices(
+      ratesPayload.prices,
+      ratesPayload.roomPrices || {},
+      ratesPayload.currency || getRatesCurrencyPref(),
+      ratesPayload.pricedCount || 0,
+      ratesPayload
+    );
+    _ratesFetchDone = true;
+    _fetchingPrices = false;
+    _setPriceBtnsState(true);
+    _resolveGate();
+    const msg = _ratesStatusMessage();
+    if (msg.text) _setRatesStatus(msg.state, msg.text);
+    console.log(
+      `[perf] vsearch embedded rates: ${ratesPayload.pricedCount || 0} priced` +
+      ` (${ratesPayload.hotel_ids_fetched || '?'} ids` +
+      (ratesPayload.partial ? ', partial' : '') +
+      (ratesPayload.cache_hit ? ', cache hit' : '') +
+      `) in ${Date.now() - t0}ms`
+    );
+  }
+
+  async function fetchPrices(city, checkin, checkout, reqId, hotelIds = [], ratesPrefetch = null, opts = {}) {
     const hadDates = !!(checkin && checkout && checkin < checkout);
-    _ratesFetchDone = false;
-    _setPriceBtnsState(false);  // show spinner only while fetch is in flight
-    _setRatesStatus('loading', 'Checking live rates…');
-    // Signals revealResultsWhenReady() that rates have landed (success OR
-    // error). Always called exactly once per fetchPrices invocation so a
-    // gated render can never stall waiting on a failed/stale rates call.
+    const isBackground = !!opts.background;
+    if (!isBackground) {
+      _ratesFetchDone = false;
+      _setPriceBtnsState(false);
+      _setRatesStatus('loading', 'Checking live rates…');
+    }
     const _signalRatesArrived = () => {
+      if (isBackground) return;
       if (_ratesArrivalResolve) {
         const r = _ratesArrivalResolve;
         _ratesArrivalResolve = null;
@@ -6692,17 +6773,10 @@
       if (ratesPrefetch) {
         payload = await ratesPrefetch;
       } else {
-        const params = new URLSearchParams({ city, checkin, checkout, currency: getRatesCurrencyPref() });
-        if (hotelIds.length > 0) params.set('hotelIds', hotelIds.join(','));
-        const ratesUrl = `${BACKEND}/api/rates?` + params;
-        const resp = await Promise.race([
-          fetch(ratesUrl),
-          new Promise((_, reject) => {
-            setTimeout(() => reject(new Error('rates request timed out')), FETCH_RATES_TIMEOUT_MS);
-          }),
-        ]);
+        payload = await _fetchRatesPayload(city, checkin, checkout, reqId, hotelIds, opts);
         if (reqId !== _ratesReqId) return;
-        if (!resp.ok) {
+        if (payload?.error) {
+          if (isBackground) return;
           _fetchingPrices = false;
           for (const h of _lastHotels) { h.price = null; }
           _pricesLoaded = false;
@@ -6711,34 +6785,27 @@
           _setRatesStatus('', 'Rates unavailable — add dates again or sort by match');
           return;
         }
-        payload = { data: await resp.json() };
       }
 
       if (payload?.stale || reqId !== _ratesReqId) return;
-      if (payload?.error) {
-        _fetchingPrices = false;
-        for (const h of _lastHotels) { h.price = null; }
-        _pricesLoaded = false;
-        _hasDateSearch = hadDates;
-        _setPriceBtnsState(true);
-        _setRatesStatus('', 'Rates unavailable — add dates again or sort by match');
-        return;
-      }
 
       const data = payload.data;
-      _fetchingPrices = false;
-      applyPrices(data.prices || {}, data.roomPrices || {}, data.currency || getRatesCurrencyPref(), data.pricedCount || 0, data);
-      // V2 search only fetches photos for the top GALLERY_LIMIT (250) hotels.
-      // For ~3500-hotel cities like Mexico City, hotels ranked > 250 come back
-      // as stubs (roomTypes: []) even when we have indexed photos for them.
-      // When LiteAPI prices those stubs, lazy-fetch their room data so the
-      // card stops showing "rate-only" rows for rooms we actually have photos
-      // for. Fire-and-forget so the rates path stays fast.
-      lazyFetchStubRooms(reqId);
-      enrichHotelRates(reqId);    // per-hotel full rates for large-inventory hotels
+      if (!isBackground) _fetchingPrices = false;
+      const tRates0 = Date.now();
+      applyPrices(
+        data.prices || {},
+        data.roomPrices || {},
+        data.currency || getRatesCurrencyPref(),
+        data.pricedCount || 0,
+        data,
+        { merge: isBackground, background: isBackground }
+      );
+      if (!isBackground) {
+        console.log(`[perf] initial rates: ${hotelIds.length || 'city'} ids in ${Date.now() - tRates0}ms`);
+      }
     } catch (e) {
       console.warn('[prices]', e.message);
-      if (reqId === _ratesReqId) {
+      if (reqId === _ratesReqId && !isBackground) {
         _fetchingPrices = false;
         for (const h of _lastHotels) { h.price = null; }
         _pricesLoaded = false;
@@ -6750,9 +6817,7 @@
       }
     } finally {
       _signalRatesArrived();
-      // Safety net: if applyPrices returned early (before first paint) or threw,
-      // ensure the loading label/spinner cannot stick after this request ends.
-      if (reqId === _ratesReqId) {
+      if (reqId === _ratesReqId && !isBackground) {
         _ratesFetchDone = true;
         _fetchingPrices = false;
         _setPriceBtnsState(true);
@@ -6826,12 +6891,9 @@
   }
 
   // ── Lazy hotel-meta fetch ──────────────────────────────────────────────────
-  // Server caps synchronous LiteAPI metadata to top META_SYNC_LIMIT (~30) hotels
-  // and returns the rest in data.deferred_meta_ids. We chunk-fetch the rest
-  // here so cards beyond #30 fill in their name / stars / location / rating
-  // shortly after first paint without blocking TTFB. CHUNK=200 matches the
-  // server endpoint cap so a Mexico-City-sized fill (~3500 ids) needs ~18
-  // sequential calls rather than ~35 — cuts wall clock roughly in half.
+  // Only fetch meta for visible / curated cards (lazyFetchSortedTopMeta). Do NOT
+  // bulk-fetch data.deferred_meta_ids — the server warms tail meta in background
+  // and compact-tail hotels already carry name/photo from vsearch (B2).
   // ── Lazy stub-room fetch ───────────────────────────────────────────────────
   // _fetchRoomsForRenderedStubs — called after every renderSorted().
   //
@@ -6863,6 +6925,7 @@
       const params = new URLSearchParams({ ids: newStubs.join(','), city: S.city });
       const r = await fetch(`${BACKEND}/api/hotel-rooms?` + params);
       if (reqId !== _ratesReqId) return;  // new search started — discard
+      if (r.status === 429) { newStubs.forEach(id => _fetchedStubIds.delete(id)); return; }
       if (!r.ok) { newStubs.forEach(id => _fetchedStubIds.delete(id)); return; }
       const d = await r.json();
       if (reqId !== _ratesReqId) return;
@@ -6917,6 +6980,7 @@
       console.log(`[stub-prefetch] fetching ${url.substring(0, 120)}...`);
       const r = await fetch(url);
       console.log(`[stub-prefetch] response status=${r.status} ok=${r.ok} in ${Date.now()-t0}ms`);
+      if (r.status === 429) { console.warn('[stub-prefetch] rate limited'); return; }
       if (ourReqId !== _visibleStubReqId || searchReqId !== _ratesReqId) { console.log('[stub-prefetch] stale, bailing'); return; }
       if (!r.ok) { console.warn(`[stub-prefetch] HTTP error ${r.status}`); return; }
       const d = await r.json();
@@ -6931,11 +6995,12 @@
   // in place so cards show real room rows (with photos) instead of "Queen
   // Room - rate-only" fallback rows. Bails if a newer search starts.
   let _stubRoomsLazyReqId = 0;
-  async function lazyFetchStubRooms(searchReqId) {
+  async function lazyFetchStubRooms(searchReqId, opts = {}) {
     if (!_hasDateSearch || !_pricesLoaded || !S.city) {
       console.log(`[stub-rooms] skipped: hasDate=${_hasDateSearch} pricesLoaded=${_pricesLoaded} city=${S.city}`);
       return;
     }
+    const maxTargets = Math.max(5, Math.min(40, Number(opts.maxTargets) || 25));
     // Two cases trigger a lazy room fetch:
     //  A) Stub: ranked > GALLERY_LIMIT (no roomTypes) and LiteAPI priced
     //     at least one room — we need photos to render anything useful.
@@ -6946,7 +7011,11 @@
     //     this fetch those rate-matched rooms fall through to "rate-only"
     //     placeholder rows even though we DO have their photos indexed.
     const targetIds = [];
-    for (const h of _lastHotels) {
+    const ranked = (typeof getSortedHotelsForDisplay === 'function' && _lastHotels.length)
+      ? getSortedHotelsForDisplay()
+      : _lastHotels;
+    const scanHotels = ranked.length ? ranked : _lastHotels;
+    for (const h of scanHotels) {
       if (!h || !h.id) continue;
       const rp = h.roomPrices;
       if (!rp) continue;
@@ -6964,20 +7033,25 @@
       }
       if (!hasAnyPrice) continue;
       if (existing.length === 0 || hasMissing) targetIds.push(String(h.id));
+      if (targetIds.length >= maxTargets) break;
     }
     if (!targetIds.length) { console.log('[stub-rooms] no targets (all stubs have no roomPrices)'); return; }
     const ourReqId = ++_stubRoomsLazyReqId;
     const t0 = Date.now();
     console.log(`[stub-rooms] ${targetIds.length} targets (stubs with prices)`);
-    const CHUNK = 40;  // keep well under 10k-row server limit; at ~50 photos/hotel, 40 hotels = ~2k rows
+    const CHUNK = 40;
     let merged = 0;
     for (let i = 0; i < targetIds.length; i += CHUNK) {
       if (ourReqId !== _stubRoomsLazyReqId) return;
-      if (searchReqId !== _ratesReqId) return;  // bail on new search
+      if (searchReqId !== _ratesReqId) return;
       const slice = targetIds.slice(i, i + CHUNK);
       try {
         const params = new URLSearchParams({ ids: slice.join(','), city: S.city });
         const r = await fetch(`${BACKEND}/api/hotel-rooms?` + params);
+        if (r.status === 429) {
+          console.warn('[stub-rooms] rate limited — stopping tail fetch');
+          break;
+        }
         if (!r.ok) { console.warn(`[stub-rooms] chunk HTTP ${r.status}`); continue; }
         const d = await r.json();
         console.log(`[stub-rooms] chunk ${i/CHUNK+1}: got ${Object.keys(d?.hotels||{}).length} hotels`);
@@ -7006,12 +7080,19 @@
     if (!_hasDateSearch || !_pricesLoaded || !S.checkin || !S.checkout) return;
 
     const MAX_ENRICH = 10;
+    const visibleCap = Math.max(_displayedCount, 10);
+    const visibleIds = new Set(
+      (typeof getSortedHotelsForDisplay === 'function' ? getSortedHotelsForDisplay() : _lastHotels)
+        .slice(0, visibleCap)
+        .map((h) => String(h.id))
+    );
     const targets = _lastHotels.filter(h => {
-      if (!h?.id || h.price == null) return false;           // hotel not priced
+      if (!h?.id || !visibleIds.has(String(h.id))) return false;
+      if (h.price == null) return false;
       const indexed = (h.roomTypes || []).filter(rt => rt.roomTypeId != null).length;
-      if (indexed < 4) return false;                         // small — already well-covered
+      if (indexed < 4) return false;
       const priced = Object.keys(h.roomPrices || {}).length;
-      return priced < indexed * 0.5;                        // < half of indexed rooms have a rate
+      return priced < indexed * 0.5;
     }).slice(0, MAX_ENRICH);
 
     if (!targets.length) return;
@@ -7174,7 +7255,7 @@
     for (const h of ranked.slice(0, 30)) {
       if (hotelNeedsLiteMeta(h)) push(String(h.id));
     }
-    if (ids.length) lazyFetchHotelMeta(ids, _ratesReqId);
+    if (ids.length) lazyFetchHotelMeta(ids, _ratesReqId, { maxIds: 40 });
   }
 
   // Mirrors applyMetaInPlace pattern. For each hotel in roomsMap, mutate the
@@ -7219,24 +7300,30 @@
   }
 
   let _metaLazyReqId = 0;
-  async function lazyFetchHotelMeta(deferredIds, searchReqId) {
+  async function lazyFetchHotelMeta(deferredIds, searchReqId, opts = {}) {
     if (!Array.isArray(deferredIds) || !deferredIds.length) return;
+    const maxIds = Math.max(20, Math.min(400, Number(opts.maxIds) || 200));
+    const ids = deferredIds.slice(0, maxIds);
     const ourReqId = ++_metaLazyReqId;
     const t0 = Date.now();
-    const CHUNK = 200;
-    for (let i = 0; i < deferredIds.length; i += CHUNK) {
-      // Bail if a newer search started — those hotels aren't on screen anymore.
+    const CHUNK = 100;
+    for (let i = 0; i < ids.length; i += CHUNK) {
       if (ourReqId !== _metaLazyReqId) return;
-      const slice = deferredIds.slice(i, i + CHUNK);
+      if (searchReqId != null && searchReqId !== _ratesReqId) return;
+      const slice = ids.slice(i, i + CHUNK);
       try {
         const r = await fetch(`${BACKEND}/api/hotels-meta?ids=${encodeURIComponent(slice.join(','))}`);
+        if (r.status === 429) {
+          console.warn('[lazy meta] rate limited — stopping');
+          break;
+        }
         if (!r.ok) continue;
         const d = await r.json();
         if (ourReqId !== _metaLazyReqId) return;
         if (d?.hotels) applyMetaInPlace(d.hotels);
       } catch (_) { /* non-fatal */ }
     }
-    console.log(`[perf] lazy meta: ${deferredIds.length} hotels in ${Date.now() - t0}ms`);
+    console.log(`[perf] lazy meta: ${ids.length}/${deferredIds.length} hotels in ${Date.now() - t0}ms`);
   }
 
   // Patches DOM elements per hotel ID: hotel-name, hotel-meta (stars + location
@@ -7302,33 +7389,77 @@
     if (repaintCurated) window.SearchResultsV2?.repaintCuratedPanel?.();
   }
 
-  function applyPrices(priceMap, roomPriceMap, currency, pricedCount, ratesData = {}) {
+  function syncResultCountAfterBackgroundRates() {
+    if (!_pricesLoaded || !_hasDateSearch) return;
+    let priced = 0;
+    for (const h of _lastHotels) { if (h && h.price != null) priced++; }
+    const visibleHotels = _lastHotels.length ? getSortedHotelsForDisplay() : _lastHotels;
+    const total = visibleHotels.length;
+    const showing = Math.min(_displayedCount, total);
+    const remaining = total - _displayedCount;
+    const countEl = document.getElementById('resultCount');
+    const pricedNote = priced > 0 ? ` · ${priced} priced` : '';
+    if (countEl) {
+      countEl.textContent = remaining > 0
+        ? `Showing ${showing} of ${total} hotels${pricedNote}`
+        : `${total} hotel${total !== 1 ? 's' : ''}${pricedNote}`;
+    }
+  }
+
+  function applyPrices(priceMap, roomPriceMap, currency, pricedCount, ratesData = {}, opts = {}) {
+    const merge = !!opts.merge;
+    const isBackground = !!opts.background;
     const cur = normalizeRatesCurrencyClient(currency);
     const sym = ratesCurrencySymbol(cur);
-    _priceCurrency = cur;
+    if (!merge) _priceCurrency = cur;
 
     // Merge hotel-level and per-room prices + offerIds onto hotel objects for re-render persistence
     let roomPricedRooms = 0;
+    let newlyPricedHotels = 0;
     for (const hotel of _lastHotels) {
+      const hadPrice = hotel.price != null;
       if (Object.prototype.hasOwnProperty.call(priceMap, hotel.id)) {
         const pv = priceMap[hotel.id];
         hotel.price = pv == null || !Number.isFinite(Number(pv)) ? null : Number(pv);
-      } else {
+      } else if (!merge) {
         hotel.price = null;
       }
+      if (hotel.price != null && !hadPrice) newlyPricedHotels++;
       if (roomPriceMap[hotel.id]) {
-        hotel.roomPrices = roomPriceMap[hotel.id];
+        if (!hotel.roomPrices) hotel.roomPrices = {};
+        for (const [rid, price] of Object.entries(roomPriceMap[hotel.id])) {
+          const existing = hotel.roomPrices[rid];
+          if (existing == null || price < existing) hotel.roomPrices[rid] = price;
+        }
         roomPricedRooms += Object.keys(roomPriceMap[hotel.id]).length;
       }
-      // Rate-name map for "extra rates" rows — only used for mappedRoomIds we
-      // don't have in our indexed v2_room_inventory (i.e. rate-only rooms).
-      if (ratesData.roomNames?.[hotel.id]) hotel.roomNames = ratesData.roomNames[hotel.id];
-      // Store offerIds for white-label checkout deep links
-      if (ratesData.offerIds?.[hotel.id]) hotel.offerIds = ratesData.offerIds[hotel.id];
-      if (ratesData.roomFreeCancel?.[hotel.id]) hotel.roomFreeCancel = ratesData.roomFreeCancel[hotel.id];
+      if (ratesData.roomNames?.[hotel.id]) {
+        if (!hotel.roomNames) hotel.roomNames = {};
+        Object.assign(hotel.roomNames, ratesData.roomNames[hotel.id]);
+      }
+      if (ratesData.offerIds?.[hotel.id]) {
+        if (!hotel.offerIds) hotel.offerIds = {};
+        Object.assign(hotel.offerIds, ratesData.offerIds[hotel.id]);
+      }
+      if (ratesData.roomFreeCancel?.[hotel.id]) {
+        if (!hotel.roomFreeCancel) hotel.roomFreeCancel = {};
+        Object.assign(hotel.roomFreeCancel, ratesData.roomFreeCancel[hotel.id]);
+      }
       if (ratesData.hotelFreeCancel && Object.prototype.hasOwnProperty.call(ratesData.hotelFreeCancel, hotel.id)) {
         hotel.hotelFreeCancel = !!ratesData.hotelFreeCancel[hotel.id];
       }
+    }
+    if (merge) {
+      console.log(`[prices] merge: +${newlyPricedHotels} hotel prices, ${roomPricedRooms} room rows`);
+      if (opts.deferUi) {
+        return newlyPricedHotels;
+      }
+      if (isBackground && _initialRenderHappened && newlyPricedHotels > 0) {
+        applyPricesInPlace(sym);
+        syncResultCountAfterBackgroundRates();
+      }
+      _refreshV2CuratedAfterRates();
+      return newlyPricedHotels;
     }
     console.log(`[prices] hotel prices: ${Object.keys(priceMap).length}, room prices: ${roomPricedRooms} rooms across ${Object.keys(roomPriceMap).length} hotels`);
     _pricesLoaded  = true;
@@ -7409,6 +7540,7 @@
       : `${total} hotel${total !== 1 ? 's' : ''}${pricedNote}`;
     syncVibeSearchAlignment();
     _refreshV2CuratedAfterRates();
+    return 0;
   }
 
   function closeSortMorePop() {
@@ -12080,7 +12212,7 @@
           _pricesLoaded = false;
           _setPriceBtnsState(false);
           _setRatesStatus('loading', 'Refreshing rates…');
-          fetchPrices(S.city, S.checkin, S.checkout, reqId);
+          fetchPrices(S.city, S.checkin, S.checkout, reqId, rankedHotelIdsForRates(_lastHotels), null, { skipDetail: true });
         }
       });
     }

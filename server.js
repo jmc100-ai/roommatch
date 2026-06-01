@@ -112,6 +112,13 @@ const {
   bboxFromRing,
 } = require("./scripts/neighborhood-vibe-data");
 const { runV2Search, invalidatePhaseACache } = require("./scripts/search-v2");
+const {
+  sanitizeRatesCurrency,
+  fetchRatesForHotelIds,
+  liteRatesCall,
+  mergeLiteRatesIntoMaps,
+  RATES_DETAIL_TOPN,
+} = require("./lib/lite-rates");
 
 // ── Password gate helpers ─────────────────────────────────────────────────────
 const SITE_PASSWORD = process.env.SITE_PASSWORD || "";
@@ -218,18 +225,11 @@ const IS_PROD     = !!process.env.LITEAPI_PROD_KEY;
 // regardless of cap — going from 20 -> 100 -> 200 returned essentially
 // identical histograms (0:0 ~1:230 ~2-3:243 ~4-5:15 ~6+:0). Extra slots
 // just get filled with more rate-plan variants of the same rooms.
-// 60 is the sweet spot: captures the structural ceiling LiteAPI gives us
-// at ~⅓ the payload of 200. D3 (extra-rate rows on the client, see
-// roomNames in /api/rates response) does the real "fill the card" work.
-// Clamped 10-300 as a guardrail.
+// Clamped 10-300 — see lib/lite-rates.js LITEAPI_MAX_RATES_PER_HOTEL.
+/** @deprecated use lib/lite-rates — kept for any inline refs */
 const LITEAPI_MAX_RATES_PER_HOTEL = Math.max(10, Math.min(300,
   Number(process.env.LITEAPI_MAX_RATES_PER_HOTEL) || 60));
-/** ISO 4217 codes accepted for GET /api/rates and /api/hotel-rates ?currency= */
-const RATES_CURRENCY_ALLOW = new Set(["EUR", "USD", "GBP", "CAD", "AUD", "MXN"]);
-function sanitizeRatesCurrency(q) {
-  const c = String(q || "").trim().toUpperCase();
-  return RATES_CURRENCY_ALLOW.has(c) ? c : "USD";
-}
+/** ISO 4217 codes — re-exported from lib/lite-rates via sanitizeRatesCurrency */
 const PORT        = process.env.PORT || 3000;
 /** Canonical public site origin (marketing, sitemap, OG). Override with SITE_PUBLIC_ORIGIN or BETA_BASE_URL. */
 const SITE_PUBLIC_ORIGIN = (
@@ -1243,7 +1243,9 @@ function rlHandler(req, res /*, next, options */) {
 const _rlOpts = { standardHeaders: true, legacyHeaders: false, handler: rlHandler, skip: (req) => RL_SKIP.has(req.path || "") };
 const _rlSearch = rateLimit({ ..._rlOpts, windowMs: 60_000, max: 60 });   // /api/vsearch
 const _rlRates  = rateLimit({ ..._rlOpts, windowMs: 60_000, max: 30 });   // /api/rates + /api/prebook
-const _rlMeta   = rateLimit({ ..._rlOpts, windowMs: 60_000, max: 90 });   // /api/hotels-meta
+const _rlMetaMax = process.env.RENDER ? 90 : 300;
+const _rlMeta   = rateLimit({ ..._rlOpts, windowMs: 60_000, max: _rlMetaMax }); // /api/hotels-meta
+const _rlRooms  = rateLimit({ ..._rlOpts, windowMs: 60_000, max: _rlMetaMax }); // /api/hotel-rooms (separate bucket)
 const _rlAdmin  = rateLimit({ ..._rlOpts, windowMs: 60_000, max: 10 });   // /api/index-* + backfill
 const _rlGeneric = rateLimit({ ..._rlOpts, windowMs: 60_000, max: 240 }); // everything else /api/*
 app.use("/api/vsearch",      _rlSearch);
@@ -1251,7 +1253,7 @@ app.use("/api/rates",        _rlRates);
 app.use("/api/prebook",      _rlRates);   // LiteAPI /rates/prebook proxy (checkout step 1)
 app.use("/api/hotel-rates",  _rlRates);   // single-hotel rates, same budget as batch
 app.use("/api/hotels-meta",  _rlMeta);
-app.use("/api/hotel-rooms",  _rlMeta);
+app.use("/api/hotel-rooms",  _rlRooms);
 app.use("/api/index-city",   _rlAdmin);
 app.use("/api/index-cancel", _rlAdmin);
 app.use(/^\/api\/v2\//,      _rlGeneric);
@@ -2503,10 +2505,30 @@ app.get("/api/vsearch", async (req, res) => {
           h.name = "";
         }
       }
-      // Tell the client which IDs still need a meta fetch so it can lazy-batch them.
-      v2.body.deferred_meta_ids = deferredIds;
-      // Warm cache in the background — finishes ~1–3s after response is sent.
-      prefetchHotelMetaBackground(deferredIds);
+
+      // Compact-tail (B2): warm name/photo for priced tail hotels in background —
+      // do NOT await before TTFB (was adding seconds + blocking first paint).
+      const fullPayloadLimit = Math.max(50, Math.min(500,
+        parseInt(process.env.VSEARCH_FULL_PAYLOAD_LIMIT || "250", 10)));
+      if (v2.body.stats?.compact_tail && v2.body.rates?.prices) {
+        const pricedKeys = new Set(Object.keys(v2.body.rates.prices));
+        const tailPricedIds = [];
+        for (let i = fullPayloadLimit; i < v2.body.hotels.length; i++) {
+          const sid = String(v2.body.hotels[i].id).trim();
+          if (pricedKeys.has(sid)) tailPricedIds.push(sid);
+        }
+        if (tailPricedIds.length) {
+          prefetchHotelMetaBackground(tailPricedIds);
+          if (!v2.body.stats) v2.body.stats = {};
+          v2.body.stats.tail_meta_deferred = tailPricedIds.length;
+          console.log(`[v2-meta] tail priced meta: background warm ${tailPricedIds.length} ids`);
+        }
+      }
+
+      const DEFERRED_META_CAP = Math.max(50, Math.min(500,
+        parseInt(process.env.VSEARCH_DEFERRED_META_CAP || "200", 10)));
+      v2.body.deferred_meta_ids = deferredIds.slice(0, DEFERRED_META_CAP);
+      prefetchHotelMetaBackground(deferredIds.slice(DEFERRED_META_CAP));
 
       // ── Boop star-class ranking tweaks (no live rates) ─────────────────────
       try {
@@ -3304,63 +3326,8 @@ app.post("/api/index-cancel", async (req, res) => {
   res.json({ message: `Cancel requested for ${city} — will stop after current batch` });
 });
 
-// LiteAPI rate.cancellationPolicies — true when refundable with a zero-penalty tier
-// (typical "free cancellation until …") or explicitly RFN with no policy rows.
-function liteRateHasFreeCancellation(rate) {
-  const pol = rate?.cancellationPolicies;
-  if (!pol || typeof pol !== "object") return false;
-  if (pol.refundableTag === "NRFN") return false;
-  const infos = pol.cancelPolicyInfos;
-  if (Array.isArray(infos) && infos.length) {
-    if (infos.some((i) => Number(i?.amount) === 0)) return true;
-  }
-  return pol.refundableTag === "RFN";
-}
-
 // ── Live pricing endpoint ──────────────────────────────────────────────────────
-// Fetches cheapest available rate per hotel for a given city + date range.
-// Fires a single batched POST to LiteAPI /hotels/rates with all hotel IDs.
-// Returns { prices: { hotel_id: $/night }, currency, nights, pricedCount }
-// ─── LiteAPI /hotels/rates helpers (used by /api/rates handler) ──────────────
-//
-// Why these exist: LiteAPI silently caps per-hotel rates to ~1 (cheapest) when
-// the request batch >= 50 hotels, regardless of `maxRatesPerHotel`. Bisected
-// empirically: 48-hotel batch returns full 3-5 rates; 50-hotel batch returns
-// 1. So the /api/rates handler does a single large call for hotel-level
-// cheapest prices (drives "Available rooms only" filter + price sort), then
-// fans out smaller chunks (<=48) for the top-N ranked-and-priced hotels to
-// recover the missing per-room rates for cards users actually see.
-async function liteRatesCall(hotelIds, checkin, checkout, currency = "USD") {
-  const cur = sanitizeRatesCurrency(currency);
-  const liteRes = await fetch("https://api.liteapi.travel/v3.0/hotels/rates", {
-    method: "POST",
-    headers: { "X-API-Key": LITEAPI_KEY, "Content-Type": "application/json", "accept": "application/json" },
-    body: JSON.stringify({
-      hotelIds,
-      checkin,
-      checkout,
-      currency: cur,
-      guestNationality: "US",
-      occupancies: [{ adults: 2 }],
-      maxRatesPerHotel: LITEAPI_MAX_RATES_PER_HOTEL,
-      roomMapping: true,
-      timeout: 22,
-    }),
-  });
-  if (liteRes.status === 429) {
-    const err = new Error("rate_limited");
-    err.status = 429;
-    throw err;
-  }
-  if (!liteRes.ok) {
-    const err = new Error("liteapi_error_" + liteRes.status);
-    err.status = liteRes.status;
-    throw err;
-  }
-  const json = await liteRes.json();
-  // LiteAPI v3 wraps in { data: { rates: [...] } } or { data: [...] } — handle both.
-  return json?.data?.rates ?? json?.data ?? json?.rates ?? [];
-}
+// Shared LiteAPI logic lives in lib/lite-rates.js (also used by vsearch embed).
 
 /** LiteAPI booking step 1 — lock rate + return prebookId for WL checkout or /rates/book. */
 async function litePrebookCall(offerId, { usePaymentSdk = false, timeout = 30 } = {}) {
@@ -3392,235 +3359,74 @@ async function litePrebookCall(offerId, { usePaymentSdk = false, timeout = 30 } 
   return data;
 }
 
-// Merge a LiteAPI rates list into the accumulator maps in place. Used by both
-// the main batched call and the top-N detail pass. Existing entries are kept
-// when the new per-night is not strictly cheaper, so the detail pass can only
-// add new mappedRoomIds or improve prices — never overwrite better data.
-function mergeLiteRatesIntoMaps(ratesList, nights, acc) {
-  let totalRoomTypes = 0, withMappedId = 0, newMappedIds = 0;
-  for (const hotel of ratesList) {
-    const hotelId = hotel.hotelId;
-    for (const rt of (hotel.roomTypes || [])) {
-      totalRoomTypes++;
-      const total = rt.rates?.[0]?.retailRate?.total?.[0]?.amount;
-      if (!total || total <= 0) continue;
-      const perNight = Math.round(total / nights);
-
-      const firstRate = rt.rates?.[0];
-      const fcThis    = liteRateHasFreeCancellation(firstRate);
-      if (fcThis) acc.hotelFreeCancel[hotelId] = true;
-
-      if (!acc.prices[hotelId] || perNight < acc.prices[hotelId]) {
-        acc.prices[hotelId] = perNight;
-      }
-
-      const mappedRoomId = firstRate?.mappedRoomId;
-      if (mappedRoomId) {
-        withMappedId++;
-        const key = String(mappedRoomId);
-        if (!acc.roomPrices[hotelId]) acc.roomPrices[hotelId] = {};
-        const existing = acc.roomPrices[hotelId][key];
-        if (existing == null) newMappedIds++;
-        if (existing == null || perNight < existing) {
-          acc.roomPrices[hotelId][key] = perNight;
-          if (firstRate?.name) {
-            if (!acc.roomNames[hotelId]) acc.roomNames[hotelId] = {};
-            acc.roomNames[hotelId][key] = String(firstRate.name).slice(0, 120);
-          }
-          const offerId = firstRate?.offerId || firstRate?.offer_id;
-          if (offerId) {
-            if (!acc.offerIds[hotelId]) acc.offerIds[hotelId] = {};
-            acc.offerIds[hotelId][key] = offerId;
-          }
-          if (!acc.roomFreeCancel[hotelId]) acc.roomFreeCancel[hotelId] = {};
-          acc.roomFreeCancel[hotelId][key] = fcThis;
-        }
-      }
-    }
-  }
-  return { totalRoomTypes, withMappedId, newMappedIds };
-}
-
-// Top-N detail-pass knobs.
-//
-// CHUNK=15 is the empirically-validated sweet spot. LiteAPI's per-hotel rate
-// allocation isn't a simple "cap at batch >= 50" function — it's allocated
-// from a non-monotonic global budget that depends on the cohort. Tested
-// chunk sizes 10/15/20/25/30/40 against a 50-hotel cohort: chunk=15 returns
-// max total rates (191) AND covers lp3e1a2 with all 3 rates consistently.
-// chunk=20 anomalously drops back to 168/2-rates. chunk>=25 leaks rates
-// for some hotels. Smaller chunks = more parallel calls but more reliable
-// per-hotel coverage. With CHUNK=15 + TOPN=50 we issue 4 chunks in parallel.
-const RATES_DETAIL_TOPN     = Math.max(0, Math.min(200,
-  Number(process.env.RATES_DETAIL_TOPN ?? 50)));
-const RATES_DETAIL_CHUNK    = Math.max(5, Math.min(48,
-  Number(process.env.RATES_DETAIL_CHUNK ?? 15)));
-
 app.get("/api/rates", async (req, res) => {
   const cityInput = (req.query.city || "").trim();
   const { checkin } = req.query;
-  let { checkout } = req.query;
+  const checkout = req.query.checkout;
   const currency = sanitizeRatesCurrency(req.query.currency);
   if (!cityInput || !checkin || !checkout) {
     return res.status(400).json({ error: "city, checkin and checkout required" });
   }
   const city = await resolveCityName(cityInput, supabaseAdmin || supabase, ["hotels_cache", "indexed_cities"]);
-  let nights = Math.round((new Date(checkout) - new Date(checkin)) / 86400000);
-  if (nights < 1) {
-    return res.status(400).json({ error: "checkout must be after checkin" });
-  }
-  // Cap at 30 nights — LiteAPI doesn't support longer stays. Clamp instead of erroring.
-  if (nights > 30) {
-    const cappedCheckout = new Date(checkin);
-    cappedCheckout.setDate(cappedCheckout.getDate() + 30);
-    checkout = cappedCheckout.toISOString().slice(0, 10);
-    nights   = 30;
-  }
-
-  // Accumulator maps mutated by mergeLiteRatesIntoMaps across both passes.
-  const acc = {
-    prices: {},          // hotel_id → cheapest $/night (hotel-level display)
-    roomPrices: {},      // hotel_id → { room_type_id → $/night }
-    roomNames: {},       // hotel_id → { room_type_id → rate name (for "extra rates" rows when the room isn't in our indexed inventory) }
-    offerIds: {},        // hotel_id → { room_type_id → offerId } for white-label checkout deep links
-    roomFreeCancel: {},  // hotel_id → { room_type_id → bool } — cheapest shown rate per room
-    hotelFreeCancel: {}, // hotel_id → true if any returned rate with a price is free-cancel
-  };
-
-  const emptyResponse = (extra = {}) => ({
-    prices: acc.prices,
-    roomPrices: acc.roomPrices,
-    roomNames: acc.roomNames,
-    offerIds: acc.offerIds,
-    roomFreeCancel: acc.roomFreeCancel,
-    hotelFreeCancel: acc.hotelFreeCancel,
-    currency,
-    nights,
-    pricedCount: Object.keys(acc.prices).length,
-    ...extra,
-  });
+  const skipDetail = req.query.skip_detail === "1" || req.query.skip_detail === "true";
+  const handlerT0 = Date.now();
 
   try {
-    // If the frontend passes ranked hotel IDs directly, use them.
-    // Otherwise fall back to fetching all hotel IDs for the city from the DB.
     let hotelIds;
     const rawIds = req.query.hotelIds;
-    if (rawIds && typeof rawIds === 'string' && rawIds.length > 0) {
-      hotelIds = rawIds.split(',').map(s => s.trim()).filter(Boolean).slice(0, 200);
-      console.log(`[rates] ${city}: using ${hotelIds.length} ranked hotel IDs from client, ${checkin}→${checkout}, currency=${currency}`);
+    if (rawIds && typeof rawIds === "string" && rawIds.length > 0) {
+      hotelIds = rawIds.split(",").map((s) => s.trim()).filter(Boolean).slice(0, 200);
+      console.log(`[rates] ${city}: using ${hotelIds.length} ranked hotel IDs from client, ${checkin}→${checkout}, currency=${currency}${skipDetail ? ", skip_detail" : ""}`);
     } else {
       const fc = supabaseAdmin || supabase;
       const { data: hotelRows, error: dbErr } = await fc
         .from(hotelsCacheFor(city)).select("hotel_id").eq("city", city);
       if (dbErr) throw new Error("DB: " + dbErr.message);
-      if (!hotelRows?.length) return res.json(emptyResponse());
-      hotelIds = hotelRows.map(h => h.hotel_id);
+      if (!hotelRows?.length) {
+        return res.json({
+          prices: {}, roomPrices: {}, roomNames: {}, offerIds: {},
+          roomFreeCancel: {}, hotelFreeCancel: {}, currency, nights: 0, pricedCount: 0,
+        });
+      }
+      hotelIds = hotelRows.map((h) => h.hotel_id);
       console.log(`[rates] ${city}: fetching rates for ${hotelIds.length} hotels from DB, ${checkin}→${checkout}, currency=${currency}`);
     }
 
-    // ── Main batched call. Drives hotel-level prices for sorting/filtering.
-    //    Per-hotel rates are silently capped to ~1 by LiteAPI when the batch
-    //    is large; the detail pass below recovers the rest for top-N hotels.
-    let ratesList;
-    try {
-      ratesList = await liteRatesCall(hotelIds, checkin, checkout, currency);
-    } catch (e) {
-      if (e.status === 429) {
-        console.warn("[rates] LiteAPI rate limited");
-        return res.json(emptyResponse({ rateLimited: true }));
-      }
-      console.error("[rates] LiteAPI error", e.status || e.message);
-      return res.json(emptyResponse());
+    const result = await fetchRatesForHotelIds(hotelIds, checkin, checkout, currency, {
+      skipDetail,
+      cacheKey: !(rawIds && typeof rawIds === "string" && rawIds.length > 0) && hotelIds.length >= 500
+        ? `${city}|${checkin}|${checkout}|${currency}`
+        : null,
+    });
+    if (!result) {
+      return res.status(400).json({ error: "checkout must be after checkin" });
     }
-
-    // Diagnostic: log raw structure for the first hotel with rooms.
-    const sampleHotel = ratesList.find(h => (h.roomTypes||[]).length > 0);
-    if (sampleHotel) {
-      const srt = sampleHotel.roomTypes[0];
-      const srate = srt?.rates?.[0];
-      console.log(`[rates] sample hotel ${sampleHotel.hotelId}: roomTypes=${sampleHotel.roomTypes.length}`);
-      console.log(`[rates] sample rate name: "${srate?.name}", mappedRoomId: ${srate?.mappedRoomId}, roomTypeId: ${srt?.roomTypeId}`);
-      sampleHotel.roomTypes.slice(0, 5).forEach((r, i) => {
-        const rate = r.rates?.[0];
-        console.log(`[rates]   room[${i}] mappedRoomId=${rate?.mappedRoomId} name="${rate?.name}" total=${rate?.retailRate?.total?.[0]?.amount}`);
-      });
+    if (result.rateLimited) {
+      console.warn("[rates] LiteAPI rate limited");
     }
-
-    const mainStats = mergeLiteRatesIntoMaps(ratesList, nights, acc);
-    console.log(`[rates] main pass: ${mainStats.totalRoomTypes} room types, ${mainStats.withMappedId} with mappedRoomId, +${mainStats.newMappedIds} room rates`);
-
-    // ── Top-N detail pass.
-    //    LiteAPI has a per-request global rate budget that gets split across
-    //    the cohort. Big batches → 1 rate per hotel. Small batches with all
-    //    priced hotels → 2 rates per hotel. Small batches with some unpriced
-    //    hotels → 3+ rates per priced hotel (the unpriced hotels contribute 0
-    //    and "give" their budget share to the rest). We deliberately do NOT
-    //    pre-filter to priced hotels here — keeping the natural input order
-    //    means unpriced hotels dilute the cohort and improve per-hotel rate
-    //    coverage for the priced ones users actually see. Validated against
-    //    lp3e1a2 in Mexico City: with priced-only cohort the target gets 2
-    //    rates; with mixed cohort the target gets all 3.
-    if (RATES_DETAIL_TOPN > 0 && hotelIds.length >= 50) {
-      const detailIds = hotelIds.slice(0, RATES_DETAIL_TOPN);
-      if (detailIds.length > 0) {
-        // ── Round-robin chunk assignment.
-        //    Adjacent hotels in search-ranked order tend to share a star tier
-        //    (top hits are luxury, mid-pack is mid-tier, etc.). Sequential
-        //    chunking groups same-tier hotels together; LiteAPI's per-request
-        //    budget then gets split thin among them, so luxury hotels with 20+
-        //    room types steal allocation from their neighbours. Round-robin
-        //    interleaves tiers across chunks so each chunk has a mix, which
-        //    empirically lets the smaller hotels keep their full rate counts.
-        //    Validated against lp3e1a2 in Mexico City: sequential chunks
-        //    co-located it with lp4bab4 (St. Regis, 20 rooms) and capped it at
-        //    2 rates; isolated in a separate chunk it returns all 3.
-        const numChunks = Math.ceil(detailIds.length / RATES_DETAIL_CHUNK);
-        const chunks = Array.from({ length: numChunks }, () => []);
-        for (let i = 0; i < detailIds.length; i++) {
-          chunks[i % numChunks].push(detailIds[i]);
-        }
-        const t0 = Date.now();
-        const results = await Promise.allSettled(
-          chunks.map(ids => liteRatesCall(ids, checkin, checkout, currency))
-        );
-        let newRoomRates = 0, callsOk = 0, callsFail = 0;
-        for (const r of results) {
-          if (r.status === "fulfilled") {
-            callsOk++;
-            const s = mergeLiteRatesIntoMaps(r.value, nights, acc);
-            newRoomRates += s.newMappedIds;
-          } else {
-            callsFail++;
-            console.warn(`[rates] detail chunk failed: ${r.reason?.message}`);
-          }
-        }
-        const pricedInDetail = detailIds.filter(id => acc.prices[id] != null).length;
-        console.log(`[rates] detail pass: top ${detailIds.length} hotels (${pricedInDetail} priced from main), ${callsOk}/${chunks.length} chunks ok (size<=${RATES_DETAIL_CHUNK}), +${newRoomRates} extra room rates in ${Date.now() - t0}ms`);
-      }
-    }
-
-    const { prices, roomPrices, roomNames, offerIds, roomFreeCancel, hotelFreeCancel } = acc;
-    const pricedCount = Object.keys(prices).length;
-    const roomPricedCount = Object.values(roomPrices).reduce((s, rm) => s + Object.keys(rm).length, 0);
-    // Distinct-rooms-per-hotel histogram. Validates the LITEAPI_MAX_RATES_PER_HOTEL
-    // knob AND the detail pass: if most priced hotels are in the 0–1 bucket we're
-    // still missing rooms (consider bumping); if most are 6+ we may be over-fetching.
-    const bucketsHist = { '0': 0, '1': 0, '2-3': 0, '4-5': 0, '6+': 0 };
-    for (const hid of Object.keys(prices)) {
-      const n = roomPrices[hid] ? Object.keys(roomPrices[hid]).length : 0;
-      if (n === 0) bucketsHist['0']++;
-      else if (n === 1) bucketsHist['1']++;
-      else if (n <= 3) bucketsHist['2-3']++;
-      else if (n <= 5) bucketsHist['4-5']++;
-      else bucketsHist['6+']++;
-    }
-    console.log(`[rates] ${city}: ${pricedCount}/${hotelIds.length} hotels priced, ${roomPricedCount} room type rates, currency=${currency}, maxRates=${LITEAPI_MAX_RATES_PER_HOTEL}, detailTopN=${RATES_DETAIL_TOPN}`);
-    console.log(`[rates] distinct-rooms histogram: 0:${bucketsHist['0']} 1:${bucketsHist['1']} 2-3:${bucketsHist['2-3']} 4-5:${bucketsHist['4-5']} 6+:${bucketsHist['6+']}`);
-    res.json({ prices, roomPrices, roomNames, offerIds, roomFreeCancel, hotelFreeCancel, currency, nights, pricedCount });
-
+    const roomPricedCount = Object.values(result.roomPrices || {}).reduce((s, rm) => s + Object.keys(rm).length, 0);
+    console.log(
+      `[rates] ${city}: ${result.pricedCount}/${hotelIds.length} hotels priced, ${roomPricedCount} room type rates, ` +
+      `currency=${result.currency}, detailTopN=${skipDetail ? 0 : RATES_DETAIL_TOPN}, wall=${Date.now() - handlerT0}ms`
+    );
+    res.json({
+      prices: result.prices,
+      roomPrices: result.roomPrices,
+      roomNames: result.roomNames,
+      offerIds: result.offerIds,
+      roomFreeCancel: result.roomFreeCancel,
+      hotelFreeCancel: result.hotelFreeCancel,
+      currency: result.currency,
+      nights: result.nights,
+      pricedCount: result.pricedCount,
+      ...(result.rateLimited ? { rateLimited: true } : {}),
+    });
   } catch (err) {
     console.error("[rates]", err.message);
-    res.json(emptyResponse());
+    res.json({
+      prices: {}, roomPrices: {}, roomNames: {}, offerIds: {},
+      roomFreeCancel: {}, hotelFreeCancel: {}, currency, nights: 0, pricedCount: 0,
+    });
   }
 });
 

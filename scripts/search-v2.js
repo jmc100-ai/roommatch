@@ -22,7 +22,17 @@ function slimStubsEnabled() {
   return process.env.VSEARCH_SLIM_STUBS === "1" || process.env.VSEARCH_SLIM_STUBS === "true";
 }
 
-/** Minimal stub rows — drops empty strings, catalog photo arrays, heavy nbhd attributes. */
+function compactTailEnabled() {
+  const v = process.env.VSEARCH_COMPACT_TAIL;
+  if (v === "0" || v === "false") return false;
+  return v === "1" || v === "true" || v == null || v === "";
+}
+
+function fullPayloadLimit() {
+  return Math.max(50, Math.min(500, parseInt(process.env.VSEARCH_FULL_PAYLOAD_LIMIT || "250", 10)));
+}
+
+/** Minimal stub rows within the top-N full-payload window (no match_breakdown). */
 function slimStubPayload(h) {
   const out = {
     id: h.id,
@@ -33,22 +43,11 @@ function slimStubPayload(h) {
   };
   if (h.hotelScore != null) out.hotelScore = h.hotelScore;
   if (h.nbhd_fit_pct != null) out.nbhd_fit_pct = h.nbhd_fit_pct;
-  if (h.match_breakdown) {
-    const mb = h.match_breakdown;
-    out.match_breakdown = {
-      overall_pct: mb.overall_pct,
-      room_pct: mb.room_pct,
-      hotel_pct: mb.hotel_pct,
-      nbhd_pct: mb.nbhd_pct,
-      must_haves_summary: mb.must_haves_summary,
-      must_haves: (mb.must_haves || []).slice(0, 8),
-      query_features: (mb.query_features || []).slice(0, 6),
-      hotel_character_facts: (mb.hotel_character_facts || []).slice(0, 6),
-      nbhd_signals: mb.nbhd_signals,
-      primary_nbhd_name: mb.primary_nbhd_name,
-    };
-  }
   if (h.mainPhoto) out.mainPhoto = h.mainPhoto;
+  if (h.name) out.name = h.name;
+  if (h.starRating) out.starRating = h.starRating;
+  if (h.rating) out.rating = h.rating;
+  if (h.address) out.address = h.address;
   if (h.primary_nbhd) {
     out.primary_nbhd = { id: h.primary_nbhd.id, name: h.primary_nbhd.name };
     if (h.nbhd_fit_pct == null && h.primary_nbhd.vibe_short) {
@@ -56,6 +55,45 @@ function slimStubPayload(h) {
     }
   }
   return out;
+}
+
+/** Rank 251+ — scores + identity fields; room gallery lazy-loaded on scroll. */
+function compactTailPayload(h) {
+  const out = {
+    id: h.id,
+    vectorScore: h.vectorScore,
+    isMatched: h.isMatched,
+    property_type: h.property_type,
+    roomTypes: [],
+  };
+  if (h.hotelScore != null) out.hotelScore = h.hotelScore;
+  if (h.nbhd_fit_pct != null) out.nbhd_fit_pct = h.nbhd_fit_pct;
+  if (h.name) out.name = h.name;
+  if (h.mainPhoto) out.mainPhoto = h.mainPhoto;
+  if (h.starRating) out.starRating = h.starRating;
+  if (h.rating) out.rating = h.rating;
+  if (h.address) out.address = h.address;
+  if (h.primary_nbhd) {
+    out.primary_nbhd = { id: h.primary_nbhd.id, name: h.primary_nbhd.name };
+    if (h.primary_nbhd.vibe_short) out.primary_nbhd.vibe_short = h.primary_nbhd.vibe_short;
+  }
+  return out;
+}
+
+function shapeVsearchHotelPayload(hotels) {
+  const limit = fullPayloadLimit();
+  if (compactTailEnabled()) {
+    return hotels.map((h, idx) => {
+      if (idx < limit) {
+        return (h.roomTypes || []).length > 0 ? h : slimStubPayload(h);
+      }
+      return compactTailPayload(h);
+    });
+  }
+  if (slimStubsEnabled()) {
+    return hotels.map((h) => ((h.roomTypes || []).length > 0 ? h : slimStubPayload(h)));
+  }
+  return hotels;
 }
 
 // ── Phase-A in-memory cache (per city, 5-minute TTL) ─────────────────────────
@@ -712,15 +750,102 @@ async function runV2Search({ req, supabase, supabaseAdmin, resolveCityName }) {
     : Promise.resolve(null);
 
   const needPrimaryNbhdRpc = nbhdPrimaryByHotel.size === 0;
-  const phaseB = await Promise.all([
+
+  // ── Embedded live rates (parallel with phase B) ───────────────────────────
+  // Full-city LiteAPI (~3500 ids) takes ~25s and blocks TTFB. Sync only top-N
+  // ranked hotels for gate/first paint; warm full catalog in background (cached).
+  const {
+    fetchRatesForHotelIds,
+    parseRatesNights,
+    sanitizeRatesCurrency,
+    getCachedRates,
+    prefetchCityRatesBackground,
+  } = require("../lib/lite-rates");
+  const ratesDateCtx = parseRatesNights(
+    String(req.query.checkin || "").trim(),
+    String(req.query.checkout || "").trim()
+  );
+  const ratesCurrency = sanitizeRatesCurrency(req.query.currency);
+  const ratesCacheKey = ratesDateCtx
+    ? `${city}|${ratesDateCtx.checkin}|${ratesDateCtx.checkout}|${ratesCurrency}`
+    : null;
+  const ratesSyncTopN = Math.max(50, Math.min(500,
+    parseInt(process.env.VSEARCH_RATES_SYNC_TOPN || "120", 10)));
+  const cachedFullRates = ratesCacheKey ? getCachedRates(ratesCacheKey) : null;
+  let ratesTailPending = false;
+
+  let ratesPromise = Promise.resolve(null);
+  if (ratesDateCtx && cityHotelIds.length) {
+    if (cachedFullRates) {
+      ratesPromise = Promise.resolve({
+        ...cachedFullRates,
+        cache_hit: true,
+        wall_ms: 0,
+        hotel_ids_fetched: cityHotelIds.length,
+      });
+    } else {
+      const syncIds = topHotelIds.slice(0, ratesSyncTopN);
+      ratesTailPending = cityHotelIds.length > syncIds.length;
+      ratesPromise = syncIds.length
+        ? fetchRatesForHotelIds(
+            syncIds,
+            ratesDateCtx.checkin,
+            ratesDateCtx.checkout,
+            ratesCurrency,
+            { skipDetail: true }
+          ).catch((err) => {
+            console.warn("[v2 rates] embed sync failed:", err.message);
+            return null;
+          })
+        : Promise.resolve(null);
+      if (ratesTailPending) {
+        prefetchCityRatesBackground(
+          ratesCacheKey,
+          cityHotelIds,
+          ratesDateCtx.checkin,
+          ratesDateCtx.checkout,
+          ratesCurrency
+        );
+      }
+    }
+  }
+
+  const phaseBPromises = [
     fetchClient.rpc("get_v2_room_photos", { p_hotel_ids: topHotelIds, p_city: city, p_max_per_hotel: 10 }),
     hotelVibePromise,
-    ...(needPrimaryNbhdRpc
-      ? [fetchClient.rpc("get_primary_nbhds_for_hotels", { p_hotel_ids: topHotelIds })]
-      : []),
-  ]);
-  const [photosResult, hotelVibeResult] = phaseB;
-  const primaryNbhdRpcResult = needPrimaryNbhdRpc ? phaseB[2] : null;
+    ratesPromise,
+  ];
+  if (needPrimaryNbhdRpc) {
+    phaseBPromises.push(
+      fetchClient.rpc("get_primary_nbhds_for_hotels", { p_hotel_ids: topHotelIds })
+    );
+  }
+  const phaseB = await Promise.all(phaseBPromises);
+  const [photosResult, hotelVibeResult, embeddedRatesResult] = phaseB;
+  const primaryNbhdRpcResult = needPrimaryNbhdRpc ? phaseB[3] : null;
+
+  if (ratesDateCtx && cityHotelIds.length) {
+    _perf.rates_embed_ms = embeddedRatesResult?.wall_ms ?? 0;
+    _perf.rates_embed_count = embeddedRatesResult?.pricedCount ?? 0;
+    _perf.rates_cache_hit = !!embeddedRatesResult?.cache_hit;
+    _perf.rates_tail_pending = ratesTailPending;
+    if (embeddedRatesResult?.main_chunks) _perf.rates_main_chunks = embeddedRatesResult.main_chunks;
+    if (embeddedRatesResult?.pricedCount > 0 || embeddedRatesResult?.cache_hit) {
+      const scope = embeddedRatesResult.cache_hit
+        ? "full-city cache"
+        : ratesTailPending
+          ? `sync top-${ratesSyncTopN}`
+          : "full-city";
+      console.log(
+        `[v2 rates] embed ${scope}: ${embeddedRatesResult.pricedCount}/${cityHotelIds.length} priced` +
+        ` in ${embeddedRatesResult.wall_ms}ms` +
+        (embeddedRatesResult.cache_hit ? " (cache hit)" : "") +
+        (embeddedRatesResult.main_chunks ? ` chunks=${embeddedRatesResult.main_chunks}` : "") +
+        (ratesTailPending ? " tail=pending" : "") +
+        ` (parallel phase-B)`
+      );
+    }
+  }
 
   _perf.phase_b_ms = Date.now() - _t0;
   console.log(`[v2 perf] phase-B parallel (photos+vibe+nbhd): ${_perf.phase_b_ms}ms  photos=${photosResult.data?.length}`);
@@ -1416,9 +1541,7 @@ async function runV2Search({ req, supabase, supabaseAdmin, resolveCityName }) {
     console.warn(`[v2] deduped ${beforeDedupe - hotels.length} duplicate hotel_id row(s) in vsearch payload`);
   }
 
-  if (slimStubsEnabled()) {
-    hotels = hotels.map((h) => ((h.roomTypes || []).length > 0 ? h : slimStubPayload(h)));
-  }
+  hotels = shapeVsearchHotelPayload(hotels);
 
   const nbhdBlendApplied = !!(nbhdFitByHotelId?.size > 0 && nbhdRankWeight > 0);
 
@@ -1443,6 +1566,27 @@ async function runV2Search({ req, supabase, supabaseAdmin, resolveCityName }) {
       city,
       indexing:    false,
       indexStatus: "complete",
+      ...(embeddedRatesResult && ratesDateCtx
+        ? {
+            rates: {
+              prices: embeddedRatesResult.prices || {},
+              roomPrices: embeddedRatesResult.roomPrices || {},
+              roomNames: embeddedRatesResult.roomNames || {},
+              offerIds: embeddedRatesResult.offerIds || {},
+              roomFreeCancel: embeddedRatesResult.roomFreeCancel || {},
+              hotelFreeCancel: embeddedRatesResult.hotelFreeCancel || {},
+              currency: embeddedRatesResult.currency,
+              nights: embeddedRatesResult.nights,
+              pricedCount: embeddedRatesResult.pricedCount || 0,
+              hotel_ids_fetched: embeddedRatesResult.hotel_ids_fetched,
+              embedded: true,
+              full_city: !ratesTailPending,
+              partial: !!ratesTailPending,
+              tail_pending: !!ratesTailPending,
+              cache_hit: !!embeddedRatesResult.cache_hit,
+            },
+          }
+        : {}),
       stats: {
         perf_ms: _perf,
         search_version_used:      "v2",
@@ -1463,10 +1607,15 @@ async function runV2Search({ req, supabase, supabaseAdmin, resolveCityName }) {
         nbhd_rank_weight_active:  nbhdRankWeight,
         nbhd_blend_applied:       nbhdBlendApplied,
         slim_stubs:               slimStubsEnabled(),
+        compact_tail:             compactTailEnabled(),
+        full_payload_limit:       compactTailEnabled() ? fullPayloadLimit() : null,
         nbhd_cache_hit:           nbhdCacheHit,
         price_matters:            priceMatters,
         luxury_pref:              luxuryPref,
         price_matters_star_penalty_applied: false,
+        ...(typeof _perf.rates_embed_ms === "number"
+          ? { rates_embed_ms: _perf.rates_embed_ms, rates_embed_count: _perf.rates_embed_count ?? 0 }
+          : {}),
         ...(nbhdBlendApplied ? { nbhd_rank_weight: nbhdRankWeight } : {}),
         client_resort_note:
           "API hotel order uses server primarySignal; the UI re-sorts with Best Match (room vibe % + nbhd blend + Boop price guards).",

@@ -29,5 +29,19 @@ services:
         value: "1"
       - key: VSEARCH_SLIM_STUBS
         value: "1"
+      - key: VSEARCH_COMPACT_TAIL
+        value: "1"
+      - key: VSEARCH_FULL_PAYLOAD_LIMIT
+        value: "250"
+      - key: VSEARCH_DEFERRED_META_CAP
+        value: "200"
+      - key: RATES_MAIN_CHUNK
+        value: "350"
+      - key: RATES_MAIN_CONCURRENCY
+        value: "6"
+      - key: RATES_CACHE_TTL_MS
+        value: "180000"
+      - key: VSEARCH_RATES_SYNC_TOPN
+        value: "120"
       - key: NBHD_BOOP_CACHE
         value: "1"
