@@ -6979,7 +6979,7 @@
   let _visibleStubReqId = 0;
   async function lazyFetchVisibleStubPhotos(searchReqId) {
     if (!S.city) { console.log('[stub-prefetch] skipped: no city'); return; }
-    const MAX_PREFETCH = 30;
+    const MAX_PREFETCH = 45;
     const ranked = (_lastHotels.length && typeof getSortedHotelsForDisplay === 'function')
       ? getSortedHotelsForDisplay()
       : _lastHotels;
@@ -6997,6 +6997,10 @@
     for (const sid of curatedHighlightIdList()) {
       const h = byId.get(sid) || _lastHotels.find((x) => String(x.id) === sid);
       if (h) pushStub(h);
+    }
+    for (const h of ranked.slice(0, 15)) {
+      pushStub(h);
+      if (targets.length >= MAX_PREFETCH) break;
     }
     for (const h of allStubs) {
       pushStub(h);
@@ -7284,7 +7288,7 @@
       const h = byId.get(sid) || _lastHotels.find((x) => String(x.id) === sid);
       if (!h || hotelNeedsLiteMeta(h)) push(sid);
     }
-    for (const h of ranked.slice(0, 30)) {
+    for (const h of ranked.slice(0, 40)) {
       if (hotelNeedsLiteMeta(h)) push(String(h.id));
     }
     if (ids.length) lazyFetchHotelMeta(ids, _ratesReqId, { maxIds: 40 });
@@ -7501,6 +7505,9 @@
     // to a list the user can act on. Falls back to OFF if zero hotels priced
     // (e.g. supplier outage) so the user still sees results.
     _showAvailOnly = pricedCount > 0;
+    if (_lastHotels.length > 0 && pricedCount === 0) {
+      _showAvailOnly = false;
+    }
     _setPriceBtnsState(true);
 
     const availFilter = document.getElementById('availFilter');
@@ -8742,13 +8749,13 @@
    * Best Match + live rates + neutral slider: light nudge toward cheaper hotels
    * only when room scores are very close or one hotel is a major price outlier.
    */
-  const MATCH_LIVE_RATE_NUDGE_MAX = 18;
+  const MATCH_LIVE_RATE_NUDGE_MAX = 14;
   /** Pairwise nudge only when room gap ≤ this (Option B). */
-  const MATCH_LIVE_RATE_NUDGE_ROOM_GAP = 5;
+  const MATCH_LIVE_RATE_NUDGE_ROOM_GAP = 4;
   /** Pairwise / trim when hotel price ≥ this × cohort median. */
   const MATCH_LIVE_RATE_NUDGE_MIN_RATIO = 3;
   /** Room lead ≥ this beats price nudges when slider is neutral (Option B). */
-  const MATCH_LIVE_RATE_ROOM_DOMINANCE_GAP = 10;
+  const MATCH_LIVE_RATE_ROOM_DOMINANCE_GAP = 12;
   const MATCH_LIVE_RATE_RATIO_BOOST = 12;
   /** Absolute sort trim starts above this × median (was 2.2; Option B → 4). */
   const MATCH_LIVE_RATE_PRICE_RATIO = 4;
@@ -8794,6 +8801,8 @@
   }
 
   function shouldNbhdGuardYieldToPrice(weakNbhdHotel, strongNbhdHotel) {
+    const pm = boopPriceMattersForSort();
+    if (Math.abs(pm) <= BOOP_PRICE_NEUTRAL_BAND) return false;
     const roomWeak = bestMatchRoomScore(weakNbhdHotel);
     const roomStrong = bestMatchRoomScore(strongNbhdHotel);
     return roomWeak - roomStrong >= BOOP_PRICE_NBHD_ROOM_YIELD_GAP;
@@ -8909,21 +8918,8 @@
     return Math.min(MATCH_LIVE_RATE_LUXURY_TRIM_MAX, (ratio - MATCH_LIVE_RATE_PRICE_RATIO) * 4.5);
   }
 
-  /** Best Match sort basis — best priced room % when rates are loaded (see lib/client-match-sort.js). */
+  /** Best Match sort basis — same signal as the card ROOM VIBE % badge (F1). */
   function bestMatchRoomScore(h) {
-    const allRooms = h?.roomTypes || [];
-    if (_pricesLoaded && _hasDateSearch && h?.roomPrices && allRooms.length) {
-      const pricedScored = allRooms.filter(
-        (rt) => rt.roomTypeId != null && h.roomPrices[rt.roomTypeId] != null && (rt.score || 0) > 0
-      );
-      if (pricedScored.length > 0) {
-        return Math.max(...pricedScored.map((rt) => rt.score || 0));
-      }
-      if (h.price != null) {
-        const bestRoom = Math.max(0, ...allRooms.map((rt) => rt.score || 0));
-        if (bestRoom > 0) return bestRoom;
-      }
-    }
     const room = roomVibeMatchDisplayPct(h);
     return room > 0 ? room : (h.vectorScore || 0);
   }
@@ -9120,23 +9116,20 @@
         const roomB = roomMatchScore(b);
         const useNeutralLiveSort = pmNeutral && pricePercentiles;
         if (Math.abs(pm) <= BOOP_PRICE_NEUTRAL_BAND) {
-          const nbhdA = a.nbhd_fit_pct;
-          const nbhdB = b.nbhd_fit_pct;
-          const nbhdGap = (nbhdA != null && nbhdB != null) ? Math.abs(nbhdB - nbhdA) : 0;
           const roomGap = roomB - roomA;
           const domGap = useNeutralLiveSort
             ? MATCH_LIVE_RATE_ROOM_DOMINANCE_GAP
             : BOOP_ROOM_DOMINANCE_GAP;
-          if (roomGap >= domGap && nbhdGap <= BOOP_NBHD_SIMILAR_MAX) {
+          if (roomGap >= domGap) {
             const cmp = 1;
             return _sortReverse ? -cmp : cmp;
           }
-          if (roomGap <= -domGap && nbhdGap <= BOOP_NBHD_SIMILAR_MAX) {
+          if (roomGap <= -domGap) {
             const cmp = -1;
             return _sortReverse ? -cmp : cmp;
           }
         }
-        if (pm > 0) {
+        if (pm > BOOP_PRICE_NEUTRAL_BAND) {
           const roomGap = roomB - roomA;
           if (roomGap >= roomGapGuard) {
             if (!shouldRoomGuardYieldToPrice(b, pricePercentiles)) {
@@ -9171,6 +9164,9 @@
           diff += matchLiveRateNudgeDiff(a, b, roomA, roomB, pricePercentiles);
         }
         if (Math.abs(diff) < 1e-6) diff = (b.vectorScore || 0) - (a.vectorScore || 0);
+        if (Math.abs(diff) < 1e-6) diff = (Number(b.hotelScore) || 0) - (Number(a.hotelScore) || 0);
+        if (Math.abs(diff) < 1e-6) diff = (Number(b.rating) || 0) - (Number(a.rating) || 0);
+        if (Math.abs(diff) < 1e-6) diff = String(b.id).localeCompare(String(a.id));
         return _sortReverse ? -diff : (diff > 0 ? 1 : diff < 0 ? -1 : 0);
       });
 
@@ -9262,6 +9258,36 @@
     }
   }
 
+  function buildResultsEmptyStateHTML() {
+    const raw = _lastHotels.length;
+    let priced = 0;
+    for (const h of _lastHotels) {
+      if (h?.price != null) priced++;
+    }
+    const datesLine = (_hasDateSearch && S.checkin && S.checkout)
+      ? ` for ${S.checkin} → ${S.checkout}`
+      : '';
+    const availOn = _showAvailOnly && _hasDateSearch && _pricesLoaded;
+    if (availOn && raw > 0 && priced === 0) {
+      return `<div class="empty-state results-empty-state">
+        <h3>No bookable rooms for these dates</h3>
+        <p>LiteAPI returned no rates${escHtml(datesLine)}. Try different dates or turn off <strong>Available rooms only</strong>.</p>
+        <button type="button" class="btn-ghost" onclick="setAvailFilter(false)">Show all ${raw} matches</button>
+      </div>`;
+    }
+    if (availOn && raw > 0) {
+      return `<div class="empty-state results-empty-state">
+        <h3>No available matches</h3>
+        <p>We found ${raw} hotels that match your vibe, but none have bookable rooms${escHtml(datesLine)} with the current filters.</p>
+        <button type="button" class="btn-ghost" onclick="setAvailFilter(false)">Show all ${raw} matches</button>
+      </div>`;
+    }
+    return `<div class="empty-state results-empty-state">
+      <h3>No hotels match</h3>
+      <p>Try adjusting your vibe quiz, dates, or search query.</p>
+    </div>`;
+  }
+
   function renderSorted() {
     if (document.getElementById('st-results')?.classList.contains('results-pending')) return;
     const hotels = getSortedHotelsForDisplay();
@@ -9281,8 +9307,14 @@
       for (const h of _lastHotels) { if (h && h.price != null) priced++; }
       if (priced > 0) pricedSuffix = ` · ${priced} priced`;
     }
-    document.getElementById('resultCount').textContent =
-      remaining > 0 ? `Showing ${showing} of ${total} hotels${nbhdSuffix}${pricedSuffix}` : `${total} hotel${total !== 1 ? 's' : ''}${nbhdSuffix}${pricedSuffix}`;
+    const countEl = document.getElementById('resultCount');
+    if (countEl) {
+      countEl.textContent = total === 0 && _lastHotels.length > 0
+        ? `0 of ${_lastHotels.length} hotels visible${nbhdSuffix}${pricedSuffix}`
+        : (remaining > 0
+          ? `Showing ${showing} of ${total} hotels${nbhdSuffix}${pricedSuffix}`
+          : `${total} hotel${total !== 1 ? 's' : ''}${nbhdSuffix}${pricedSuffix}`);
+    }
     const dbgBtn = document.getElementById('debugCopyBtn');
     if (dbgBtn) dbgBtn.style.display = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' ? '' : 'none';
     syncVibeSearchAlignment();
@@ -9292,6 +9324,14 @@
 
     // BOOP v4 — populate the top-neighbourhood refine strip (lives above #results)
     renderNbhdRefineStrip(hotels);
+
+    if (total === 0 && _lastHotels.length > 0) {
+      _lbRegistry.length = 0;
+      resultsEl.innerHTML = buildResultsEmptyStateHTML();
+      syncSortDirectionIndicators();
+      syncSearchResultsV2FromRender(hotels, total);
+      return;
+    }
 
     _lbRegistry.length = 0;
     let html = toShow.map(h => {

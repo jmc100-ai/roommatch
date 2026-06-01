@@ -792,10 +792,12 @@ function mergeStayVibeIntoIntent(intent, stayVibe) {
 
   // 2) When intent is thin (regex fallback or near-empty), augment with
   //    stayVibe-implied supporting facts so ranking has real signal even
-  //    when the LLM router missed.
+  //    when the LLM router missed. Also when Boop stayVibe is set but the
+  //    LLM returned fewer than 4 soft prefs (common on cache miss + timeout).
   const isThin =
     (intent.router_version === "v2-facts-1") ||
-    ((intent.soft_preferences?.length || 0) === 0);
+    ((intent.soft_preferences?.length || 0) === 0) ||
+    ((intent.soft_preferences?.length || 0) < 4);
   if (isThin) {
     const supporting = STAY_VIBE_SUPPORTING_FACTS[String(stayVibe || "").toLowerCase()] || [];
     const have = new Set(soft.map((s) => s.fact_key));

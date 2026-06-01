@@ -473,7 +473,7 @@ async function runV2Search({ req, supabase, supabaseAdmin, resolveCityName }) {
   // produced detected_fact_keys=[] → every room got the same baseline 0.725
   // score → adaptive remap collapsed everything to 94-100% match.
   const stayVibeFact = STAY_VIBE_TO_VISUAL_STYLE[String(stayVibe || "").toLowerCase()];
-  if (stayVibeFact) {
+  if (stayVibe) {
     intent = mergeStayVibeIntoIntent(intent, stayVibe);
   }
 
@@ -1341,6 +1341,13 @@ async function runV2Search({ req, supabase, supabaseAdmin, resolveCityName }) {
   }
 
   // ── Build response payload ─────────────────────────────────────────────────
+  const NBHD_NEUTRAL_PCT = parseFloat(process.env.VSEARCH_NBHD_NEUTRAL_PCT || "62");
+  function resolveNbhdFitPct(hotelId) {
+    if (!nbhdFitByHotelId?.size) return undefined;
+    const v = nbhdFitByHotelId.get(hotelId);
+    return v != null ? v : NBHD_NEUTRAL_PCT;
+  }
+
   let hotels = allHotels.map(({ hotel_id: hotelId, topScore, hotelVibePct, rawHotelVibe }) => {
     const meta       = hotelMeta.get(hotelId) || {};
     const score      = Math.round(topScore);
@@ -1359,7 +1366,7 @@ async function runV2Search({ req, supabase, supabaseAdmin, resolveCityName }) {
       : null;
 
     const primaryNbhd = primaryNbhdMap.get(hotelId) || null;
-    const nbhdFitPct  = nbhdFitByHotelId?.get(hotelId);
+    const nbhdFitPct  = resolveNbhdFitPct(hotelId);
     const propertyType = meta.property_type || "hotel";
 
     if (!hasPhotos) {
@@ -1619,6 +1626,8 @@ async function runV2Search({ req, supabase, supabaseAdmin, resolveCityName }) {
         price_matters:            priceMatters,
         luxury_pref:              luxuryPref,
         price_matters_star_penalty_applied: false,
+        stay_vibe: stayVibe || null,
+        stay_vibe_fact_key: stayVibeFact || null,
         ...(typeof _perf.rates_embed_ms === "number"
           ? { rates_embed_ms: _perf.rates_embed_ms, rates_embed_count: _perf.rates_embed_count ?? 0 }
           : {}),

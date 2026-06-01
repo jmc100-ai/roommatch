@@ -2463,10 +2463,13 @@ app.get("/api/vsearch", async (req, res) => {
       // every hotel — including "stubs" beyond GALLERY_LIMIT that have no indexed
       // room rows — still gets a real LiteAPI name, hero photo, star rating, and
       // address. Without this, stubs would render as "Hotel in {city}" forever.
-      const META_SYNC_LIMIT = Math.max(10, parseInt(process.env.META_SYNC_LIMIT || "30", 10));
+      const META_SYNC_LIMIT = Math.max(10, parseInt(process.env.META_SYNC_LIMIT || "50", 10));
       const boopProfileForMeta = parseBoopProfileFromQuery(req.query);
       const needsStarPenaltyMeta = needsBoopStarMetaForRanking(boopProfileForMeta);
       const nbhdWeightForMeta = v2.body.stats?.nbhd_rank_weight ?? 0;
+      const boopMetaBoost = boopProfileForMeta
+        ? Math.max(META_SYNC_LIMIT, parseInt(process.env.BOOP_META_SYNC_LIMIT || "50", 10))
+        : META_SYNC_LIMIT;
       // Boop price-matters / luxury sorts need starRating on the hotels that can
       // actually reach the top of the list. Pre-sort by room+nbhd (no stars) so
       // we fetch LiteAPI meta for the right IDs — not a fixed API-order prefix.
@@ -2475,12 +2478,12 @@ app.get("/api/vsearch", async (req, res) => {
       }
       const allIds = v2.body.hotels.map((h) => String(h.id).trim()).filter(Boolean);
       const STAR_PENALTY_META_TOPN = Math.max(
-        META_SYNC_LIMIT,
+        boopMetaBoost,
         parseInt(process.env.STAR_PENALTY_META_TOPN || "35", 10)
       );
       const metaFetchTopN = needsStarPenaltyMeta
         ? Math.min(allIds.length, STAR_PENALTY_META_TOPN)
-        : META_SYNC_LIMIT;
+        : boopMetaBoost;
       const syncIds      = allIds.slice(0, metaFetchTopN);
       const deferredIds  = allIds.slice(metaFetchTopN);
       const photoHotels  = v2.body.hotels.filter(h => h.roomTypes?.length > 0).length;
@@ -5044,7 +5047,7 @@ app.get("/api/hotel/:hotelId", async (req, res) => {
 
     return {
       hotel_id:      hotelId,
-      name:          resolveHotelNameFromMeta(meta, hotelId, ""),
+      name:          resolveHotelNameFromMeta(meta, hotelId, "") || `Hotel ${hotelId}`,
       star_rating:   meta.starRating || 0,
       guest_rating:  meta.guestRating || 0,
       address:       meta.address || "",
@@ -5059,6 +5062,14 @@ app.get("/api/hotel/:hotelId", async (req, res) => {
       hotel_photos:  cacheRow.hotel_photos || [],
       room_types:    roomTypes,
       primary_nbhd:  primaryNbhd,
+      meta_status: {
+        has_live_name: !!(meta.name || meta.hotelName),
+        has_description: !!(meta.description && String(meta.description).trim().length > 20),
+        has_amenities: Array.isArray(meta.amenities) && meta.amenities.length > 0,
+        room_type_count: roomTypes.length,
+        photo_count: (cacheRow.hotel_photos || []).length
+          + roomTypes.reduce((n, rt) => n + (rt.photos || []).length, 0),
+      },
     };
   })();
 

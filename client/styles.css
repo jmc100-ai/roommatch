@@ -2557,6 +2557,9 @@
 
     /* ── Empty / error ───────────── */
     .empty-state { text-align: center; padding: 80px 20px; }
+    .results-empty-state h3 { font-size: 1.25rem; margin-bottom: 0.75rem; }
+    .results-empty-state p { color: var(--muted, #666); max-width: 36rem; margin: 0 auto 1.25rem; line-height: 1.5; }
+    .results-empty-state .btn-ghost { margin-top: 0.5rem; }
     .empty-icon  { font-size: 44px; margin-bottom: 16px; opacity: 0.3; }
     .empty-title { font-family: 'Cormorant Garamond', serif; font-size: 24px; font-weight: 300; color: var(--muted); margin-bottom: 8px; }
     .empty-sub   { font-size: 13px; color: var(--muted); font-weight: 300; }
