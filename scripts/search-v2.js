@@ -496,6 +496,56 @@ async function runV2Search({ req, supabase, supabaseAdmin, resolveCityName }) {
     ? cityHotelIds.filter((id) => hotelIdsByGeo.includes(id))
     : cityHotelIds;
 
+  // ── Full-city rates: start ASAP (parallel with scoring + phase B) ─────────
+  const {
+    fetchRatesForHotelIds,
+    parseRatesNights,
+    sanitizeRatesCurrency,
+    getCachedRates,
+  } = require("../lib/lite-rates");
+  const ratesDateCtx = parseRatesNights(
+    String(req.query.checkin || "").trim(),
+    String(req.query.checkout || "").trim()
+  );
+  const ratesCurrency = sanitizeRatesCurrency(req.query.currency);
+  const ratesCacheKey = ratesDateCtx
+    ? `${city}|${ratesDateCtx.checkin}|${ratesDateCtx.checkout}|${ratesCurrency}`
+    : null;
+  let fullCityRatesPromise = null;
+  let ratesTailPending = false;
+  let embeddedRatesResult = null;
+
+  if (ratesDateCtx && cityHotelIds.length) {
+    const cachedFull = getCachedRates(ratesCacheKey);
+    if (cachedFull) {
+      embeddedRatesResult = {
+        ...cachedFull,
+        cache_hit: true,
+        wall_ms: 0,
+        hotel_ids_fetched: cityHotelIds.length,
+      };
+      fullCityRatesPromise = Promise.resolve(embeddedRatesResult);
+    } else {
+      ratesTailPending = true;
+      const tRates0 = Date.now();
+      fullCityRatesPromise = fetchRatesForHotelIds(
+        cityHotelIds,
+        ratesDateCtx.checkin,
+        ratesDateCtx.checkout,
+        ratesCurrency,
+        { skipDetail: true, cacheKey: ratesCacheKey }
+      )
+        .then((r) => {
+          _perf.rates_full_ms = Date.now() - tRates0;
+          return r;
+        })
+        .catch((err) => {
+          console.warn("[v2 rates] full-city failed:", err.message);
+          return null;
+        });
+    }
+  }
+
   if (!eligibleHotelIds.length) {
     return {
       status: 200,
@@ -751,69 +801,9 @@ async function runV2Search({ req, supabase, supabaseAdmin, resolveCityName }) {
 
   const needPrimaryNbhdRpc = nbhdPrimaryByHotel.size === 0;
 
-  // ── Embedded live rates (parallel with phase B) ───────────────────────────
-  // Full-city LiteAPI (~3500 ids) takes ~25s and blocks TTFB. Sync only top-N
-  // ranked hotels for gate/first paint; warm full catalog in background (cached).
-  const {
-    fetchRatesForHotelIds,
-    parseRatesNights,
-    sanitizeRatesCurrency,
-    getCachedRates,
-    prefetchCityRatesBackground,
-  } = require("../lib/lite-rates");
-  const ratesDateCtx = parseRatesNights(
-    String(req.query.checkin || "").trim(),
-    String(req.query.checkout || "").trim()
-  );
-  const ratesCurrency = sanitizeRatesCurrency(req.query.currency);
-  const ratesCacheKey = ratesDateCtx
-    ? `${city}|${ratesDateCtx.checkin}|${ratesDateCtx.checkout}|${ratesCurrency}`
-    : null;
-  const ratesSyncTopN = Math.max(50, Math.min(500,
-    parseInt(process.env.VSEARCH_RATES_SYNC_TOPN || "120", 10)));
-  const cachedFullRates = ratesCacheKey ? getCachedRates(ratesCacheKey) : null;
-  let ratesTailPending = false;
-
-  let ratesPromise = Promise.resolve(null);
-  if (ratesDateCtx && cityHotelIds.length) {
-    if (cachedFullRates) {
-      ratesPromise = Promise.resolve({
-        ...cachedFullRates,
-        cache_hit: true,
-        wall_ms: 0,
-        hotel_ids_fetched: cityHotelIds.length,
-      });
-    } else {
-      const syncIds = topHotelIds.slice(0, ratesSyncTopN);
-      ratesTailPending = cityHotelIds.length > syncIds.length;
-      ratesPromise = syncIds.length
-        ? fetchRatesForHotelIds(
-            syncIds,
-            ratesDateCtx.checkin,
-            ratesDateCtx.checkout,
-            ratesCurrency,
-            { skipDetail: true }
-          ).catch((err) => {
-            console.warn("[v2 rates] embed sync failed:", err.message);
-            return null;
-          })
-        : Promise.resolve(null);
-      if (ratesTailPending) {
-        prefetchCityRatesBackground(
-          ratesCacheKey,
-          cityHotelIds,
-          ratesDateCtx.checkin,
-          ratesDateCtx.checkout,
-          ratesCurrency
-        );
-      }
-    }
-  }
-
   const phaseBPromises = [
     fetchClient.rpc("get_v2_room_photos", { p_hotel_ids: topHotelIds, p_city: city, p_max_per_hotel: 10 }),
     hotelVibePromise,
-    ratesPromise,
   ];
   if (needPrimaryNbhdRpc) {
     phaseBPromises.push(
@@ -821,31 +811,8 @@ async function runV2Search({ req, supabase, supabaseAdmin, resolveCityName }) {
     );
   }
   const phaseB = await Promise.all(phaseBPromises);
-  const [photosResult, hotelVibeResult, embeddedRatesResult] = phaseB;
-  const primaryNbhdRpcResult = needPrimaryNbhdRpc ? phaseB[3] : null;
-
-  if (ratesDateCtx && cityHotelIds.length) {
-    _perf.rates_embed_ms = embeddedRatesResult?.wall_ms ?? 0;
-    _perf.rates_embed_count = embeddedRatesResult?.pricedCount ?? 0;
-    _perf.rates_cache_hit = !!embeddedRatesResult?.cache_hit;
-    _perf.rates_tail_pending = ratesTailPending;
-    if (embeddedRatesResult?.main_chunks) _perf.rates_main_chunks = embeddedRatesResult.main_chunks;
-    if (embeddedRatesResult?.pricedCount > 0 || embeddedRatesResult?.cache_hit) {
-      const scope = embeddedRatesResult.cache_hit
-        ? "full-city cache"
-        : ratesTailPending
-          ? `sync top-${ratesSyncTopN}`
-          : "full-city";
-      console.log(
-        `[v2 rates] embed ${scope}: ${embeddedRatesResult.pricedCount}/${cityHotelIds.length} priced` +
-        ` in ${embeddedRatesResult.wall_ms}ms` +
-        (embeddedRatesResult.cache_hit ? " (cache hit)" : "") +
-        (embeddedRatesResult.main_chunks ? ` chunks=${embeddedRatesResult.main_chunks}` : "") +
-        (ratesTailPending ? " tail=pending" : "") +
-        ` (parallel phase-B)`
-      );
-    }
-  }
+  const [photosResult, hotelVibeResult] = phaseB;
+  const primaryNbhdRpcResult = needPrimaryNbhdRpc ? phaseB[2] : null;
 
   _perf.phase_b_ms = Date.now() - _t0;
   console.log(`[v2 perf] phase-B parallel (photos+vibe+nbhd): ${_perf.phase_b_ms}ms  photos=${photosResult.data?.length}`);
@@ -1554,6 +1521,45 @@ async function runV2Search({ req, supabase, supabaseAdmin, resolveCityName }) {
   );
   _perf.total_since_phase_a_ms = Date.now() - _t0;
   _perf.wall_ms = Date.now() - _t0Total;
+
+  // If full-city rates started at phase-A, wait up to budget so cold searches
+  // often embed complete pricing in the vsearch response (no client tail hop).
+  if (fullCityRatesPromise && ratesTailPending && !embeddedRatesResult) {
+    const waitMs = Math.max(0, Math.min(15000,
+      parseInt(process.env.VSEARCH_RATES_WAIT_MS || "8000", 10)));
+    const tWait = Date.now();
+    const raced = await Promise.race([
+      fullCityRatesPromise,
+      new Promise((resolve) => setTimeout(() => resolve(null), waitMs)),
+    ]);
+    _perf.rates_embed_wait_ms = Date.now() - tWait;
+    if (raced?.pricedCount > 0) {
+      embeddedRatesResult = raced;
+      ratesTailPending = false;
+    }
+  }
+
+  if (ratesDateCtx && cityHotelIds.length && embeddedRatesResult) {
+    _perf.rates_embed_ms = embeddedRatesResult.wall_ms ?? _perf.rates_full_ms ?? 0;
+    _perf.rates_embed_count = embeddedRatesResult.pricedCount ?? 0;
+    _perf.rates_cache_hit = !!embeddedRatesResult.cache_hit;
+    _perf.rates_tail_pending = ratesTailPending;
+    if (embeddedRatesResult.main_chunks) _perf.rates_main_chunks = embeddedRatesResult.main_chunks;
+    const scope = embeddedRatesResult.cache_hit
+      ? "full-city cache"
+      : ratesTailPending ? "partial wait" : "full-city";
+    console.log(
+      `[v2 rates] embed ${scope}: ${embeddedRatesResult.pricedCount}/${cityHotelIds.length} priced` +
+      ` in ${_perf.rates_embed_ms}ms` +
+      (embeddedRatesResult.cache_hit ? " (cache hit)" : "") +
+      (_perf.rates_embed_wait_ms ? ` wait=${_perf.rates_embed_wait_ms}ms` : "") +
+      (ratesTailPending ? " tail=pending" : "")
+    );
+  } else if (ratesTailPending) {
+    _perf.rates_tail_pending = true;
+    console.log(`[v2 rates] tail pending (${cityHotelIds.length} catalog ids, wait budget exhausted)`);
+  }
+
   console.log(
     `[v2 perf] TOTAL: ${_perf.total_since_phase_a_ms}ms (since phase-A) | wall: ${_perf.wall_ms}ms (since handler entry)`
   );

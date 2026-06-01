@@ -2476,7 +2476,7 @@ app.get("/api/vsearch", async (req, res) => {
       const allIds = v2.body.hotels.map((h) => String(h.id).trim()).filter(Boolean);
       const STAR_PENALTY_META_TOPN = Math.max(
         META_SYNC_LIMIT,
-        parseInt(process.env.STAR_PENALTY_META_TOPN || "80", 10)
+        parseInt(process.env.STAR_PENALTY_META_TOPN || "35", 10)
       );
       const metaFetchTopN = needsStarPenaltyMeta
         ? Math.min(allIds.length, STAR_PENALTY_META_TOPN)

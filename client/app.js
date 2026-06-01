@@ -5886,6 +5886,7 @@
     closeDateRangePicker('cmd');
     document.getElementById('cmd-tray').classList.remove('open');
     syncCommandBarFromState();
+    prefetchCityRatesForDates();
     if (finishCmdTripSheetSubflow('Dates updated — tap Update results when ready')) return;
     startSearch();
   }
@@ -6426,9 +6427,22 @@
         console.log(`[perf] render called: ${Date.now() - _t0search}ms`);
         render(hotels, hasDates);
         if (hasDates && data.rates && typeof data.rates.prices === 'object') {
-          applyVsearchEmbeddedRates(data.rates, reqId);
           if (data.rates.tail_pending) {
-            fetchPrices(city, checkin, checkout, reqId, [], null, { skipDetail: true, background: true });
+            // Full "Available only" count needs the whole catalog — keep skeleton
+            // until tail lands (server prefetch may already be in flight / cached).
+            if (data.rates.pricedCount > 0) {
+              applyPrices(
+                data.rates.prices,
+                data.rates.roomPrices || {},
+                data.rates.currency || getRatesCurrencyPref(),
+                data.rates.pricedCount || 0,
+                data.rates,
+                { merge: true, deferUi: true }
+              );
+            }
+            fetchPrices(city, checkin, checkout, reqId, [], null, { skipDetail: true });
+          } else {
+            applyVsearchEmbeddedRates(data.rates, reqId);
           }
         } else if (hasDates) {
           // Legacy fallback — older server builds without embedded full-city rates
@@ -6690,6 +6704,24 @@
 
   let _backgroundRatesReqId = 0;
   let _postRevealWorkReqId = 0;
+  let _cityRatesPrefetchCtrl = null;
+
+  /** Warm full-city /api/rates cache while user finishes the search UI (dates → search). */
+  function prefetchCityRatesForDates() {
+    if (!S.city || !S.checkin || !S.checkout || S.checkin >= S.checkout) return;
+    try { _cityRatesPrefetchCtrl?.abort(); } catch (_) {}
+    _cityRatesPrefetchCtrl = typeof AbortController !== 'undefined' ? new AbortController() : null;
+    const params = new URLSearchParams({
+      city: S.city,
+      checkin: S.checkin,
+      checkout: S.checkout,
+      currency: getRatesCurrencyPref(),
+      skip_detail: '1',
+    });
+    const signal = _cityRatesPrefetchCtrl?.signal;
+    console.log('[perf] prefetch city rates (dates confirmed)');
+    fetch(`${BACKEND}/api/rates?` + params, signal ? { signal } : undefined).catch(() => {});
+  }
 
   /** After first paint: visible meta + stub photos; optional rate follow-ups (capped). */
   function _runPostRevealRatesWork(searchReqId) {
