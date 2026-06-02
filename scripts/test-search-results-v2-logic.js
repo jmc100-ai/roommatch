@@ -20,6 +20,24 @@ const sandbox = {
     body: { classList: { add() {}, remove() {} }, appendChild() {} },
   },
 };
+sandbox.window.RoomMatchResultsBridge = {
+  roomVibeMatchDisplayPct(h) {
+    const rooms = h?.roomTypes || [];
+    if (rooms.length) return Math.round(Math.max(0, ...rooms.map((r) => r.score || 0)));
+    return Math.round(Number(h.vectorScore) || 0);
+  },
+  hotelStyleMatchDisplayPct(h) {
+    const raw = Number(h.hotelScore);
+    if (Number.isFinite(raw) && raw > 0) return Math.round(raw);
+    const room = sandbox.window.RoomMatchResultsBridge.roomVibeMatchDisplayPct(h);
+    const nbhdRaw = h.nbhd_fit_pct != null ? Math.round(Number(h.nbhd_fit_pct)) : 0;
+    const nbhdForBlend = nbhdRaw > 0 ? nbhdRaw : room;
+    return Math.max(0, Math.round(room * 0.65 + nbhdForBlend * 0.35));
+  },
+  overallMatchDisplayPct(h) {
+    return Math.round(Number(h.vectorScore) || 0);
+  },
+};
 sandbox.window.document = sandbox.document;
 sandbox.globalThis = sandbox.window;
 vm.runInContext(src, vm.createContext(sandbox));
@@ -140,6 +158,20 @@ function testCuratedHighlightIds() {
   console.log('  ok getCuratedHighlightHotelIds — picks + more');
 }
 
+function testStylishPickMetricFallback() {
+  const h = {
+    id: 'fs',
+    vectorScore: 88,
+    nbhd_fit_pct: 72,
+    hotelScore: null,
+    roomTypes: [{ score: 91 }],
+  };
+  const pct = V2.pickMetricPct(h, 'stylish');
+  assert(pct > 0, `stylish pick should not show 0% when hotelScore is null, got ${pct}`);
+  assert(pct >= 80, `expected blended style pct ~80+, got ${pct}`);
+  console.log('  ok pickMetricPct stylish — fallback when hotelScore null');
+}
+
 function testModeConstants() {
   assert(V2.MODE_CLASSIC === 'classic', 'MODE_CLASSIC');
   assert(V2.MODE_V2 === 'v2', 'MODE_V2');
@@ -152,6 +184,7 @@ function main() {
   console.log('SearchResultsV2 logic tests\n');
   if (!V2) throw new Error('SearchResultsV2 failed to load');
   testModeConstants();
+  testStylishPickMetricFallback();
   testSelectTopPicksUnique();
   testBrandKeyCollapsesRitzVariants();
   testSelectMoreHotelsExcludesTopPicks();

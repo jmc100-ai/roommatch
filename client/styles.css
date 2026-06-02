@@ -6025,7 +6025,8 @@
     .hotel-row-price-per .add-dates-link,
     .sr2-pick-price .add-dates-link,
     .sr2-more-price .add-dates-link,
-    .fine-tune-budget-dates-hint .add-dates-link {
+    .fine-tune-budget-dates-hint .add-dates-link,
+    .fine-tune-dates-inline .add-dates-link {
       color: var(--accent2);
     }
     .budget-chip-btn.budget-chip-btn--pending-dates {
@@ -6111,10 +6112,196 @@
         font-weight: 400;
       }
       .fine-tune-sub {
-        margin: 0;
-        font-size: 13px;
+        display: none;
+      }
+      .fine-tune-hdr {
+        padding: 0 36px 10px 0;
+      }
+      .fine-tune-section {
+        margin-top: 14px;
+      }
+      .fine-tune-section-label {
+        margin: 0 0 8px;
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: rgba(232, 228, 220, 0.72);
+      }
+      .fine-tune-budget-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 6px;
+      }
+      .fine-tune-budget-pill {
+        padding: 10px 8px;
+        border-radius: 12px;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        background: rgba(255, 255, 255, 0.03);
+        color: var(--text);
+        font-family: 'DM Sans', sans-serif;
+        font-size: 12px;
+        font-weight: 500;
+        text-align: center;
+        cursor: pointer;
+        line-height: 1.25;
+        transition: border-color 0.15s, background 0.15s;
+      }
+      .fine-tune-budget-pill.active {
+        border-color: rgba(201, 169, 110, 0.55);
+        background: rgba(201, 169, 110, 0.1);
+        color: var(--accent2);
+      }
+      .fine-tune-budget-pill-sub {
+        display: block;
+        margin-top: 2px;
+        font-size: 9px;
+        font-weight: 400;
+        color: var(--muted);
+      }
+      .fine-tune-budget-pill.active .fine-tune-budget-pill-sub {
+        color: rgba(232, 213, 176, 0.75);
+      }
+      .fine-tune-custom-link {
+        display: inline-block;
+        margin-top: 8px;
+        padding: 0;
+        border: none;
+        background: none;
+        color: var(--accent2);
+        font-family: 'DM Sans', sans-serif;
+        font-size: 12px;
+        font-weight: 500;
+        text-decoration: underline;
+        cursor: pointer;
+      }
+      .fine-tune-inline-flex {
+        display: none;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        margin-top: 8px;
+        padding: 8px 0 0;
+        border-top: 1px solid rgba(255, 255, 255, 0.06);
+        cursor: pointer;
+      }
+      .fine-tune-inline-flex.is-visible { display: flex; }
+      .fine-tune-inline-flex-label {
+        font-size: 12px;
+        line-height: 1.3;
+        flex: 1;
+        color: var(--text);
+      }
+      .fine-tune-inline-flex-switch {
+        position: relative;
+        width: 36px;
+        height: 20px;
+        flex-shrink: 0;
+        border-radius: 100px;
+        background: rgba(255, 255, 255, 0.14);
+      }
+      .fine-tune-inline-flex-switch::after {
+        content: '';
+        position: absolute;
+        top: 2px;
+        left: 2px;
+        width: 16px;
+        height: 16px;
+        border-radius: 50%;
+        background: var(--muted);
+        transition: transform 0.15s, background 0.15s;
+      }
+      .fine-tune-inline-flex.is-on .fine-tune-inline-flex-switch {
+        background: rgba(201, 169, 110, 0.4);
+      }
+      .fine-tune-inline-flex.is-on .fine-tune-inline-flex-switch::after {
+        transform: translateX(16px);
+        background: var(--accent2);
+      }
+      .fine-tune-dates-inline {
+        margin: 8px 0 0;
+        font-size: 11px;
         line-height: 1.45;
         color: var(--muted);
+      }
+      .fine-tune-mh-chips {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+      }
+      .fine-tune-mh-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        padding: 8px 12px;
+        border-radius: 100px;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        background: rgba(255, 255, 255, 0.04);
+        color: var(--text);
+        font-family: 'DM Sans', sans-serif;
+        font-size: 12px;
+        font-weight: 500;
+        cursor: pointer;
+        transition: border-color 0.15s, background 0.15s;
+      }
+      .fine-tune-mh-chip.active {
+        border-color: rgba(201, 169, 110, 0.5);
+        background: rgba(201, 169, 110, 0.1);
+        color: var(--accent2);
+      }
+      .fine-tune-mh-chip-icon {
+        font-size: 13px;
+        line-height: 1;
+        opacity: 0.88;
+      }
+      .fine-tune-mh-chip.active .fine-tune-mh-chip-icon {
+        opacity: 1;
+      }
+      .fine-tune-extras-block {
+        margin-top: 14px;
+        padding-top: 12px;
+        border-top: 1px solid rgba(255, 255, 255, 0.08);
+      }
+      .fine-tune-extras-label {
+        margin: 0 0 8px;
+        font-size: 13px;
+        font-weight: 500;
+        color: var(--text);
+      }
+      .fine-tune-extras-label span {
+        color: var(--muted);
+        font-weight: 400;
+        font-size: 12px;
+      }
+      .fine-tune-extras-block .fine-tune-extras-wrap {
+        margin-top: 0;
+      }
+      .fine-tune-extras-block .fine-tune-extras {
+        min-height: 56px;
+      }
+      .fine-tune-compact-avail {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        margin-top: 14px;
+        padding-top: 12px;
+        border-top: 1px solid rgba(255, 255, 255, 0.08);
+      }
+      .fine-tune-compact-avail-label {
+        font-size: 13px;
+        font-weight: 500;
+        color: var(--text);
+      }
+      .fine-tune-compact-avail-sub {
+        font-size: 10px;
+        color: var(--muted);
+        margin-top: 2px;
+      }
+      .fine-tune-count {
+        font-size: 11px;
+        line-height: 1.35;
+        padding: 0 4px;
       }
       .fine-tune-close {
         position: absolute;
@@ -6756,10 +6943,41 @@
     body.has-hotel-detail .static-overlay,
     body.has-hotel-detail .landing-sections,
     body.has-hotel-detail .trust-bar { display: none !important; }
-    body.has-hotel-detail { padding-top: 0 !important; }
+    body.has-hotel-detail {
+      padding-top: 0 !important;
+      overflow: hidden;
+    }
+    body.has-hotel-detail #st-hotel-detail {
+      display: block !important;
+      position: fixed;
+      inset: 0;
+      z-index: 480;
+      overflow-x: hidden;
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
+      background: var(--bg, #0c0c0e);
+      max-width: none;
+      margin: 0;
+      padding: 0;
+    }
     /* Intro uses a div, not <header> — body.has-results hides all header elements */
     body.has-hotel-detail .hpage-intro {
       display: block;
+    }
+    /* Viewport-fixed mobile CTA (portaled to #hpage-mobile-cta-host on <body>) */
+    #hpage-mobile-cta-host {
+      position: fixed;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      z-index: 520;
+      pointer-events: none;
+    }
+    #hpage-mobile-cta-host:not([hidden]) {
+      pointer-events: auto;
+    }
+    #hpage-mobile-cta-host .hpage-mobile-cta {
+      display: none;
     }
 
     .hpage {
@@ -7331,13 +7549,91 @@
       display: block;
       visibility: visible;
     }
+    .hpage-intro-name .hpage-metric-badge--hotel {
+      display: inline-flex;
+      vertical-align: middle;
+      margin: 0 0 0 10px;
+      position: relative;
+      top: -0.06em;
+    }
+    .hpage-metric-badge {
+      flex-shrink: 0;
+      display: inline-flex;
+      align-items: center;
+      padding: 5px 11px;
+      border-radius: 100px;
+      font-size: 13px;
+      font-weight: 700;
+      font-variant-numeric: tabular-nums;
+      line-height: 1.15;
+      letter-spacing: 0.02em;
+      white-space: nowrap;
+    }
+    .hpage-metric-badge--hotel {
+      background: rgba(220, 120, 160, 0.14);
+      border: 1px solid rgba(220, 120, 160, 0.42);
+      color: #e8b0c8;
+      font-family: 'DM Sans', sans-serif;
+      font-size: 12px;
+      font-weight: 600;
+    }
+    .hpage-metric-badge--nbhd {
+      background: rgba(201, 169, 110, 0.12);
+      border: 1px solid rgba(201, 169, 110, 0.38);
+      color: var(--accent2, #c9a96e);
+      font-family: 'DM Sans', sans-serif;
+      font-size: 12px;
+      font-weight: 600;
+    }
     .hpage-intro-loc {
       margin: 0 0 12px;
       font-size: 14px;
       color: rgba(232, 228, 220, 0.72);
       display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px 10px;
+    }
+    .hpage-intro-loc-text {
+      display: inline-flex;
       align-items: center;
       gap: 6px;
+      min-width: 0;
+      flex-wrap: wrap;
+    }
+    .hpage-nbhd-name-link {
+      appearance: none;
+      border: none;
+      background: none;
+      padding: 0;
+      margin: 0;
+      font: inherit;
+      color: rgba(232, 228, 220, 0.92);
+      cursor: pointer;
+      text-decoration: underline;
+      text-decoration-color: rgba(201, 169, 110, 0.5);
+      text-underline-offset: 3px;
+      text-align: left;
+    }
+    .hpage-nbhd-name-link:hover,
+    .hpage-nbhd-name-link:focus-visible {
+      color: var(--accent2, #c9a96e);
+      text-decoration-color: currentColor;
+      outline: none;
+    }
+    .hpage-nbhd-name-link--pill {
+      font-family: 'DM Sans', sans-serif;
+      font-size: 12px;
+      font-weight: 500;
+      color: rgba(232, 228, 220, 0.88);
+    }
+    .hpage-nbhd-name-link--title {
+      font-family: 'Cormorant Garamond', serif;
+      font-size: clamp(22px, 2.8vw, 28px);
+      font-weight: 600;
+      line-height: 1.2;
+      color: var(--text);
+      text-decoration-thickness: 1px;
     }
     .hpage-intro-pills {
       display: flex;
@@ -7526,12 +7822,15 @@
       line-height: 1.2;
     }
     .hpage-match-ring-lbl {
-      font-size: 10px;
+      font-size: 9px;
       font-weight: 600;
-      letter-spacing: 0.12em;
+      letter-spacing: 0.06em;
       text-transform: uppercase;
       color: var(--muted);
       margin-top: 2px;
+      max-width: 72px;
+      text-align: center;
+      line-height: 1.2;
     }
     .hpage-match-rating-row {
       display: flex;
@@ -7965,11 +8264,11 @@
     }
     .hpage-share-btn:hover { color: var(--text); border-color: rgba(255,255,255,0.3); }
 
-    /* Mobile sticky CTA bar — Find&Book primary, Vibe tour secondary (less prominent). */
+    /* Mobile sticky CTA bar — Book primary, Vibe tour secondary (lives in #hpage-mobile-cta-host). */
     .hpage-mobile-cta {
       display: none;
-      position: fixed; left: 0; right: 0; bottom: 0;
-      z-index: 60;
+      width: 100%;
+      box-sizing: border-box;
       padding: 10px 14px calc(10px + env(safe-area-inset-bottom, 0));
       background: rgba(10,10,12,0.94);
       backdrop-filter: blur(12px);
@@ -8552,12 +8851,6 @@
         max-width: 220px;
         align-self: center;
       }
-      .hpage-v3 .hpage-match-vibe-bundle .hpage-cta--match-book .hpage-cta-label--full {
-        display: none;
-      }
-      .hpage-v3 .hpage-match-vibe-bundle .hpage-cta--match-book .hpage-cta-label--short {
-        display: inline;
-      }
       .hpage-room-spec-grid {
         grid-template-columns: 1fr;
       }
@@ -8580,7 +8873,10 @@
         width: 168px;
         height: 126px;
       }
-      .hpage-mobile-cta { display: flex; }
+      #hpage-mobile-cta-host .hpage-mobile-cta { display: flex; }
+      .hpage-v3 .hpage-match-vibe-bundle .hpage-match-card-actions {
+        display: none !important;
+      }
       .hpage-hero .hp-carousel,
       .hpage-hero .hp-hero-placeholder { height: clamp(220px, 56vw, 320px); }
       .hp-carousel-btn { display: none; } /* swipe instead */
@@ -8650,6 +8946,9 @@
     .beta-fab-icon { font-size: 16px; }
     @media (max-width: 600px) {
       .beta-fab { right: 12px; bottom: 12px; padding: 11px 14px; font-size: 12px; }
+      body.has-hotel-detail .beta-fab {
+        bottom: calc(64px + env(safe-area-inset-bottom, 0));
+      }
       .beta-fab-label { display: none; }
       .beta-fab-icon { font-size: 18px; }
     }

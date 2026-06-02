@@ -158,7 +158,7 @@
       return h.nbhd_fit_pct != null ? Math.round(h.nbhd_fit_pct) : 0;
     }
     if (pickId === 'stylish') {
-      return Math.round(Number(h.hotelScore) || 0);
+      return b ? b.hotelStyleMatchDisplayPct(h) : Math.round(Number(h.hotelScore) || 0);
     }
     return 0;
   }

@@ -429,7 +429,7 @@
           <h2 id="hpage-vibe-breakdown-title" class="hpage-vibe-title">How this hotel matches your vibe</h2>
           <p class="hpage-vibe-lead">Based on your search${getEffectiveBoopProfileForScoring() ? ' and Boop profile' : ''}</p>
         </div>
-        ${overall != null ? `<div class="hpage-vibe-overall-ring" aria-label="${overall} percent overall match">${overall}%<span>overall</span></div>` : ''}
+        ${overall != null ? `<div class="hpage-vibe-overall-ring" aria-label="${overall} percent overall match">${overall}%<span>Overall Match</span></div>` : ''}
       </div>
       ${pickBanner}
       <div class="hpage-vibe-pillars">${pillarsVisible}</div>
@@ -2532,13 +2532,11 @@
     return budgetFilterChipLabel(_budgetFilter, _budgetFlex);
   }
 
-  const FINE_TUNE_MUSTHAVE_VISIBLE = 4;
-  const FINE_TUNE_BUDGET_CARDS = [
-    { id: 'any', label: 'Any budget', sub: '' },
-    { id: 'under_150', label: 'Under $150', sub: 'per night' },
-    { id: 'under_250', label: 'Under $250', sub: 'per night' },
-    { id: 'under_400', label: 'Under $400', sub: 'per night' },
-    { id: 'luxury_400', label: 'Luxury $400+', sub: 'per night' },
+  const FINE_TUNE_COMPACT_BUDGET_PILLS = [
+    { id: 'any', title: 'Any', sub: 'All ranges' },
+    { id: 'under_250', title: 'Under $250', sub: 'per night' },
+    { id: 'under_400', title: 'Under $400', sub: 'per night' },
+    { id: 'luxury', title: 'Luxury', sub: '$400+' },
   ];
   /** Results command bar party-size labels + persisted profile. */
   const PARTY_SIZE_LABELS = { solo: '1 person', couple: '2 people', group: '3+ people' };
@@ -2710,7 +2708,7 @@
   let _budgetOutsideCloseBound = false;
 
   /** Open the results command-bar dates picker (shared by budget chip, hints, cards). */
-  function openAddDatesPopover(ev) {
+  function openAddDatesPopover(ev, opts) {
     if (ev) {
       ev.stopPropagation();
       ev.preventDefault();
@@ -2719,7 +2717,34 @@
     closeCmdPartyPopover();
     closeSortMorePop();
     try { closeFineTuneSheet(); } catch (_) {}
-    toggleDatesTray();
+    if (opts && opts.context === 'budget') setDatePickerBudgetContext(true);
+    else if (budgetFilterIsActive(_budgetFilter)
+      && budgetFilterNeedsRates(_budgetFilter)
+      && !budgetHasValidDates()) {
+      setDatePickerBudgetContext(true);
+    }
+    if (isMobileCmdTripUi()) openMobileResultsDatePicker(ev);
+    else toggleDatesTray();
+  }
+
+  let _datePickerBudgetContext = false;
+
+  function setDatePickerBudgetContext(on) {
+    _datePickerBudgetContext = !!on;
+    const sub = document.getElementById('cmd-date-pop-sub');
+    if (sub && _datePickerBudgetContext) {
+      const label = budgetFilterChipBaseLabel(_budgetFilter);
+      sub.textContent = `Add travel dates to filter results by your ${label.toLowerCase()} budget.`;
+    }
+  }
+
+  function clearDatePickerBudgetContext() {
+    _datePickerBudgetContext = false;
+  }
+
+  function flashBudgetPendingDatesHint() {
+    const label = budgetFilterChipBaseLabel(_budgetFilter);
+    flashMsg(`Budget saved (${label}) — add travel dates to filter by nightly rate.`);
   }
 
   function budgetPopAddDates(ev) {
@@ -3100,9 +3125,7 @@
     const newPm = S.boopProfile?.answers?.priceMatters;
     closeBudgetPop();
     syncBudgetChipUI();
-    if (pendingDatesFilter) {
-      setTimeout(() => toggleDatesTray(), 120);
-    }
+    if (pendingDatesFilter) flashBudgetPendingDatesHint();
     if (!_lastHotels?.length) return;
     _displayedCount = 10;
     if (S.q && prevPm !== newPm) {
@@ -3197,9 +3220,15 @@
 
   function _musthaveChipHtml(label, isEmpty, budgetSubline) {
     const safeLabel = escHtml(label);
-    const safeBudget = escHtml(budgetSubline || budgetFilterChipLabel(_budgetFilter, _budgetFlex));
-    const textHtml = `<span class="vibe-chip-text vibe-chip-text--stacked"><span class="vibe-chip-line1">${safeLabel}</span><span class="vibe-chip-line2">${safeBudget}</span></span>`;
-    const ariaLabel = escHtml(`Edit preferences: ${label}, ${budgetSubline || budgetFilterChipLabel(_budgetFilter, _budgetFlex)}`);
+    const pendingDates = budgetFilterIsActive(_budgetFilter)
+      && budgetFilterNeedsRates(_budgetFilter)
+      && !budgetHasValidDates();
+    const budgetLine2 = pendingDates
+      ? `${escHtml(budgetFilterChipBaseLabel(_budgetFilter))} · ${addDatesLink('Add dates', 'chip')}`
+      : escHtml(budgetSubline || budgetFilterChipLabel(_budgetFilter, _budgetFlex));
+    const textHtml = `<span class="vibe-chip-text vibe-chip-text--stacked"><span class="vibe-chip-line1">${safeLabel}</span><span class="vibe-chip-line2">${budgetLine2}</span></span>`;
+    const ariaBudget = budgetSubline || budgetFilterChipLabel(_budgetFilter, _budgetFlex);
+    const ariaLabel = escHtml(`Edit preferences: ${label}, ${ariaBudget}`);
     const emptyClass = isEmpty ? ' vibe-chip-empty' : '';
     if (isEmpty) {
       return `<button type="button" class="vibe-chip vibe-chip--stacked${emptyClass}" data-vibe-step="musthaves" onclick="openFineTuneSheet()" aria-label="${ariaLabel}">${textHtml}</button>`;
@@ -3210,16 +3239,17 @@
   function budgetFilterToMobileCardId(f) {
     const filter = f || { mode: 'any' };
     if (filter.mode === 'any') return 'any';
-    if (filter.mode === 'luxury') return 'luxury_400';
-    if (filter.mode === 'under' && [150, 250, 400].includes(filter.underMax)) return `under_${filter.underMax}`;
-    if (filter.mode === 'range' && filter.min === 400 && filter.max == null) return 'luxury_400';
+    if (filter.mode === 'luxury') return 'luxury';
+    if (filter.mode === 'under' && [250, 400].includes(filter.underMax)) return `under_${filter.underMax}`;
+    if (filter.mode === 'under' && filter.underMax === 150) return 'under_250';
+    if (filter.mode === 'range' && filter.min === 400 && filter.max == null) return 'luxury';
     if (filter.mode === 'under' || filter.mode === 'range') return 'custom';
     return 'any';
   }
 
   function mobileCardIdToBudgetFilter(cardId, customMin, customMax) {
     if (!cardId || cardId === 'any') return { mode: 'any' };
-    if (cardId === 'luxury_400') return { mode: 'luxury' };
+    if (cardId === 'luxury' || cardId === 'luxury_400') return { mode: 'luxury' };
     if (cardId.startsWith('under_')) {
       return normalizeBudgetFilter({ mode: 'under', underMax: parseInt(cardId.slice(6), 10) });
     }
@@ -3252,26 +3282,45 @@
     }
     _fineTuneDraft = {
       budgetCard: cardId,
+      budgetFlex: _budgetFlex !== false,
       customMin,
       customMax,
       customOpen: cardId === 'custom',
-      showMoreMusthaves: false,
       dealbreakers: new Set(Array.isArray(profile.dealbreakers) ? profile.dealbreakers : []),
       freetext: (profile.freetext || '').slice(0, 250),
       availOnly: !!(_showAvailOnly && _hasDateSearch),
     };
   }
 
-  function fineTuneSelectionCount() {
-    if (!_fineTuneDraft) return 0;
-    return _fineTuneDraft.dealbreakers.size;
+  function fineTuneDraftFilter() {
+    if (!_fineTuneDraft) return { mode: 'any' };
+    const f = mobileCardIdToBudgetFilter(
+      _fineTuneDraft.budgetCard,
+      _fineTuneDraft.customMin,
+      _fineTuneDraft.customMax,
+    );
+    return f.error ? { mode: 'any' } : f;
+  }
+
+  function fineTuneDraftHasFlexCap() {
+    return budgetFilterHasCap(fineTuneDraftFilter());
+  }
+
+  function fineTuneFooterSummary() {
+    if (!_fineTuneDraft) return 'No preferences set';
+    const parts = [];
+    const f = fineTuneDraftFilter();
+    if (f.mode !== 'any') parts.push(budgetFilterChipLabel(f, _fineTuneDraft.budgetFlex));
+    const n = _fineTuneDraft.dealbreakers.size;
+    if (n) parts.push(n === 1 ? '1 must-have' : `${n} must-haves`);
+    if ((_fineTuneDraft.freetext || '').trim()) parts.push('note added');
+    return parts.length ? parts.join(' · ') : 'No preferences set';
   }
 
   function updateFineTuneFooterCount() {
     const el = document.getElementById('fine-tune-count');
     if (!el) return;
-    const n = fineTuneSelectionCount();
-    el.textContent = n === 1 ? '1 selected' : `${n} selected`;
+    el.textContent = fineTuneFooterSummary();
   }
 
   function renderFineTuneSheet(opts = {}) {
@@ -3282,89 +3331,60 @@
     const d = _fineTuneDraft;
     const mhQ = BOOP_QUESTIONS.find(q => q.id === 'musthaves');
     const options = mhQ?.options || [];
-    const visibleCount = d.showMoreMusthaves ? options.length : FINE_TUNE_MUSTHAVE_VISIBLE;
-    const budgetCardsHtml = FINE_TUNE_BUDGET_CARDS.map((c) => {
-      const active = d.budgetCard === c.id;
-      return `<button type="button" class="fine-tune-budget-card${active ? ' active' : ''}" aria-pressed="${active ? 'true' : 'false'}" onclick="fineTunePickBudgetCard('${c.id}')">
-        <span class="fine-tune-budget-card-dot" aria-hidden="true"></span>
-        <span class="fine-tune-budget-card-label">${escHtml(c.label)}</span>
-        ${c.sub ? `<span class="fine-tune-budget-card-sub">${escHtml(c.sub)}</span>` : ''}
-      </button>`;
-    }).join('');
-    const musthaveRowsHtml = options.slice(0, visibleCount).map((o) => {
-      const active = d.dealbreakers.has(o.id);
-      const img = boopGetDynamicImage('musthaves', o.id, o.image || 'https://images.unsplash.com/photo-1477959858617-67f85cf4f1df?auto=format&fit=crop&w=1200&q=80');
-      return `<button type="button" class="fine-tune-mh-row${active ? ' active' : ''}" aria-pressed="${active ? 'true' : 'false'}" onclick="fineTuneToggleMusthave('${o.id}')">
-        <span class="fine-tune-mh-thumb"><img src="${img}" alt="" loading="lazy" /></span>
-        <span class="fine-tune-mh-text">
-          <span class="fine-tune-mh-title">${escHtml(o.label)}</span>
-          <span class="fine-tune-mh-hint">${escHtml(o.hint || '')}</span>
-        </span>
-        <span class="fine-tune-mh-toggle" aria-hidden="true">${active ? '✓' : '+'}</span>
-      </button>`;
-    }).join('');
-    const showMoreBtn = options.length > FINE_TUNE_MUSTHAVE_VISIBLE && !d.showMoreMusthaves
-      ? `<button type="button" class="fine-tune-show-more" onclick="fineTuneShowMoreMusthaves()">Show more <span aria-hidden="true">⌄</span></button>`
-      : '';
-    const datesHint = (S.checkin && S.checkout && S.checkin < S.checkout)
-      ? ''
-      : `<p class="fine-tune-budget-dates-hint">Add travel dates to filter by nightly rate. ${addDatesLink('Add dates', 'fine-tune')}</p>`;
+    const draftFilter = fineTuneDraftFilter();
+    const showFlex = fineTuneDraftHasFlexCap();
+    const showDatesHint = budgetFilterNeedsRates(draftFilter) && !budgetHasValidDates();
     const availDisabled = !_hasDateSearch;
+
+    const budgetPillsHtml = FINE_TUNE_COMPACT_BUDGET_PILLS.map((c) => {
+      const active = d.budgetCard === c.id;
+      return `<button type="button" class="fine-tune-budget-pill${active ? ' active' : ''}" aria-pressed="${active ? 'true' : 'false'}" onclick="fineTunePickBudgetCard('${c.id}')">${escHtml(c.title)}<span class="fine-tune-budget-pill-sub">${escHtml(c.sub)}</span></button>`;
+    }).join('');
+
+    const musthaveChipsHtml = options.map((o) => {
+      const active = d.dealbreakers.has(o.id);
+      const icon = MUSTHAVE_ICONS[o.id] || '✦';
+      const label = MUSTHAVE_CHIP_SHORT[o.id] || o.label;
+      return `<button type="button" class="fine-tune-mh-chip${active ? ' active' : ''}" aria-pressed="${active ? 'true' : 'false'}" onclick="fineTuneToggleMusthave('${o.id}')"><span class="fine-tune-mh-chip-icon" aria-hidden="true">${icon}</span><span>${escHtml(label)}</span></button>`;
+    }).join('');
+
+    const customToggleLabel = d.budgetCard === 'custom' && d.customOpen ? 'Custom range ▴' : 'Custom range…';
+
     scroll.innerHTML = `
       <section class="fine-tune-section fine-tune-section--first">
-        <div class="fine-tune-section-head">
-          <span class="fine-tune-section-icon" aria-hidden="true">🏷</span>
-          <div>
-            <h3 class="fine-tune-section-title">Budget <span class="fine-tune-opt">(optional)</span></h3>
-            <p class="fine-tune-section-sub">Choose your nightly budget range.</p>
-          </div>
-        </div>
-        <div class="fine-tune-budget-cards">${budgetCardsHtml}</div>
-        ${datesHint}
-        <button type="button" class="fine-tune-custom-toggle${d.customOpen ? ' open' : ''}" aria-expanded="${d.customOpen ? 'true' : 'false'}" onclick="fineTuneToggleCustomBudget()">
-          Custom range <span class="fine-tune-chev" aria-hidden="true">⌄</span>
-        </button>
+        <h3 class="fine-tune-section-label">Nightly budget</h3>
+        <div class="fine-tune-budget-grid">${budgetPillsHtml}</div>
+        <button type="button" class="fine-tune-custom-link" aria-expanded="${d.customOpen ? 'true' : 'false'}" onclick="fineTuneToggleCustomBudget()">${customToggleLabel}</button>
         <div class="fine-tune-custom-range${d.customOpen ? ' open' : ''}" id="fine-tune-custom-range">
           <label class="fine-tune-range-field">
             <span>Min</span>
-            <input type="number" min="0" step="1" inputmode="numeric" placeholder="Min" value="${escHtml(d.customMin)}" oninput="fineTuneCustomRangeInput('min', this.value)" />
+            <input type="number" min="0" step="1" inputmode="numeric" placeholder="Optional" value="${escHtml(d.customMin)}" oninput="fineTuneCustomRangeInput('min', this.value)" />
           </label>
           <label class="fine-tune-range-field">
             <span>Max</span>
-            <input type="number" min="0" step="1" inputmode="numeric" placeholder="Max" value="${escHtml(d.customMax)}" oninput="fineTuneCustomRangeInput('max', this.value)" />
+            <input type="number" min="0" step="1" inputmode="numeric" placeholder="Optional" value="${escHtml(d.customMax)}" oninput="fineTuneCustomRangeInput('max', this.value)" />
           </label>
         </div>
+        <div class="fine-tune-inline-flex${showFlex ? ' is-visible' : ''}${d.budgetFlex ? ' is-on' : ''}" role="switch" aria-checked="${d.budgetFlex ? 'true' : 'false'}" tabindex="0" onclick="fineTuneToggleFlex()" onkeydown="if(event.key===' '||event.key==='Enter'){event.preventDefault();fineTuneToggleFlex();}">
+          <span class="fine-tune-inline-flex-label">Allow slightly over budget</span>
+          <span class="fine-tune-inline-flex-switch" aria-hidden="true"></span>
+        </div>
+        ${showDatesHint ? `<p class="fine-tune-dates-inline">Add dates to filter by rate — until then we nudge ranking only. ${addDatesLink('Add dates →', 'fine-tune')}</p>` : ''}
       </section>
       <section class="fine-tune-section">
-        <div class="fine-tune-section-head">
-          <span class="fine-tune-section-icon" aria-hidden="true">✦</span>
-          <div>
-            <h3 class="fine-tune-section-title">What matters most?</h3>
-            <p class="fine-tune-section-sub">Tap to add your must-have preferences.</p>
+        <h3 class="fine-tune-section-label">Must-haves</h3>
+        <div class="fine-tune-mh-chips">${musthaveChipsHtml}</div>
+        <div class="fine-tune-extras-block">
+          <p class="fine-tune-extras-label">Anything else? <span>(optional)</span></p>
+          <div class="fine-tune-extras-wrap">
+            <textarea class="fine-tune-extras" id="fine-tune-extras" maxlength="250" placeholder="e.g. quiet side street, boutique feel, great coffee nearby" oninput="fineTuneExtrasInput(this.value)">${escHtml(d.freetext)}</textarea>
+            <span class="fine-tune-char-count" id="fine-tune-char-count">${d.freetext.length}/250</span>
           </div>
         </div>
-        <div class="fine-tune-mh-list">${musthaveRowsHtml}</div>
-        ${showMoreBtn}
-      </section>
-      <section class="fine-tune-section">
-        <div class="fine-tune-section-head">
-          <span class="fine-tune-section-icon" aria-hidden="true">✎</span>
+        <div class="fine-tune-compact-avail">
           <div>
-            <h3 class="fine-tune-section-title">Anything else? <span class="fine-tune-opt">(optional)</span></h3>
-            <p class="fine-tune-section-sub">Street energy, character, views, or small details — tell us anything else that matters.</p>
-          </div>
-        </div>
-        <div class="fine-tune-extras-wrap">
-          <textarea class="fine-tune-extras" id="fine-tune-extras" maxlength="250" placeholder="e.g. quiet side street, small boutique hotel, dark room for better sleep, great coffee nearby" oninput="fineTuneExtrasInput(this.value)">${escHtml(d.freetext)}</textarea>
-          <span class="fine-tune-char-count" id="fine-tune-char-count">${d.freetext.length}/250</span>
-        </div>
-      </section>
-      <section class="fine-tune-section fine-tune-section--avail">
-        <div class="fine-tune-section-head fine-tune-section-head--row">
-          <span class="fine-tune-section-icon" aria-hidden="true">📅</span>
-          <div class="fine-tune-avail-copy">
-            <h3 class="fine-tune-section-title">Available only</h3>
-            <p class="fine-tune-section-sub">Only show available properties</p>
+            <div class="fine-tune-compact-avail-label">Available only</div>
+            <div class="fine-tune-compact-avail-sub">Hide hotels without rates</div>
           </div>
           <label class="toggle-switch fine-tune-avail-toggle${availDisabled ? ' disabled' : ''}">
             <input type="checkbox" id="fine-tune-avail" ${d.availOnly ? 'checked' : ''} ${availDisabled ? 'disabled' : ''} onchange="fineTuneAvailChange(this.checked)" />
@@ -3422,8 +3442,18 @@
 
   function fineTuneToggleCustomBudget() {
     if (!_fineTuneDraft) return;
-    _fineTuneDraft.customOpen = !_fineTuneDraft.customOpen;
-    if (_fineTuneDraft.customOpen) _fineTuneDraft.budgetCard = 'custom';
+    if (_fineTuneDraft.budgetCard === 'custom') {
+      _fineTuneDraft.customOpen = !_fineTuneDraft.customOpen;
+    } else {
+      _fineTuneDraft.budgetCard = 'custom';
+      _fineTuneDraft.customOpen = true;
+    }
+    renderFineTuneSheet();
+  }
+
+  function fineTuneToggleFlex() {
+    if (!_fineTuneDraft) return;
+    _fineTuneDraft.budgetFlex = !_fineTuneDraft.budgetFlex;
     renderFineTuneSheet();
   }
 
@@ -3432,18 +3462,14 @@
     if (which === 'min') _fineTuneDraft.customMin = val;
     else _fineTuneDraft.customMax = val;
     _fineTuneDraft.budgetCard = 'custom';
+    _fineTuneDraft.customOpen = true;
+    renderFineTuneSheet({ preserveScroll: true });
   }
 
   function fineTuneToggleMusthave(id) {
     if (!_fineTuneDraft) return;
     if (_fineTuneDraft.dealbreakers.has(id)) _fineTuneDraft.dealbreakers.delete(id);
     else _fineTuneDraft.dealbreakers.add(id);
-    renderFineTuneSheet();
-  }
-
-  function fineTuneShowMoreMusthaves() {
-    if (!_fineTuneDraft) return;
-    _fineTuneDraft.showMoreMusthaves = true;
     renderFineTuneSheet();
   }
 
@@ -3454,6 +3480,7 @@
     const ta = document.getElementById('fine-tune-extras');
     if (ta && ta.value !== _fineTuneDraft.freetext) ta.value = _fineTuneDraft.freetext;
     if (counter) counter.textContent = `${_fineTuneDraft.freetext.length}/250`;
+    updateFineTuneFooterCount();
   }
 
   function fineTuneAvailChange(checked) {
@@ -3465,6 +3492,7 @@
     if (ev) { ev.preventDefault(); ev.stopPropagation(); }
     if (!_fineTuneDraft) return;
     _fineTuneDraft.budgetCard = 'any';
+    _fineTuneDraft.budgetFlex = true;
     _fineTuneDraft.customMin = '';
     _fineTuneDraft.customMax = '';
     _fineTuneDraft.customOpen = false;
@@ -3484,14 +3512,20 @@
       return;
     }
     const prevProfile = _activeBoopProfileForChips() || {};
+    const prevPm = prevProfile?.answers?.priceMatters;
     const prevDealbreakers = JSON.stringify(Array.isArray(prevProfile.dealbreakers) ? prevProfile.dealbreakers.sort() : []);
     const nextDealbreakers = JSON.stringify(Array.from(d.dealbreakers).sort());
     const prevFreetext = (prevProfile.freetext || '').trim();
     const nextFreetext = (d.freetext || '').trim();
     const searchInputsChanged = prevDealbreakers !== nextDealbreakers || prevFreetext !== nextFreetext;
+    const prevBudgetJson = JSON.stringify(normalizeBudgetFilter(prevProfile.budgetFilter || { mode: 'any' }));
+    const nextBudgetJson = JSON.stringify(normalizeBudgetFilter(nextBudget));
+    const budgetChanged = prevBudgetJson !== nextBudgetJson
+      || (prevProfile.budgetFlex !== false) !== (d.budgetFlex !== false);
+    const pendingDatesFilter = budgetFilterNeedsRates(nextBudget) && !budgetHasValidDates();
 
     _budgetFilter = nextBudget;
-    syncBudgetChipUI();
+    _budgetFlex = d.budgetFlex !== false;
 
     const profile = {
       answers: { ...(prevProfile.answers || { group_size: 'couple' }) },
@@ -3500,7 +3534,7 @@
       freetext: nextFreetext,
       advancedKeywords: prevProfile.advancedKeywords || null,
       budgetFilter: nextBudget,
-      budgetFlex: prevProfile.budgetFlex !== undefined ? prevProfile.budgetFlex : _budgetFlex,
+      budgetFlex: _budgetFlex,
       updatedAt: Date.now(),
     };
     syncPriceMattersIntoProfile(profile);
@@ -3512,11 +3546,21 @@
     _showAvailOnly = !!d.availOnly;
 
     closeFineTuneSheet();
+    syncBudgetChipUI();
     renderVibeChips();
+    if (typeof syncResultCountUi === 'function') syncResultCountUi();
 
-    if (searchInputsChanged) {
+    if (pendingDatesFilter) flashBudgetPendingDatesHint();
+
+    const newPm = profile.answers?.priceMatters;
+    if (searchInputsChanged || budgetChanged) {
       clearNbhdPickerMatchCache();
-      runBoopSearch(profile);
+      if (S.q && (searchInputsChanged || prevPm !== newPm)) {
+        runBoopSearch(profile);
+      } else if (_lastHotels?.length) {
+        _displayedCount = 10;
+        renderSorted();
+      }
     } else if (_lastHotels?.length) {
       _displayedCount = 10;
       renderSorted();
@@ -4644,6 +4688,15 @@
   }
   window.openNeighborhoodExplorerFromDetail = openNeighborhoodExplorerFromDetail;
 
+  /** Link a neighbourhood name on hotel detail → nbhd explorer (scrolls to that card). */
+  function hotelDetailNbhdNameLinkHTML(nbhdName, className) {
+    const name = String(nbhdName || '').trim();
+    if (!name) return '';
+    if (!S.city) return escHtml(name);
+    const cls = className ? `hpage-nbhd-name-link ${className}` : 'hpage-nbhd-name-link';
+    return `<button type="button" class="${cls}" data-nbhd-explore="${escAttr(name)}" onclick="event.preventDefault();openNeighborhoodExplorerFromDetail(this.getAttribute('data-nbhd-explore'))">${escHtml(name)}</button>`;
+  }
+
   function renderNbhdCard(h, cardId) {
     const bbox = h.bbox
       ? `${h.bbox.lat_min},${h.bbox.lat_max},${h.bbox.lon_min},${h.bbox.lon_max}`
@@ -5380,6 +5433,7 @@
     const trigger = document.getElementById(ids.trigger);
     if (pop) pop.classList.remove('open');
     if (trigger) trigger.setAttribute('aria-expanded', 'false');
+    if (context === 'cmd') clearDatePickerBudgetContext();
     if (context === 'cmd' && window.matchMedia && window.matchMedia('(max-width: 640px)').matches) {
       document.getElementById('cmd-tray')?.classList.remove('open');
     }
@@ -5421,9 +5475,14 @@
       }
     }
     if (sub) {
-      sub.textContent = CITY_DATE_PICKER.selecting === 'checkout'
-        ? 'Pick a check-out date. It must be at least two days after check-in.'
-        : 'Select a check-in date, then choose your check-out date.';
+      if (_datePickerBudgetContext) {
+        const label = budgetFilterChipBaseLabel(_budgetFilter);
+        sub.textContent = `Add travel dates to filter results by your ${label.toLowerCase()} budget.`;
+      } else {
+        sub.textContent = CITY_DATE_PICKER.selecting === 'checkout'
+          ? 'Pick a check-out date. It must be at least two days after check-in.'
+          : 'Select a check-in date, then choose your check-out date.';
+      }
     }
   }
 
@@ -6164,6 +6223,7 @@
     if (sb) { sb.textContent = fmtDate(ci) + ' – ' + fmtDate(co); sb.classList.add('set'); }
     closeDateRangePicker('cmd');
     document.getElementById('cmd-tray').classList.remove('open');
+    clearDatePickerBudgetContext();
     syncCommandBarFromState();
     prefetchCityRatesForDates();
     if (finishCmdTripSheetSubflow('Dates updated — tap Update results when ready')) return;
@@ -7992,6 +8052,26 @@
     // Stub hotels lazy-load rooms with score=0 (outside Phase-B window).
     // Fall back to vectorScore so the badge doesn't drop to 0 after rooms load.
     return bestRoomScore > 0 ? Math.round(bestRoomScore) : Math.round(h?.vectorScore || 0);
+  }
+
+  /**
+   * Hotel character / style % for V2 "Most Stylish" pick and hotel vibe pills.
+   * Uses server hotelScore when present; otherwise match_breakdown or a room+nbhd blend
+   * (same fallback as vibe tour) so top picks never show 0% for hotels outside the
+   * hotel-vibe RPC window.
+   */
+  function hotelStyleMatchDisplayPct(h) {
+    if (!h) return 0;
+    const raw = Number(h.hotelScore);
+    if (Number.isFinite(raw) && raw > 0) return Math.round(raw);
+    const mb = h.match_breakdown;
+    if (mb && mb.hotel_pct != null && Number(mb.hotel_pct) > 0) {
+      return Math.round(Number(mb.hotel_pct));
+    }
+    const room = roomVibeMatchDisplayPct(h);
+    const nbhdRaw = h.nbhd_fit_pct != null ? Math.round(Number(h.nbhd_fit_pct)) : 0;
+    const nbhdForBlend = nbhdRaw > 0 ? nbhdRaw : room;
+    return Math.max(0, Math.round(room * 0.65 + nbhdForBlend * 0.35));
   }
 
   function roomsSectionFeaturedLabel() {
@@ -10192,6 +10272,7 @@
     document.body.style.overflow = ''; // ensure not stuck locked from any prior modal
 
     // Render skeleton while we fetch.
+    clearHotelDetailMobileCta();
     root.innerHTML = hotelDetailPageSkeletonHTML();
     window.scrollTo(0, 0);
 
@@ -10221,6 +10302,16 @@
       if (_detailHotelId !== hotelId) return; // user navigated away
       _detailHotelData = data;
       root.innerHTML = hotelDetailPageHTML(data, _detailPageOpts);
+      const detailSearchHotel = hotelDetailSearchContext(data);
+      const bookHotel = {
+        id: data.hotel_id,
+        name: data.name,
+        city: S.city,
+        ...(detailSearchHotel || {}),
+      };
+      mountHotelDetailMobileCta(
+        hotelDetailMobileCtaHTML(bookHotel, escHtml(String(data.hotel_id)))
+      );
       _attachHpReviewsObserver(hotelId);
       // Defer scroll to reviews until after layout settles.
       if (scrollTo === 'reviews') {
@@ -10234,6 +10325,34 @@
     }
   }
 
+  function hotelDetailMobileCtaHTML(bookHotel, hotelIdAttr) {
+    return `<div class="hpage-mobile-cta" role="group" aria-label="Hotel actions">
+      ${bookLinkHTML(bookHotel, null, 'hotel_detail_mobile', {
+        className: 'hpage-cta hpage-cta--primary hpage-cta--mobile',
+        label: 'Book',
+      })}
+      <button type="button" class="hpage-cta hpage-cta--vibe hpage-cta--mobile" onclick="openVibeTourForHotel('${hotelIdAttr}')">Vibe tour</button>
+    </div>`;
+  }
+
+  function mountHotelDetailMobileCta(html) {
+    const host = document.getElementById('hpage-mobile-cta-host');
+    if (!host) return;
+    if (html) {
+      host.innerHTML = html;
+      host.hidden = false;
+      host.removeAttribute('aria-hidden');
+    } else {
+      host.innerHTML = '';
+      host.hidden = true;
+      host.setAttribute('aria-hidden', 'true');
+    }
+  }
+
+  function clearHotelDetailMobileCta() {
+    mountHotelDetailMobileCta('');
+  }
+
   // Internal close — restores prior view + URL.
   // fromPop=true means popstate triggered the close (don't push history again).
   function closeHotelDetailPage(opts) {
@@ -10243,6 +10362,7 @@
     const root = document.getElementById('st-hotel-detail');
     if (!root || root.style.display === 'none') return;
 
+    clearHotelDetailMobileCta();
     root.style.display = 'none';
     root.innerHTML = ''; // free memory
     document.body.classList.remove('has-hotel-detail');
@@ -10502,11 +10622,24 @@
       </div>`).join('');
   }
 
+  /** Compact % badge (Top Picks metrics on detail intro). */
+  function hotelDetailMetricBadgeHTML(pct, className, opts) {
+    if (pct == null || !Number.isFinite(Number(pct))) return '';
+    const o = typeof opts === 'string' ? { title: opts } : (opts || {});
+    const v = Math.round(Math.max(0, Math.min(100, Number(pct))));
+    const label = o.label ? String(o.label).trim() : '';
+    const text = label ? `${v}% ${label}` : `${v}%`;
+    const t = o.title || text;
+    return `<span class="hpage-metric-badge ${className}" title="${escHtml(t)}" aria-label="${escHtml(t)}">${escHtml(text)}</span>`;
+  }
+
+  function nbhdAreaFitDisplayPct(h) {
+    if (!h || h.nbhd_fit_pct == null) return null;
+    return Math.round(Number(h.nbhd_fit_pct));
+  }
+
   function hotelDetailMatchSidebarHTML(d, searchHotel, pageOpts) {
-    const overall = (() => {
-      const mb = resolveMatchBreakdown(searchHotel);
-      return mb?.overall_pct != null ? Math.round(mb.overall_pct) : overallMatchDisplayPct(searchHotel || {});
-    })();
+    const overall = overallMatchDisplayPct(searchHotel || {});
     const stars = '★'.repeat(Math.min(Math.max(Math.round(d.star_rating || 0), 0), 5));
     const rating = d.guest_rating > 0 ? parseFloat(d.guest_rating).toFixed(1) : null;
     const ratingLabel = rating ? hotelDetailRatingLabel(d.guest_rating) : '';
@@ -10520,9 +10653,9 @@
     const reviewMeta = rating ? '<span id="hpage-sb-review-count">Guest reviews</span>' : '';
     return `<aside class="hpage-sidebar hpage-match-card" aria-label="Match summary">
       <div class="hpage-match-card-top">
-        <div class="hpage-match-ring" style="--match-pct:${overall}" aria-label="${overall}% match">
+        <div class="hpage-match-ring" style="--match-pct:${overall}" aria-label="${overall} percent overall match">
           <span class="hpage-match-ring-val">${overall}%</span>
-          <span class="hpage-match-ring-lbl">match</span>
+          <span class="hpage-match-ring-lbl">Overall Match</span>
         </div>
         ${stars || rating ? `<div class="hpage-match-rating-block">
           ${ratingLabel ? `<span class="hpage-match-rating-label">${escHtml(ratingLabel)}</span>` : ''}
@@ -10535,7 +10668,7 @@
       </div>
       <div class="hpage-match-card-actions">
         <div class="hpage-match-action-book">
-          ${bookLinkHTML(bookHotel, null, 'hotel_detail', { className: 'hpage-cta hpage-cta--primary hpage-cta--match-book', label: 'Find &amp; Book →', shortLabel: 'Book' })}
+          ${bookLinkHTML(bookHotel, null, 'hotel_detail', { className: 'hpage-cta hpage-cta--primary hpage-cta--match-book', label: 'Book' })}
         </div>
         <div class="hpage-match-action-vibe hpage-match-action-vibe--sidebar">
           <button type="button" class="hpage-cta hpage-cta--vibe" onclick="openVibeTourForHotel('${hotelIdAttr}')"><span aria-hidden="true">✦</span> Take a Vibe Tour</button>
@@ -10547,9 +10680,21 @@
   function hotelDetailIntroHTML(d, searchHotel) {
     const displayName = hotelDisplayTitle({ name: d.name, id: d.hotel_id, city: d.city });
     const nbhdName = d.primary_nbhd?.name || searchHotel?.primary_nbhd?.name || '';
-    const cityPart = d.city ? `${nbhdName ? `${nbhdName}, ` : ''}${d.city}` : nbhdName;
+    const locText = nbhdName
+      ? `${hotelDetailNbhdNameLinkHTML(nbhdName)}${d.city ? `, ${escHtml(d.city)}` : ''}`
+      : (d.city ? escHtml(d.city) : '');
+    const hotelStylePct = searchHotel ? hotelStyleMatchDisplayPct(searchHotel) : null;
+    const nbhdFitPct = searchHotel ? nbhdAreaFitDisplayPct(searchHotel) : null;
+    const hotelBadge = hotelStylePct != null && hotelStylePct > 0
+      ? hotelDetailMetricBadgeHTML(hotelStylePct, 'hpage-metric-badge--hotel', { title: 'Hotel style match' })
+      : '';
+    const nbhdBadge = nbhdFitPct != null
+      ? hotelDetailMetricBadgeHTML(nbhdFitPct, 'hpage-metric-badge--nbhd', { title: 'Area fit', label: 'Area match' })
+      : '';
     const pills = [];
-    if (nbhdName) pills.push(`<span class="hpage-intro-pill">📍 ${escHtml(nbhdName)}</span>`);
+    if (nbhdName) {
+      pills.push(`<span class="hpage-intro-pill">📍 ${hotelDetailNbhdNameLinkHTML(nbhdName, 'hpage-nbhd-name-link--pill')}</span>`);
+    }
     const profile = getEffectiveBoopProfileForScoring();
     const trip = profile?.answers?.trip;
     const tripLabels = { first: 'Great for first visits', repeat: 'Great for return visits', expert: 'Great if you know the city' };
@@ -10558,8 +10703,8 @@
       ?.find((o) => o.id === profile?.answers?.stayVibe);
     if (vibeOpt && !trip) pills.push(`<span class="hpage-intro-pill">${escHtml(vibeOpt.title || vibeOpt.label)}</span>`);
     return `<div class="hpage-intro" role="group" aria-label="Hotel overview">
-      <h1 class="hpage-intro-name">${escHtml(displayName)}</h1>
-      ${cityPart ? `<p class="hpage-intro-loc"><span aria-hidden="true">📍</span> ${escHtml(cityPart)}</p>` : ''}
+      <h1 class="hpage-intro-name">${escHtml(displayName)}${hotelBadge}</h1>
+      ${locText ? `<p class="hpage-intro-loc"><span class="hpage-intro-loc-text"><span aria-hidden="true">📍</span> ${locText}</span>${nbhdBadge}</p>` : (nbhdBadge ? `<p class="hpage-intro-loc">${nbhdBadge}</p>` : '')}
       ${pills.length ? `<div class="hpage-intro-pills">${pills.join('')}</div>` : ''}
     </div>`;
   }
@@ -10784,7 +10929,7 @@
       </div>`).join('');
     return `<section class="hp-section hpage-nbhd-block" aria-labelledby="hpage-nbhd-title">
       <h2 id="hpage-nbhd-title" class="hpage-section-label">About the neighbourhood</h2>
-      ${nbhdName ? `<p class="hpage-nbhd-place-name">${escHtml(nbhdName)}</p>` : ''}
+      ${nbhdName ? `<p class="hpage-nbhd-place-name">${hotelDetailNbhdNameLinkHTML(nbhdName, 'hpage-nbhd-name-link--title')}</p>` : ''}
       <div class="hpage-nbhd-grid">
         <div class="hpage-nbhd-copy">
           ${text ? `<p>${escHtml(text)}</p>` : ''}
@@ -10928,15 +11073,6 @@
           ${amenRest.length > 0 ? `<button class="hp-amenities-more" onclick="toggleHpAmenities()">+ ${amenRest.length} more</button>` : ''}
          </div>` : '';
 
-    const mobileCTAHTML = `
-      <div class="hpage-mobile-cta" role="group" aria-label="Hotel actions">
-        ${bookLinkHTML(bookHotel, null, 'hotel_detail_mobile', {
-          className: 'hpage-cta hpage-cta--primary hpage-cta--mobile',
-          label: 'Find &amp; Book →',
-        })}
-        <button type="button" class="hpage-cta hpage-cta--vibe hpage-cta--mobile" onclick="openVibeTourForHotel('${hotelIdAttr}')">Vibe tour</button>
-      </div>`;
-
     return `
       ${lightboxHTML}
       <div class="hpage hpage-v3">
@@ -10968,8 +11104,7 @@
             ${hotelDetailReviewsSectionHTML(d)}
           </div>
         </div>
-      </div>
-      ${mobileCTAHTML}`;
+      </div>`;
   }
 
   // Copy current /hotel/:id URL to clipboard (sidebar Share).
@@ -11381,6 +11516,7 @@
     addDatesLinkHtml: (label) => addDatesLink(label || 'Add dates', 'sr2'),
     hotelDisplayTitle,
     roomVibeMatchDisplayPct,
+    hotelStyleMatchDisplayPct,
     hotelEffectiveScore,
     overallMatchDisplayPct,
     renderRoomsSection(hotel, pickKind) {

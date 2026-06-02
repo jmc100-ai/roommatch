@@ -902,7 +902,7 @@
       <div class="fine-tune-grabber" aria-hidden="true"></div>
       <div class="fine-tune-hdr">
         <h2 class="fine-tune-title" id="fine-tune-sheet-title">Fine-tune your <em>stay</em></h2>
-        <p class="fine-tune-sub">Add what matters most to you. We'll shape your results.</p>
+        <p class="fine-tune-sub" aria-hidden="true">Add what matters most to you. We'll shape your results.</p>
         <button type="button" class="fine-tune-close" onclick="closeFineTuneSheet(event)" aria-label="Close">×</button>
       </div>
     </div>
@@ -942,6 +942,9 @@
 <div id="st-hotel-detail" class="hpage" style="display:none" role="main" aria-label="Hotel details">
   <!-- filled by JS (hotelDetailPageHTML) -->
 </div>
+
+<!-- Hotel detail mobile CTA — direct body child so position:fixed stays on the viewport (see .cmd-trip-sheet-host) -->
+<div id="hpage-mobile-cta-host" hidden aria-hidden="true"></div>
 
 <!-- Momentum toast -->
 <div id="mbanner" class="mbanner"></div>
