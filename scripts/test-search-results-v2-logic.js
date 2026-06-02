@@ -46,9 +46,47 @@ function testSelectTopPicksUnique() {
   console.log('  ok selectTopPicks — four unique hotels');
 }
 
+function testSelectMoreHotelsExcludesTopPicks() {
+  const hotels = Array.from({ length: 14 }, (_, i) => ({
+    id: `h${i}`,
+    name: `Hotel ${i}`,
+    vectorScore: 100 - i,
+    nbhd_fit_pct: 40 + i,
+    hotelScore: 30 + i,
+  }));
+  hotels[8].name = 'The Ritz-Carlton Residences Mexico City';
+  hotels[8].vectorScore = 100;
+  hotels[8].hotelScore = 95;
+  hotels[3].name = 'The Ritz-Carlton, Mexico City';
+  hotels[3].hotelScore = 99;
+  const sorted = [...hotels].sort((a, b) => {
+    const bScore = bridgeOverall(b);
+    const aScore = bridgeOverall(a);
+    return bScore - aScore;
+  });
+  function bridgeOverall(h) {
+    return (Number(h.vectorScore) || 0);
+  }
+  const picks = V2.selectTopPicks(sorted);
+  const pickIds = new Set(
+    ['overall', 'room_match', 'area_fit', 'stylish'].map((k) => picks[k]?.id).filter(Boolean),
+  );
+  const more = V2.selectMoreHotels(sorted, picks, V2.MORE_HOTELS_COUNT);
+  assert(more.length === 8, `expected 8 more hotels, got ${more.length}`);
+  for (const h of more) {
+    assert(!pickIds.has(h.id), `more hotels must not repeat top pick ${h.id}`);
+  }
+  const brands = ['overall', 'room_match', 'area_fit', 'stylish']
+    .map((k) => picks[k] && V2.hotelBrandKey(picks[k]))
+    .filter(Boolean);
+  assert(new Set(brands).size === brands.length, `top picks should not share brand keys: ${brands.join(', ')}`);
+  console.log('  ok selectMoreHotels — excludes all top picks');
+}
+
 function testSelectMoreHotelsMatchesMainListRanks() {
   const hotels = Array.from({ length: 14 }, (_, i) => ({
     id: `h${i}`,
+    name: `Distinct Brand ${i}`,
     vectorScore: 100 - i,
     nbhd_fit_pct: 50,
     hotelScore: 50,
@@ -56,10 +94,24 @@ function testSelectMoreHotelsMatchesMainListRanks() {
   const picks = V2.selectTopPicks(hotels);
   const more = V2.selectMoreHotels(hotels, picks, V2.MORE_HOTELS_COUNT);
   assert(more.length === 8, `expected 8 more hotels, got ${more.length}`);
-  for (let i = 0; i < 8; i++) {
-    assert(more[i].id === hotels[i + 1].id, `more[${i}] should be main-list rank #${i + 2}`);
+  const pickIds = new Set(
+    ['overall', 'room_match', 'area_fit', 'stylish'].map((k) => picks[k]?.id).filter(Boolean),
+  );
+  let rank = 0;
+  for (const h of hotels) {
+    if (pickIds.has(h.id)) continue;
+    assert(more[rank]?.id === h.id, `more[${rank}] should be next sorted hotel after picks`);
+    rank += 1;
+    if (rank >= 8) break;
   }
-  console.log('  ok selectMoreHotels — ranks #2–#9 match sorted list');
+  console.log('  ok selectMoreHotels — next sorted rows after picks');
+}
+
+function testBrandKeyCollapsesRitzVariants() {
+  const a = { id: 'a', name: 'The Ritz-Carlton Residences Mexico City', city: 'Mexico City' };
+  const b = { id: 'b', name: 'The Ritz-Carlton, Mexico City', city: 'Mexico City' };
+  assert(V2.hotelBrandKey(a) === V2.hotelBrandKey(b), 'Ritz variants should share brand key');
+  console.log('  ok hotelBrandKey — Ritz variants');
 }
 
 function testLensReorders() {
@@ -101,6 +153,8 @@ function main() {
   if (!V2) throw new Error('SearchResultsV2 failed to load');
   testModeConstants();
   testSelectTopPicksUnique();
+  testBrandKeyCollapsesRitzVariants();
+  testSelectMoreHotelsExcludesTopPicks();
   testSelectMoreHotelsMatchesMainListRanks();
   testCuratedHighlightIds();
   testLensReorders();

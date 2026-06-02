@@ -785,9 +785,13 @@
   let _propTypeFilter = 'all'; // dropdown: all | hotel | apartment | vacation_home | villa | hostel
   /** Nightly budget filter (desktop chip; mobile wired, button hidden until later). */
   let _budgetFilter = { mode: 'any' };
+  /** When true, hotels slightly above a nightly cap may still appear (desktop budget pop). */
+  let _budgetFlex = true;
+  let _budgetPopDraft = null;
   const BUDGET_SESSION_KEY = 'budgetFilter'; // legacy — cleared on reset; no longer persisted
-  const BUDGET_LUXURY_MIN_STARS = 4.5;
+  const BUDGET_LUXURY_MIN_PRICE = 400;
   const BUDGET_UNDER_PRESETS = [150, 250, 400, 600];
+  const BUDGET_DESKTOP_CARD_IDS = ['any', 'under_250', 'under_400', 'luxury', 'custom'];
   const RATES_CURRENCIES = ['USD', 'EUR', 'GBP', 'CAD', 'AUD', 'MXN'];
   const RM_CURRENCY_KEY = 'rm_rates_currency';
   function getRatesCurrencyPref() {
@@ -2231,7 +2235,6 @@
     el.hidden = !boopPriceMattersCaptionIsNeutral(n);
   }
 
-  /** Results stay-vibe chip subline (revert: set VIBE_CHIP_SHOW_PRICE_MATTERS false). */
   function boopPriceMattersChipSubline(n) {
     const v = Math.max(-100, Math.min(100, Number(n) || 0));
     if (v >= 33) return 'Price Matters - More';
@@ -2439,6 +2442,7 @@
   }
 
   function boopFinish() {
+    const prev = S.boopProfile || loadBoopProfileForCity(S.city) || {};
     const normalizedAnswers = migrateBoopProfileAnswersIfNeeded({ ...BOOP.answers });
     const reconciledPrefs = reconcileTripEnvWeights(normalizedAnswers, BOOP.prefs);
     const advancedKw = (BOOP.advancedKeywords || '').trim();
@@ -2448,9 +2452,14 @@
       dealbreakers: Array.from(BOOP.dealbreakers),
       freetext: BOOP.freetext || '',
       advancedKeywords: advancedKw || null,
+      budgetFilter: prev.budgetFilter || _budgetFilter || { mode: 'any' },
+      budgetFlex: prev.budgetFlex !== undefined ? prev.budgetFlex : _budgetFlex,
       updatedAt: Date.now(),
     };
+    syncPriceMattersIntoProfile(profile);
     BOOP.answers = normalizedAnswers;
+    _budgetFilter = normalizeBudgetFilter(profile.budgetFilter);
+    _budgetFlex = profile.budgetFlex !== false;
     S.boopProfile = profile;
     saveBoopProfileForCity(S.city, profile);
     clearNbhdPickerMatchCache();
@@ -2485,8 +2494,8 @@
   // ── Vibe chips on results toolbar ────────────────────────────────
   // Steps that surface as taps on the results-page chip strip.
   const VIBE_CHIP_STEPS = ['trip', 'stayVibe', 'nbhdScene', 'musthaves'];
-  /** Experiment: stay-vibe chip shows price slider as a second line. Set false to revert. */
-  const VIBE_CHIP_SHOW_PRICE_MATTERS = true;
+  /** Stay-vibe chip no longer shows price-matters subline; budget lives on budget chip. */
+  const VIBE_CHIP_SHOW_PRICE_MATTERS = false;
   /** Card steps opened from results vibe chips (not must-haves). */
   const BOOP_CHIP_OVERLAY_CARD_STEPS = ['trip', 'stayVibe', 'nbhdScene'];
 
@@ -2506,6 +2515,23 @@
     spacious: 'Spacious',
     work_desk: 'Work desk',
   };
+
+  function musthaveFreetextSubline(profile) {
+    return String(profile?.freetext || '').trim();
+  }
+
+  function musthaveHasChipContent(profile) {
+    const db = Array.isArray(profile?.dealbreakers) ? profile.dealbreakers : [];
+    return db.length > 0 || !!musthaveFreetextSubline(profile);
+  }
+
+  /** Line 2 on the must-haves chip: freetext wins over budget when both exist. */
+  function musthaveChipSubline(profile) {
+    const ft = musthaveFreetextSubline(profile);
+    if (ft) return ft;
+    return budgetFilterChipLabel(_budgetFilter, _budgetFlex);
+  }
+
   const FINE_TUNE_MUSTHAVE_VISIBLE = 4;
   const FINE_TUNE_BUDGET_CARDS = [
     { id: 'any', label: 'Any budget', sub: '' },
@@ -2597,7 +2623,7 @@
     }
     const hasDates = !!(S.checkin && S.checkout && S.checkin < S.checkout);
     if (!hasDates) {
-      el.textContent = 'Free cancellation: add travel dates to filter.';
+      el.innerHTML = `Free cancellation: ${addDatesLink('add travel dates', 'inline')} to filter.`;
       el.classList.add('is-on');
       return;
     }
@@ -2623,21 +2649,33 @@
     const row = document.getElementById('vibe-chip-row');
     if (!row) return;
     const profile = _activeBoopProfileForChips() || {};
+    if (profile.budgetFilter) {
+      const norm = normalizeBudgetFilter(profile.budgetFilter);
+      if (JSON.stringify(norm) !== JSON.stringify(_budgetFilter)) {
+        _budgetFilter = norm;
+        _budgetFlex = profile.budgetFlex !== false;
+      }
+    }
     const ans = profile.answers || {};
     const dealbreakers = new Set(Array.isArray(profile.dealbreakers) ? profile.dealbreakers : []);
     const chips = [];
     for (const stepKey of VIBE_CHIP_STEPS) {
       if (stepKey === 'musthaves') {
+        const freetext = musthaveFreetextSubline(profile);
         if (isMobileCmdTripUi()) {
           const summary = finetuneChipSummary();
-          const isEmpty = summary === '+ Must-haves';
-          chips.push(_musthaveChipHtml(summary, isEmpty, budgetFilterChipLabel(_budgetFilter)));
+          const isEmpty = !musthaveHasChipContent(profile);
+          chips.push(_musthaveChipHtml(summary, isEmpty, musthaveChipSubline(profile)));
           continue;
         }
         const mh = BOOP_QUESTIONS.find(q => q.id === 'musthaves');
         const pickedOpts = (mh?.options || []).filter(o => dealbreakers.has(o.id));
-        if (pickedOpts.length === 0) {
+        if (pickedOpts.length === 0 && !freetext) {
           chips.push(_chipHtml(stepKey, '', _emptyChipLabelFor('musthaves'), true));
+          continue;
+        }
+        if (pickedOpts.length === 0) {
+          chips.push(_chipHtml(stepKey, '', 'Must-haves', false, freetext));
           continue;
         }
         const mhIcon = MUSTHAVE_ICONS[pickedOpts[0].id] || '✓';
@@ -2648,7 +2686,7 @@
         } else {
           text = `${pickedOpts.length} must-haves`;
         }
-        chips.push(_chipHtml(stepKey, icon, text, false));
+        chips.push(_chipHtml(stepKey, icon, text, false, freetext || undefined));
         continue;
       }
       const q = BOOP_QUESTIONS.find(x => x.id === stepKey);
@@ -2671,8 +2709,34 @@
   // ── Nightly budget filter (desktop chip; mobile wired, button hidden) ─────
   let _budgetOutsideCloseBound = false;
 
+  /** Open the results command-bar dates picker (shared by budget chip, hints, cards). */
+  function openAddDatesPopover(ev) {
+    if (ev) {
+      ev.stopPropagation();
+      ev.preventDefault();
+    }
+    closeBudgetPop();
+    closeCmdPartyPopover();
+    closeSortMorePop();
+    try { closeFineTuneSheet(); } catch (_) {}
+    toggleDatesTray();
+  }
+
+  function budgetPopAddDates(ev) {
+    openAddDatesPopover(ev);
+  }
+
+  /** Inline hot link — always opens the dates popover; stops card/row click propagation. */
+  function addDatesLink(label, extraClass) {
+    const safe = escHtml(label || 'Add dates');
+    const cls = extraClass ? ` add-dates-link--${extraClass}` : '';
+    return `<button type="button" class="add-dates-link${cls}" onclick="openAddDatesPopover(event)">${safe}</button>`;
+  }
+
   function resetBudgetFilter() {
     _budgetFilter = { mode: 'any' };
+    _budgetFlex = true;
+    _budgetPopDraft = null;
     try { sessionStorage.removeItem(BUDGET_SESSION_KEY); } catch (_) {}
     syncBudgetChipUI();
     closeBudgetPop();
@@ -2690,23 +2754,130 @@
       const max = f.max != null && Number.isFinite(Number(f.max)) ? Math.max(0, Math.round(Number(f.max))) : null;
       if (min == null && max == null) return { mode: 'any' };
       if (min != null && max != null && min > max) return { mode: 'any' };
+      if (min === BUDGET_LUXURY_MIN_PRICE && max == null) return { mode: 'luxury' };
       return { mode: 'range', min, max };
     }
     return { mode: 'any' };
   }
 
-  function budgetFilterChipLabel(f) {
+  function budgetFilterHasCap(f) {
+    const filter = normalizeBudgetFilter(f || { mode: 'any' });
+    if (filter.mode === 'under') return true;
+    if (filter.mode === 'range' && filter.max != null) return true;
+    return false;
+  }
+
+  function budgetHasValidDates() {
+    return !!(S.checkin && S.checkout && S.checkin < S.checkout);
+  }
+
+  /** Price-based budget filters need live nightly rates (incl. luxury $400+ floor). */
+  function budgetFilterNeedsRates(f) {
+    const filter = normalizeBudgetFilter(f || { mode: 'any' });
+    if (filter.mode === 'luxury') return true;
+    if (filter.mode === 'under') return true;
+    if (filter.mode === 'range' && (filter.min != null || filter.max != null)) return true;
+    return false;
+  }
+
+  function budgetDraftNeedsRates(draft) {
+    if (!draft) return false;
+    if (draft.cardId === 'luxury' || draft.cardId === 'under_250' || draft.cardId === 'under_400') return true;
+    if (draft.cardId === 'custom') {
+      return !!(String(draft.customMin || '').trim() || String(draft.customMax || '').trim());
+    }
+    return false;
+  }
+
+  function budgetFlexMaxPrice(baseMax) {
+    if (baseMax == null || !Number.isFinite(baseMax)) return null;
+    return Math.round(baseMax + Math.min(60, baseMax * 0.15));
+  }
+
+  /** Derive wizard priceMatters (-100…100) from stay vibe + budget picks (no manual slider). */
+  function derivePriceMattersFromSignals(stayVibe, filter, flex) {
+    let pm = 0;
+    const f = normalizeBudgetFilter(filter || { mode: 'any' });
+    if (f.mode === 'under') {
+      if (f.underMax <= 150) pm += 50;
+      else if (f.underMax <= 250) pm += 40;
+      else if (f.underMax <= 400) pm += 28;
+      else pm += 18;
+    } else if (f.mode === 'range') {
+      const cap = f.max;
+      if (cap != null) {
+        if (cap <= 150) pm += 50;
+        else if (cap <= 250) pm += 40;
+        else if (cap <= 400) pm += 28;
+        else pm += 18;
+      } else if (f.min != null && f.min >= 400) {
+        pm -= 45;
+      }
+    } else if (f.mode === 'luxury') {
+      pm -= 45;
+    }
+    if (stayVibe === 'simple_value') pm += 40;
+    if (budgetFilterHasCap(f)) {
+      pm += flex === false ? 12 : -20;
+    }
+    return Math.max(-100, Math.min(100, Math.round(pm)));
+  }
+
+  function syncPriceMattersIntoProfile(profile) {
+    if (!profile) return;
+    const stayVibe = profile.answers?.stayVibe;
+    const filter = profile.budgetFilter != null ? profile.budgetFilter : _budgetFilter;
+    const flex = profile.budgetFlex !== false;
+    profile.answers = migrateBoopProfileAnswersIfNeeded({ ...(profile.answers || {}) });
+    profile.answers.priceMatters = derivePriceMattersFromSignals(stayVibe, filter, flex);
+  }
+
+  function persistBudgetToProfile() {
+    const base = S.boopProfile || (S.city ? loadBoopProfileForCity(S.city) : null) || {};
+    const profile = {
+      ...base,
+      budgetFilter: _budgetFilter,
+      budgetFlex: _budgetFlex,
+      answers: { ...(base.answers || {}), group_size: base.answers?.group_size || 'couple' },
+      updatedAt: Date.now(),
+    };
+    syncPriceMattersIntoProfile(profile);
+    S.boopProfile = profile;
+    if (S.city) saveBoopProfileForCity(S.city, profile);
+    return profile;
+  }
+
+  function hydrateBudgetFromProfile(profile) {
+    if (!profile) return;
+    if (profile.budgetFilter) _budgetFilter = normalizeBudgetFilter(profile.budgetFilter);
+    _budgetFlex = profile.budgetFlex !== false;
+    syncBudgetChipUI();
+  }
+
+  function budgetFilterChipBaseLabel(f) {
     const filter = f || _budgetFilter || { mode: 'any' };
     if (filter.mode === 'any') return 'Any budget';
-    if (filter.mode === 'luxury') return 'Luxury only';
-    if (filter.mode === 'under') return `<$${filter.underMax}`;
+    if (filter.mode === 'luxury') return 'Luxury $400+';
+    if (filter.mode === 'under') return `Under $${filter.underMax}`;
     if (filter.mode === 'range') {
       const { min, max } = filter;
       if (min != null && max != null) return `$${min}–$${max}`;
       if (min != null) return `$${min}+`;
-      if (max != null) return `<$${max}`;
+      if (max != null) return `Under $${max}`;
+      return 'Any budget';
     }
     return 'Any budget';
+  }
+
+  function budgetFilterChipLabel(f, flex) {
+    let label = budgetFilterChipBaseLabel(f);
+    const filter = f || _budgetFilter || { mode: 'any' };
+    const flexOn = flex !== false;
+    const needsRates = budgetFilterNeedsRates(filter);
+    const hasDates = budgetHasValidDates();
+    if (needsRates && !hasDates) label += ' · Add dates';
+    else if (budgetFilterHasCap(filter) && flexOn && hasDates) label += ' · Flexible';
+    return label;
   }
 
   function budgetFilterIsActive(f) {
@@ -2716,12 +2887,155 @@
   function syncBudgetChipUI() {
     const btn = document.getElementById('budgetChipBtn');
     if (!btn) return;
-    const label = budgetFilterChipLabel(_budgetFilter);
-    btn.textContent = label;
-    btn.setAttribute('aria-label', `Nightly budget: ${label}`);
     const active = budgetFilterIsActive(_budgetFilter);
+    const pendingDates = active && budgetFilterNeedsRates(_budgetFilter) && !budgetHasValidDates();
+    const label = budgetFilterChipLabel(_budgetFilter, _budgetFlex);
+    if (pendingDates) {
+      const base = budgetFilterChipBaseLabel(_budgetFilter);
+      btn.innerHTML = `${escHtml(base)} · ${addDatesLink('Add dates', 'chip')}`;
+    } else {
+      btn.textContent = label;
+    }
+    btn.setAttribute('aria-label', `Nightly budget: ${label}`);
     btn.classList.toggle('vibe-chip-empty', !active);
     btn.classList.toggle('budget-chip-btn--active', active);
+    btn.classList.toggle('budget-chip-btn--pending-dates', pendingDates);
+  }
+
+  function budgetFilterToDesktopCardId(f) {
+    const filter = normalizeBudgetFilter(f || { mode: 'any' });
+    if (filter.mode === 'any') return 'any';
+    if (filter.mode === 'luxury') return 'luxury';
+    if (filter.mode === 'under') {
+      if (filter.underMax === 250) return 'under_250';
+      if (filter.underMax === 400) return 'under_400';
+      return 'custom';
+    }
+    if (filter.mode === 'range') {
+      if (filter.min === 400 && filter.max == null) return 'luxury';
+      return 'custom';
+    }
+    return 'any';
+  }
+
+  function desktopCardIdToBudgetFilter(cardId, customMin, customMax) {
+    if (!cardId || cardId === 'any') return { mode: 'any' };
+    if (cardId === 'luxury') return { mode: 'luxury' };
+    if (cardId.startsWith('under_')) {
+      return normalizeBudgetFilter({ mode: 'under', underMax: parseInt(cardId.slice(6), 10) });
+    }
+    if (cardId === 'custom') {
+      const minRaw = (customMin || '').trim();
+      const maxRaw = (customMax || '').trim();
+      const min = minRaw !== '' ? Math.max(0, parseInt(minRaw, 10)) : null;
+      const max = maxRaw !== '' ? Math.max(0, parseInt(maxRaw, 10)) : null;
+      if ((minRaw !== '' && !Number.isFinite(min)) || (maxRaw !== '' && !Number.isFinite(max))) {
+        return { error: 'Enter valid whole-dollar amounts.' };
+      }
+      if (min != null && max != null && min > max) return { error: 'Min cannot be greater than max.' };
+      if (minRaw === '' && maxRaw === '') return { mode: 'any' };
+      return normalizeBudgetFilter({ mode: 'range', min, max });
+    }
+    return { mode: 'any' };
+  }
+
+  function budgetPopDraftHasCap(draft) {
+    if (!draft) return false;
+    if (draft.cardId === 'under_250' || draft.cardId === 'under_400') return true;
+    if (draft.cardId !== 'custom') return false;
+    const maxRaw = (draft.customMax || '').trim();
+    return maxRaw !== '';
+  }
+
+  function renderBudgetPopUI() {
+    const draft = _budgetPopDraft || { cardId: 'any', customMin: '', customMax: '', customOpen: false, flex: true };
+    document.querySelectorAll('#budgetPopCards .budget-card').forEach((el) => {
+      const id = el.getAttribute('data-budget-card');
+      const selected = id === draft.cardId;
+      el.classList.toggle('is-selected', selected);
+      el.setAttribute('aria-selected', selected ? 'true' : 'false');
+      if (id === 'custom') el.classList.toggle('is-open', !!draft.customOpen);
+    });
+    const customFields = document.getElementById('budgetPopCustomFields');
+    if (customFields) customFields.classList.toggle('is-open', draft.cardId === 'custom' && draft.customOpen);
+    const minEl = document.getElementById('budgetDraftMin');
+    const maxEl = document.getElementById('budgetDraftMax');
+    if (minEl && document.activeElement !== minEl) minEl.value = draft.customMin || '';
+    if (maxEl && document.activeElement !== maxEl) maxEl.value = draft.customMax || '';
+    const flexEl = document.getElementById('budgetPopFlex');
+    const showFlex = budgetPopDraftHasCap(draft);
+    if (flexEl) {
+      flexEl.classList.toggle('is-visible', showFlex);
+      flexEl.classList.toggle('is-on', draft.flex !== false);
+      flexEl.setAttribute('aria-checked', draft.flex !== false ? 'true' : 'false');
+    }
+    const footnote = document.getElementById('budgetPopFootnote');
+    const hasDates = budgetHasValidDates();
+    if (footnote) footnote.style.display = (showFlex && draft.flex !== false && hasDates) ? 'block' : 'none';
+    const datesBanner = document.getElementById('budgetPopDatesBanner');
+    const showDatesBanner = !hasDates && budgetDraftNeedsRates(draft);
+    if (datesBanner) datesBanner.hidden = !showDatesBanner;
+  }
+
+  function syncBudgetPopDraftFromFilter() {
+    const f = _budgetFilter || { mode: 'any' };
+    const cardId = budgetFilterToDesktopCardId(f);
+    let customMin = '';
+    let customMax = '';
+    if (cardId === 'custom') {
+      if (f.mode === 'under') customMax = String(f.underMax);
+      else if (f.mode === 'range') {
+        if (f.min != null) customMin = String(f.min);
+        if (f.max != null) customMax = String(f.max);
+      }
+    }
+    _budgetPopDraft = {
+      cardId,
+      customMin,
+      customMax,
+      customOpen: cardId === 'custom',
+      flex: _budgetFlex !== false,
+    };
+    renderBudgetPopUI();
+  }
+
+  function selectBudgetPopCard(cardId) {
+    if (!_budgetPopDraft) syncBudgetPopDraftFromFilter();
+    const draft = _budgetPopDraft;
+    if (cardId === 'custom' && draft.cardId === 'custom') {
+      draft.customOpen = !draft.customOpen;
+    } else {
+      draft.cardId = cardId;
+      if (cardId === 'custom') {
+        draft.customOpen = true;
+      } else {
+        draft.customOpen = false;
+        draft.customMin = '';
+        draft.customMax = '';
+        const minEl = document.getElementById('budgetDraftMin');
+        const maxEl = document.getElementById('budgetDraftMax');
+        if (minEl) minEl.value = '';
+        if (maxEl) maxEl.value = '';
+      }
+    }
+    renderBudgetPopUI();
+  }
+
+  function toggleBudgetPopFlex() {
+    if (!_budgetPopDraft) syncBudgetPopDraftFromFilter();
+    _budgetPopDraft.flex = _budgetPopDraft.flex === false;
+    renderBudgetPopUI();
+  }
+
+  function onBudgetPopCustomInput() {
+    if (!_budgetPopDraft) syncBudgetPopDraftFromFilter();
+    const minEl = document.getElementById('budgetDraftMin');
+    const maxEl = document.getElementById('budgetDraftMax');
+    _budgetPopDraft.cardId = 'custom';
+    _budgetPopDraft.customOpen = true;
+    _budgetPopDraft.customMin = minEl?.value || '';
+    _budgetPopDraft.customMax = maxEl?.value || '';
+    renderBudgetPopUI();
   }
 
   function bindBudgetOutsideClose() {
@@ -2741,67 +3055,7 @@
     if (w) w.classList.remove('budget-chip-open');
     if (btn) btn.setAttribute('aria-expanded', 'false');
     if (pop) pop.setAttribute('aria-hidden', 'true');
-  }
-
-  function syncBudgetPopDraftFromFilter() {
-    const f = _budgetFilter || { mode: 'any' };
-    const minEl = document.getElementById('budgetDraftMin');
-    const maxEl = document.getElementById('budgetDraftMax');
-    if (minEl) minEl.value = '';
-    if (maxEl) maxEl.value = '';
-    let radioVal = 'any';
-    if (f.mode === 'luxury') radioVal = 'luxury';
-    else if (f.mode === 'under') radioVal = `under_${f.underMax}`;
-    else if (f.mode === 'range') {
-      if (minEl && f.min != null) minEl.value = String(f.min);
-      if (maxEl && f.max != null) maxEl.value = String(f.max);
-      radioVal = '';
-    }
-    document.querySelectorAll('input[name="budgetDraft"]').forEach((el) => {
-      el.checked = el.value === radioVal;
-    });
-    const hint = document.getElementById('budgetPopHint');
-    if (hint) {
-      hint.hidden = !!(S.checkin && S.checkout && S.checkin < S.checkout);
-    }
-  }
-
-  function onBudgetDraftRadioChange() {
-    const minEl = document.getElementById('budgetDraftMin');
-    const maxEl = document.getElementById('budgetDraftMax');
-    if (minEl) minEl.value = '';
-    if (maxEl) maxEl.value = '';
-  }
-
-  function onBudgetDraftRangeInput() {
-    document.querySelectorAll('input[name="budgetDraft"]').forEach((el) => { el.checked = false; });
-  }
-
-  function readBudgetDraftFromPop() {
-    const minEl = document.getElementById('budgetDraftMin');
-    const maxEl = document.getElementById('budgetDraftMax');
-    const minRaw = minEl?.value?.trim();
-    const maxRaw = maxEl?.value?.trim();
-    const min = minRaw !== '' && minRaw != null ? Math.max(0, parseInt(minRaw, 10)) : null;
-    const max = maxRaw !== '' && maxRaw != null ? Math.max(0, parseInt(maxRaw, 10)) : null;
-    const hasRange = (minRaw !== '' && minRaw != null) || (maxRaw !== '' && maxRaw != null);
-    if (hasRange) {
-      if ((minRaw !== '' && !Number.isFinite(min)) || (maxRaw !== '' && !Number.isFinite(max))) {
-        return { error: 'Enter valid whole-dollar amounts.' };
-      }
-      if (min != null && max != null && min > max) {
-        return { error: 'Min cannot be greater than max.' };
-      }
-      return normalizeBudgetFilter({ mode: 'range', min, max });
-    }
-    const checked = document.querySelector('input[name="budgetDraft"]:checked');
-    const val = checked?.value || 'any';
-    if (val === 'any') return { mode: 'any' };
-    if (val === 'luxury') return { mode: 'luxury' };
-    if (val.startsWith('under_')) {
-      return normalizeBudgetFilter({ mode: 'under', underMax: parseInt(val.slice(6), 10) });
-    }
-    return { mode: 'any' };
+    _budgetPopDraft = null;
   }
 
   function toggleBudgetPop(ev) {
@@ -2824,16 +3078,36 @@
   }
 
   function applyBudgetFilter() {
-    const next = readBudgetDraftFromPop();
+    const draft = _budgetPopDraft || { cardId: 'any', customMin: '', customMax: '', flex: true };
+    const minEl = document.getElementById('budgetDraftMin');
+    const maxEl = document.getElementById('budgetDraftMax');
+    const minRaw = (minEl?.value || draft.customMin || '').trim();
+    const maxRaw = (maxEl?.value || draft.customMax || '').trim();
+    let cardId = draft.cardId || 'any';
+    if (cardId === 'custom' || minRaw || maxRaw) {
+      if (minRaw || maxRaw) cardId = 'custom';
+    }
+    const next = desktopCardIdToBudgetFilter(cardId, minRaw, maxRaw);
     if (next.error) {
       flashMsg(next.error);
       return;
     }
+    const prevPm = S.boopProfile?.answers?.priceMatters;
+    const pendingDatesFilter = budgetFilterNeedsRates(next) && !budgetHasValidDates();
     _budgetFilter = next;
+    _budgetFlex = draft.flex !== false;
+    persistBudgetToProfile();
+    const newPm = S.boopProfile?.answers?.priceMatters;
     closeBudgetPop();
     syncBudgetChipUI();
-    if (_lastHotels?.length) {
-      _displayedCount = 10;
+    if (pendingDatesFilter) {
+      setTimeout(() => toggleDatesTray(), 120);
+    }
+    if (!_lastHotels?.length) return;
+    _displayedCount = 10;
+    if (S.q && prevPm !== newPm) {
+      startVectorSearch(S.q, S.city, { disabled: false, textContent: '' }, null);
+    } else {
       renderSorted();
     }
   }
@@ -2847,16 +3121,26 @@
     const f = _budgetFilter || { mode: 'any' };
     if (f.mode === 'any') return true;
     if (f.mode === 'luxury') {
-      const stars = Number(h?.starRating);
-      return Number.isFinite(stars) && stars >= BUDGET_LUXURY_MIN_STARS;
+      if (!_pricesLoaded || !_hasDateSearch) return true;
+      const p = hotelNightlyPrice(h);
+      if (p == null) return false;
+      return p >= BUDGET_LUXURY_MIN_PRICE;
     }
     if (f.mode === 'under' || f.mode === 'range') {
       if (!_pricesLoaded || !_hasDateSearch) return true;
       const p = hotelNightlyPrice(h);
       if (p == null) return false;
-      if (f.mode === 'under') return p <= f.underMax;
+      if (f.mode === 'under') {
+        let max = f.underMax;
+        if (_budgetFlex) max = budgetFlexMaxPrice(max);
+        return p <= max;
+      }
       if (f.min != null && p < f.min) return false;
-      if (f.max != null && p > f.max) return false;
+      if (f.max != null) {
+        let max = f.max;
+        if (_budgetFlex) max = budgetFlexMaxPrice(max);
+        if (p > max) return false;
+      }
       return true;
     }
     return true;
@@ -2904,16 +3188,18 @@
     for (const o of (mhQ?.options || [])) {
       if (dealbreakers.has(o.id)) parts.push(MUSTHAVE_CHIP_SHORT[o.id] || o.label);
     }
-    if (parts.length === 0) return '+ Must-haves';
+    if (parts.length === 0) {
+      return musthaveFreetextSubline(profile) ? 'Must-haves' : '+ Must-haves';
+    }
     if (parts.length <= 2) return parts.join(' + ');
     return `${parts[0]} + ${parts.length - 1} more`;
   }
 
   function _musthaveChipHtml(label, isEmpty, budgetSubline) {
     const safeLabel = escHtml(label);
-    const safeBudget = escHtml(budgetSubline || budgetFilterChipLabel(_budgetFilter));
+    const safeBudget = escHtml(budgetSubline || budgetFilterChipLabel(_budgetFilter, _budgetFlex));
     const textHtml = `<span class="vibe-chip-text vibe-chip-text--stacked"><span class="vibe-chip-line1">${safeLabel}</span><span class="vibe-chip-line2">${safeBudget}</span></span>`;
-    const ariaLabel = escHtml(`Edit preferences: ${label}, ${budgetSubline || budgetFilterChipLabel(_budgetFilter)}`);
+    const ariaLabel = escHtml(`Edit preferences: ${label}, ${budgetSubline || budgetFilterChipLabel(_budgetFilter, _budgetFlex)}`);
     const emptyClass = isEmpty ? ' vibe-chip-empty' : '';
     if (isEmpty) {
       return `<button type="button" class="vibe-chip vibe-chip--stacked${emptyClass}" data-vibe-step="musthaves" onclick="openFineTuneSheet()" aria-label="${ariaLabel}">${textHtml}</button>`;
@@ -2924,6 +3210,7 @@
   function budgetFilterToMobileCardId(f) {
     const filter = f || { mode: 'any' };
     if (filter.mode === 'any') return 'any';
+    if (filter.mode === 'luxury') return 'luxury_400';
     if (filter.mode === 'under' && [150, 250, 400].includes(filter.underMax)) return `under_${filter.underMax}`;
     if (filter.mode === 'range' && filter.min === 400 && filter.max == null) return 'luxury_400';
     if (filter.mode === 'under' || filter.mode === 'range') return 'custom';
@@ -2932,7 +3219,7 @@
 
   function mobileCardIdToBudgetFilter(cardId, customMin, customMax) {
     if (!cardId || cardId === 'any') return { mode: 'any' };
-    if (cardId === 'luxury_400') return normalizeBudgetFilter({ mode: 'range', min: 400, max: null });
+    if (cardId === 'luxury_400') return { mode: 'luxury' };
     if (cardId.startsWith('under_')) {
       return normalizeBudgetFilter({ mode: 'under', underMax: parseInt(cardId.slice(6), 10) });
     }
@@ -3021,7 +3308,7 @@
       : '';
     const datesHint = (S.checkin && S.checkout && S.checkin < S.checkout)
       ? ''
-      : '<p class="fine-tune-budget-dates-hint">Add travel dates to filter by nightly rate.</p>';
+      : `<p class="fine-tune-budget-dates-hint">Add travel dates to filter by nightly rate. ${addDatesLink('Add dates', 'fine-tune')}</p>`;
     const availDisabled = !_hasDateSearch;
     scroll.innerHTML = `
       <section class="fine-tune-section fine-tune-section--first">
@@ -3212,8 +3499,11 @@
       dealbreakers: Array.from(d.dealbreakers),
       freetext: nextFreetext,
       advancedKeywords: prevProfile.advancedKeywords || null,
+      budgetFilter: nextBudget,
+      budgetFlex: prevProfile.budgetFlex !== undefined ? prevProfile.budgetFlex : _budgetFlex,
       updatedAt: Date.now(),
     };
+    syncPriceMattersIntoProfile(profile);
     S.boopProfile = profile;
     if (S.city) saveBoopProfileForCity(S.city, profile);
 
@@ -3412,29 +3702,6 @@
         ? ' boop-grid--quad'
         : ((q.options && q.options.length >= 3) ? ' boop-grid--triple' : '');
       const currentPick = BOOP.answers[q.id];
-      let priceMatterBlock = '';
-      if (q.id === 'stayVibe') {
-        if (BOOP.answers.priceMatters == null || !Number.isFinite(Number(BOOP.answers.priceMatters))) {
-          BOOP.answers.priceMatters = 0;
-        }
-        const pm = Math.max(-100, Math.min(100, Number(BOOP.answers.priceMatters) || 0));
-        const pmCaption = boopPriceMattersCaption(pm);
-        const pmNeutralHint = boopPriceMattersCaptionIsNeutral(pm)
-          ? '<div class="boop-price-matter-neutral-hint" id="boop-price-matter-neutral-hint">Very expensive hotels may rank lower to help surface the best overall match</div>'
-          : '<div class="boop-price-matter-neutral-hint" id="boop-price-matter-neutral-hint" hidden>Very expensive hotels may rank lower to help surface the best overall match</div>';
-        priceMatterBlock = `<div class="boop-price-matter">
-          <div class="boop-price-matter-label">How much should price matter?</div>
-          <div class="boop-price-matter-ends">
-            <span>Less important</span>
-            <span>Very important</span>
-          </div>
-          <input type="range" class="boop-price-matter-range" id="boop-price-matter-range" min="-100" max="100" step="1" value="${pm}"
-            oninput="boopPriceMattersInput(this.value)"
-            aria-valuemin="-100" aria-valuemax="100" aria-valuenow="${pm}" aria-valuetext="${escHtml(pmCaption)}" />
-          <div class="boop-price-matter-cur" id="boop-price-matter-cur">${escHtml(pmCaption)}</div>
-          ${pmNeutralHint}
-        </div>`;
-      }
       const gridHtml = `<div class="boop-grid${gridClass}">${q.options.map((o, cardIdx) => {
         const isCurrent = overlayMode && o.id === currentPick;
         const imgSrc = boopGetDynamicImage(q.id, o.id, o.image);
@@ -3465,9 +3732,9 @@
         </div>`
         : '';
       if (isChipCardOverlay) {
-        body = `<div class="boop-card-screen">${priceMatterBlock}${gridHtml}${overlayFindHtml}</div>`;
+        body = `<div class="boop-card-screen">${gridHtml}${overlayFindHtml}</div>`;
       } else {
-        body = `${priceMatterBlock}${gridHtml}${overlayFindHtml}`;
+        body = `${gridHtml}${overlayFindHtml}`;
       }
     } else if (q.type === 'slider') {
       const blend = boopBlend(BOOP.slider);
@@ -3645,7 +3912,10 @@
     // wizard can pre-populate answers if that's ever wired up, but the review
     // UI is hidden for now.
     const saved = loadBoopProfileForCity(city);
-    if (saved) S.boopProfile = saved;
+    if (saved) {
+      S.boopProfile = saved;
+      hydrateBudgetFromProfile(saved);
+    }
 
     await startBoopStep();
     refreshStory('boop');
@@ -5772,13 +6042,23 @@
     await finishPaint(waited);
   }
 
+  function _ratesUnavailableStatusHtml() {
+    return `Rates unavailable — ${addDatesLink('add dates again', 'inline')} or sort by match`;
+  }
+
   function _ratesStatusMessage() {
     if (_pricesLoaded) return { state: 'done', text: '✓ Live rates' };
     if (_fetchingPrices) return { state: 'loading', text: 'Checking live rates…' };
     if (_ratesFetchDone && _userHasTravelDates()) {
-      return { state: '', text: 'Rates unavailable — add dates again or sort by match' };
+      return { state: '', html: _ratesUnavailableStatusHtml() };
     }
     return { state: '', text: '' };
+  }
+
+  function _applyRatesStatusMessage(msg) {
+    const m = msg || _ratesStatusMessage();
+    if (!m.text && !m.html) return;
+    _setRatesStatus(m.state, m.text || m.html || '', { html: !!m.html });
   }
 
   /** Clear #ratesStatus loading spinner when this rates request is finished. */
@@ -5786,15 +6066,14 @@
     const el = document.getElementById('ratesStatus');
     if (!el?.classList.contains('loading')) return false;
     const msg = _ratesStatusMessage();
-    _setRatesStatus(msg.state, msg.text);
+    _applyRatesStatusMessage(msg);
     return true;
   }
 
   /** After first results paint, align #ratesStatus with whether prices already landed. */
   function _syncRatesStatusAfterReveal() {
     if (_resolveRatesLoadingUi()) return;
-    const msg = _ratesStatusMessage();
-    if (msg.text) _setRatesStatus(msg.state, msg.text);
+    _applyRatesStatusMessage();
   }
 
   function startSearch() {
@@ -6360,6 +6639,7 @@
         vsearchParams.must_haves = S.mustHaves.join(',');
       }
       if (S.boopProfile && typeof S.boopProfile === 'object') {
+        syncPriceMattersIntoProfile(S.boopProfile);
         try { vsearchParams.boop_profile = JSON.stringify(S.boopProfile); } catch (_) {}
       }
       if (SEARCH_VERSION_OVERRIDE) vsearchParams.search_version = SEARCH_VERSION_OVERRIDE;
@@ -6655,12 +6935,13 @@
     _ratesStatusFadeTimers = [];
   }
 
-  function _setRatesStatus(state, text) {
+  function _setRatesStatus(state, text, opts = {}) {
     const el = document.getElementById('ratesStatus');
     if (!el) return;
     _clearRatesStatusFadeTimers();
     el.className = `rates-status${state ? ' ' + state : ''}`;
-    el.textContent = text;
+    if (opts.html) el.innerHTML = text;
+    else el.textContent = text;
     if (state === 'done') {
       // Fade out after 4s so it doesn't clutter the UI permanently
       _ratesStatusFadeTimers.push(setTimeout(() => { el.classList.add('fade'); }, 4000));
@@ -6773,8 +7054,7 @@
     _fetchingPrices = false;
     _setPriceBtnsState(true);
     _resolveGate();
-    const msg = _ratesStatusMessage();
-    if (msg.text) _setRatesStatus(msg.state, msg.text);
+    _applyRatesStatusMessage();
     console.log(
       `[perf] vsearch embedded rates: ${ratesPayload.pricedCount || 0} priced` +
       ` (${ratesPayload.hotel_ids_fetched || '?'} ids` +
@@ -6814,7 +7094,7 @@
           _pricesLoaded = false;
           _hasDateSearch = hadDates;
           _setPriceBtnsState(true);
-          _setRatesStatus('', 'Rates unavailable — add dates again or sort by match');
+          _setRatesStatus('', _ratesUnavailableStatusHtml(), { html: true });
           return;
         }
       }
@@ -6843,7 +7123,7 @@
         _pricesLoaded = false;
         _hasDateSearch = hadDates;
         _setPriceBtnsState(true);
-        _setRatesStatus('', 'Rates unavailable — add dates again or sort by match');
+        _setRatesStatus('', _ratesUnavailableStatusHtml(), { html: true });
         updateFreeCancelHint();
         _refreshV2CuratedAfterRates();
       }
@@ -6853,8 +7133,7 @@
         _ratesFetchDone = true;
         _fetchingPrices = false;
         _setPriceBtnsState(true);
-        const msg = _ratesStatusMessage();
-        if (msg.text) _setRatesStatus(msg.state, msg.text);
+        _applyRatesStatusMessage();
         _refreshV2CuratedAfterRates();
       }
     }
@@ -7427,19 +7706,11 @@
 
   function syncResultCountAfterBackgroundRates() {
     if (!_pricesLoaded || !_hasDateSearch) return;
-    let priced = 0;
-    for (const h of _lastHotels) { if (h && h.price != null) priced++; }
     const visibleHotels = _lastHotels.length ? getSortedHotelsForDisplay() : _lastHotels;
     const total = visibleHotels.length;
     const showing = Math.min(_displayedCount, total);
     const remaining = total - _displayedCount;
-    const countEl = document.getElementById('resultCount');
-    const pricedNote = priced > 0 ? ` · ${priced} priced` : '';
-    if (countEl) {
-      countEl.textContent = remaining > 0
-        ? `Showing ${showing} of ${total} hotels${pricedNote}`
-        : `${total} hotel${total !== 1 ? 's' : ''}${pricedNote}`;
-    }
+    syncResultCountUi(total, showing, remaining);
   }
 
   function applyPrices(priceMap, roomPriceMap, currency, pricedCount, ratesData = {}, opts = {}) {
@@ -7500,6 +7771,7 @@
     console.log(`[prices] hotel prices: ${Object.keys(priceMap).length}, room prices: ${roomPricedRooms} rooms across ${Object.keys(roomPriceMap).length} hotels`);
     _pricesLoaded  = true;
     _hasDateSearch = true;
+    syncBudgetChipUI();
     // Default "Available rooms only" to ON whenever the user searched with
     // dates AND we actually got rates back. Cuts a 3,500-hotel firehose down
     // to a list the user can act on. Falls back to OFF if zero hotels priced
@@ -7572,11 +7844,7 @@
     const total = visibleHotels.length;
     const showing = Math.min(_displayedCount, total);
     const remaining = total - _displayedCount;
-    const countEl = document.getElementById('resultCount');
-    const pricedNote = pricedCount > 0 ? ` · ${pricedCount} priced` : '';
-    if (countEl) countEl.textContent = remaining > 0
-      ? `Showing ${showing} of ${total} hotels${pricedNote}`
-      : `${total} hotel${total !== 1 ? 's' : ''}${pricedNote}`;
+    syncResultCountUi(total, showing, remaining);
     syncVibeSearchAlignment();
     _refreshV2CuratedAfterRates();
     return 0;
@@ -8596,7 +8864,7 @@
          ${_hasDateSearch && S.checkin && S.checkout ? `<div class="hotel-row-price-total">${sym}${Math.round(h.price * (Math.round((new Date(S.checkout) - new Date(S.checkin)) / 86400000) || 1)).toLocaleString()} total</div>` : ''}`
       : _fetchingPrices
         ? `<div class="hotel-row-price-skeleton"></div>`
-        : `<div class="hotel-row-price-per" style="margin-top:4px">${_pricesLoaded ? 'No rates' : 'Add dates'}</div>`;
+        : `<div class="hotel-row-price-per" style="margin-top:4px">${_pricesLoaded ? 'No rates' : addDatesLink('Add dates', 'row')}</div>`;
 
     // Build room sub-rows
     const roomRowsHTML = visibleRooms.map((rt, ri) => {
@@ -9288,6 +9556,37 @@
     </div>`;
   }
 
+  function syncResultCountUi(total, showing, remaining) {
+    const nbhdSuffix = selectedNeighborhood?.name ? ` · ${selectedNeighborhood.name}` : '';
+    let pricedSuffix = '';
+    if (_pricesLoaded && _hasDateSearch) {
+      let pricedInSearch = 0;
+      for (const h of _lastHotels) { if (h && h.price != null) pricedInSearch++; }
+      const budgetFiltered = budgetFilterIsActive(_budgetFilter)
+        && budgetFilterNeedsRates(_budgetFilter)
+        && budgetHasValidDates();
+      if (pricedInSearch > 0) {
+        pricedSuffix = budgetFiltered
+          ? ` · ${pricedInSearch} with rates in search`
+          : ` · ${pricedInSearch} priced`;
+      }
+    }
+    const countEl = document.getElementById('resultCount');
+    if (!countEl) return;
+    const budgetLabel = (budgetFilterIsActive(_budgetFilter) && budgetFilterNeedsRates(_budgetFilter) && budgetHasValidDates())
+      ? `${total} match your budget`
+      : null;
+    countEl.textContent = total === 0 && _lastHotels.length > 0
+      ? `0 of ${_lastHotels.length} hotels visible${nbhdSuffix}${pricedSuffix}`
+      : (budgetLabel != null
+        ? (remaining > 0
+          ? `Showing ${showing} of ${budgetLabel}${nbhdSuffix}${pricedSuffix}`
+          : `${budgetLabel}${nbhdSuffix}${pricedSuffix}`)
+        : (remaining > 0
+          ? `Showing ${showing} of ${total} hotels${nbhdSuffix}${pricedSuffix}`
+          : `${total} hotel${total !== 1 ? 's' : ''}${nbhdSuffix}${pricedSuffix}`));
+  }
+
   function renderSorted() {
     if (document.getElementById('st-results')?.classList.contains('results-pending')) return;
     const hotels = getSortedHotelsForDisplay();
@@ -9296,25 +9595,7 @@
     const remaining = hotels.length - _displayedCount;
     const total     = hotels.length;
 
-    // Update result count in sort bar. Include "· N priced" suffix once
-    // rates have landed so the gated first-paint render produces the same
-    // count line that applyPrices would have written (post-rates).
-    const showing = toShow.length;
-    const nbhdSuffix = selectedNeighborhood?.name ? ` · ${selectedNeighborhood.name}` : '';
-    let pricedSuffix = '';
-    if (_pricesLoaded && _hasDateSearch) {
-      let priced = 0;
-      for (const h of _lastHotels) { if (h && h.price != null) priced++; }
-      if (priced > 0) pricedSuffix = ` · ${priced} priced`;
-    }
-    const countEl = document.getElementById('resultCount');
-    if (countEl) {
-      countEl.textContent = total === 0 && _lastHotels.length > 0
-        ? `0 of ${_lastHotels.length} hotels visible${nbhdSuffix}${pricedSuffix}`
-        : (remaining > 0
-          ? `Showing ${showing} of ${total} hotels${nbhdSuffix}${pricedSuffix}`
-          : `${total} hotel${total !== 1 ? 's' : ''}${nbhdSuffix}${pricedSuffix}`);
-    }
+    syncResultCountUi(total, toShow.length, remaining);
     const dbgBtn = document.getElementById('debugCopyBtn');
     if (dbgBtn) dbgBtn.style.display = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' ? '' : 'none';
     syncVibeSearchAlignment();
@@ -11097,6 +11378,7 @@
       currentSort: _currentSort,
     }),
     escHtml,
+    addDatesLinkHtml: (label) => addDatesLink(label || 'Add dates', 'sr2'),
     hotelDisplayTitle,
     roomVibeMatchDisplayPct,
     hotelEffectiveScore,
@@ -11204,7 +11486,7 @@
     const priceNote = h.price != null ? 'Lowest available'
       : _fetchingPrices ? 'Loading rates…'
       : _pricesLoaded   ? 'No rates found'
-      :                   'Add dates for rates';
+      :                   addDatesLink('Add dates for rates', 'card');
 
     return `
       <div class="hotel-card" id="hotel-card-${h.id}">

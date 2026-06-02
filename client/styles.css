@@ -5780,6 +5780,259 @@
     }
     .budget-pop-apply:hover { opacity: 0.92; }
 
+    /* Budget popover v2 — card picks + flex toggle (desktop) */
+    .budget-pop--v2 {
+      min-width: 320px;
+      max-width: 320px;
+      padding: 14px 12px 12px;
+      border-radius: 16px;
+    }
+    .budget-pop-lead {
+      margin: 0 0 12px;
+      padding: 0 4px;
+    }
+    .budget-pop-lead-title {
+      margin: 0 0 4px;
+      font-size: 15px;
+      font-weight: 600;
+      line-height: 1.3;
+      color: var(--text);
+    }
+    .budget-pop-lead-sub {
+      margin: 0;
+      font-size: 11px;
+      line-height: 1.45;
+      color: var(--muted);
+    }
+    .budget-cards {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .budget-card {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      width: 100%;
+      padding: 10px;
+      border-radius: 12px;
+      border: 1px solid rgba(255, 255, 255, 0.10);
+      background: rgba(255, 255, 255, 0.03);
+      color: var(--text);
+      font-family: 'DM Sans', sans-serif;
+      text-align: left;
+      cursor: pointer;
+      transition: border-color 0.12s, background 0.12s;
+    }
+    .budget-card:hover {
+      border-color: rgba(201, 169, 110, 0.35);
+      background: rgba(255, 255, 255, 0.05);
+    }
+    .budget-card.is-selected {
+      border-color: rgba(201, 169, 110, 0.55);
+      background: rgba(201, 169, 110, 0.08);
+    }
+    .budget-card--custom {
+      border-style: dashed;
+      border-color: rgba(255, 255, 255, 0.18);
+    }
+    .budget-card--custom.is-open {
+      border-style: solid;
+      border-color: rgba(201, 169, 110, 0.4);
+    }
+    .budget-card-icon {
+      width: 32px;
+      height: 32px;
+      border-radius: 9px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 15px;
+      flex-shrink: 0;
+      background: rgba(255, 255, 255, 0.06);
+    }
+    .budget-card.is-selected .budget-card-icon {
+      background: rgba(201, 169, 110, 0.15);
+    }
+    .budget-card-body { flex: 1; min-width: 0; }
+    .budget-card-title {
+      display: block;
+      font-size: 13px;
+      font-weight: 500;
+      line-height: 1.25;
+    }
+    .budget-card-sub {
+      display: block;
+      font-size: 10px;
+      color: var(--muted);
+      margin-top: 2px;
+      line-height: 1.3;
+    }
+    .budget-card-check {
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      border: 1.5px solid rgba(255, 255, 255, 0.22);
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 10px;
+      color: transparent;
+    }
+    .budget-card.is-selected .budget-card-check {
+      border-color: var(--accent2);
+      background: var(--accent2);
+      color: #1a1a1a;
+    }
+    .budget-card-chevron {
+      font-size: 14px;
+      color: var(--muted);
+      flex-shrink: 0;
+    }
+    .budget-custom-fields {
+      display: none;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      margin: 0 0 6px;
+      padding: 0 2px;
+    }
+    .budget-custom-fields.is-open {
+      display: grid;
+      margin-top: 10px;
+    }
+    .budget-flex {
+      display: none;
+      margin-top: 10px;
+      padding: 10px;
+      border-radius: 12px;
+      border: 1px solid rgba(201, 169, 110, 0.22);
+      background: rgba(201, 169, 110, 0.06);
+    }
+    .budget-flex.is-visible { display: block; }
+    .budget-flex-row {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 10px;
+    }
+    .budget-flex-copy { flex: 1; min-width: 0; }
+    .budget-flex-title {
+      font-size: 12px;
+      font-weight: 500;
+      line-height: 1.35;
+      color: var(--text);
+    }
+    .budget-flex-sub {
+      font-size: 10px;
+      line-height: 1.4;
+      color: var(--muted);
+      margin-top: 3px;
+    }
+    .budget-flex-switch {
+      position: relative;
+      width: 36px;
+      height: 20px;
+      flex-shrink: 0;
+      margin-top: 2px;
+      border-radius: 100px;
+      background: rgba(255, 255, 255, 0.14);
+      transition: background 0.15s;
+    }
+    .budget-flex-switch::after {
+      content: '';
+      position: absolute;
+      top: 2px;
+      left: 2px;
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: var(--muted);
+      transition: transform 0.15s, background 0.15s;
+    }
+    .budget-flex.is-on .budget-flex-switch {
+      background: rgba(201, 169, 110, 0.4);
+    }
+    .budget-flex.is-on .budget-flex-switch::after {
+      transform: translateX(16px);
+      background: var(--accent2);
+    }
+    .budget-footnote {
+      display: none;
+      margin: 8px 0 0;
+      font-size: 10px;
+      line-height: 1.45;
+      color: var(--muted);
+    }
+    .budget-dates-banner {
+      margin-top: 10px;
+      padding: 10px;
+      border-radius: 12px;
+      border: 1px solid rgba(201, 169, 110, 0.28);
+      background: rgba(201, 169, 110, 0.08);
+    }
+    .budget-dates-banner[hidden] { display: none !important; }
+    .budget-dates-banner-text {
+      margin: 0 0 8px;
+      font-size: 11px;
+      line-height: 1.45;
+      color: var(--text);
+    }
+    .budget-dates-banner-cta {
+      display: inline-flex;
+      align-items: center;
+      padding: 0;
+      border: none;
+      background: none;
+      color: var(--accent2);
+      font-family: 'DM Sans', sans-serif;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      text-decoration: underline;
+      text-underline-offset: 2px;
+    }
+    .budget-dates-banner-cta:hover { opacity: 0.88; }
+
+    /* Shared hot "Add dates" links → openAddDatesPopover() */
+    .add-dates-link {
+      display: inline;
+      padding: 0;
+      margin: 0;
+      border: none;
+      background: none;
+      color: var(--accent2);
+      font: inherit;
+      font-weight: 600;
+      text-decoration: underline;
+      text-underline-offset: 2px;
+      cursor: pointer;
+      vertical-align: baseline;
+    }
+    .add-dates-link:hover { opacity: 0.88; }
+    .add-dates-link:focus-visible {
+      outline: 2px solid rgba(201, 169, 110, 0.55);
+      outline-offset: 2px;
+      border-radius: 2px;
+    }
+    #st-results .budget-chip-btn .add-dates-link {
+      font-size: inherit;
+      font-weight: 600;
+    }
+    .rates-status .add-dates-link,
+    .free-cancel-hint .add-dates-link,
+    .price-note .add-dates-link,
+    .hotel-row-price-per .add-dates-link,
+    .sr2-pick-price .add-dates-link,
+    .sr2-more-price .add-dates-link,
+    .fine-tune-budget-dates-hint .add-dates-link {
+      color: var(--accent2);
+    }
+    .budget-chip-btn.budget-chip-btn--pending-dates {
+      border-color: rgba(201, 169, 110, 0.35);
+    }
+    .budget-pop-hint { margin-top: 10px; }
+
     /* ── Mobile fine-tune sheet (must-haves chip) ── */
     .fine-tune-sheet-host { display: none; }
 
@@ -8928,7 +9181,7 @@
       display: flex;
       align-items: center;
       justify-content: center;
-      min-height: 290px;
+      min-height: 303px;
       cursor: default;
     }
     .sr2-pick-card--skel {
@@ -8940,8 +9193,7 @@
       50% { opacity: 0.85; }
     }
     .sr2-pick-empty { margin: 0; font-size: 13px; color: var(--muted); }
-    /* ~45% taller photo than More Hotels (4/3) so Top Picks read as the hero row */
-    .sr2-pick-media { position: relative; aspect-ratio: 1000 / 1089; background: rgba(0, 0, 0, 0.35); }
+    .sr2-pick-media { position: relative; aspect-ratio: 1000 / 1138; background: rgba(0, 0, 0, 0.35); }
     .sr2-pick-img { width: 100%; height: 100%; object-fit: cover; display: block; }
     .sr2-pick-img--ph { min-height: 100%; background: rgba(255, 255, 255, 0.06); }
     .sr2-pick-badge {

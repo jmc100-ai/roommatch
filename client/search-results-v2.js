@@ -79,6 +79,25 @@
     return id != null && String(id).trim() ? String(id).trim() : null;
   }
 
+  /**
+   * Fuzzy brand key so sibling properties (e.g. Ritz-Carlton + Ritz-Carlton Residences)
+   * count as one family for Top Picks diversity — not used for filtering the main list.
+   */
+  function hotelBrandKey(h) {
+    const b = bridge();
+    let name = String(b?.hotelDisplayTitle?.(h) || h?.name || '').toLowerCase().trim();
+    if (!name) return '';
+    name = name.replace(/^the\s+/, '');
+    name = name.split(',')[0].trim();
+    name = name.replace(
+      /\b(residences|residence|suites|suite|apartments|apartment|extended stay|condo|condos)\b/gi,
+      ' ',
+    );
+    const city = String(h?.city || '').toLowerCase().trim();
+    if (city && name.endsWith(city)) name = name.slice(0, -city.length).trim();
+    return name.replace(/[^a-z0-9]+/g, '');
+  }
+
   /** Pull latest sorted hotels from classic pipeline (app.js bridge). */
   function buildCtxFromBridge() {
     const b = bridge();
@@ -188,32 +207,44 @@
 
   function selectTopPicks(hotels) {
     const list = hotels || [];
-    const used = new Set();
+    const usedIds = new Set();
+    const usedBrands = new Set();
     const picks = {};
+
+    const claim = (h) => {
+      const id = hotelKey(h);
+      if (!id) return false;
+      usedIds.add(id);
+      const brand = hotelBrandKey(h);
+      if (brand) usedBrands.add(brand);
+      return true;
+    };
+
+    const isBlocked = (h) => {
+      const id = hotelKey(h);
+      if (!id || usedIds.has(id)) return true;
+      const brand = hotelBrandKey(h);
+      return !!(brand && usedBrands.has(brand));
+    };
 
     const takeBest = (slotId, pool) => {
       let best = null;
       let bestScore = -Infinity;
       for (const h of pool) {
-        const id = hotelKey(h);
-        if (!id || used.has(id)) continue;
+        if (isBlocked(h)) continue;
         const s = pickSortScore(h, slotId);
         if (s > bestScore) {
           bestScore = s;
           best = h;
         }
       }
-      if (best) used.add(hotelKey(best));
+      if (best) claim(best);
       return best;
     };
 
     if (list.length) {
       const first = list[0];
-      const firstId = hotelKey(first);
-      if (firstId) {
-        picks.overall = first;
-        used.add(firstId);
-      }
+      if (claim(first)) picks.overall = first;
     }
     picks.room_match = takeBest('room_match', list);
     picks.area_fit = takeBest('area_fit', list);
@@ -223,14 +254,30 @@
   }
 
   /**
-   * Next N hotels in the active sort — ranks #2..#(N+1), same rows as the top of "See all".
-   * Top Picks are curated separately (#1 is usually Best Overall); this grid mirrors the main list.
+   * Next N hotels in the active sort, excluding every Top Pick (by id).
+   * Top Picks are metric-specific and often sit at ranks #2–#5, not only #1.
    */
   function selectMoreHotels(sorted, picks, limit) {
-    void picks;
     const list = sorted || [];
-    if (list.length <= 1) return [];
-    return list.slice(1, 1 + limit);
+    const cap = Math.max(0, Number(limit) || 0);
+    if (!list.length || cap === 0) return [];
+
+    const pickIds = new Set();
+    if (picks && typeof picks === 'object') {
+      for (const h of Object.values(picks)) {
+        const id = hotelKey(h);
+        if (id) pickIds.add(id);
+      }
+    }
+
+    const out = [];
+    for (const h of list) {
+      const id = hotelKey(h);
+      if (!id || pickIds.has(id)) continue;
+      out.push(h);
+      if (out.length >= cap) break;
+    }
+    return out;
   }
 
   /** Top Picks + More Hotels — may rank outside sync meta top-N; always prefetch these. */
@@ -296,13 +343,19 @@
     const ui = b?.getSearchUiState?.() || {};
     const datesEntered = !!(ui.datesEntered || ui.hasDateSearch);
     if (h?.price != null && Number.isFinite(Number(h.price))) {
-      return `From ${sym}${Number(h.price).toLocaleString()} / night`;
+      return { text: `From ${sym}${Number(h.price).toLocaleString()} / night` };
     }
     if (datesEntered && (ui.fetchingPrices || (!ui.pricesLoaded && !ui.ratesFetchDone))) {
-      return 'Checking rates…';
+      return { text: 'Checking rates…' };
     }
-    if (datesEntered && ui.pricesLoaded) return 'No rates for your dates';
-    return 'Add dates for rates';
+    if (datesEntered && ui.pricesLoaded) return { text: 'No rates for your dates' };
+    const link = b?.addDatesLinkHtml?.('Add dates for rates');
+    return link ? { html: link } : { text: 'Add dates for rates' };
+  }
+
+  function priceLineMarkup(h) {
+    const pl = priceLine(h);
+    return pl.html != null ? pl.html : esc(pl.text || '');
   }
 
   function starsHtml(h) {
@@ -345,7 +398,7 @@
             ${starsHtml(h)}
             ${rating}
           </p>
-          <p class="sr2-pick-price">${esc(priceLine(h))}</p>
+          <p class="sr2-pick-price">${priceLineMarkup(h)}</p>
         </div>
       </article>`;
   }
@@ -382,7 +435,7 @@
         <div class="sr2-more-body">
           <h3 class="sr2-more-name">${esc(title)}</h3>
           <p class="sr2-more-meta"><span class="sr2-more-nbhd">📍 ${esc(nbhd)}</span>${rating}</p>
-          <p class="sr2-more-price">${esc(priceLine(h))}</p>
+          <p class="sr2-more-price">${priceLineMarkup(h)}</p>
         </div>
       </article>`;
   }
@@ -475,7 +528,7 @@
           <h2 id="sr2-modal-why-title">Why these hotels?</h2>
           <p>Each of the four cards is a different hotel — chosen for a distinct strength in your search.
             Best Overall follows your main ranking; the other three optimize room match, neighbourhood fit,
-            or hotel style without repeating the same property.</p>
+            or hotel style without repeating the same property or brand family.</p>
         </div>
       </div>
       <div class="sr2-modal" id="sr2-modal-how" hidden role="dialog" aria-modal="true" aria-labelledby="sr2-modal-how-title">
@@ -809,6 +862,7 @@
     syncFromSearchContext,
     isV2Mode,
     selectTopPicks,
+    hotelBrandKey,
     sortHotelsForLens,
     lensSortScore,
     pickMetricPct,

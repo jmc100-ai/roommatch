@@ -630,26 +630,77 @@
           <!-- Desktop nightly budget chip (mobile: wired in app.js, button hidden until later prompt) -->
           <div class="budget-chip-wrap budget-chip-wrap--desktop" id="budgetChipWrap">
             <button type="button" class="budget-chip-btn vibe-chip vibe-chip-empty" id="budgetChipBtn" onclick="toggleBudgetPop(event)" aria-expanded="false" aria-haspopup="dialog" aria-controls="budgetPop">Any budget</button>
-            <div class="budget-pop" id="budgetPop" role="dialog" aria-label="Nightly budget" aria-hidden="true" onclick="event.stopPropagation()">
-              <div class="budget-pop-title">Nightly budget</div>
-              <label class="budget-pop-opt"><input type="radio" name="budgetDraft" value="any" checked onchange="onBudgetDraftRadioChange()"> Any budget</label>
-              <label class="budget-pop-opt"><input type="radio" name="budgetDraft" value="under_150" onchange="onBudgetDraftRadioChange()"> Under $150</label>
-              <label class="budget-pop-opt"><input type="radio" name="budgetDraft" value="under_250" onchange="onBudgetDraftRadioChange()"> Under $250</label>
-              <label class="budget-pop-opt"><input type="radio" name="budgetDraft" value="under_400" onchange="onBudgetDraftRadioChange()"> Under $400</label>
-              <label class="budget-pop-opt"><input type="radio" name="budgetDraft" value="under_600" onchange="onBudgetDraftRadioChange()"> Under $600</label>
-              <label class="budget-pop-opt"><input type="radio" name="budgetDraft" value="luxury" onchange="onBudgetDraftRadioChange()"> Luxury only</label>
-              <div class="budget-pop-or" aria-hidden="true"><span>OR</span></div>
-              <div class="budget-pop-range">
+            <div class="budget-pop budget-pop--v2" id="budgetPop" role="dialog" aria-label="Nightly budget" aria-hidden="true" onclick="event.stopPropagation()">
+              <div class="budget-pop-lead">
+                <h2 class="budget-pop-lead-title">Ideal nightly spend?</h2>
+                <p class="budget-pop-lead-sub">Match your vibe — filter by rate when dates are set.</p>
+              </div>
+              <div class="budget-cards" id="budgetPopCards" role="listbox" aria-label="Budget options">
+                <button type="button" class="budget-card is-selected" data-budget-card="any" role="option" aria-selected="true" onclick="selectBudgetPopCard('any')">
+                  <span class="budget-card-icon" aria-hidden="true">🏷</span>
+                  <span class="budget-card-body">
+                    <span class="budget-card-title">Any budget</span>
+                    <span class="budget-card-sub">Show all price ranges</span>
+                  </span>
+                  <span class="budget-card-check" aria-hidden="true">✓</span>
+                </button>
+                <button type="button" class="budget-card" data-budget-card="under_250" role="option" aria-selected="false" onclick="selectBudgetPopCard('under_250')">
+                  <span class="budget-card-icon" aria-hidden="true">$</span>
+                  <span class="budget-card-body">
+                    <span class="budget-card-title">Under $250</span>
+                    <span class="budget-card-sub">Max per night</span>
+                  </span>
+                  <span class="budget-card-check" aria-hidden="true">✓</span>
+                </button>
+                <button type="button" class="budget-card" data-budget-card="under_400" role="option" aria-selected="false" onclick="selectBudgetPopCard('under_400')">
+                  <span class="budget-card-icon" aria-hidden="true">$</span>
+                  <span class="budget-card-body">
+                    <span class="budget-card-title">Under $400</span>
+                    <span class="budget-card-sub">Max per night</span>
+                  </span>
+                  <span class="budget-card-check" aria-hidden="true">✓</span>
+                </button>
+                <button type="button" class="budget-card" data-budget-card="luxury" role="option" aria-selected="false" onclick="selectBudgetPopCard('luxury')">
+                  <span class="budget-card-icon" aria-hidden="true">👑</span>
+                  <span class="budget-card-body">
+                    <span class="budget-card-title">Luxury stays</span>
+                    <span class="budget-card-sub">$400+ per night</span>
+                  </span>
+                  <span class="budget-card-check" aria-hidden="true">✓</span>
+                </button>
+                <button type="button" class="budget-card budget-card--custom" id="budgetPopCustomCard" data-budget-card="custom" role="option" aria-selected="false" onclick="selectBudgetPopCard('custom')">
+                  <span class="budget-card-icon" aria-hidden="true">▦</span>
+                  <span class="budget-card-body">
+                    <span class="budget-card-title">Custom range</span>
+                    <span class="budget-card-sub">Set min and max</span>
+                  </span>
+                  <span class="budget-card-chevron" aria-hidden="true">›</span>
+                </button>
+              </div>
+              <div class="budget-custom-fields" id="budgetPopCustomFields">
                 <label class="budget-pop-range-field">
                   <span class="budget-pop-range-label">Min</span>
-                  <input type="number" class="budget-pop-range-input" id="budgetDraftMin" min="0" step="1" inputmode="numeric" placeholder="Min" oninput="onBudgetDraftRangeInput()" />
+                  <input type="number" class="budget-pop-range-input" id="budgetDraftMin" min="0" step="1" inputmode="numeric" placeholder="Optional" oninput="onBudgetPopCustomInput()" />
                 </label>
                 <label class="budget-pop-range-field">
                   <span class="budget-pop-range-label">Max</span>
-                  <input type="number" class="budget-pop-range-input" id="budgetDraftMax" min="0" step="1" inputmode="numeric" placeholder="Max" oninput="onBudgetDraftRangeInput()" />
+                  <input type="number" class="budget-pop-range-input" id="budgetDraftMax" min="0" step="1" inputmode="numeric" placeholder="Optional" oninput="onBudgetPopCustomInput()" />
                 </label>
               </div>
-              <p class="budget-pop-hint" id="budgetPopHint" hidden>Add travel dates to filter by nightly rate.</p>
+              <div class="budget-flex" id="budgetPopFlex" role="switch" aria-checked="true" tabindex="0" onclick="toggleBudgetPopFlex()" onkeydown="if(event.key===' '||event.key==='Enter'){event.preventDefault();toggleBudgetPopFlex();}">
+                <div class="budget-flex-row">
+                  <div class="budget-flex-copy">
+                    <div class="budget-flex-title">Keep great matches slightly above budget</div>
+                    <div class="budget-flex-sub">Vibe-first — won't hide exceptional fits</div>
+                  </div>
+                  <span class="budget-flex-switch" aria-hidden="true"></span>
+                </div>
+              </div>
+              <p class="budget-footnote" id="budgetPopFootnote">Perfect vibe matches may still appear a bit above your cap.</p>
+              <div class="budget-dates-banner" id="budgetPopDatesBanner" hidden>
+                <p class="budget-dates-banner-text">Add travel dates to filter by nightly rate. Until then, we'll only nudge ranking toward your budget.</p>
+                <button type="button" class="budget-dates-banner-cta add-dates-link add-dates-link--banner" onclick="openAddDatesPopover(event)">Add dates →</button>
+              </div>
               <button type="button" class="budget-pop-apply" onclick="applyBudgetFilter()">Apply</button>
             </div>
           </div>
