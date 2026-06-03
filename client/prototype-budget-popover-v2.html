@@ -1,0 +1,578 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Budget popup v2 — card popover (preview only)</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #0c0c0e;
+      --panel: rgba(18, 18, 21, 0.98);
+      --text: #e8e4dc;
+      --muted: #9a9590;
+      --accent: #c9a96e;
+      --accent2: #e8d5b0;
+      --border: rgba(255, 255, 255, 0.12);
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: 'DM Sans', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      padding: 28px 20px 40px;
+    }
+    .tag {
+      display: inline-block;
+      margin-bottom: 10px;
+      padding: 3px 10px;
+      border-radius: 100px;
+      border: 1px solid rgba(201, 169, 110, 0.35);
+      color: var(--accent2);
+      font-size: 10px;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+    }
+    .page-head { max-width: 420px; margin: 0 auto 20px; }
+    .page-head h1 { margin: 0 0 6px; font-size: 18px; font-weight: 600; }
+    .page-head p { margin: 0; font-size: 12px; line-height: 1.5; color: var(--muted); }
+
+    /* ── Fake results bar ── */
+    .demo-bar {
+      max-width: 420px;
+      margin: 0 auto 8px;
+      padding: 10px 12px;
+      border-radius: 14px;
+      border: 1px solid var(--border);
+      background: rgba(255, 255, 255, 0.03);
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+    }
+    .demo-bar-label {
+      width: 100%;
+      font-size: 10px;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 2px;
+    }
+    .vibe-chip {
+      display: inline-flex;
+      align-items: center;
+      min-height: 46px;
+      padding: 8px 14px;
+      border-radius: 100px;
+      border: 1px solid rgba(255, 255, 255, 0.10);
+      background: rgba(255, 255, 255, 0.06);
+      color: var(--text);
+      font-size: 13px;
+      font-weight: 500;
+      font-family: inherit;
+      cursor: pointer;
+    }
+    .vibe-chip--ghost {
+      border-style: dashed;
+      border-color: rgba(255, 255, 255, 0.20);
+      background: transparent;
+      color: var(--muted);
+      font-style: italic;
+      font-weight: 400;
+    }
+    .budget-wrap {
+      position: relative;
+    }
+    .budget-wrap.is-open { z-index: 10; }
+
+    /* ── Popup ── */
+    .budget-pop {
+      display: none;
+      position: absolute;
+      top: calc(100% + 8px);
+      left: 0;
+      width: 320px;
+      padding: 14px 12px 12px;
+      border-radius: 16px;
+      border: 1px solid var(--border);
+      background: var(--panel);
+      box-shadow: 0 18px 50px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(201, 169, 110, 0.08);
+    }
+    .budget-wrap.is-open .budget-pop { display: block; }
+
+    .budget-pop-lead {
+      margin: 0 0 12px;
+      padding: 0 4px;
+    }
+    .budget-pop-lead h2 {
+      margin: 0 0 4px;
+      font-size: 15px;
+      font-weight: 600;
+      line-height: 1.3;
+    }
+    .budget-pop-lead p {
+      margin: 0;
+      font-size: 11px;
+      line-height: 1.45;
+      color: var(--muted);
+    }
+
+    .budget-cards { display: flex; flex-direction: column; gap: 6px; }
+
+    .budget-card {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      width: 100%;
+      padding: 10px 10px;
+      border-radius: 12px;
+      border: 1px solid rgba(255, 255, 255, 0.10);
+      background: rgba(255, 255, 255, 0.03);
+      color: var(--text);
+      font-family: inherit;
+      text-align: left;
+      cursor: pointer;
+      transition: border-color 0.12s, background 0.12s;
+    }
+    .budget-card:hover {
+      border-color: rgba(201, 169, 110, 0.35);
+      background: rgba(255, 255, 255, 0.05);
+    }
+    .budget-card.is-selected {
+      border-color: rgba(201, 169, 110, 0.55);
+      background: rgba(201, 169, 110, 0.08);
+    }
+    .budget-card--custom {
+      border-style: dashed;
+      border-color: rgba(255, 255, 255, 0.18);
+    }
+    .budget-card--custom.is-open {
+      border-style: solid;
+      border-color: rgba(201, 169, 110, 0.4);
+    }
+    .budget-card-icon {
+      width: 32px;
+      height: 32px;
+      border-radius: 9px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 15px;
+      flex-shrink: 0;
+      background: rgba(255, 255, 255, 0.06);
+    }
+    .budget-card.is-selected .budget-card-icon {
+      background: rgba(201, 169, 110, 0.15);
+    }
+    .budget-card-body { flex: 1; min-width: 0; }
+    .budget-card-title {
+      display: block;
+      font-size: 13px;
+      font-weight: 500;
+      line-height: 1.25;
+    }
+    .budget-card-sub {
+      display: block;
+      font-size: 10px;
+      color: var(--muted);
+      margin-top: 2px;
+      line-height: 1.3;
+    }
+    .budget-card-check {
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      border: 1.5px solid rgba(255, 255, 255, 0.22);
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 10px;
+      color: transparent;
+    }
+    .budget-card.is-selected .budget-card-check {
+      border-color: var(--accent2);
+      background: var(--accent2);
+      color: #1a1a1a;
+    }
+    .budget-card-chevron {
+      font-size: 14px;
+      color: var(--muted);
+      flex-shrink: 0;
+    }
+
+    .budget-custom-fields {
+      display: none;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      margin: 0 0 6px;
+      padding: 0 2px;
+    }
+    .budget-custom-fields.is-open { display: grid; }
+    .budget-field-label {
+      font-size: 10px;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 4px;
+    }
+    .budget-field-input {
+      width: 100%;
+      padding: 8px 10px;
+      border-radius: 10px;
+      border: 1px solid var(--border);
+      background: rgba(255, 255, 255, 0.04);
+      color: var(--text);
+      font-family: inherit;
+      font-size: 13px;
+    }
+    .budget-field-input:focus {
+      outline: none;
+      border-color: rgba(201, 169, 110, 0.45);
+    }
+
+    .budget-flex {
+      display: none;
+      margin-top: 10px;
+      padding: 10px;
+      border-radius: 12px;
+      border: 1px solid rgba(201, 169, 110, 0.22);
+      background: rgba(201, 169, 110, 0.06);
+    }
+    .budget-flex.is-visible { display: block; }
+    .budget-flex-row {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 10px;
+      cursor: pointer;
+    }
+    .budget-flex-copy { flex: 1; min-width: 0; }
+    .budget-flex-title {
+      font-size: 12px;
+      font-weight: 500;
+      line-height: 1.35;
+      color: var(--text);
+    }
+    .budget-flex-sub {
+      font-size: 10px;
+      line-height: 1.4;
+      color: var(--muted);
+      margin-top: 3px;
+    }
+    .budget-switch {
+      position: relative;
+      width: 36px;
+      height: 20px;
+      flex-shrink: 0;
+      margin-top: 2px;
+      border-radius: 100px;
+      background: rgba(255, 255, 255, 0.14);
+      transition: background 0.15s;
+    }
+    .budget-switch::after {
+      content: '';
+      position: absolute;
+      top: 2px;
+      left: 2px;
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: var(--muted);
+      transition: transform 0.15s, background 0.15s;
+    }
+    .budget-flex.is-on .budget-switch {
+      background: rgba(201, 169, 110, 0.4);
+    }
+    .budget-flex.is-on .budget-switch::after {
+      transform: translateX(16px);
+      background: var(--accent2);
+    }
+    .budget-footnote {
+      display: none;
+      margin: 8px 0 0;
+      font-size: 10px;
+      line-height: 1.45;
+      color: var(--muted);
+    }
+    .budget-flex.is-visible.is-on + .budget-footnote { display: block; }
+
+    .budget-dates-hint {
+      display: none;
+      margin: 10px 0 0;
+      padding: 8px 10px;
+      border-radius: 10px;
+      background: rgba(255, 255, 255, 0.04);
+      font-size: 11px;
+      line-height: 1.4;
+      color: var(--muted);
+    }
+    .budget-dates-hint.is-visible { display: block; }
+
+    .budget-pop-apply {
+      display: block;
+      width: 100%;
+      margin-top: 12px;
+      padding: 10px 14px;
+      border: none;
+      border-radius: 100px;
+      background: linear-gradient(180deg, var(--accent2) 0%, var(--accent) 100%);
+      color: #1a1a1a;
+      font-family: inherit;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .budget-pop-apply:hover { opacity: 0.92; }
+
+    .demo-note {
+      max-width: 420px;
+      margin: 20px auto 0;
+      padding: 12px 14px;
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      background: rgba(255, 255, 255, 0.02);
+      font-size: 11px;
+      line-height: 1.55;
+      color: var(--muted);
+    }
+    .demo-note strong { color: var(--text); font-weight: 600; }
+    .demo-backdrop {
+      display: none;
+      position: fixed;
+      inset: 0;
+      z-index: 5;
+    }
+    .demo-backdrop.is-open { display: block; }
+  </style>
+</head>
+<body>
+  <header class="page-head">
+    <span class="tag">Preview only — not wired to app</span>
+    <h1>Budget popup v2</h1>
+    <p>Click the budget chip. Card picks + custom range + flexibility toggle (only when a cap is set).</p>
+  </header>
+
+  <div class="demo-bar">
+    <span class="demo-bar-label">Results toolbar (simulated)</span>
+    <button type="button" class="vibe-chip vibe-chip--ghost">+ Trip</button>
+    <button type="button" class="vibe-chip vibe-chip--ghost">+ Stay vibe</button>
+    <div class="budget-wrap" id="budgetWrap">
+      <button type="button" class="vibe-chip" id="budgetChip" aria-expanded="false" aria-haspopup="dialog">
+        Any budget
+      </button>
+      <div class="budget-pop" id="budgetPop" role="dialog" aria-label="Nightly budget">
+        <div class="budget-pop-lead">
+          <h2>Ideal nightly spend?</h2>
+          <p>Match your vibe — filter by rate when dates are set.</p>
+        </div>
+
+        <div class="budget-cards" role="listbox" aria-label="Budget options">
+          <button type="button" class="budget-card is-selected" data-id="any" role="option" aria-selected="true">
+            <span class="budget-card-icon" aria-hidden="true">🏷</span>
+            <span class="budget-card-body">
+              <span class="budget-card-title">Any budget</span>
+              <span class="budget-card-sub">Show all price ranges</span>
+            </span>
+            <span class="budget-card-check" aria-hidden="true">✓</span>
+          </button>
+          <button type="button" class="budget-card" data-id="under_250" role="option" aria-selected="false">
+            <span class="budget-card-icon" aria-hidden="true">$</span>
+            <span class="budget-card-body">
+              <span class="budget-card-title">Under $250</span>
+              <span class="budget-card-sub">Max per night</span>
+            </span>
+            <span class="budget-card-check" aria-hidden="true">✓</span>
+          </button>
+          <button type="button" class="budget-card" data-id="under_400" role="option" aria-selected="false">
+            <span class="budget-card-icon" aria-hidden="true">$</span>
+            <span class="budget-card-body">
+              <span class="budget-card-title">Under $400</span>
+              <span class="budget-card-sub">Max per night</span>
+            </span>
+            <span class="budget-card-check" aria-hidden="true">✓</span>
+          </button>
+          <button type="button" class="budget-card" data-id="luxury" role="option" aria-selected="false">
+            <span class="budget-card-icon" aria-hidden="true">👑</span>
+            <span class="budget-card-body">
+              <span class="budget-card-title">Luxury stays</span>
+              <span class="budget-card-sub">$400+ per night</span>
+            </span>
+            <span class="budget-card-check" aria-hidden="true">✓</span>
+          </button>
+          <button type="button" class="budget-card budget-card--custom" id="customCard" data-id="custom" role="option" aria-selected="false">
+            <span class="budget-card-icon" aria-hidden="true">▦</span>
+            <span class="budget-card-body">
+              <span class="budget-card-title">Custom range</span>
+              <span class="budget-card-sub">Set min and max</span>
+            </span>
+            <span class="budget-card-chevron" aria-hidden="true">›</span>
+          </button>
+        </div>
+
+        <div class="budget-custom-fields" id="customFields">
+          <div>
+            <div class="budget-field-label">Min</div>
+            <input class="budget-field-input" id="customMin" type="number" placeholder="Optional" min="0" />
+          </div>
+          <div>
+            <div class="budget-field-label">Max</div>
+            <input class="budget-field-input" id="customMax" type="number" placeholder="Optional" min="0" />
+          </div>
+        </div>
+
+        <div class="budget-flex" id="flexBlock" role="switch" aria-checked="true" tabindex="0">
+          <div class="budget-flex-row" id="flexRow">
+            <div class="budget-flex-copy">
+              <div class="budget-flex-title">Keep great matches slightly above budget</div>
+              <div class="budget-flex-sub">Vibe-first — won't hide exceptional fits</div>
+            </div>
+            <span class="budget-switch" aria-hidden="true"></span>
+          </div>
+        </div>
+        <p class="budget-footnote" id="flexNote">
+          Perfect vibe matches may still appear a bit above your cap.
+        </p>
+
+        <p class="budget-dates-hint" id="datesHint">
+          Add travel dates to filter by nightly rate.
+        </p>
+
+        <button type="button" class="budget-pop-apply" id="applyBtn">Apply</button>
+      </div>
+    </div>
+  </div>
+
+  <aside class="demo-note">
+    <strong>Try it:</strong> pick Under $250 or $400 — flexibility toggle appears. Any budget or Luxury hides it.
+    Custom range expands min/max; toggle shows when max is set. Apply updates the chip label.
+  </aside>
+
+  <div class="demo-backdrop" id="backdrop"></div>
+
+  <script>
+    const LABELS = {
+      any: 'Any budget',
+      under_250: 'Under $250',
+      under_400: 'Under $400',
+      luxury: 'Luxury stays',
+      custom: 'Custom range',
+    };
+    const CAP_IDS = new Set(['under_250', 'under_400', 'custom']);
+
+    let selected = 'any';
+    let customOpen = false;
+    let flexOn = true;
+
+    const wrap = document.getElementById('budgetWrap');
+    const chip = document.getElementById('budgetChip');
+    const backdrop = document.getElementById('backdrop');
+    const flexBlock = document.getElementById('flexBlock');
+    const flexRow = document.getElementById('flexRow');
+    const datesHint = document.getElementById('datesHint');
+    const customFields = document.getElementById('customFields');
+    const customCard = document.getElementById('customCard');
+    const customMax = document.getElementById('customMax');
+
+    function hasCap() {
+      if (selected === 'under_250' || selected === 'under_400') return true;
+      if (selected === 'custom') {
+        const max = customMax.value.trim();
+        return max !== '' && Number(max) > 0;
+      }
+      return false;
+    }
+
+    function syncCards() {
+      document.querySelectorAll('.budget-card').forEach((card) => {
+        const id = card.dataset.id;
+        const on = id === selected;
+        card.classList.toggle('is-selected', on);
+        card.setAttribute('aria-selected', on ? 'true' : 'false');
+        if (id === 'custom') card.classList.toggle('is-open', customOpen);
+      });
+      customFields.classList.toggle('is-open', customOpen && selected === 'custom');
+
+      const showFlex = hasCap();
+      flexBlock.classList.toggle('is-visible', showFlex);
+      flexBlock.classList.toggle('is-on', showFlex && flexOn);
+      flexBlock.setAttribute('aria-checked', showFlex && flexOn ? 'true' : 'false');
+
+      const showDates = selected !== 'any';
+      datesHint.classList.toggle('is-visible', showDates);
+    }
+
+    function chipLabel() {
+      if (selected === 'custom') {
+        const min = document.getElementById('customMin').value.trim();
+        const max = customMax.value.trim();
+        if (min && max) return `$${min}–$${max}`;
+        if (max) return `Under $${max}`;
+        if (min) return `$${min}+`;
+        return 'Custom range';
+      }
+      let label = LABELS[selected] || 'Any budget';
+      if (hasCap() && flexOn) label += ' · Flexible';
+      return label;
+    }
+
+    function selectOption(id) {
+      if (id === 'custom') {
+        customOpen = !customOpen;
+        selected = 'custom';
+      } else {
+        selected = id;
+        customOpen = false;
+      }
+      if (id === 'under_250' || id === 'under_400') flexOn = true;
+      syncCards();
+    }
+
+    document.querySelectorAll('.budget-card').forEach((card) => {
+      card.addEventListener('click', () => selectOption(card.dataset.id));
+    });
+
+    flexRow.addEventListener('click', () => {
+      flexOn = !flexOn;
+      syncCards();
+    });
+    flexBlock.addEventListener('keydown', (e) => {
+      if (e.key === ' ' || e.key === 'Enter') {
+        e.preventDefault();
+        flexOn = !flexOn;
+        syncCards();
+      }
+    });
+
+    customMax.addEventListener('input', syncCards);
+    document.getElementById('customMin').addEventListener('input', syncCards);
+
+    function openPop() {
+      wrap.classList.add('is-open');
+      backdrop.classList.add('is-open');
+      chip.setAttribute('aria-expanded', 'true');
+    }
+    function closePop() {
+      wrap.classList.remove('is-open');
+      backdrop.classList.remove('is-open');
+      chip.setAttribute('aria-expanded', 'false');
+    }
+
+    chip.addEventListener('click', (e) => {
+      e.stopPropagation();
+      wrap.classList.contains('is-open') ? closePop() : openPop();
+    });
+    backdrop.addEventListener('click', closePop);
+    document.getElementById('applyBtn').addEventListener('click', () => {
+      chip.textContent = chipLabel();
+      chip.classList.toggle('vibe-chip--ghost', selected === 'any' && !flexOn);
+      closePop();
+    });
+
+    syncCards();
+  </script>
+</body>
+</html>

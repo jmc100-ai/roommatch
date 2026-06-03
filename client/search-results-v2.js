@@ -527,8 +527,8 @@
           <button type="button" class="sr2-modal-close" onclick="SearchResultsV2.closeModals()" aria-label="Close">×</button>
           <h2 id="sr2-modal-why-title">Why these hotels?</h2>
           <p>Each of the four cards is a different hotel — chosen for a distinct strength in your search.
-            Best Overall follows your main ranking; the other three optimize room match, neighbourhood fit,
-            or hotel style without repeating the same property or brand family.</p>
+            Best Overall follows your main ranking; the other three highlight room match, neighbourhood fit,
+            or hotel character without repeating the same property or brand family.</p>
         </div>
       </div>
       <div class="sr2-modal" id="sr2-modal-how" hidden role="dialog" aria-modal="true" aria-labelledby="sr2-modal-how-title">
@@ -536,9 +536,7 @@
         <div class="sr2-modal-panel">
           <button type="button" class="sr2-modal-close" onclick="SearchResultsV2.closeModals()" aria-label="Close">×</button>
           <h2 id="sr2-modal-how-title">How it works</h2>
-          <p>TravelByVibe scores room photos and hotel character against your Boop vibe. Top picks use
-            badge-specific match scores; the grid below uses your overall match. Change sort anytime —
-            see all matches for the full list with the same filters as this search.</p>
+          <p>TravelByVibe scores real room photos and hotel character against your saved vibe preferences and room description. Top picks highlight different strengths; the list below follows your current sort. Use <strong>See all matches</strong> for the full searchable grid with the same filters.</p>
         </div>
       </div>`;
     document.body.appendChild(host);

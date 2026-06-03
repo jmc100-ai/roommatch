@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Budget popover mockup — simplified (preview only)</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #0c0c0e;
+      --panel: rgba(18, 18, 21, 0.98);
+      --text: #e8e4dc;
+      --muted: #9a9590;
+      --accent: #c9a96e;
+      --accent2: #e8d5b0;
+      --border: rgba(255, 255, 255, 0.12);
+      --chip-border: rgba(255, 255, 255, 0.20);
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: 'DM Sans', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      padding: 32px 24px 48px;
+    }
+    .page-head { max-width: 960px; margin: 0 auto 28px; }
+    .page-head h1 { margin: 0 0 8px; font-size: 20px; font-weight: 600; }
+    .page-head p { margin: 0; font-size: 13px; line-height: 1.55; color: var(--muted); max-width: 720px; }
+    .page-head .tag {
+      display: inline-block; margin-bottom: 10px; padding: 3px 10px; border-radius: 100px;
+      border: 1px solid rgba(201, 169, 110, 0.35); color: var(--accent2);
+      font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase;
+    }
+    .compare {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 28px;
+      max-width: 960px;
+      margin: 0 auto;
+      align-items: start;
+    }
+    @media (max-width: 820px) { .compare { grid-template-columns: 1fr; } }
+    .col-label {
+      font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase;
+      color: var(--muted); margin: 0 0 12px; font-weight: 500;
+    }
+    .col-label--new { color: var(--accent2); }
+    .stage {
+      padding: 24px 18px 20px;
+      border-radius: 16px;
+      border: 1px solid var(--border);
+      background: rgba(255, 255, 255, 0.02);
+    }
+    .chip-preview {
+      display: inline-flex; align-items: center; min-height: 46px;
+      padding: 8px 14px; margin-bottom: 14px; border-radius: 100px;
+      border: 1px dashed var(--chip-border); color: var(--muted);
+      font-size: 13px; font-style: italic;
+    }
+    .chip-preview--active {
+      border-style: solid; border-color: rgba(255,255,255,0.10);
+      background: rgba(255,255,255,0.06); color: var(--text);
+      font-style: normal; font-weight: 500;
+    }
+
+    .budget-pop {
+      width: 100%; max-width: 260px;
+      padding: 14px 12px 12px;
+      border-radius: 14px;
+      border: 1px solid var(--border);
+      background: var(--panel);
+      box-shadow: 0 18px 50px rgba(0,0,0,0.5), 0 0 0 1px rgba(201,169,110,0.08);
+    }
+    .budget-pop-title {
+      font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase;
+      color: var(--muted); padding: 0 6px 10px; margin: 0; font-weight: 500;
+    }
+    .budget-pop-opt {
+      display: flex; align-items: center; gap: 10px;
+      padding: 7px 8px; margin: 0; border-radius: 10px;
+      font-size: 13px; color: var(--text); cursor: pointer;
+    }
+    .budget-pop-opt:hover { background: rgba(255,255,255,0.04); }
+    .budget-pop-opt input[type="radio"] {
+      accent-color: var(--accent2); width: 14px; height: 14px; margin: 0;
+    }
+    .budget-pop-or {
+      display: flex; align-items: center; gap: 10px; margin: 10px 0 8px;
+      color: var(--muted); font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase;
+    }
+    .budget-pop-or::before, .budget-pop-or::after {
+      content: ''; flex: 1; height: 1px; background: rgba(255,255,255,0.10);
+    }
+    .budget-pop-range { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 10px; }
+    .budget-pop-range-field { display: flex; flex-direction: column; gap: 4px; }
+    .budget-pop-range-label {
+      font-size: 10px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted);
+    }
+    .budget-pop-range-input {
+      width: 100%; padding: 8px 10px; border-radius: 10px;
+      border: 1px solid var(--border); background: rgba(255,255,255,0.04);
+      color: var(--text); font-family: inherit; font-size: 13px;
+    }
+    .budget-pop-hint { margin: 0 0 10px; font-size: 11px; line-height: 1.4; color: var(--muted); }
+    .budget-pop-apply {
+      display: block; width: 100%; padding: 10px 14px; border: none; border-radius: 100px;
+      background: linear-gradient(180deg, var(--accent2) 0%, var(--accent) 100%);
+      color: #1a1a1a; font-family: inherit; font-size: 13px; font-weight: 600; cursor: pointer;
+    }
+    .budget-pop-apply:hover { opacity: 0.92; }
+
+    /* Simplified extras */
+    .budget-pop-link {
+      display: block; width: 100%; margin: 2px 0 12px; padding: 4px 8px;
+      border: none; background: none; text-align: left;
+      font-family: inherit; font-size: 12px; color: var(--accent2); cursor: pointer;
+    }
+    .budget-pop-link:hover { text-decoration: underline; }
+    .budget-pop-custom { display: none; margin-bottom: 8px; }
+    .budget-pop-custom.is-open { display: block; }
+    .budget-pop-toggle {
+      display: flex; align-items: center; justify-content: space-between; gap: 12px;
+      margin: 4px 6px 12px; padding: 10px 8px; border-radius: 10px;
+      border: 1px solid rgba(255,255,255,0.08);
+      background: rgba(255,255,255,0.03);
+      cursor: pointer;
+    }
+    .budget-pop-toggle-text {
+      font-size: 12px; line-height: 1.35; color: var(--text);
+    }
+    .budget-pop-switch {
+      position: relative; width: 36px; height: 20px; flex-shrink: 0;
+      border-radius: 100px; background: rgba(255,255,255,0.14);
+      transition: background 0.15s;
+    }
+    .budget-pop-switch::after {
+      content: ''; position: absolute; top: 2px; left: 2px;
+      width: 16px; height: 16px; border-radius: 50%;
+      background: var(--muted); transition: transform 0.15s, background 0.15s;
+    }
+    .budget-pop-toggle.is-on .budget-pop-switch { background: rgba(201,169,110,0.35); }
+    .budget-pop-toggle.is-on .budget-pop-switch::after {
+      transform: translateX(16px); background: var(--accent2);
+    }
+    .note-list {
+      max-width: 960px; margin: 24px auto 0; padding: 14px 16px;
+      border-radius: 12px; border: 1px solid var(--border);
+      background: rgba(255,255,255,0.02);
+    }
+    .note-list p { margin: 0; font-size: 12px; line-height: 1.55; color: var(--muted); }
+  </style>
+</head>
+<body>
+  <header class="page-head">
+    <span class="tag">Preview only — not wired to app</span>
+    <h1>Budget popover — simplified</h1>
+    <p>Right side cuts options, hides custom range behind a link, and replaces the ranking section with <strong style="color:var(--text)">one toggle</strong> (maps to today’s price-matters slider: off = balanced, on = value-first).</p>
+  </header>
+
+  <div class="compare">
+    <section>
+      <p class="col-label">Current</p>
+      <div class="stage">
+        <div class="chip-preview">Any budget</div>
+        <div class="budget-pop">
+          <div class="budget-pop-title">Nightly budget</div>
+          <label class="budget-pop-opt"><input type="radio" name="cur" checked /> Any budget</label>
+          <label class="budget-pop-opt"><input type="radio" name="cur" /> Under $150</label>
+          <label class="budget-pop-opt"><input type="radio" name="cur" /> Under $250</label>
+          <label class="budget-pop-opt"><input type="radio" name="cur" /> Under $400</label>
+          <label class="budget-pop-opt"><input type="radio" name="cur" /> Under $600</label>
+          <label class="budget-pop-opt"><input type="radio" name="cur" /> Luxury only</label>
+          <div class="budget-pop-or"><span>OR</span></div>
+          <div class="budget-pop-range">
+            <label class="budget-pop-range-field">
+              <span class="budget-pop-range-label">Min</span>
+              <input class="budget-pop-range-input" placeholder="Min" readonly />
+            </label>
+            <label class="budget-pop-range-field">
+              <span class="budget-pop-range-label">Max</span>
+              <input class="budget-pop-range-input" placeholder="Max" readonly />
+            </label>
+          </div>
+          <p class="budget-pop-hint">Add travel dates to filter by nightly rate.</p>
+          <button type="button" class="budget-pop-apply">Apply</button>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <p class="col-label col-label--new">Proposed (simpler)</p>
+      <div class="stage">
+        <div class="chip-preview chip-preview--active" id="chipPreview">Any budget</div>
+        <div class="budget-pop">
+          <div class="budget-pop-title">Budget</div>
+          <label class="budget-pop-opt"><input type="radio" name="new" value="any" checked onchange="syncChip()" /> Any budget</label>
+          <label class="budget-pop-opt"><input type="radio" name="new" value="250" onchange="syncChip()" /> Under $250</label>
+          <label class="budget-pop-opt"><input type="radio" name="new" value="400" onchange="syncChip()" /> Under $400</label>
+          <label class="budget-pop-opt"><input type="radio" name="new" value="luxury" onchange="syncChip()" /> Luxury only</label>
+
+          <button type="button" class="budget-pop-link" onclick="toggleCustom()">Custom range…</button>
+          <div class="budget-pop-custom" id="customRange">
+            <div class="budget-pop-range">
+              <label class="budget-pop-range-field">
+                <span class="budget-pop-range-label">Min</span>
+                <input class="budget-pop-range-input" placeholder="Min" />
+              </label>
+              <label class="budget-pop-range-field">
+                <span class="budget-pop-range-label">Max</span>
+                <input class="budget-pop-range-input" placeholder="Max" />
+              </label>
+            </div>
+          </div>
+
+          <div class="budget-pop-toggle" id="valueToggle" role="switch" aria-checked="false" tabindex="0"
+               onclick="toggleValue()" onkeydown="if(event.key===' '||event.key==='Enter'){event.preventDefault();toggleValue();}">
+            <span class="budget-pop-toggle-text">Prefer value when matches are close</span>
+            <span class="budget-pop-switch" aria-hidden="true"></span>
+          </div>
+
+          <button type="button" class="budget-pop-apply">Apply</button>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <aside class="note-list">
+    <p><strong style="color:var(--text)">Removed from wizard:</strong> stay-vibe price slider. <strong style="color:var(--text)">Removed from popover:</strong> extra tiers ($150/$600), always-visible min/max, ranking divider, 3-way segment, helper copy. Luxury-only already implies match-first; the toggle only nudges value when budget is open.</p>
+  </aside>
+
+  <script>
+    const LABELS = { any: 'Any budget', 250: 'Under $250', 400: 'Under $400', luxury: 'Luxury only' };
+    function selectedBudget() {
+      const r = document.querySelector('input[name="new"]:checked');
+      return r ? r.value : 'any';
+    }
+    function syncChip() {
+      const chip = document.getElementById('chipPreview');
+      const toggle = document.getElementById('valueToggle');
+      let t = LABELS[selectedBudget()] || 'Any budget';
+      if (toggle.classList.contains('is-on') && selectedBudget() === 'any') t = 'Any budget · Value';
+      chip.textContent = t;
+    }
+    function toggleCustom() {
+      document.getElementById('customRange').classList.toggle('is-open');
+    }
+    function toggleValue() {
+      const el = document.getElementById('valueToggle');
+      const on = !el.classList.contains('is-on');
+      el.classList.toggle('is-on', on);
+      el.setAttribute('aria-checked', on ? 'true' : 'false');
+      syncChip();
+    }
+  </script>
+</body>
+</html>

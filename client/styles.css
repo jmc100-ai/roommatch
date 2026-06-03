@@ -131,10 +131,15 @@
       padding: 5px 28px 5px 10px;
       cursor: pointer;
       min-width: 76px;
+      color-scheme: dark;
       background-color: rgba(255, 255, 255, 0.06);
       background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath fill='%23a8a4a0' d='M0 0l5 6 5-6z'/%3E%3C/svg%3E");
       background-repeat: no-repeat;
       background-position: right 9px center;
+    }
+    .topnav-currency-select option {
+      background: #1a1a1e;
+      color: #e8e4dc;
     }
     .topnav-currency-select:hover {
       border-color: rgba(201, 169, 110, 0.4);
@@ -5749,14 +5754,24 @@
       padding: 8px 10px;
       border-radius: 10px;
       border: 1px solid rgba(255, 255, 255, 0.12);
-      background: rgba(255, 255, 255, 0.04);
+      background: rgba(255, 255, 255, 0.06);
       color: var(--text);
       font-family: 'DM Sans', sans-serif;
       font-size: 13px;
+      color-scheme: dark;
+    }
+    .budget-pop-range-input::placeholder {
+      color: rgba(232, 228, 220, 0.45);
+      font-style: normal;
+    }
+    .budget-pop-range-input::selection {
+      background: rgba(201, 169, 110, 0.65);
+      color: #1a1a1a;
     }
     .budget-pop-range-input:focus {
       outline: none;
       border-color: rgba(201, 169, 110, 0.45);
+      background: rgba(255, 255, 255, 0.09);
     }
     .budget-pop-hint {
       margin: 0 0 10px;
@@ -6026,7 +6041,8 @@
     .sr2-pick-price .add-dates-link,
     .sr2-more-price .add-dates-link,
     .fine-tune-budget-dates-hint .add-dates-link,
-    .fine-tune-dates-inline .add-dates-link {
+    .fine-tune-dates-inline .add-dates-link,
+    .hpage-other-room-price-note .add-dates-link {
       color: var(--accent2);
     }
     .budget-chip-btn.budget-chip-btn--pending-dates {
@@ -6462,10 +6478,24 @@
         padding: 10px 12px;
         border-radius: 10px;
         border: 1px solid rgba(255, 255, 255, 0.12);
-        background: rgba(255, 255, 255, 0.04);
+        background: rgba(255, 255, 255, 0.06);
         color: var(--text);
         font-family: 'DM Sans', sans-serif;
         font-size: 14px;
+        color-scheme: dark;
+      }
+      .fine-tune-range-field input::placeholder {
+        color: rgba(232, 228, 220, 0.45);
+        font-style: normal;
+      }
+      .fine-tune-range-field input::selection {
+        background: rgba(201, 169, 110, 0.65);
+        color: #1a1a1a;
+      }
+      .fine-tune-range-field input:focus {
+        outline: none;
+        border-color: rgba(201, 169, 110, 0.45);
+        background: rgba(255, 255, 255, 0.09);
       }
       .fine-tune-mh-list {
         display: flex;
@@ -7405,16 +7435,15 @@
       grid-row: 1 / 3;
       align-self: start;
     }
+    /* Match ring is in-page content — do not sticky-float over vibe cards while scrolling */
+    .hpage-v3 .hpage-match-card.hpage-sidebar {
+      position: static;
+      top: auto;
+    }
     .hpage-match-vibe-bundle .hpage-why-vibe {
       grid-column: 1;
       grid-row: 2;
       align-self: start;
-    }
-    .hpage-match-card-actions {
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-      margin-top: 2px;
     }
     .hpage-fullbleed {
       grid-column: 1 / -1;
@@ -7433,107 +7462,253 @@
     .hpage-fullbleed .hpage-other-rooms {
       padding-top: 4px;
     }
-    .hpage-fullbleed .hpage-rooms-list {
+    .hpage-fullbleed .hpage-other-rooms-list {
       width: 100%;
     }
     .hpage-other-rooms .hpage-section-label {
-      margin-bottom: 10px;
+      margin-bottom: 12px;
     }
-    .hpage-rooms-list .rooms-other-header {
-      margin-top: 0;
-      font-size: 11px;
-      font-weight: 600;
-      letter-spacing: 0.1em;
-      text-transform: uppercase;
-      color: var(--accent2, #c9a96e);
+    .hpage-other-rooms-list {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
     }
-    .hpage-rooms-list .rooms-other {
-      border-radius: 14px;
-      border: 1px solid rgba(255, 255, 255, 0.08);
-      overflow: hidden;
-      background: rgba(255, 255, 255, 0.02);
-    }
-    .hpage-rooms-list .room-type-row {
-      border-bottom: 1px solid rgba(255, 255, 255, 0.06);
-    }
-    .hpage-rooms-list .room-type-row:last-child {
-      border-bottom: none;
-    }
-    .hpage-rooms-list .room-type-header {
-      padding: 14px 18px;
-      min-height: 108px;
+    .hpage-other-room {
+      display: grid;
+      grid-template-columns: 108px minmax(0, 1fr) max-content;
+      gap: 14px 16px;
       align-items: center;
-      gap: 16px;
-      background: transparent;
+      padding: 14px 16px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 12px;
+      background: rgba(255, 255, 255, 0.02);
+      width: 100%;
+      box-sizing: border-box;
     }
-    .hpage-rooms-list .room-type-header:hover {
-      background: rgba(255, 255, 255, 0.03);
+    .hpage-other-room--hidden {
+      display: none;
     }
-    .hpage-rooms-list .room-thumb {
-      width: 132px;
-      height: 99px;
-      border-radius: 10px;
-      opacity: 1;
+    .hpage-other-room-thumb {
+      display: block;
+      width: 108px;
+      height: 80px;
+      padding: 0;
+      border: none;
+      border-radius: 8px;
+      overflow: hidden;
+      flex-shrink: 0;
+      cursor: pointer;
+      background: rgba(255, 255, 255, 0.04);
     }
-    .hpage-rooms-list .room-type-left {
+    .hpage-other-room-thumb img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+    .hpage-other-room-thumb--ph {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 22px;
+      opacity: 0.45;
+      border: 1px dashed rgba(255, 255, 255, 0.1);
+      cursor: default;
+    }
+    .hpage-other-room-main {
+      grid-column: 2;
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .hpage-other-room-thumb {
+      grid-column: 1;
+    }
+    .hpage-other-room-aside {
+      grid-column: 3;
+    }
+    .hpage-other-room-title-row {
+      display: flex;
       align-items: center;
       flex-wrap: wrap;
-      gap: 8px 12px;
-      flex: 1;
+      gap: 8px 10px;
     }
-    .hpage-rooms-list .room-type-name {
+    .hpage-other-room-name {
+      margin: 0;
       font-family: 'Cormorant Garamond', serif;
-      font-size: clamp(15px, 1.55vw, 18px);
+      font-size: clamp(16px, 1.6vw, 20px);
       font-weight: 500;
       line-height: 1.2;
       letter-spacing: 0.01em;
       color: var(--text);
-      white-space: normal;
-      overflow: visible;
-      text-overflow: unset;
-      flex: none;
-      width: 100%;
     }
-    .hpage-rooms-list .room-match-bar-wrap {
-      width: 100%;
-      max-width: 220px;
-    }
-    .hpage-rooms-list .room-score-badge {
-      font-size: 11px;
+    .hpage-other-room-match {
+      display: inline-block;
       padding: 4px 10px;
+      border-radius: 100px;
+      font-size: 10px;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      white-space: nowrap;
+      color: var(--accent2, #c9a96e);
+      border: 1px solid rgba(201, 169, 110, 0.55);
+      background: transparent;
+      line-height: 1.2;
     }
-    .hpage-rooms-list .room-rate {
-      font-size: 15px;
+    .hpage-other-room-specs {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 4px 16px;
     }
-    .hpage-rooms-list .book-btn--room {
+    .hpage-other-room-specs .hpage-room-spec-item {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+      line-height: 1.3;
+      color: rgba(232, 228, 220, 0.78);
+      white-space: nowrap;
+    }
+    .hpage-other-room-specs .hpage-room-spec-icon {
+      font-size: 14px;
+      opacity: 0.85;
+    }
+    .hpage-other-room-aside {
+      display: flex;
+      flex-direction: row;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 14px;
+      flex: 0 0 auto;
       flex-shrink: 0;
-      align-self: center;
-      font-size: 0.78rem;
-      padding: 6px 12px;
-      margin-left: 0;
     }
-    .hpage-rooms-list .room-type-row.open .photo-strip-wrap {
-      max-height: 280px;
-      background: rgba(0, 0, 0, 0.2);
-    }
-    .hpage-rooms-list .photo-strip {
-      padding: 10px 14px 12px;
-      gap: 8px;
-    }
-    .hpage-rooms-list .photo-strip .room-photo-cell {
-      width: 200px;
-      height: 150px;
+    .hpage-other-room-price-col {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+      gap: 2px;
       flex-shrink: 0;
-      border-radius: 10px;
-      overflow: hidden;
     }
-    .hpage-rooms-list .photo-strip .room-photo-cell img {
-      width: 100%;
-      height: 100%;
-      object-fit: cover;
+    .hpage-other-room-price {
+      text-align: right;
+      white-space: nowrap;
+      line-height: 1.2;
     }
-    .hpage-rooms-list .rooms-show-more {
+    .hpage-other-room-price-amt {
+      font-size: 17px;
+      font-weight: 600;
+      color: #e8e2da;
+      font-family: 'DM Sans', sans-serif;
+    }
+    .hpage-other-room-price-per {
+      font-size: 12px;
+      font-weight: 400;
+      color: rgba(232, 228, 220, 0.65);
+    }
+    .hpage-other-room-price-note {
+      margin: 0;
+      font-size: 10px;
+      line-height: 1.3;
+      color: rgba(232, 228, 220, 0.45);
+      text-align: right;
+      white-space: nowrap;
+      max-width: 11rem;
+    }
+    .hpage-other-room-price-col--muted {
+      align-items: flex-end;
+      padding-right: 10px;
+    }
+    .hpage-other-room-price-col--muted .hpage-other-room-price-note {
+      margin: 0;
+      white-space: normal;
+      text-align: right;
+      line-height: 1.35;
+    }
+    .hpage-other-room-price-col--muted .add-dates-link--hpage-other {
       font-size: 13px;
+      font-weight: 600;
+      color: rgba(214, 193, 150, 0.95);
+      letter-spacing: 0.01em;
+    }
+    .hpage-other-room-price-col--muted .hpage-other-room-price-muted {
+      font-size: 12px;
+      color: rgba(232, 228, 220, 0.62);
+    }
+    .cmd-date-range--hpage-portal {
+      position: fixed;
+      inset: 0;
+      z-index: 600;
+      pointer-events: none;
+    }
+    .cmd-date-range--hpage-portal .city-date-pop.open {
+      pointer-events: auto;
+      display: block !important;
+      position: fixed;
+      left: 50%;
+      top: 50%;
+      bottom: auto;
+      transform: translate(-50%, -50%);
+      z-index: 601;
+    }
+    @media (max-width: 760px) {
+      .cmd-date-range--hpage-portal .city-date-pop.open {
+        inset: 0;
+        left: 0;
+        right: 0;
+        top: 0;
+        bottom: 0;
+        transform: none;
+      }
+    }
+    .hpage-other-room-fc {
+      font-size: 9px;
+    }
+    .hpage-other-room-book {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      margin: 0;
+      padding: 8px 18px;
+      border-radius: 8px;
+      border: none;
+      background: var(--accent2, #c9a96e);
+      color: #141210;
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: 0.02em;
+      text-decoration: none;
+      white-space: nowrap;
+      font-family: 'DM Sans', sans-serif;
+      transition: filter 0.15s, transform 0.1s;
+    }
+    .hpage-other-room-book:hover {
+      filter: brightness(1.06);
+      color: #141210;
+    }
+    .hpage-other-rooms-more {
+      display: block;
+      width: 100%;
+      margin-top: 4px;
+      padding: 12px;
+      background: transparent;
+      border: 1px dashed rgba(255, 255, 255, 0.12);
+      border-radius: 10px;
+      color: rgba(201, 169, 110, 0.7);
+      font-size: 12px;
+      font-weight: 500;
+      letter-spacing: 0.06em;
+      text-align: center;
+      cursor: pointer;
+      font-family: 'DM Sans', sans-serif;
+      transition: color 0.15s, border-color 0.15s;
+    }
+    .hpage-other-rooms-more:hover {
+      color: var(--accent2, #c9a96e);
+      border-color: rgba(201, 169, 110, 0.35);
     }
     .hpage-intro {
       padding: 8px 0 4px;
@@ -7763,18 +7938,62 @@
       background: rgba(255, 255, 255, 0.04);
       border: 1px solid rgba(255, 255, 255, 0.1);
       border-radius: 16px;
-      padding: 18px 16px 16px;
+      padding: 16px 14px 14px;
+      display: block;
+    }
+    .hpage-match-card-grid {
+      display: grid;
+      grid-template-columns: minmax(100px, 112px) minmax(0, 1fr);
+      gap: 12px 8px;
+      align-items: start;
+    }
+    .hpage-match-card-grid--solo {
+      grid-template-columns: 1fr;
+      max-width: 200px;
+      margin: 0 auto;
+    }
+    .hpage-match-card-col {
       display: flex;
       flex-direction: column;
-      gap: 14px;
+      align-items: stretch;
+      gap: 12px;
+      min-width: 0;
     }
-    .hpage-match-card-top {
-      display: flex;
+    .hpage-match-card-col--score {
       align-items: center;
-      gap: 14px;
+    }
+    .hpage-match-card-col--guest {
+      justify-content: flex-start;
+      padding-top: 2px;
+    }
+    .hpage-match-action-book {
+      width: auto;
+      max-width: 100%;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      align-self: center;
+    }
+    .hpage-match-action-vibe--sidebar {
+      width: 100%;
+    }
+    .hpage-match-action-book .hpage-cta--match-book {
+      width: auto;
+      min-width: 88px;
+      max-width: 100%;
+      box-sizing: border-box;
+      padding: 11px 22px;
+    }
+    .hpage-match-action-vibe--sidebar .hpage-cta--vibe {
+      width: 100%;
+      box-sizing: border-box;
+      white-space: nowrap;
+      font-size: 12px;
+      padding: 11px 10px;
+      gap: 5px;
     }
     .hpage-match-ring {
-      --ring-size: 88px;
+      --ring-size: 96px;
       flex-shrink: 0;
       width: var(--ring-size);
       height: var(--ring-size);
@@ -7803,17 +8022,18 @@
       line-height: 1.1;
     }
     .hpage-match-ring-val {
-      font-size: 22px;
+      font-size: 24px;
       font-weight: 700;
       color: var(--text);
       font-variant-numeric: tabular-nums;
     }
     .hpage-match-rating-block {
-      flex: 1;
       min-width: 0;
       display: flex;
       flex-direction: column;
+      align-items: flex-start;
       gap: 4px;
+      text-align: left;
     }
     .hpage-match-rating-label {
       font-size: 15px;
@@ -7856,10 +8076,22 @@
       font-weight: 600;
       color: var(--text);
     }
-    .hpage-match-reviews-meta {
-      margin: 0;
+    .hpage-match-reviews-link {
+      margin: 2px 0 0;
+      padding: 0;
+      border: none;
+      background: none;
+      font: inherit;
       font-size: 12px;
       color: var(--muted);
+      text-decoration: none;
+      cursor: pointer;
+      text-align: left;
+    }
+    .hpage-match-reviews-link:hover {
+      color: rgba(232, 228, 220, 0.88);
+      text-decoration: underline;
+      text-underline-offset: 2px;
     }
     .hpage-match-attrs {
       display: flex;
@@ -8736,41 +8968,17 @@
         border-radius: 0;
         margin: 0;
       }
-      .hpage-match-vibe-bundle .hpage-match-card-top {
-        flex-direction: column;
-        align-items: center;
-        text-align: center;
-        gap: 8px;
+      .hpage-match-vibe-bundle .hpage-match-card-grid {
+        grid-template-columns: minmax(96px, 108px) minmax(0, 1fr);
+        gap: 10px 8px;
         width: 100%;
-        padding: 0;
-        margin: 0;
+      }
+      .hpage-match-vibe-bundle .hpage-match-card-col--score {
+        align-items: center;
       }
       .hpage-match-vibe-bundle .hpage-match-rating-block {
-        align-items: center;
+        align-items: flex-start;
         width: 100%;
-      }
-      .hpage-match-vibe-bundle .hpage-match-card-actions {
-        display: flex;
-        flex-direction: column;
-        gap: 8px;
-        width: 100%;
-        margin: 0;
-      }
-      .hpage-match-vibe-bundle .hpage-match-action-book {
-        display: flex;
-        justify-content: center;
-        width: 100%;
-        margin: 0;
-      }
-      .hpage-match-vibe-bundle .hpage-match-action-vibe--sidebar {
-        display: block;
-        width: 100%;
-        margin: 0;
-      }
-      .hpage-match-vibe-bundle .hpage-match-action-vibe--sidebar .hpage-cta--vibe {
-        width: 100%;
-        max-width: 100%;
-        box-sizing: border-box;
       }
       .hpage-v3 .hpage-match-vibe-bundle .hp-section.hpage-why-vibe {
         padding: 14px 0 0;
@@ -8816,19 +9024,19 @@
         min-height: 0;
       }
       .hpage-match-rating-row {
-        justify-content: center;
+        justify-content: flex-start;
       }
       .hpage-v3 .hpage-match-vibe-bundle .hpage-match-ring {
-        --ring-size: 66px;
+        --ring-size: 88px;
       }
       .hpage-v3 .hpage-match-vibe-bundle .hpage-match-ring::before {
-        inset: 6px;
+        inset: 7px;
       }
       .hpage-v3 .hpage-match-vibe-bundle .hpage-match-ring-val {
-        font-size: 17px;
+        font-size: 22px;
       }
       .hpage-v3 .hpage-match-vibe-bundle .hpage-match-ring-lbl {
-        font-size: 8px;
+        font-size: 9px;
       }
       .hpage-v3 .hpage-match-vibe-bundle .hpage-match-rating-label {
         font-size: 11px;
@@ -8841,15 +9049,13 @@
         font-size: 10px;
       }
       .hpage-v3 .hpage-match-vibe-bundle .hpage-match-card .hpage-cta {
-        padding: 10px 14px;
-        font-size: 13px;
         max-width: 100%;
         box-sizing: border-box;
       }
-      .hpage-v3 .hpage-match-vibe-bundle .hpage-cta--match-book {
-        width: 70%;
-        max-width: 220px;
-        align-self: center;
+      .hpage-v3 .hpage-match-vibe-bundle .hpage-match-action-vibe--sidebar .hpage-cta--vibe {
+        white-space: nowrap;
+        font-size: 11px;
+        padding: 10px 8px;
       }
       .hpage-room-spec-grid {
         grid-template-columns: 1fr;
@@ -8857,24 +9063,38 @@
       .hpage-nbhd-grid {
         grid-template-columns: 1fr;
       }
-      .hpage-rooms-list .room-type-header {
-        min-height: 96px;
+      .hpage-other-room {
+        grid-template-columns: 88px minmax(0, 1fr);
+        gap: 10px 12px;
         padding: 12px 14px;
-        gap: 12px;
       }
-      .hpage-rooms-list .room-thumb {
-        width: 108px;
-        height: 81px;
+      .hpage-other-room-thumb {
+        width: 88px;
+        height: 66px;
       }
-      .hpage-rooms-list .room-type-name {
-        font-size: 15px;
+      .hpage-other-room-aside {
+        grid-column: 1 / -1;
+        justify-content: space-between;
+        padding-top: 8px;
+        border-top: 1px solid rgba(255, 255, 255, 0.06);
       }
-      .hpage-rooms-list .photo-strip .room-photo-cell {
-        width: 168px;
-        height: 126px;
+      .hpage-other-room-price-col {
+        align-items: flex-start;
+      }
+      .hpage-other-room-price,
+      .hpage-other-room-price-note {
+        text-align: left;
+      }
+      .hpage-other-room-specs {
+        gap: 4px 12px;
+      }
+      .hpage-other-room-specs .hpage-room-spec-item {
+        font-size: 11px;
+        white-space: normal;
       }
       #hpage-mobile-cta-host .hpage-mobile-cta { display: flex; }
-      .hpage-v3 .hpage-match-vibe-bundle .hpage-match-card-actions {
+      .hpage-v3 .hpage-match-vibe-bundle .hpage-match-action-book,
+      .hpage-v3 .hpage-match-vibe-bundle .hpage-match-action-vibe--sidebar {
         display: none !important;
       }
       .hpage-hero .hp-carousel,

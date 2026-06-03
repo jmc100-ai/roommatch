@@ -167,9 +167,9 @@ function loginHtml(error = "") {
 <body>
   <div class="card">
     <h1>TravelBy<span style="color:#c9a96e">Vibe</span></h1>
-    <p class="sub">Enter the code from your invite email</p>
+    <p class="sub">TravelByVibe is in closed beta. Enter the invite code from your email to continue.</p>
     <form method="POST" action="/auth">
-      <input type="password" name="password" placeholder="Beta code" autofocus autocomplete="current-password"/>
+      <input type="password" name="password" placeholder="Invite code" autofocus autocomplete="current-password"/>
       <button type="submit">Continue</button>
       ${error ? `<p class="error">${error}</p>` : ""}
     </form>

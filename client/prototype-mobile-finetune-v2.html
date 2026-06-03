@@ -1,0 +1,1389 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Mobile bundled fine-tune v2 — prototype (preview only)</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #0c0c0e;
+      --panel: #141418;
+      --sheet: #121216;
+      --text: #e8e4dc;
+      --muted: #9a9590;
+      --accent: #c9a96e;
+      --accent2: #e8d5b0;
+      --border: rgba(255, 255, 255, 0.12);
+      --phone-w: 390px;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: 'DM Sans', sans-serif;
+      background: #080809;
+      color: var(--text);
+      padding: 20px 16px 48px;
+    }
+    .page-head { max-width: 920px; margin: 0 auto 24px; }
+    .page-head h1 { margin: 0 0 8px; font-size: 20px; font-weight: 600; }
+    .page-head p { margin: 0 0 12px; font-size: 13px; line-height: 1.55; color: var(--muted); }
+    .tag {
+      display: inline-block;
+      margin-bottom: 10px;
+      padding: 3px 10px;
+      border-radius: 100px;
+      border: 1px solid rgba(201, 169, 110, 0.35);
+      color: var(--accent2);
+      font-size: 10px;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+    }
+
+    /* ── Gap review table ── */
+    .review {
+      max-width: 920px;
+      margin: 0 auto 28px;
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      overflow: hidden;
+      background: rgba(255,255,255,0.02);
+    }
+    .review h2 {
+      margin: 0;
+      padding: 12px 14px;
+      font-size: 13px;
+      font-weight: 600;
+      background: rgba(255,255,255,0.04);
+      border-bottom: 1px solid var(--border);
+    }
+    .review table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12px;
+    }
+    .review th, .review td {
+      padding: 10px 12px;
+      text-align: left;
+      border-bottom: 1px solid rgba(255,255,255,0.06);
+      vertical-align: top;
+    }
+    .review th { color: var(--muted); font-weight: 500; width: 28%; }
+    .review tr:last-child td, .review tr:last-child th { border-bottom: none; }
+    .pill-ok { color: #7dcea0; }
+    .pill-gap { color: #e8a87c; }
+    .pill-bad { color: #e07a7a; }
+
+    /* ── Concept switcher ── */
+    .concept-bar {
+      max-width: 920px;
+      margin: 0 auto 20px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+    }
+    .concept-bar label { font-size: 12px; color: var(--muted); margin-right: 4px; }
+    .concept-btn {
+      padding: 8px 14px;
+      border-radius: 100px;
+      border: 1px solid var(--border);
+      background: transparent;
+      color: var(--text);
+      font-family: inherit;
+      font-size: 12px;
+      font-weight: 500;
+      cursor: pointer;
+    }
+    .concept-btn.is-active {
+      border-color: rgba(201, 169, 110, 0.55);
+      background: rgba(201, 169, 110, 0.12);
+      color: var(--accent2);
+    }
+    .state-toggle {
+      margin-left: auto;
+      display: flex;
+      gap: 6px;
+    }
+    .state-btn {
+      padding: 6px 10px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: rgba(255,255,255,0.03);
+      color: var(--muted);
+      font-family: inherit;
+      font-size: 11px;
+      cursor: pointer;
+    }
+    .state-btn.is-on { color: var(--accent2); border-color: rgba(201,169,110,0.4); }
+
+    .layout {
+      max-width: 920px;
+      margin: 0 auto;
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 24px;
+    }
+    @media (min-width: 860px) {
+      .layout { grid-template-columns: 1fr 1fr; }
+    }
+
+    .concept-panel { display: none; }
+    .concept-panel.is-visible { display: block; }
+
+    .concept-note {
+      margin: 0 0 12px;
+      padding: 10px 12px;
+      border-radius: 10px;
+      background: rgba(201, 169, 110, 0.08);
+      border: 1px solid rgba(201, 169, 110, 0.22);
+      font-size: 12px;
+      line-height: 1.5;
+      color: var(--text);
+    }
+    .concept-note strong { color: var(--accent2); font-weight: 600; }
+
+    /* ── Phone frame ── */
+    .phone {
+      width: var(--phone-w);
+      max-width: 100%;
+      margin: 0 auto;
+      border-radius: 28px;
+      border: 1px solid rgba(255,255,255,0.14);
+      background: var(--bg);
+      overflow: hidden;
+      box-shadow: 0 24px 60px rgba(0,0,0,0.55);
+    }
+    .phone-status {
+      height: 28px;
+      background: rgba(0,0,0,0.35);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 10px;
+      color: var(--muted);
+    }
+    .phone-results {
+      padding: 12px 12px 0;
+      min-height: 120px;
+    }
+    .phone-results-label {
+      font-size: 10px;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 8px;
+    }
+    .chip-row {
+      display: flex;
+      gap: 8px;
+      overflow-x: auto;
+      padding-bottom: 8px;
+      scrollbar-width: none;
+    }
+    .chip-row::-webkit-scrollbar { display: none; }
+    /* Production mobile 2×2 vibe grid (≤640px results toolbar) */
+    .chip-grid-wrap {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .chip-grid-label {
+      font-size: 9px;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+      color: rgba(232, 228, 220, 0.78);
+      padding: 0 2px;
+    }
+    .chip-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 6px;
+      width: 100%;
+    }
+    .chip-grid .vibe-chip {
+      flex-shrink: 1;
+      max-width: none;
+      width: 100%;
+      justify-content: flex-start;
+      border-radius: 14px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .chip-grid .vibe-chip--stacked {
+      max-width: none;
+      align-items: flex-start;
+    }
+    .chip-grid .vibe-chip-line2 { max-width: 100%; }
+    .trip-summary-bar {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 7px 10px;
+      margin-bottom: 10px;
+      border-radius: 12px;
+      border: 1.5px solid rgba(255,255,255,0.24);
+      background: rgba(255,255,255,0.06);
+      font-size: 13px;
+      font-weight: 500;
+    }
+    .trip-summary-bar span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .trip-summary-edit { flex-shrink: 0; font-size: 13px; font-weight: 600; color: var(--accent2); }
+    .sheet-divider {
+      height: 1px;
+      margin: 4px 0 0;
+      background: rgba(255,255,255,0.08);
+    }
+
+    /* ── Compact bundled sheet (B2) ── */
+    .layout-toggle {
+      display: flex;
+      gap: 6px;
+      margin-bottom: 12px;
+    }
+    .layout-toggle button {
+      flex: 1;
+      padding: 7px 10px;
+      border-radius: 10px;
+      border: 1px solid var(--border);
+      background: rgba(255,255,255,0.03);
+      color: var(--muted);
+      font-family: inherit;
+      font-size: 11px;
+      font-weight: 500;
+      cursor: pointer;
+    }
+    .layout-toggle button.is-active {
+      border-color: rgba(201, 169, 110, 0.5);
+      background: rgba(201, 169, 110, 0.1);
+      color: var(--accent2);
+    }
+    .sheet-hdr--compact { padding-bottom: 8px; }
+    .sheet-hdr--compact .sheet-sub { display: none; }
+    .section-label {
+      margin: 0 0 8px;
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: rgba(232, 228, 220, 0.72);
+    }
+    .section-label--row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+    .section-label-link {
+      font-size: 11px;
+      font-weight: 500;
+      letter-spacing: 0;
+      text-transform: none;
+      color: var(--accent2);
+      text-decoration: underline;
+      cursor: pointer;
+      border: none;
+      background: none;
+      font-family: inherit;
+      padding: 0;
+    }
+    .budget-grid-compact {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 6px;
+    }
+    .budget-pill {
+      padding: 10px 8px;
+      border-radius: 12px;
+      border: 1px solid rgba(255,255,255,0.10);
+      background: rgba(255,255,255,0.03);
+      color: var(--text);
+      font-family: inherit;
+      font-size: 12px;
+      font-weight: 500;
+      text-align: center;
+      cursor: pointer;
+      line-height: 1.25;
+    }
+    .budget-pill.is-selected {
+      border-color: rgba(201, 169, 110, 0.55);
+      background: rgba(201, 169, 110, 0.1);
+      color: var(--accent2);
+    }
+    .budget-pill-sub { display: block; font-size: 9px; color: var(--muted); font-weight: 400; margin-top: 2px; }
+    .budget-pill.is-selected .budget-pill-sub { color: rgba(232, 213, 176, 0.75); }
+    .inline-flex-row {
+      display: none;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      margin-top: 8px;
+      padding: 8px 0;
+      border-top: 1px solid rgba(255,255,255,0.06);
+      cursor: pointer;
+    }
+    .inline-flex-row.is-visible { display: flex; }
+    .inline-flex-row.is-on .budget-switch { background: rgba(201,169,110,0.4); }
+    .inline-flex-row.is-on .budget-switch::after { transform: translateX(16px); background: var(--accent2); }
+    .inline-flex-label { font-size: 12px; line-height: 1.3; flex: 1; }
+    .dates-inline {
+      display: none;
+      margin-top: 6px;
+      font-size: 11px;
+      color: var(--muted);
+      line-height: 1.4;
+    }
+    .dates-inline.is-visible { display: block; }
+    .dates-inline .hot {
+      color: var(--accent2);
+      text-decoration: underline;
+      cursor: pointer;
+      border: none;
+      background: none;
+      font: inherit;
+      padding: 0;
+    }
+    .mh-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+    .mh-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 8px 12px;
+      border-radius: 100px;
+      border: 1px solid rgba(255,255,255,0.10);
+      background: rgba(255,255,255,0.04);
+      color: var(--text);
+      font-family: inherit;
+      font-size: 12px;
+      font-weight: 500;
+      cursor: pointer;
+    }
+    .mh-chip-icon {
+      font-size: 13px;
+      line-height: 1;
+      opacity: 0.88;
+      flex-shrink: 0;
+    }
+    .mh-chip.is-on .mh-chip-icon { opacity: 1; }
+    .mh-chip.is-on {
+      border-color: rgba(201, 169, 110, 0.5);
+      background: rgba(201, 169, 110, 0.1);
+      color: var(--accent2);
+    }
+    .extras-block {
+      margin-top: 14px;
+      padding-top: 12px;
+      border-top: 1px solid rgba(255,255,255,0.08);
+    }
+    .extras-block-label {
+      margin: 0 0 8px;
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--text);
+    }
+    .extras-block-label span {
+      color: var(--muted);
+      font-weight: 400;
+      font-size: 12px;
+    }
+    .extras-block .extras {
+      min-height: 56px;
+      margin: 0;
+    }
+    .compact-avail {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      margin-top: 14px;
+      padding-top: 12px;
+      border-top: 1px solid rgba(255,255,255,0.08);
+    }
+    .compact-avail-label { font-size: 13px; font-weight: 500; }
+    .compact-avail-sub { font-size: 10px; color: var(--muted); margin-top: 2px; }
+    .sheet-scroll--compact .sheet-section { margin-top: 14px; }
+    .sheet-scroll--compact .sheet-section:first-child { margin-top: 4px; }
+    .savings-note {
+      margin: 10px 0 0;
+      padding: 8px 10px;
+      border-radius: 8px;
+      background: rgba(125, 206, 160, 0.08);
+      border: 1px solid rgba(125, 206, 160, 0.2);
+      font-size: 11px;
+      color: rgba(200, 230, 210, 0.9);
+      line-height: 1.4;
+    }
+    .vibe-chip {
+      flex-shrink: 0;
+      display: inline-flex;
+      align-items: center;
+      min-height: 46px;
+      padding: 8px 14px;
+      border-radius: 100px;
+      border: 1px solid rgba(255,255,255,0.10);
+      background: rgba(255,255,255,0.06);
+      color: var(--text);
+      font-size: 13px;
+      font-weight: 500;
+      font-family: inherit;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+    .vibe-chip--ghost {
+      border-style: dashed;
+      border-color: rgba(255,255,255,0.20);
+      background: transparent;
+      color: var(--muted);
+      font-style: italic;
+      font-weight: 400;
+    }
+    .vibe-chip--stacked {
+      flex-direction: column;
+      align-items: flex-start;
+      min-height: 52px;
+      padding: 8px 14px 8px 12px;
+      white-space: normal;
+      max-width: 160px;
+    }
+    .vibe-chip-line1 { font-size: 13px; font-weight: 500; line-height: 1.2; }
+    .vibe-chip-line2 {
+      font-size: 11px;
+      color: var(--muted);
+      margin-top: 2px;
+      line-height: 1.25;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 140px;
+    }
+    .vibe-chip-line2 .hot { color: var(--accent2); text-decoration: underline; cursor: pointer; }
+    .vibe-chip-pencil { margin-left: 6px; font-size: 12px; opacity: 0.7; }
+
+    .phone-dim {
+      height: 80px;
+      background: linear-gradient(180deg, transparent, rgba(0,0,0,0.5));
+      pointer-events: none;
+    }
+
+    /* ── Bottom sheet ── */
+    .sheet-host {
+      position: relative;
+      background: rgba(0,0,0,0.45);
+      border-top: 1px solid var(--border);
+    }
+    .sheet {
+      background: var(--sheet);
+      border-radius: 20px 20px 0 0;
+      max-height: 72vh;
+      display: flex;
+      flex-direction: column;
+    }
+    .sheet-grabber {
+      width: 36px;
+      height: 4px;
+      border-radius: 100px;
+      background: rgba(255,255,255,0.18);
+      margin: 10px auto 8px;
+    }
+    .sheet-hdr {
+      position: relative;
+      padding: 0 40px 12px 16px;
+    }
+    .sheet-title {
+      margin: 0 0 4px;
+      font-size: 20px;
+      font-weight: 600;
+    }
+    .sheet-title em {
+      font-family: 'Instrument Serif', Georgia, serif;
+      font-style: italic;
+      color: var(--accent2);
+      font-weight: 400;
+    }
+    .sheet-sub { margin: 0; font-size: 12px; color: var(--muted); line-height: 1.4; }
+    .sheet-close {
+      position: absolute;
+      top: 0;
+      right: 12px;
+      width: 32px;
+      height: 32px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: rgba(255,255,255,0.04);
+      color: var(--muted);
+      font-size: 18px;
+      cursor: pointer;
+    }
+
+    /* Tabs (concept B) */
+    .sheet-tabs {
+      display: flex;
+      gap: 4px;
+      padding: 0 16px 10px;
+      border-bottom: 1px solid rgba(255,255,255,0.08);
+    }
+    .sheet-tab {
+      flex: 1;
+      padding: 8px 10px;
+      border: none;
+      border-radius: 10px;
+      background: transparent;
+      color: var(--muted);
+      font-family: inherit;
+      font-size: 12px;
+      font-weight: 500;
+      cursor: pointer;
+    }
+    .sheet-tab.is-active {
+      background: rgba(201, 169, 110, 0.12);
+      color: var(--accent2);
+    }
+
+    .sheet-scroll {
+      overflow-y: auto;
+      padding: 0 16px 12px;
+      flex: 1;
+    }
+    .sheet-section { margin-top: 16px; }
+    .sheet-section:first-child { margin-top: 8px; }
+    .section-head {
+      display: flex;
+      gap: 10px;
+      align-items: flex-start;
+      margin-bottom: 10px;
+    }
+    .section-icon {
+      width: 34px;
+      height: 34px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(255,255,255,0.05);
+      border: 1px solid rgba(255,255,255,0.08);
+      font-size: 15px;
+      flex-shrink: 0;
+    }
+    .section-title { margin: 0 0 2px; font-size: 14px; font-weight: 600; }
+    .section-sub { margin: 0; font-size: 11px; color: var(--muted); line-height: 1.35; }
+    .opt { font-weight: 400; color: var(--muted); font-size: 12px; }
+
+    /* Budget cards — desktop parity, full-width stack on mobile */
+    .budget-cards { display: flex; flex-direction: column; gap: 6px; }
+    .budget-card {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      width: 100%;
+      padding: 11px 10px;
+      border-radius: 12px;
+      border: 1px solid rgba(255,255,255,0.10);
+      background: rgba(255,255,255,0.03);
+      color: var(--text);
+      font-family: inherit;
+      text-align: left;
+      cursor: pointer;
+    }
+    .budget-card.is-selected {
+      border-color: rgba(201, 169, 110, 0.55);
+      background: rgba(201, 169, 110, 0.08);
+    }
+    .budget-card--custom { border-style: dashed; }
+    .budget-card--custom.is-open { border-style: solid; }
+    .budget-card-icon {
+      width: 32px; height: 32px; border-radius: 9px;
+      display: flex; align-items: center; justify-content: center;
+      background: rgba(255,255,255,0.06); flex-shrink: 0;
+    }
+    .budget-card.is-selected .budget-card-icon { background: rgba(201,169,110,0.15); }
+    .budget-card-body { flex: 1; min-width: 0; }
+    .budget-card-title { display: block; font-size: 13px; font-weight: 500; }
+    .budget-card-sub { display: block; font-size: 10px; color: var(--muted); margin-top: 2px; }
+    .budget-card-check {
+      width: 18px; height: 18px; border-radius: 50%;
+      border: 1.5px solid rgba(255,255,255,0.22);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 10px; color: transparent;
+    }
+    .budget-card.is-selected .budget-card-check {
+      border-color: var(--accent2); background: var(--accent2); color: #1a1a1a;
+    }
+    .budget-card-chevron { color: var(--muted); font-size: 14px; }
+
+    .budget-custom-fields {
+      display: none;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      margin-top: 10px;
+      padding: 0 2px;
+    }
+    .budget-custom-fields.is-open { display: grid; }
+    .budget-field-label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); margin-bottom: 4px; }
+    .budget-field-input {
+      width: 100%; padding: 10px; border-radius: 10px;
+      border: 1px solid var(--border);
+      background: rgba(255,255,255,0.04);
+      color: var(--text); font-family: inherit; font-size: 14px;
+    }
+
+    .budget-flex {
+      display: none;
+      margin-top: 12px;
+      padding: 10px;
+      border-radius: 12px;
+      border: 1px solid rgba(201, 169, 110, 0.22);
+      background: rgba(201, 169, 110, 0.06);
+    }
+    .budget-flex.is-visible { display: block; }
+    .budget-flex.is-on .budget-switch { background: rgba(201,169,110,0.4); }
+    .budget-flex.is-on .budget-switch::after { transform: translateX(16px); background: var(--accent2); }
+    .budget-flex-row { display: flex; justify-content: space-between; gap: 10px; cursor: pointer; }
+    .budget-flex-title { font-size: 12px; font-weight: 500; line-height: 1.35; }
+    .budget-flex-sub { font-size: 10px; color: var(--muted); margin-top: 3px; line-height: 1.35; }
+    .budget-switch {
+      position: relative; width: 36px; height: 20px; flex-shrink: 0; margin-top: 2px;
+      border-radius: 100px; background: rgba(255,255,255,0.14);
+    }
+    .budget-switch::after {
+      content: ''; position: absolute; top: 2px; left: 2px;
+      width: 16px; height: 16px; border-radius: 50%;
+      background: var(--muted); transition: transform 0.15s;
+    }
+
+    .dates-banner {
+      display: none;
+      margin-top: 12px;
+      padding: 10px;
+      border-radius: 12px;
+      border: 1px solid rgba(201, 169, 110, 0.28);
+      background: rgba(201, 169, 110, 0.08);
+      font-size: 11px;
+      line-height: 1.45;
+    }
+    .dates-banner.is-visible { display: block; }
+    .dates-banner-cta {
+      display: inline-block;
+      margin-top: 8px;
+      padding: 0;
+      border: none;
+      background: none;
+      color: var(--accent2);
+      font-family: inherit;
+      font-size: 12px;
+      font-weight: 600;
+      text-decoration: underline;
+      cursor: pointer;
+    }
+
+    /* Legacy horizontal budget (today) */
+    .budget-cards--legacy {
+      flex-direction: row;
+      overflow-x: auto;
+      padding-bottom: 4px;
+      scrollbar-width: none;
+    }
+    .budget-cards--legacy::-webkit-scrollbar { display: none; }
+    .budget-card--legacy {
+      flex: 0 0 auto;
+      min-width: 108px;
+      max-width: 120px;
+      flex-direction: column;
+      align-items: flex-start;
+      padding: 12px 10px;
+      position: relative;
+    }
+    .budget-card--legacy .budget-card-check { position: absolute; top: 8px; right: 8px; width: 8px; height: 8px; }
+
+    /* Must-haves rows */
+    .mh-list { display: flex; flex-direction: column; gap: 8px; }
+    .mh-row {
+      display: flex; align-items: center; gap: 10px;
+      padding: 10px; border-radius: 14px;
+      border: 1px solid rgba(255,255,255,0.08);
+      background: rgba(255,255,255,0.03);
+      cursor: pointer; font-family: inherit; color: var(--text); text-align: left; width: 100%;
+    }
+    .mh-row.is-on { border-color: rgba(201,169,110,0.45); background: rgba(201,169,110,0.06); }
+    .mh-thumb {
+      width: 44px; height: 44px; border-radius: 10px; overflow: hidden; flex-shrink: 0;
+      background: rgba(255,255,255,0.08);
+    }
+    .mh-thumb img { width: 100%; height: 100%; object-fit: cover; }
+    .mh-title { font-size: 13px; font-weight: 500; display: block; }
+    .mh-hint { font-size: 10px; color: var(--muted); display: block; margin-top: 2px; }
+    .mh-toggle { margin-left: auto; font-size: 14px; color: var(--muted); }
+
+    .extras {
+      width: 100%; min-height: 72px; padding: 10px 12px;
+      border-radius: 12px; border: 1px solid var(--border);
+      background: rgba(255,255,255,0.04); color: var(--text);
+      font-family: inherit; font-size: 13px; resize: vertical;
+    }
+
+    .avail-row {
+      display: flex; align-items: center; gap: 10px;
+      padding: 4px 0;
+    }
+    .avail-row .section-head { flex: 1; margin: 0; }
+    .toggle {
+      width: 44px; height: 24px; border-radius: 100px;
+      background: rgba(255,255,255,0.14); position: relative; flex-shrink: 0; cursor: pointer;
+    }
+    .toggle.is-on { background: rgba(201,169,110,0.45); }
+    .toggle::after {
+      content: ''; position: absolute; top: 3px; left: 3px;
+      width: 18px; height: 18px; border-radius: 50%; background: var(--muted);
+      transition: transform 0.15s;
+    }
+    .toggle.is-on::after { transform: translateX(20px); background: var(--accent2); }
+
+    .sheet-ft {
+      display: flex; align-items: center; gap: 8px;
+      padding: 12px 16px 16px;
+      border-top: 1px solid rgba(255,255,255,0.08);
+      background: rgba(0,0,0,0.25);
+    }
+    .ft-clear {
+      padding: 10px 12px; border: none; background: none;
+      color: var(--muted); font-family: inherit; font-size: 12px; cursor: pointer;
+    }
+    .ft-count { flex: 1; text-align: center; font-size: 12px; color: var(--muted); }
+    .ft-apply {
+      padding: 12px 18px; border: none; border-radius: 100px;
+      background: linear-gradient(180deg, var(--accent2), var(--accent));
+      color: #1a1a1a; font-family: inherit; font-size: 13px; font-weight: 600; cursor: pointer;
+    }
+
+    .rec-box {
+      max-width: 920px;
+      margin: 28px auto 0;
+      padding: 14px 16px;
+      border-radius: 14px;
+      border: 1px solid rgba(201, 169, 110, 0.3);
+      background: rgba(201, 169, 110, 0.06);
+      font-size: 13px;
+      line-height: 1.55;
+    }
+    .rec-box h3 { margin: 0 0 8px; font-size: 14px; color: var(--accent2); }
+    .rec-box ul { margin: 0; padding-left: 18px; }
+    .rec-box li { margin-bottom: 6px; }
+  </style>
+</head>
+<body>
+  <header class="page-head">
+    <span class="tag">Preview only — not wired to app</span>
+    <h1>Mobile bundled fine-tune v2 — prototype</h1>
+    <p>Compares today’s bundled fine-tune sheet with desktop budget v2 upgrades. Toggle concepts and “dates set” to preview chip labels and sheet behavior.</p>
+  </header>
+
+  <section class="review" aria-label="Gap analysis">
+    <h2>Desktop v2 vs mobile today</h2>
+    <table>
+      <tr>
+        <th>Entry point</th>
+        <td class="pill-ok"><strong>Bundled v2:</strong> same stacked Must-haves chip (budget on line 2). Desktop: separate Budget chip.</td>
+      </tr>
+      <tr>
+        <th>Budget UI</th>
+        <td class="pill-gap">Today: horizontal pills + Under $150. <strong>Bundled v2:</strong> vertical cards (desktop parity), flex toggle, no $150 tier.</td>
+      </tr>
+      <tr>
+        <th>Dates honesty</th>
+        <td class="pill-gap">Today: one-line hint. <strong>Bundled v2:</strong> banner + chip “· Add dates” + Apply opens dates tray.</td>
+      </tr>
+      <tr>
+        <th>Footer count</th>
+        <td class="pill-gap">Today: must-haves only. <strong>Bundled v2:</strong> budget label + flex + must-have count combined.</td>
+      </tr>
+      <tr>
+        <th>Luxury $400+</th>
+        <td class="pill-ok">Both paths now map to price ≥ $400 when dates set (after recent fix). UI copy aligned on desktop; mobile card label OK.</td>
+      </tr>
+      <tr>
+        <th>priceMatters</th>
+        <td class="pill-ok">Derived from budget + stay vibe on apply (desktop + mobile applyFineTune). Wizard slider removed everywhere.</td>
+      </tr>
+    </table>
+  </section>
+
+  <div class="concept-bar">
+    <label>Concept</label>
+    <button type="button" class="concept-btn" data-concept="today">A · Today (legacy)</button>
+    <button type="button" class="concept-btn is-active" data-concept="bundled">B · Bundled v2 ★</button>
+    <button type="button" class="concept-btn" data-concept="split">C · Split chips</button>
+    <button type="button" class="concept-btn" data-concept="unified">D · Tabbed sheet</button>
+    <div class="state-toggle">
+      <button type="button" class="state-btn is-on" id="btnDatesOn">Dates set</button>
+      <button type="button" class="state-btn" id="btnDatesOff">No dates</button>
+    </div>
+  </div>
+
+  <div class="layout">
+    <!-- TODAY (legacy) -->
+    <div class="concept-panel" data-panel="today">
+      <p class="concept-note"><strong>A · Today (legacy)</strong> — Same single chip entry point, but budget uses horizontal scroll pills (incl. Under $150), no flex toggle, footer counts must-haves only.</p>
+      <div class="phone" id="phoneToday">
+        <div class="phone-status">Mexico City · results</div>
+        <div class="phone-results">
+          <div class="phone-results-label">Vibe chips (mobile)</div>
+          <div class="chip-row" id="chipsToday"></div>
+        </div>
+        <div class="phone-dim"></div>
+        <div class="sheet-host">
+          <div class="sheet">
+            <div class="sheet-grabber"></div>
+            <div class="sheet-hdr">
+              <h2 class="sheet-title">Fine-tune your <em>stay</em></h2>
+              <p class="sheet-sub">Add what matters most to you.</p>
+              <button type="button" class="sheet-close" aria-label="Close">×</button>
+            </div>
+            <div class="sheet-scroll" id="scrollToday"></div>
+            <div class="sheet-ft">
+              <button type="button" class="ft-clear">Clear all</button>
+              <span class="ft-count" id="countToday">0 selected</span>
+              <button type="button" class="ft-apply">Apply preferences</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- BUNDLED V2 (recommended) -->
+    <div class="concept-panel is-visible" data-panel="bundled">
+      <p class="concept-note"><strong>B · Bundled v2</strong> — Same chip entry point. Toggle <strong>Compact</strong> below: 2×2 budget pills, icon must-have chips, open extras field, inline flex/dates. All features kept.</p>
+      <div class="layout-toggle">
+        <button type="button" class="layout-btn" data-layout="full">Full (desktop parity)</button>
+        <button type="button" class="layout-btn is-active" data-layout="compact">Compact ★</button>
+      </div>
+      <div class="phone" id="phoneBundled">
+        <div class="phone-status" id="statusBundled">Mexico City · Jul 14 – Jul 21</div>
+        <div class="phone-results">
+          <div class="trip-summary-bar">
+            <span id="tripLineBundled">Mexico City · Jul 14 – Jul 21 · 2 people</span>
+            <span class="trip-summary-edit">Edit</span>
+          </div>
+          <div class="chip-grid-wrap">
+            <span class="chip-grid-label">Your vibe</span>
+            <div class="chip-grid" id="chipsBundled"></div>
+          </div>
+        </div>
+        <div class="phone-dim"></div>
+        <div class="sheet-host">
+          <div class="sheet">
+            <div class="sheet-grabber"></div>
+            <div class="sheet-hdr" id="hdrBundled">
+              <h2 class="sheet-title">Fine-tune your <em>stay</em></h2>
+              <p class="sheet-sub">Budget and must-haves — same chip, desktop-parity controls.</p>
+              <button type="button" class="sheet-close" aria-label="Close">×</button>
+            </div>
+            <div class="sheet-scroll" id="scrollBundled"></div>
+            <div class="sheet-ft">
+              <button type="button" class="ft-clear">Clear all</button>
+              <span class="ft-count" id="countBundled">—</span>
+              <button type="button" class="ft-apply">Apply preferences</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- SPLIT CHIPS -->
+    <div class="concept-panel" data-panel="split">
+      <p class="concept-note"><strong>C · Split chips</strong> — Adds a 5th chip (budget separate). Only viable if neighbourhood chip is dropped or merged — otherwise the 2×2 grid breaks.</p>
+      <div class="phone" id="phoneSplit">
+        <div class="phone-status">Mexico City · Jul 14 – Jul 21</div>
+        <div class="phone-results">
+          <div class="phone-results-label">Vibe chips (mobile v2)</div>
+          <div class="chip-row" id="chipsSplit"></div>
+        </div>
+        <div class="phone-dim"></div>
+        <div class="sheet-host">
+          <div class="sheet" id="sheetSplit">
+            <div class="sheet-grabber"></div>
+            <div class="sheet-hdr" id="hdrSplit"></div>
+            <div class="sheet-scroll" id="scrollSplit"></div>
+            <div class="sheet-ft">
+              <button type="button" class="ft-clear">Clear</button>
+              <span class="ft-count" id="countSplit">—</span>
+              <button type="button" class="ft-apply">Apply</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- UNIFIED with tabs -->
+    <div class="concept-panel" data-panel="unified">
+      <p class="concept-note"><strong>D · Tabbed sheet</strong> — Collapse trip/stay into fewer chips; one “Stay preferences” chip with <strong>Budget | Must-haves</strong> tabs inside. More taps to reach budget than bundled v2.</p>
+      <div class="phone" id="phoneUnified">
+        <div class="phone-status">Mexico City · results</div>
+        <div class="phone-results">
+          <div class="phone-results-label">Single preferences chip</div>
+          <div class="chip-row" id="chipsUnified"></div>
+        </div>
+        <div class="phone-dim"></div>
+        <div class="sheet-host">
+          <div class="sheet">
+            <div class="sheet-grabber"></div>
+            <div class="sheet-hdr">
+              <h2 class="sheet-title">Stay <em>preferences</em></h2>
+              <p class="sheet-sub">Budget and must-haves in one place.</p>
+              <button type="button" class="sheet-close">×</button>
+            </div>
+            <div class="sheet-tabs">
+              <button type="button" class="sheet-tab is-active" data-tab="budget">Budget</button>
+              <button type="button" class="sheet-tab" data-tab="musthaves">Must-haves</button>
+            </div>
+            <div class="sheet-scroll" id="scrollUnified"></div>
+            <div class="sheet-ft">
+              <button type="button" class="ft-clear">Clear all</button>
+              <span class="ft-count" id="countUnified">—</span>
+              <button type="button" class="ft-apply">Apply</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <aside class="rec-box">
+    <h3>Recommendation — simplify bundled sheet</h3>
+    <ul>
+      <li><strong>Default to Compact layout</strong> — ~40% less scroll than full desktop parity; same chip, all features preserved.</li>
+      <li><strong>Budget:</strong> 2×2 pills (Any / $250 / $400 / Luxury) + “Custom range” link — drop per-card icons and subtitles.</li>
+      <li><strong>Flex + dates:</strong> one-line toggle and inline “Add dates” text — not boxed banners (show only when relevant).</li>
+      <li><strong>Must-haves:</strong> wrap chips, no photo rows — hints live in wizard; sheet is for quick toggles.</li>
+      <li><strong>Extras:</strong> “Anything else?” textarea open by default; <strong>Available only</strong> stays as one slim row at bottom.</li>
+      <li><strong>Cut duplicate copy:</strong> drop sheet subtitle + section icon circles; footer already summarizes selection.</li>
+      <li>Keep <strong>Full</strong> layout only if you want literal desktop markup reuse — otherwise Compact is the ship target.</li>
+    </ul>
+  </aside>
+
+  <script>
+    const DESKTOP_BUDGET_CARDS = [
+      { id: 'any', icon: '🏷', title: 'Any budget', sub: 'Show all price ranges' },
+      { id: 'under_250', icon: '$', title: 'Under $250', sub: 'Max per night' },
+      { id: 'under_400', icon: '$', title: 'Under $400', sub: 'Max per night' },
+      { id: 'luxury', icon: '👑', title: 'Luxury stays', sub: '$400+ per night' },
+      { id: 'custom', icon: '▦', title: 'Custom range', sub: 'Set min and max', custom: true },
+    ];
+    const LEGACY_BUDGET_CARDS = [
+      { id: 'any', title: 'Any budget', sub: '' },
+      { id: 'under_150', title: 'Under $150', sub: 'per night' },
+      { id: 'under_250', title: 'Under $250', sub: 'per night' },
+      { id: 'under_400', title: 'Under $400', sub: 'per night' },
+      { id: 'luxury_400', title: 'Luxury $400+', sub: 'per night' },
+    ];
+    const MUSTHAVES = [
+      { id: 'free_cancellation', title: 'Free cancellation', hint: 'Favour cancellable rates when dates are set.' },
+      { id: 'balcony', title: 'Balcony', hint: 'Outdoor space or terrace.' },
+      { id: 'spa_bathroom', title: 'Spa-style bath', hint: 'Soaking tub or rainfall shower.' },
+      { id: 'spacious', title: 'Spacious room', hint: 'Extra space to spread out.' },
+    ];
+
+    let datesSet = true;
+    let budgetCard = 'under_400';
+    let budgetFlex = true;
+    let customOpen = false;
+    let customMin = '';
+    let customMax = '';
+    let mhOn = new Set(['balcony']);
+    let splitSheet = 'budget'; // budget | musthaves
+    let unifiedTab = 'budget';
+    let bundledLayout = 'compact'; // full | compact
+    let customLinkOpen = false;
+
+    const COMPACT_BUDGET_PILLS = [
+      { id: 'any', title: 'Any', sub: 'All ranges' },
+      { id: 'under_250', title: 'Under $250', sub: 'per night' },
+      { id: 'under_400', title: 'Under $400', sub: 'per night' },
+      { id: 'luxury', title: 'Luxury', sub: '$400+' },
+    ];
+    const MH_CHIP_LABELS = {
+      free_cancellation: 'Free cancel',
+      balcony: 'Balcony',
+      spa_bathroom: 'Spa bath',
+      spacious: 'Spacious',
+    };
+    const MH_CHIP_ICONS = {
+      free_cancellation: '✓',
+      balcony: '🌅',
+      spa_bathroom: '🛁',
+      spacious: '🏠',
+    };
+
+    function budgetLabel() {
+      const flexSuffix = budgetFlex && hasBudgetCap() && datesSet ? ' · Flexible' : '';
+      if (budgetCard === 'custom') return customMax ? `Under $${customMax}${flexSuffix}` : 'Custom range';
+      if (budgetCard === 'any') return 'Any budget';
+      if (!datesSet) {
+        const caps = { under_250: 'Under $250', under_400: 'Under $400', luxury: 'Luxury $400+', under_150: 'Under $150', luxury_400: 'Luxury $400+' };
+        return `${caps[budgetCard] || 'Any budget'} · Add dates`;
+      }
+      const labels = { under_250: 'Under $250', under_400: 'Under $400', luxury: 'Luxury $400+', under_150: 'Under $150', luxury_400: 'Luxury $400+' };
+      return (labels[budgetCard] || 'Any budget') + flexSuffix;
+    }
+
+    function hasBudgetCap() {
+      return ['under_250', 'under_400', 'custom'].includes(budgetCard) && (budgetCard !== 'custom' || customMax);
+    }
+
+    function renderBudgetBlockV2(container, legacy) {
+      const cards = legacy ? LEGACY_BUDGET_CARDS : DESKTOP_BUDGET_CARDS;
+      const wrap = document.createElement('div');
+      wrap.innerHTML = `
+        <section class="sheet-section">
+          <div class="section-head">
+            <span class="section-icon">${legacy ? '🏷' : '💰'}</span>
+            <div>
+              <h3 class="section-title">Budget <span class="opt">(optional)</span></h3>
+              <p class="section-sub">${legacy ? 'Choose your nightly budget range.' : 'Ideal nightly spend — filter by rate when dates are set.'}</p>
+            </div>
+          </div>
+          <div class="budget-cards ${legacy ? 'budget-cards--legacy' : ''}" id="cards-${legacy?'leg':'v2'}"></div>
+          ${legacy ? '' : `<div class="budget-custom-fields ${customOpen && budgetCard==='custom'?'is-open':''}" id="customFields">
+            <div><div class="budget-field-label">Min</div><input class="budget-field-input" type="number" placeholder="Optional" /></div>
+            <div><div class="budget-field-label">Max</div><input class="budget-field-input" type="number" placeholder="Optional" value="${customMax}" /></div>
+          </div>`}
+          ${legacy ? `<button type="button" style="margin-top:10px;border:none;background:none;color:var(--accent2);font:inherit;font-size:13px;cursor:pointer">Custom range ⌄</button>` : ''}
+          ${legacy ? `<p class="dates-banner ${!datesSet?'is-visible':''}" style="margin-top:10px">Add travel dates to filter by nightly rate. <button class="dates-banner-cta">Add dates →</button></p>` : `
+          <div class="budget-flex ${hasBudgetCap()?'is-visible':''} ${budgetFlex?'is-on':''}" id="flexBlock">
+            <div class="budget-flex-row">
+              <div><div class="budget-flex-title">Keep great matches slightly above budget</div><div class="budget-flex-sub">Vibe-first — won't hide exceptional fits</div></div>
+              <span class="budget-switch"></span>
+            </div>
+          </div>
+          <div class="dates-banner ${!datesSet && budgetCard!=='any'?'is-visible':''}">
+            Add travel dates to filter by nightly rate. Until then we'll nudge ranking only.
+            <button type="button" class="dates-banner-cta">Add dates →</button>
+          </div>`}
+        </section>`;
+      container.appendChild(wrap);
+      const row = wrap.querySelector('.budget-cards');
+      cards.forEach(c => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        const active = budgetCard === c.id;
+        btn.className = `budget-card ${legacy?'budget-card--legacy':''} ${c.custom?'budget-card--custom':''} ${active?'is-selected':''} ${c.custom && customOpen?'is-open':''}`;
+        if (legacy) {
+          btn.innerHTML = `<span class="budget-card-title">${c.title}</span>${c.sub?`<span class="budget-card-sub">${c.sub}</span>`:''}<span class="budget-card-check">${active?'':' '}</span>`;
+        } else {
+          btn.innerHTML = `
+            <span class="budget-card-icon">${c.icon||'$'}</span>
+            <span class="budget-card-body"><span class="budget-card-title">${c.title}</span><span class="budget-card-sub">${c.sub||''}</span></span>
+            ${c.custom ? '<span class="budget-card-chevron">›</span>' : '<span class="budget-card-check">✓</span>'}`;
+        }
+        btn.onclick = () => {
+          if (c.custom && budgetCard === 'custom') customOpen = !customOpen;
+          else { budgetCard = c.id; if (c.custom) customOpen = true; else customOpen = false; }
+          renderAll();
+        };
+        row.appendChild(btn);
+      });
+      if (!legacy) {
+        const flex = wrap.querySelector('#flexBlock');
+        if (flex) flex.onclick = () => { budgetFlex = !budgetFlex; renderAll(); };
+      }
+    }
+
+    function renderBudgetBlockCompact(container) {
+      const sec = document.createElement('section');
+      sec.className = 'sheet-section';
+      const showDates = !datesSet && budgetCard !== 'any';
+      const showFlex = hasBudgetCap();
+      sec.innerHTML = `
+        <h3 class="section-label">Nightly budget</h3>
+        <div class="budget-grid-compact" id="budgetGridCompact"></div>
+        <button type="button" class="section-label-link" style="margin-top:8px;display:block" id="customLink">
+          ${budgetCard === 'custom' ? 'Custom range ▴' : 'Custom range…'}
+        </button>
+        <div class="budget-custom-fields ${(customLinkOpen || budgetCard === 'custom') ? 'is-open' : ''}" id="customFieldsCompact">
+          <div><div class="budget-field-label">Min</div><input class="budget-field-input" type="number" placeholder="Optional" /></div>
+          <div><div class="budget-field-label">Max</div><input class="budget-field-input" type="number" placeholder="Max" value="${customMax}" /></div>
+        </div>
+        <div class="inline-flex-row ${showFlex ? 'is-visible' : ''} ${budgetFlex ? 'is-on' : ''}" id="flexInline">
+          <span class="inline-flex-label">Allow slightly over budget</span>
+          <span class="budget-switch"></span>
+        </div>
+        <p class="dates-inline ${showDates ? 'is-visible' : ''}">
+          Add dates to filter by rate — until then we nudge ranking only.
+          <button type="button" class="hot">Add dates →</button>
+        </p>`;
+      container.appendChild(sec);
+      const grid = sec.querySelector('#budgetGridCompact');
+      COMPACT_BUDGET_PILLS.forEach(c => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        const active = budgetCard === c.id;
+        btn.className = `budget-pill${active ? ' is-selected' : ''}`;
+        btn.innerHTML = `${c.title}<span class="budget-pill-sub">${c.sub}</span>`;
+        btn.onclick = () => { budgetCard = c.id; customLinkOpen = false; renderAll(); };
+        grid.appendChild(btn);
+      });
+      sec.querySelector('#customLink').onclick = () => {
+        if (budgetCard === 'custom') { customLinkOpen = !customLinkOpen; }
+        else { budgetCard = 'custom'; customLinkOpen = true; }
+        renderAll();
+      };
+      const flex = sec.querySelector('#flexInline');
+      if (flex) flex.onclick = () => { budgetFlex = !budgetFlex; renderAll(); };
+    }
+
+    function renderMusthavesBlockCompact(container) {
+      const sec = document.createElement('section');
+      sec.className = 'sheet-section';
+      sec.innerHTML = `
+        <div class="section-label section-label--row">
+          <span>Must-haves</span>
+        </div>
+        <div class="mh-chips" id="mhChips"></div>
+        <div class="extras-block">
+          <p class="extras-block-label">Anything else? <span>(optional)</span></p>
+          <textarea class="extras" placeholder="e.g. quiet side street, boutique feel">Roma Norte walkable</textarea>
+        </div>
+        <div class="compact-avail">
+          <div>
+            <div class="compact-avail-label">Available only</div>
+            <div class="compact-avail-sub">Hide hotels without rates</div>
+          </div>
+          <span class="toggle is-on"></span>
+        </div>`;
+      container.appendChild(sec);
+      const chips = sec.querySelector('#mhChips');
+      MUSTHAVES.forEach(m => {
+        const on = mhOn.has(m.id);
+        const icon = MH_CHIP_ICONS[m.id] || '✦';
+        const label = MH_CHIP_LABELS[m.id] || m.title;
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = `mh-chip${on ? ' is-on' : ''}`;
+        btn.innerHTML = `<span class="mh-chip-icon" aria-hidden="true">${icon}</span><span>${label}</span>`;
+        btn.onclick = () => { on ? mhOn.delete(m.id) : mhOn.add(m.id); renderAll(); };
+        chips.appendChild(btn);
+      });
+    }
+
+    function renderMusthavesBlock(container, includeExtras) {
+      const sec = document.createElement('section');
+      sec.className = 'sheet-section';
+      sec.innerHTML = `
+        <div class="section-head">
+          <span class="section-icon">✦</span>
+          <div>
+            <h3 class="section-title">What matters most?</h3>
+            <p class="section-sub">Tap to add must-have preferences.</p>
+          </div>
+        </div>
+        <div class="mh-list" id="mhList"></div>
+        ${includeExtras ? `
+        <section class="sheet-section">
+          <div class="section-head"><span class="section-icon">✎</span>
+            <div><h3 class="section-title">Anything else? <span class="opt">(optional)</span></h3>
+            <p class="section-sub">Street energy, views, small details…</p></div>
+          </div>
+          <textarea class="extras" placeholder="e.g. quiet side street, boutique feel">Roma Norte walkable</textarea>
+        </section>
+        <section class="sheet-section">
+          <div class="avail-row">
+            <div class="section-head"><span class="section-icon">📅</span>
+              <div><h3 class="section-title">Available only</h3><p class="section-sub">Hide hotels without rates</p></div>
+            </div>
+            <span class="toggle is-on"></span>
+          </div>
+        </section>` : ''}`;
+      container.appendChild(sec);
+      const list = sec.querySelector('#mhList');
+      MUSTHAVES.forEach(m => {
+        const on = mhOn.has(m.id);
+        const row = document.createElement('button');
+        row.type = 'button';
+        row.className = `mh-row ${on?'is-on':''}`;
+        row.innerHTML = `
+          <span class="mh-thumb"><img src="https://images.unsplash.com/photo-1477959858617-67f85cf4f1df?w=120&q=60" alt="" /></span>
+          <span><span class="mh-title">${m.title}</span><span class="mh-hint">${m.hint}</span></span>
+          <span class="mh-toggle">${on?'✓':'+'}</span>`;
+        row.onclick = () => { on ? mhOn.delete(m.id) : mhOn.add(m.id); renderAll(); };
+        list.appendChild(row);
+      });
+    }
+
+    function bundledFooterCount() {
+      const parts = [];
+      if (budgetCard !== 'any') parts.push(budgetLabel());
+      if (mhOn.size) parts.push(`${mhOn.size} must-have${mhOn.size !== 1 ? 's' : ''}`);
+      if (parts.length === 0) return 'No preferences set';
+      return parts.join(' · ');
+    }
+
+    function chipBudgetSubline() {
+      if (budgetCard === 'any') return 'Any budget';
+      const label = budgetLabel();
+      if (!datesSet && budgetCard !== 'any') {
+        return label.includes('Add dates') ? label : `${label} · <span class="hot">Add dates</span>`;
+      }
+      return label;
+    }
+
+    function renderChipsBundled() {
+      const el = document.getElementById('chipsBundled');
+      const mhLine = mhOn.size
+        ? `${[...mhOn].map(id => id === 'balcony' ? 'Balcony' : 'Free cancel').slice(0, 1).join('')}${mhOn.size > 1 ? ' + more' : ''}`
+        : '+ Must-haves';
+      const budgetSub = chipBudgetSubline();
+      const tripEl = document.getElementById('tripLineBundled');
+      const statusEl = document.getElementById('statusBundled');
+      const tripText = datesSet ? 'Mexico City · Jul 14 – Jul 21 · 2 people' : 'Mexico City · Add dates · 2 people';
+      if (tripEl) tripEl.textContent = tripText;
+      if (statusEl) statusEl.textContent = datesSet ? 'Mexico City · Jul 14 – Jul 21' : 'Mexico City · results';
+      el.innerHTML = `
+        <button type="button" class="vibe-chip">First time</button>
+        <button type="button" class="vibe-chip">Sleek</button>
+        <button type="button" class="vibe-chip">Walkable</button>
+        <button type="button" class="vibe-chip vibe-chip--stacked${mhOn.size === 0 && budgetCard === 'any' ? ' vibe-chip--ghost' : ''}">
+          <span class="vibe-chip-line1">${mhLine}</span>
+          <span class="vibe-chip-line2">${budgetSub}</span>
+          <span class="vibe-chip-pencil">✎</span>
+        </button>`;
+      document.getElementById('countBundled').textContent = bundledFooterCount();
+    }
+
+    function renderScrollBundled() {
+      const sc = document.getElementById('scrollBundled');
+      const hdr = document.getElementById('hdrBundled');
+      sc.innerHTML = '';
+      sc.classList.toggle('sheet-scroll--compact', bundledLayout === 'compact');
+      hdr.classList.toggle('sheet-hdr--compact', bundledLayout === 'compact');
+      if (bundledLayout === 'compact') {
+        renderBudgetBlockCompact(sc);
+        renderMusthavesBlockCompact(sc);
+      } else {
+        renderBudgetBlockV2(sc, false);
+        const div = document.createElement('div');
+        div.className = 'sheet-divider';
+        sc.appendChild(div);
+        renderMusthavesBlock(sc, true);
+      }
+    }
+
+    function renderChipsToday() {
+      const el = document.getElementById('chipsToday');
+      const mh = mhOn.size ? `${[...mhOn][0] === 'balcony' ? 'Balcony' : '1 must-have'}${mhOn.size>1?' + more':''}` : '+ Must-haves';
+      const sub = budgetCard !== 'any' ? budgetLabel() : 'Any budget';
+      el.innerHTML = `
+        <button type="button" class="vibe-chip">First time</button>
+        <button type="button" class="vibe-chip">Sleek</button>
+        <button type="button" class="vibe-chip vibe-chip--stacked">
+          <span class="vibe-chip-line1">${mh}</span>
+          <span class="vibe-chip-line2">${sub}</span>
+        </button>`;
+      document.getElementById('countToday').textContent = `${mhOn.size} selected`;
+    }
+
+    function renderChipsSplit() {
+      const el = document.getElementById('chipsSplit');
+      const bLabel = budgetLabel();
+      const mhLabel = mhOn.size ? `Balcony${mhOn.size>1?' +1':''}` : '+ Must-haves';
+      el.innerHTML = `
+        <button type="button" class="vibe-chip">First time</button>
+        <button type="button" class="vibe-chip">Sleek</button>
+        <button type="button" class="vibe-chip ${budgetCard==='any'?'vibe-chip--ghost':''}" onclick="splitSheet='budget';renderAll()">${bLabel}</button>
+        <button type="button" class="vibe-chip vibe-chip--stacked" onclick="splitSheet='musthaves';renderAll()">
+          <span class="vibe-chip-line1">${mhLabel}</span>
+          <span class="vibe-chip-line2">Roma Norte walkable</span>
+          <span class="vibe-chip-pencil">✎</span>
+        </button>`;
+    }
+
+    function renderChipsUnified() {
+      const el = document.getElementById('chipsUnified');
+      el.innerHTML = `
+        <button type="button" class="vibe-chip">First time</button>
+        <button type="button" class="vibe-chip vibe-chip--stacked">
+          <span class="vibe-chip-line1">Stay preferences</span>
+          <span class="vibe-chip-line2">${budgetLabel()} · ${mhOn.size} must-have${mhOn.size!==1?'s':''}</span>
+        </button>`;
+      document.getElementById('countUnified').textContent =
+        `${budgetCard !== 'any' ? budgetLabel() : 'Any budget'} · ${mhOn.size} must-have${mhOn.size!==1?'s':''}`;
+    }
+
+    function renderScrollToday() {
+      const sc = document.getElementById('scrollToday');
+      sc.innerHTML = '';
+      renderBudgetBlockV2(sc, true);
+      renderMusthavesBlock(sc, true);
+    }
+
+    function renderScrollSplit() {
+      document.getElementById('hdrSplit').innerHTML = splitSheet === 'budget'
+        ? `<h2 class="sheet-title">Ideal nightly <em>spend?</em></h2><p class="sheet-sub">Match your vibe — filter by rate when dates are set.</p><button type="button" class="sheet-close">×</button>`
+        : `<h2 class="sheet-title">Must-<em>haves</em></h2><p class="sheet-sub">What matters most for your stay?</p><button type="button" class="sheet-close">×</button>`;
+      const sc = document.getElementById('scrollSplit');
+      sc.innerHTML = '';
+      if (splitSheet === 'budget') renderBudgetBlockV2(sc, false);
+      else renderMusthavesBlock(sc, true);
+      document.getElementById('countSplit').textContent = splitSheet === 'budget'
+        ? budgetLabel()
+        : `${mhOn.size} must-have${mhOn.size!==1?'s':''}`;
+    }
+
+    function renderScrollUnified() {
+      const sc = document.getElementById('scrollUnified');
+      sc.innerHTML = '';
+      if (unifiedTab === 'budget') renderBudgetBlockV2(sc, false);
+      else renderMusthavesBlock(sc, true);
+      document.querySelectorAll('.sheet-tab').forEach(t => {
+        t.classList.toggle('is-active', t.dataset.tab === unifiedTab);
+        t.onclick = () => { unifiedTab = t.dataset.tab; renderAll(); };
+      });
+    }
+
+    function renderAll() {
+      renderChipsToday();
+      renderScrollToday();
+      renderChipsBundled();
+      renderScrollBundled();
+      renderChipsSplit();
+      renderScrollSplit();
+      renderChipsUnified();
+      renderScrollUnified();
+      document.querySelectorAll('.concept-btn').forEach(b => {
+        b.classList.toggle('is-active', b.dataset.concept === document.querySelector('.concept-panel.is-visible')?.dataset.panel);
+      });
+    }
+
+    document.querySelectorAll('.concept-btn').forEach(btn => {
+      btn.onclick = () => {
+        document.querySelectorAll('.concept-panel').forEach(p => p.classList.remove('is-visible'));
+        document.querySelector(`[data-panel="${btn.dataset.concept}"]`).classList.add('is-visible');
+        btn.parentElement.querySelectorAll('.concept-btn').forEach(b => b.classList.remove('is-active'));
+        btn.classList.add('is-active');
+      };
+    });
+
+    document.querySelectorAll('.layout-btn').forEach(btn => {
+      btn.onclick = () => {
+        bundledLayout = btn.dataset.layout;
+        document.querySelectorAll('.layout-btn').forEach(b => b.classList.toggle('is-active', b.dataset.layout === bundledLayout));
+        renderAll();
+      };
+    });
+
+    document.getElementById('btnDatesOn').onclick = () => {
+      datesSet = true;
+      document.getElementById('btnDatesOn').classList.add('is-on');
+      document.getElementById('btnDatesOff').classList.remove('is-on');
+      renderAll();
+    };
+    document.getElementById('btnDatesOff').onclick = () => {
+      datesSet = false;
+      document.getElementById('btnDatesOff').classList.add('is-on');
+      document.getElementById('btnDatesOn').classList.remove('is-on');
+      renderAll();
+    };
+
+    renderAll();
+  </script>
+</body>
+</html>

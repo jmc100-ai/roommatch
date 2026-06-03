@@ -1,6 +1,11 @@
   const BACKEND = (location.hostname === 'localhost' || location.hostname === '127.0.0.1')
     ? 'http://localhost:3000' : '';
 
+  /** Same-origin fetch that sends the beta rm_gate cookie when SITE_PASSWORD is on. */
+  function apiFetch(url, opts = {}) {
+    return fetch(url, { credentials: 'same-origin', ...opts });
+  }
+
   /** Public product name; legal entity remains TravelBoop, LLC. */
   const BRAND_HTML = '<span class="brand-lockup">TravelBy<span class="brand-vibe">Vibe</span></span>';
   const BRAND_PLAIN = 'TravelByVibe';
@@ -318,7 +323,7 @@
     (mustQ?.options || []).filter((o) => picked.has(o.id)).forEach((o) => pills.push(o.label));
     if (!pills.length) return '';
     return `<div class="hpage-vibe-boop">
-      <div class="hpage-vibe-boop-label">Your Boop</div>
+      <div class="hpage-vibe-boop-label">Your vibe</div>
       <div class="hpage-vibe-boop-pills">${pills.map((p) => `<span class="hpage-vibe-pill">${escHtml(p)}</span>`).join('')}</div>
     </div>`;
   }
@@ -427,7 +432,7 @@
       <div class="hpage-vibe-breakdown-head">
         <div>
           <h2 id="hpage-vibe-breakdown-title" class="hpage-vibe-title">How this hotel matches your vibe</h2>
-          <p class="hpage-vibe-lead">Based on your search${getEffectiveBoopProfileForScoring() ? ' and Boop profile' : ''}</p>
+          <p class="hpage-vibe-lead">Based on your search${getEffectiveBoopProfileForScoring() ? ' and saved vibe preferences' : ''}</p>
         </div>
         ${overall != null ? `<div class="hpage-vibe-overall-ring" aria-label="${overall} percent overall match">${overall}%<span>Overall Match</span></div>` : ''}
       </div>
@@ -750,7 +755,7 @@
     const pk = nbhdProfileScoringCacheKey();
     if (_nbhdPickerMatchCache && _nbhdPickerMatchCache.city === cityN && _nbhdPickerMatchCache.profileKey === pk) return;
     try {
-      const resp = await fetch(`${BACKEND}/api/neighborhoods?city=${encodeURIComponent(cityN)}`);
+      const resp = await apiFetch(`${BACKEND}/api/neighborhoods?city=${encodeURIComponent(cityN)}`);
       if (!resp.ok) return;
       const data = await resp.json();
       if (resp.status === 202 || data.status === 'generating') return;
@@ -1014,7 +1019,7 @@
       id:'trip',
       label:'Your trip',
       title:'Have you been to this city before?',
-      sub:'We will lean your picks toward classic highlights or quieter local pockets based on what you choose.',
+      sub:'We use this to suggest neighbourhoods and hotels that fit a first visit, a return trip, or deep local knowledge.',
       type:'cards',
       options:[
         { id:'first',  emoji:'🗺️', title:'First time',        note:'Central, iconic, easy to navigate.', image:'https://images.unsplash.com/photo-1521216774850-01bc1c5fe0da?auto=format&fit=crop&w=1200&q=80', weights:{ central:20, iconic:18, calm:8, local:-6 } },
@@ -1043,7 +1048,7 @@
       id:'stayVibe',
       label:'Stay style',
       title:'What kind of stay feels right?',
-      sub:'This steers both the room look and the hotel personality we search for.',
+      sub:'This steers the room photos we surface and the overall feel of the hotel.',
       type:'cards',
       options:[
         { id:'sleek_polished', emoji:'✨', title:'Sleek & polished', note:'Clean modern rooms, refined service, calm luxury.', image:'images/wizard/sleek-polished.png' },
@@ -1374,20 +1379,48 @@
     localStorage.setItem(BOOP_PROFILE_KEY, JSON.stringify(map || {}));
   }
 
+  /** Budget chip state is in-memory only for the current visit — never persisted. */
+  function stripBudgetFromProfile(profile) {
+    if (!profile || typeof profile !== 'object') return profile;
+    const next = { ...profile };
+    delete next.budgetFilter;
+    delete next.budgetFlex;
+    return next;
+  }
+
+  function purgePersistedBudgetFromAllProfiles() {
+    try {
+      const map = readBoopProfiles();
+      let dirty = false;
+      for (const key of Object.keys(map)) {
+        const row = map[key];
+        if (!row || typeof row !== 'object') continue;
+        if (row.budgetFilter != null || row.budgetFlex !== undefined) {
+          map[key] = stripBudgetFromProfile(row);
+          dirty = true;
+        }
+      }
+      if (dirty) writeBoopProfiles(map);
+    } catch (_) {}
+  }
+
   function loadBoopProfileForCity(city) {
     const key = cityKey(city);
     if (!key) return null;
     const map = readBoopProfiles();
     const raw = map[key];
     if (!raw) return null;
-    return { ...raw, answers: migrateBoopProfileAnswersIfNeeded({ ...(raw.answers || {}) }) };
+    return {
+      ...stripBudgetFromProfile(raw),
+      answers: migrateBoopProfileAnswersIfNeeded({ ...(raw.answers || {}) }),
+    };
   }
 
   function saveBoopProfileForCity(city, profile) {
     const key = cityKey(city);
     if (!key) return;
     const map = readBoopProfiles();
-    map[key] = { ...profile, updatedAt: Date.now() };
+    map[key] = { ...stripBudgetFromProfile(profile), updatedAt: Date.now() };
     writeBoopProfiles(map);
   }
 
@@ -1894,7 +1927,7 @@
       BOOP_TRIP_FETCHING.add(cityK);
       try {
         const params = new URLSearchParams({ city });
-        const resp = await fetch(`${BACKEND}/api/boop-trip-images?${params}`);
+        const resp = await apiFetch(`${BACKEND}/api/boop-trip-images?${params}`);
         if (resp.ok) {
           const data = await resp.json();
           const images = data.images;
@@ -1908,10 +1941,6 @@
             if (preloadImages) {
               await boopPreloadTripWizardImages(BOOP_WIZARD_IMAGES[cityK].trip);
             }
-            const q = BOOP_QUESTIONS[BOOP.idx];
-            if (q?.id === 'trip' && document.getElementById('st-boop')?.style.display !== 'none') {
-              renderBoopQuestion();
-            }
           }
         }
       } catch (_) {
@@ -1920,6 +1949,10 @@
         BOOP_TRIP_FETCHING.delete(cityK);
         BOOP_TRIP_READY.add(cityK);
         BOOP_TRIP_LOAD_PROMISES.delete(cityK);
+        const q = BOOP_QUESTIONS[BOOP.idx];
+        if (q?.id === 'trip' && document.getElementById('st-boop')?.style.display !== 'none') {
+          renderBoopQuestion();
+        }
       }
     })();
 
@@ -1932,7 +1965,7 @@
     if (!cityK || BOOP_WIZARD_IMAGES[cityK] || BOOP_WIZARD_FETCHING.has(cityK)) return;
     BOOP_WIZARD_FETCHING.add(cityK);
     try {
-      const resp = await fetch(`${BACKEND}/api/neighborhoods?city=${encodeURIComponent(city)}`);
+      const resp = await apiFetch(`${BACKEND}/api/neighborhoods?city=${encodeURIComponent(city)}`);
       if (!resp.ok) return;
       const data = await resp.json();
       const hoods = data.neighborhoods || [];
@@ -2110,7 +2143,7 @@
    */
   function boopSkipToResults() {
     if (!S.city) return;
-    flashMsg('Skipping intro — searching hotels', 1800);
+    flashMsg('Skipping vibe setup — searching hotels', 1800);
     if (boopCurrentWizardHasSignal()) {
       boopFinish();
       return;
@@ -2452,8 +2485,8 @@
       dealbreakers: Array.from(BOOP.dealbreakers),
       freetext: BOOP.freetext || '',
       advancedKeywords: advancedKw || null,
-      budgetFilter: prev.budgetFilter || _budgetFilter || { mode: 'any' },
-      budgetFlex: prev.budgetFlex !== undefined ? prev.budgetFlex : _budgetFlex,
+      budgetFilter: _budgetFilter || { mode: 'any' },
+      budgetFlex: _budgetFlex,
       updatedAt: Date.now(),
     };
     syncPriceMattersIntoProfile(profile);
@@ -2647,13 +2680,6 @@
     const row = document.getElementById('vibe-chip-row');
     if (!row) return;
     const profile = _activeBoopProfileForChips() || {};
-    if (profile.budgetFilter) {
-      const norm = normalizeBudgetFilter(profile.budgetFilter);
-      if (JSON.stringify(norm) !== JSON.stringify(_budgetFilter)) {
-        _budgetFilter = norm;
-        _budgetFlex = profile.budgetFlex !== false;
-      }
-    }
     const ans = profile.answers || {};
     const dealbreakers = new Set(Array.isArray(profile.dealbreakers) ? profile.dealbreakers : []);
     const chips = [];
@@ -2707,11 +2733,65 @@
   // ── Nightly budget filter (desktop chip; mobile wired, button hidden) ─────
   let _budgetOutsideCloseBound = false;
 
+  let _datesConfirmHotelDetail = false;
+  let _cmdDateRangePortalHome = null;
+
+  /** Cmd date picker lives under hidden #st-results — portal it so hotel detail can open it. */
+  function ensureCmdDateRangePortaledForHotelDetail() {
+    const range = document.getElementById('cmd-date-range');
+    if (!range) return false;
+    if (!range.dataset.hpagePortaled) {
+      _cmdDateRangePortalHome = { parent: range.parentElement, next: range.nextSibling };
+      document.body.appendChild(range);
+      range.dataset.hpagePortaled = '1';
+      range.classList.add('cmd-date-range--hpage-portal');
+    }
+    return true;
+  }
+
+  function restoreCmdDateRangeFromHotelDetailPortal() {
+    const range = document.getElementById('cmd-date-range');
+    if (!range?.dataset.hpagePortaled || !_cmdDateRangePortalHome?.parent) return;
+    const { parent, next } = _cmdDateRangePortalHome;
+    if (next && next.parentElement === parent) parent.insertBefore(range, next);
+    else parent.appendChild(range);
+    delete range.dataset.hpagePortaled;
+    range.classList.remove('cmd-date-range--hpage-portal');
+    _cmdDateRangePortalHome = null;
+  }
+
+  function openHotelDetailDatesPicker(ev) {
+    if (ev) {
+      ev.stopPropagation();
+      ev.preventDefault();
+    }
+    _datesConfirmHotelDetail = true;
+    closeBudgetPop();
+    closeCmdPartyPopover();
+    closeSortMorePop();
+    try { closeFineTuneSheet(); } catch (_) {}
+    clearDatePickerBudgetContext();
+    const sub = document.getElementById('cmd-date-pop-sub');
+    if (sub) {
+      sub.textContent = 'Add travel dates to see nightly room rates. We’ll refresh your search when you confirm.';
+    }
+    if (!ensureCmdDateRangePortaledForHotelDetail()) {
+      flashMsg('Could not open the date picker — try from search results');
+      _datesConfirmHotelDetail = false;
+      return;
+    }
+    openCityDateRangePicker('cmd');
+  }
+
   /** Open the results command-bar dates picker (shared by budget chip, hints, cards). */
   function openAddDatesPopover(ev, opts) {
     if (ev) {
       ev.stopPropagation();
       ev.preventDefault();
+    }
+    if (document.body.classList.contains('has-hotel-detail')) {
+      openHotelDetailDatesPicker(ev);
+      return;
     }
     closeBudgetPop();
     closeCmdPartyPopover();
@@ -2870,13 +2950,6 @@
     S.boopProfile = profile;
     if (S.city) saveBoopProfileForCity(S.city, profile);
     return profile;
-  }
-
-  function hydrateBudgetFromProfile(profile) {
-    if (!profile) return;
-    if (profile.budgetFilter) _budgetFilter = normalizeBudgetFilter(profile.budgetFilter);
-    _budgetFlex = profile.budgetFlex !== false;
-    syncBudgetChipUI();
   }
 
   function budgetFilterChipBaseLabel(f) {
@@ -3956,10 +4029,7 @@
     // wizard can pre-populate answers if that's ever wired up, but the review
     // UI is hidden for now.
     const saved = loadBoopProfileForCity(city);
-    if (saved) {
-      S.boopProfile = saved;
-      hydrateBudgetFromProfile(saved);
-    }
+    if (saved) S.boopProfile = saved;
 
     await startBoopStep();
     refreshStory('boop');
@@ -4166,7 +4236,9 @@
         h.includes('wikimedia.org') ||
         h.includes('staticflickr.com') ||
         h.includes('images.unsplash.com') ||
-        h.includes('images.pexels.com')
+        h.includes('images.pexels.com') ||
+        h.includes('googleusercontent.com') ||
+        h.includes('places.googleapis.com')
       ) {
         const base = BACKEND || '';
         return `${base}/api/nbhd-img?u=${encodeURIComponent(url)}`;
@@ -4551,7 +4623,7 @@
 
     // Fetch from API (works for any city — Gemini generates on first call)
     try {
-      const resp = await fetch(`${BACKEND}/api/neighborhoods?city=${encodeURIComponent(city)}`);
+      const resp = await apiFetch(`${BACKEND}/api/neighborhoods?city=${encodeURIComponent(city)}`);
       if (resp.ok) {
         const data = await resp.json();
         // 202 = still generating — poll again in 3s
@@ -5433,7 +5505,11 @@
     const trigger = document.getElementById(ids.trigger);
     if (pop) pop.classList.remove('open');
     if (trigger) trigger.setAttribute('aria-expanded', 'false');
-    if (context === 'cmd') clearDatePickerBudgetContext();
+    if (context === 'cmd') {
+      clearDatePickerBudgetContext();
+      restoreCmdDateRangeFromHotelDetailPortal();
+      _datesConfirmHotelDetail = false;
+    }
     if (context === 'cmd' && window.matchMedia && window.matchMedia('(max-width: 640px)').matches) {
       document.getElementById('cmd-tray')?.classList.remove('open');
     }
@@ -5502,17 +5578,22 @@
     syncAllDateRangeUIs();
   }
 
-  function updateCityDatePopoverPosition() {
-    const ids = cityDateIds();
+  function updateCityDatePopoverPosition(context = CITY_DATE_PICKER.context || 'city') {
+    const ids = cityDateIds(context);
     const pop = document.getElementById(ids.pop);
     const trigger = document.getElementById(ids.trigger);
+    const range = document.getElementById('cmd-date-range');
     if (!pop || !trigger) return;
     if (window.matchMedia && window.matchMedia('(max-width: 760px)').matches) {
       pop.style.removeProperty('--city-date-pop-max-h');
       return;
     }
+    if (context === 'cmd' && range?.dataset.hpagePortaled) {
+      pop.style.setProperty('--city-date-pop-max-h', 'min(560px, calc(100dvh - 48px))');
+      return;
+    }
     const rect = trigger.getBoundingClientRect();
-    const available = (CITY_DATE_PICKER.context === 'cmd')
+    const available = (context === 'cmd')
       ? window.innerHeight - rect.bottom - 24
       : rect.top - 18;
     const maxH = Math.max(240, Math.floor(available));
@@ -5529,7 +5610,7 @@
     const ci = document.getElementById(ids.ci)?.value || '';
     CITY_DATE_PICKER.cursor = cityDateMonthStart(ci || ymdFromLocalDate(new Date()));
     CITY_DATE_PICKER.selecting = ci ? 'checkout' : 'checkin';
-    updateCityDatePopoverPosition();
+    updateCityDatePopoverPosition(context);
     pop.classList.add('open');
     trigger.setAttribute('aria-expanded', 'true');
     document.body.classList.add('city-date-modal-open');
@@ -6222,11 +6303,28 @@
     const sb = document.getElementById('s-dates-btn');
     if (sb) { sb.textContent = fmtDate(ci) + ' – ' + fmtDate(co); sb.classList.add('set'); }
     closeDateRangePicker('cmd');
-    document.getElementById('cmd-tray').classList.remove('open');
+    document.getElementById('cmd-tray')?.classList.remove('open');
+    restoreCmdDateRangeFromHotelDetailPortal();
     clearDatePickerBudgetContext();
     syncCommandBarFromState();
     prefetchCityRatesForDates();
+    const fromHotelDetail = _datesConfirmHotelDetail;
+    _datesConfirmHotelDetail = false;
     if (finishCmdTripSheetSubflow('Dates updated — tap Update results when ready')) return;
+    if (fromHotelDetail && document.body.classList.contains('has-hotel-detail')) {
+      if (S.q && S.city) {
+        startSearch();
+        return;
+      }
+      if (S.city && S.checkin && S.checkout && _detailHotelId) {
+        const reqId = ++_ratesReqId;
+        _fetchingPrices = true;
+        _pricesLoaded = false;
+        fetchPrices(S.city, S.checkin, S.checkout, reqId, [_detailHotelId], null, { skipDetail: false })
+          .finally(() => repaintHotelDetailPageRooms());
+        return;
+      }
+    }
     startSearch();
   }
 
@@ -6321,76 +6419,79 @@
   }
 
   function getStaticPageContent(id) {
-    const commonFoot = `<p class="static-muted">${BRAND_HTML} is in beta — this page is a friendly overview, not legal advice, and we may refresh it as the product changes. Operated by ${COMPANY_LEGAL}.</p>`;
+    const commonFoot = `<p class="static-muted">${BRAND_HTML} is in beta. This page is a plain-language overview, not legal advice, and we may update it as the product changes. Operated by ${COMPANY_LEGAL}. For full legal text, see <a href="/privacy" target="_blank" rel="noopener">Privacy</a> and <a href="/terms" target="_blank" rel="noopener">Terms</a>.</p>`;
     const pages = {
       how: {
         title: 'How it works',
         html: `
-          <p>${BRAND_HTML} walks you through three simple layers: <strong>where you are going</strong>, <strong>what the neighbourhood should feel like</strong>, and <strong>what the room should look like</strong>.</p>
-          <h2>1 · City &amp; dates</h2>
-          <p>Pick your destination and, if you like, your stay dates. Dates unlock live prices when our partners have them.</p>
-          <h2>2 · Your vibe &amp; the map</h2>
-          <p>A short wizard captures how you like to travel. Neighbourhood cards (and the map on larger screens) describe the rhythm of each area so you pick a base that fits your trip — not just a dot on a map.</p>
-          <h2>3 · Room search in your own words</h2>
-          <p>Describe the bathroom, bed, light, or layout you want. We rank hotels using real room photos so you are judging spaces, not brochure copy alone.</p>
+          <p>${BRAND_HTML} helps you choose <strong>where to stay</strong>, <strong>what the area should feel like</strong>, and <strong>which room actually looks right</strong> — using real hotel photos, not marketing fluff alone.</p>
+          <h2>1 · Pick a city (and optional dates)</h2>
+          <p>Start with your destination and who is travelling. Add check-in and check-out when you want live nightly rates from our booking partner; you can browse matches first and add dates later.</p>
+          <h2>2 · Shape your vibe</h2>
+          <p>A short wizard (about a minute) captures how you like to travel — first visit or not, stay style, neighbourhood energy, and must-haves like a balcony or spa-style bath. We save this per city so you can tweak it from the results bar anytime.</p>
+          <h2>3 · See matches ranked for you</h2>
+          <p>We score hotels using indexed room and hotel photos plus your vibe answers. Match percentages are a guide, not a guarantee. Use sort options, budget, dates, and “available only” when you are ready to narrow the list.</p>
+          <h2>4 · Book when you are ready</h2>
+          <p>“Find &amp; Book” opens our partner’s checkout with your dates when we have them. Always confirm price, cancellation, and accessibility on the booking site before you pay.</p>
           <h2>While we are in beta</h2>
-          <p>Coverage and polish will keep improving. Always confirm anything important — price, policy, accessibility — on the hotel or booking site before you pay.</p>
+          <p>Coverage and polish keep improving city by city. If something looks off, use the purple <strong>Feedback</strong> button — we read it.</p>
           ${commonFoot}`,
       },
       about: {
         title: `About ${BRAND_PLAIN}`,
         html: `
-          <p><strong>${BRAND_HTML}</strong> helps you find a hotel that fits your trip — not just a place to sleep.</p>
-          <p>We focus on neighborhood vibe and real room photos, so you can better understand what a stay will actually feel like before you book.</p>
-          <p>Answer a few quick questions about your travel style, and we'll recommend hotels and areas that match — from walkable cafés and local character to quiet streets or nightlife.</p>
-          <p>The goal: fewer booking surprises and more \u201Cthis is exactly what I wanted.\u201D</p>
-          <h2>Currently in Beta</h2>
-          <p>${BRAND_HTML} is still growing, with more cities, smarter recommendations, and ongoing improvements added regularly. Use the purple <strong>Feedback</strong> button anytime — your feedback directly shapes what we build next.</p>
-          <p class="static-muted">${BRAND_HTML} is in beta, so features and information may change as the product evolves. Information here is for orientation only and is not legal or professional advice. Operated by ${COMPANY_LEGAL}.</p>`,
+          <p><strong>${BRAND_HTML}</strong> is a visual hotel search built for travellers who care how a stay <em>feels</em>, not just the star rating on a listing.</p>
+          <p>Most sites show one hero image and a wall of text. We rank stays using real room photos and neighbourhood context so you can picture the bathroom, the light, and the street energy before you commit.</p>
+          <p>Tell us your vibe in plain language — sleek and polished, leafy and quiet, must-have rain shower — and we surface hotels and areas that line up. When you add dates, we pull live rates from our travel partner so you can compare and book in one flow.</p>
+          <p>We are ${BRAND_HTML} in name; ${COMPANY_LEGAL} is the company behind the product.</p>
+          <h2>Currently in beta</h2>
+          <p>We are adding cities, tuning match quality, and shipping improvements regularly. Use the purple <strong>Feedback</strong> button anytime — your notes directly shape what we build next.</p>
+          <p class="static-muted">Features and information may change during beta. Nothing here is legal, financial, or professional travel advice. Operated by ${COMPANY_LEGAL}.</p>`,
       },
       privacy: {
         title: 'Privacy',
         html: `
-          <p>Here is the plain-language version — the standalone <a href="/privacy" target="_blank" rel="noopener">/privacy</a> page has the same story with a little more room to breathe.</p>
+          <p>Here is the short version for the menu. The full page at <a href="/privacy" target="_blank" rel="noopener">/privacy</a> has the same points in more detail.</p>
           <h2>What we collect</h2>
           <ul>
-            <li><strong>What you type</strong> — city, searches, wizard answers, and optional feedback.</li>
-            <li><strong>Basic technical info</strong> — things like IP address and browser type to keep the site safe.</li>
-            <li><strong>A sign-in cookie</strong> — only when we use a beta code, so you do not have to re-enter it on every click.</li>
+            <li><strong>What you enter</strong> — city, room descriptions, vibe wizard answers, budget and filter choices, and optional feedback.</li>
+            <li><strong>Basic technical info</strong> — such as IP address and browser type, to keep the service secure and reliable.</li>
+            <li><strong>A sign-in cookie</strong> — only during closed beta, so you do not re-enter your invite code every visit.</li>
+            <li><strong>Anonymous usage and crash reports</strong> — to fix bugs and improve the product. We do not send your exact search words in those analytics.</li>
           </ul>
-          <h2>Partners</h2>
-          <p>Hotels, photos, and prices come from travel partners. Some smart features use Google’s AI. Hosting, maps, email, and anonymous analytics each run through vendors with their own policies.</p>
-          <h2>Questions or removals</h2>
-          <p>Email <a href="mailto:beta@travelbyvibe.com">beta@travelbyvibe.com</a> — we are a small team and will help as quickly as we can.</p>
+          <h2>Who helps us run the site</h2>
+          <p>Hotel listings, photos, and prices come from our travel data partners. Some matching features use Google’s AI. Hosting, maps, email, and analytics tools each have their own privacy policies.</p>
+          <h2>Your choices</h2>
+          <p>Email <a href="mailto:beta@travelbyvibe.com">beta@travelbyvibe.com</a> to ask a question or request deletion. We are a small team and will respond as soon as we can.</p>
           ${commonFoot}`,
       },
       terms: {
         title: 'Terms of service',
         html: `
-          <p>By using ${BRAND_PLAIN} during beta you agree to these terms. If you disagree, please stop using the site.</p>
-          <h2>Not professional advice</h2>
-          <p>${BRAND_PLAIN} is not legal, financial, or travel-agent advice. Neighbourhood notes and match hints are for discovery — they can be incomplete or wrong.</p>
+          <p>By using ${BRAND_PLAIN} during beta you agree to these terms. If you do not agree, please stop using the site. The full text lives at <a href="/terms" target="_blank" rel="noopener">/terms</a>.</p>
+          <h2>Discovery tool, not professional advice</h2>
+          <p>${BRAND_PLAIN} helps you explore hotels and neighbourhoods. We are not your travel agent, lawyer, or accountant. Match scores and area descriptions are for inspiration and can be incomplete or wrong.</p>
           <h2>No guarantees</h2>
-          <p>The service is provided “as is.” We do not promise availability, perfect prices, or that any hotel suits your trip.</p>
+          <p>The service is provided “as is.” We do not promise availability, accurate prices, or that any hotel is right for your trip.</p>
           <h2>Bookings</h2>
-          <p>When you leave us to book elsewhere, their rules apply. We are not part of your reservation.</p>
-          <h2>Play fair</h2>
-          <p>Please do not abuse or overload the product. We may pause access that hurts other beta users.</p>
+          <p>When you click through to book, you are on our partner’s site and their terms apply. We are not a party to your reservation.</p>
+          <h2>Fair use</h2>
+          <p>Please do not scrape, overload, or misuse the beta in ways that harm other users. We may pause access if needed to protect the service.</p>
           <h2>Liability</h2>
           <p>To the fullest extent the law allows, ${COMPANY_LEGAL} and its operators are not liable for indirect or consequential damages from using the beta.</p>
           <h2>Changes</h2>
-          <p>We may update these terms. Continuing to use the site means you accept the latest version.</p>
+          <p>We may update these terms. If you keep using ${BRAND_PLAIN} after an update, that means you accept the new version.</p>
           ${commonFoot}`,
       },
       contact: {
         title: 'Contact',
         html: `
-          <p>We read every note we can — weird matches, slow searches, wild ideas, all of it helps.</p>
+          <p>Questions, rough edges, or ideas — we read what you send.</p>
           <h2>Email</h2>
-          <p><a href="mailto:hello@travelbyvibe.com">hello@travelbyvibe.com</a> — general hellos and product thoughts.</p>
-          <p><a href="mailto:beta@travelbyvibe.com">beta@travelbyvibe.com</a> — beta access, privacy, or data questions.</p>
+          <p><a href="mailto:hello@travelbyvibe.com">hello@travelbyvibe.com</a> — general product notes and hellos.</p>
+          <p><a href="mailto:beta@travelbyvibe.com">beta@travelbyvibe.com</a> — beta access, privacy, or data requests.</p>
           <h2>Developers</h2>
-          <p>Found a bug in the open-source pieces? <a href="https://github.com/jmc100-ai/roommatch/issues" target="_blank" rel="noopener noreferrer">Open an issue on GitHub</a>.</p>
+          <p>Spotted a bug in open-source pieces? <a href="https://github.com/jmc100-ai/roommatch/issues" target="_blank" rel="noopener noreferrer">Open an issue on GitHub</a>.</p>
           ${commonFoot}`,
       },
     };
@@ -6452,7 +6553,7 @@
     initTopnavMenuAndStatic();
     scheduleSyncAvailFilterMount();
     syncBudgetChipUI();
-    // Clear any legacy persisted budget from a prior tab session
+    purgePersistedBudgetFromAllProfiles();
     try { sessionStorage.removeItem(BUDGET_SESSION_KEY); } catch (_) {}
     // Restore property-type filter from sessionStorage
     try {
@@ -9739,9 +9840,11 @@
   // ── showMoreRooms ─────────────────────────────────────────────────────────
   // Reveals hidden compact room rows and removes the "Show N more" button.
   function showMoreRooms(btn) {
-    const container = btn.closest('.rooms-other');
+    const container = btn.closest('.rooms-other') || btn.closest('.hpage-other-rooms-list');
     if (!container) return;
-    container.querySelectorAll('.room-hidden').forEach(r => r.classList.remove('room-hidden'));
+    container.querySelectorAll('.room-hidden, .hpage-other-room--hidden').forEach((r) => {
+      r.classList.remove('room-hidden', 'hpage-other-room--hidden');
+    });
     btn.remove();
   }
 
@@ -10586,13 +10689,13 @@
         <p class="hpage-vibe-card-phrase">${escHtml(c.phrase)}</p>
         <p class="hpage-vibe-card-pct">${c.pct}% match</p>
       </div>`).join('');
-    const boopNote = getEffectiveBoopProfileForScoring()
-      ? 'Based on your search and Boop profile'
+    const vibeNote = getEffectiveBoopProfileForScoring()
+      ? 'Based on your search and saved vibe preferences'
       : 'Based on your search';
     return `<section class="hp-section hpage-why-vibe" aria-labelledby="hpage-why-vibe-title">
       <h2 id="hpage-why-vibe-title" class="hpage-section-label">Why this hotel matches your vibe</h2>
       ${hpageCarouselWrap(cells, 'Why this hotel matches your vibe')}
-      <p class="hpage-vibe-cards-foot">${boopNote} <span class="hpage-vibe-info" title="Scores reflect your query, Boop answers, and indexed room photos">ⓘ</span></p>
+      <p class="hpage-vibe-cards-foot">${vibeNote} <span class="hpage-vibe-info" title="Scores reflect your room description, vibe wizard answers, and indexed hotel photos">ⓘ</span></p>
     </section>`;
   }
 
@@ -10650,29 +10753,38 @@
       city: S.city,
       ...(searchHotel || {}),
     };
-    const reviewMeta = rating ? '<span id="hpage-sb-review-count">Guest reviews</span>' : '';
-    return `<aside class="hpage-sidebar hpage-match-card" aria-label="Match summary">
-      <div class="hpage-match-card-top">
-        <div class="hpage-match-ring" style="--match-pct:${overall}" aria-label="${overall} percent overall match">
-          <span class="hpage-match-ring-val">${overall}%</span>
-          <span class="hpage-match-ring-lbl">Overall Match</span>
-        </div>
-        ${stars || rating ? `<div class="hpage-match-rating-block">
-          ${ratingLabel ? `<span class="hpage-match-rating-label">${escHtml(ratingLabel)}</span>` : ''}
-          <div class="hpage-match-rating-row">
-            ${stars ? `<span class="hp-stars hpage-match-stars" aria-hidden="true">${stars}</span>` : ''}
-            ${rating ? `<span class="hpage-match-score"><strong>${rating}</strong> / 10</span>` : ''}
+    const hasGuestRating = !!(stars || rating);
+    const reviewMeta = rating
+      ? `<button type="button" class="hpage-match-reviews-link" id="hpage-sb-review-count" onclick="_hpScrollToReviews({ smooth: true })">Guest reviews</button>`
+      : '';
+    const guestColHTML = hasGuestRating
+      ? `<div class="hpage-match-card-col hpage-match-card-col--guest">
+          <div class="hpage-match-rating-block">
+            ${ratingLabel ? `<span class="hpage-match-rating-label">${escHtml(ratingLabel)}</span>` : ''}
+            <div class="hpage-match-rating-row">
+              ${stars ? `<span class="hp-stars hpage-match-stars" aria-hidden="true">${stars}</span>` : ''}
+              ${rating ? `<span class="hpage-match-score"><strong>${rating}</strong> / 10</span>` : ''}
+            </div>
+            ${reviewMeta}
           </div>
-          ${reviewMeta ? `<p class="hpage-match-reviews-meta">${reviewMeta}</p>` : ''}
-        </div>` : ''}
-      </div>
-      <div class="hpage-match-card-actions">
-        <div class="hpage-match-action-book">
-          ${bookLinkHTML(bookHotel, null, 'hotel_detail', { className: 'hpage-cta hpage-cta--primary hpage-cta--match-book', label: 'Book' })}
+          <div class="hpage-match-action-vibe hpage-match-action-vibe--sidebar">
+            <button type="button" class="hpage-cta hpage-cta--vibe" onclick="openVibeTourForHotel('${hotelIdAttr}')"><span aria-hidden="true">✦</span> Take a Vibe Tour</button>
+          </div>
+        </div>`
+      : '';
+    const gridCls = hasGuestRating ? 'hpage-match-card-grid' : 'hpage-match-card-grid hpage-match-card-grid--solo';
+    return `<aside class="hpage-sidebar hpage-match-card" aria-label="Match summary">
+      <div class="${gridCls}">
+        <div class="hpage-match-card-col hpage-match-card-col--score">
+          <div class="hpage-match-ring" style="--match-pct:${overall}" aria-label="${overall} percent overall match">
+            <span class="hpage-match-ring-val">${overall}%</span>
+            <span class="hpage-match-ring-lbl">Overall Match</span>
+          </div>
+          <div class="hpage-match-action-book">
+            ${bookLinkHTML(bookHotel, null, 'hotel_detail', { className: 'hpage-cta hpage-cta--primary hpage-cta--match-book', label: 'Book' })}
+          </div>
         </div>
-        <div class="hpage-match-action-vibe hpage-match-action-vibe--sidebar">
-          <button type="button" class="hpage-cta hpage-cta--vibe" onclick="openVibeTourForHotel('${hotelIdAttr}')"><span aria-hidden="true">✦</span> Take a Vibe Tour</button>
-        </div>
+        ${guestColHTML}
       </div>
     </aside>`;
   }
@@ -10715,7 +10827,9 @@
   }
 
   function hotelDetailSortedRooms(searchHotel) {
-    const indexed = (searchHotel?.roomTypes || []).filter((rt) => !isDetailPseudoRoom(rt));
+    const indexed = (searchHotel?.roomTypes || [])
+      .filter((rt) => !isDetailPseudoRoom(rt))
+      .map((rt) => hotelDetailEnrichRoomType(rt));
     let rooms = sortRoomsForCard([...indexed], searchHotel);
     if (_detailPageOpts?.sr2_pick === 'room_match' && rooms.length > 1) {
       rooms = [...rooms].sort((a, b) => (b.score || 0) - (a.score || 0));
@@ -10723,23 +10837,170 @@
     return rooms;
   }
 
-  function hotelDetailRoomSpecsHTML(rt) {
-    const items = [];
-    if (rt.beds) items.push({ icon: '🛏', label: rt.beds });
-    const viewFromAmenity = (rt.amenities || []).find((a) => /view|skyline|city|ocean|garden/i.test(String(a)));
-    if (viewFromAmenity) items.push({ icon: '🌆', label: viewFromAmenity });
-    if (rt.size) items.push({ icon: '▢', label: rt.size });
-    const guestCap = (rt.beds || '').match(/up to\s*(\d+)|(\d+)\s*guest/i);
-    if (guestCap) {
-      const n = guestCap[1] || guestCap[2];
-      items.push({ icon: '👥', label: `Up to ${n} guest${n === '1' ? '' : 's'}` });
+  /** V2 search roomTypes often omit beds/size — infer display specs from the room name. */
+  function hotelDetailEnrichRoomType(rt) {
+    const out = { ...rt };
+    const name = String(out.name || '').trim();
+    if (!out.beds) {
+      const bedWord = name.match(/\b(king|queen|double|twin|single)\b/i);
+      if (bedWord) {
+        const b = bedWord[1].toLowerCase();
+        const labels = {
+          king: '1 King Bed',
+          queen: '1 Queen Bed',
+          double: '1 Double Bed',
+          twin: '2 Twin Beds',
+          single: '1 Single Bed',
+        };
+        out.beds = labels[b] || `1 ${bedWord[1]} Bed`;
+      }
     }
+    if (!out.size) {
+      const sq = name.match(/(\d+)\s*(sq\.?\s*ft|sqft|ft²)/i);
+      if (sq) out.size = `${sq[1]} sq ft`;
+    }
+    const amenities = [...(out.amenities || [])];
+    if (!amenities.some((a) => /view/i.test(String(a)))) {
+      const viewInName = name.match(/\b(city|garden|ocean|sea|park|mountain|pool|courtyard)\s+view\b/i);
+      if (viewInName) {
+        const v = viewInName[1];
+        amenities.push(`${v.charAt(0).toUpperCase()}${v.slice(1).toLowerCase()} View`);
+      }
+    }
+    out.amenities = amenities;
+    return out;
+  }
+
+  function hotelDetailRoomSpecsHTML(rt, layout = 'grid') {
+    const room = hotelDetailEnrichRoomType(rt);
+    const items = [];
+    const guestCap = (room.beds || '').match(/up to\s*(\d+)|(\d+)\s*guest|(\d+)\s*×/i);
+    const guestN = guestCap ? (guestCap[1] || guestCap[2] || guestCap[3]) : null;
+    if (guestN) {
+      items.push({ icon: '👥', label: `${guestN} Guest${guestN === '1' ? '' : 's'}` });
+    } else if (room.beds) {
+      items.push({ icon: '👥', label: '2 Guests' });
+    }
+    if (room.beds) items.push({ icon: '🛏', label: room.beds });
+    if (room.size) items.push({ icon: '▢', label: room.size });
+    const viewFromAmenity = (room.amenities || []).find((a) => /view|skyline|city|ocean|garden/i.test(String(a)));
+    if (viewFromAmenity) items.push({ icon: '🌆', label: viewFromAmenity });
     if (!items.length) return '';
-    return `<div class="hpage-room-spec-grid">${items.map((it) => `
+    const wrapCls = layout === 'inline' ? 'hpage-other-room-specs' : 'hpage-room-spec-grid';
+    return `<div class="${wrapCls}">${items.map((it) => `
       <div class="hpage-room-spec-item">
         <span class="hpage-room-spec-icon" aria-hidden="true">${it.icon}</span>
         <span class="hpage-room-spec-label">${escHtml(it.label)}</span>
       </div>`).join('')}</div>`;
+  }
+
+  function roomPricePerNight(roomPrices, roomTypeId) {
+    if (roomTypeId == null || !roomPrices) return null;
+    const v = roomPrices[roomTypeId] ?? roomPrices[String(roomTypeId)];
+    return v != null ? v : null;
+  }
+
+  function hpageOtherRoomPriceColHTML(sym, priceVal, showFc) {
+    if (priceVal != null) {
+      return `<div class="hpage-other-room-price-col">
+          <div class="hpage-other-room-price">
+            <span class="hpage-other-room-price-amt">${sym}${priceVal.toLocaleString()}</span><span class="hpage-other-room-price-per"> / night</span>
+          </div>
+          <p class="hpage-other-room-price-note">Excluding taxes &amp; fees</p>
+          ${showFc ? '<span class="room-fc-badge hpage-other-room-fc">Free cancel</span>' : ''}
+        </div>`;
+    }
+    const noteHTML = _hasDateSearch
+      ? '<span class="hpage-other-room-price-muted">See all rates on booking</span>'
+      : addDatesLink('Add travel dates', 'hpage-other');
+    return `<div class="hpage-other-room-price-col hpage-other-room-price-col--muted">
+        <div class="hpage-other-room-price-note">${noteHTML}</div>
+      </div>`;
+  }
+
+  function hpageOtherRoomRowHTML(rt, bookHotel, roomPrices, opts = {}) {
+    const { isHidden = false, roomIdx = null } = opts;
+    rt = hotelDetailEnrichRoomType(rt);
+    const photos = rt.photos || [];
+    const hero = photos[0];
+    const score = Math.round(rt.score || 0);
+    const sym = ratesCurrencySymbol(_priceCurrency);
+    const rid = rt.roomTypeId;
+    const priceVal = roomPricePerNight(roomPrices, rid);
+    const hasPrice = priceVal != null;
+    const lbIdx = (url) => {
+      const i = _hpDetailPhotos.indexOf(url);
+      return i >= 0 ? i : 0;
+    };
+    const thumbHTML = hero
+      ? `<button type="button" class="hpage-other-room-thumb" onclick="event.stopPropagation();openHpLightbox(${lbIdx(hero)})"><img src="${escAttr(hero)}" alt="" loading="lazy" onerror="this.parentElement.classList.add('hpage-other-room-thumb--ph')"></button>`
+      : '<div class="hpage-other-room-thumb hpage-other-room-thumb--ph" aria-hidden="true">🛏</div>';
+    const matchPill = score > 0
+      ? `<span class="hpage-other-room-match" aria-label="${score} percent room match">${score}% Room Match</span>`
+      : '';
+    const specsHTML = hotelDetailRoomSpecsHTML(rt, 'inline');
+    const fcMap = bookHotel?.roomFreeCancel;
+    const showFc = hasPrice && (
+      (fcMap && (fcMap[rid] === true || fcMap[String(rid)] === true))
+      || bookHotel?.hotelFreeCancel === true
+    );
+    const bookHTML = bookLinkHTML(bookHotel, rid, 'room_row', {
+      className: 'hpage-other-room-book',
+      label: 'Book →',
+      stopPropagation: true,
+    });
+    const priceAside = `<div class="hpage-other-room-aside">
+        ${hpageOtherRoomPriceColHTML(sym, priceVal, showFc)}
+        ${bookHTML}
+      </div>`;
+    const hiddenClass = isHidden ? ' hpage-other-room--hidden' : '';
+    const dataIdx = roomIdx != null ? ` data-room-idx="${roomIdx}"` : '';
+    return `
+      <article class="hpage-other-room${hiddenClass}"${dataIdx}>
+        ${thumbHTML}
+        <div class="hpage-other-room-main">
+          <div class="hpage-other-room-title-row">
+            <h3 class="hpage-other-room-name">${escHtml(rt.name || 'Room')}</h3>
+            ${matchPill}
+          </div>
+          ${specsHTML}
+        </div>
+        ${priceAside}
+      </article>`;
+  }
+
+  function hpageOtherRateRowHTML(rateId, bookHotel, isHidden = false) {
+    const sym = ratesCurrencySymbol(_priceCurrency);
+    const perNight = bookHotel.roomPrices?.[rateId];
+    if (perNight == null) return '';
+    const rawName = bookHotel.roomNames?.[rateId] || 'Available rate';
+    const fcMap = bookHotel.roomFreeCancel;
+    const showFc = fcMap && (fcMap[rateId] === true || fcMap[String(rateId)] === true);
+    const bookHTML = bookLinkHTML(bookHotel, rateId, 'rate_row', {
+      className: 'hpage-other-room-book',
+      label: 'Book →',
+      stopPropagation: true,
+    });
+    const hiddenClass = isHidden ? ' hpage-other-room--hidden' : '';
+    return `
+      <article class="hpage-other-room hpage-other-room--rate-only${hiddenClass}">
+        <div class="hpage-other-room-thumb hpage-other-room-thumb--ph" aria-hidden="true">🛏</div>
+        <div class="hpage-other-room-main">
+          <div class="hpage-other-room-title-row">
+            <h3 class="hpage-other-room-name">${escHtml(rawName)}</h3>
+          </div>
+        </div>
+        <div class="hpage-other-room-aside">
+          <div class="hpage-other-room-price-col">
+            <div class="hpage-other-room-price">
+              <span class="hpage-other-room-price-amt">${sym}${perNight.toLocaleString()}</span><span class="hpage-other-room-price-per"> / night</span>
+            </div>
+            <p class="hpage-other-room-price-note">Excluding taxes &amp; fees</p>
+            ${showFc ? '<span class="room-fc-badge hpage-other-room-fc">Free cancel</span>' : ''}
+          </div>
+          ${bookHTML}
+        </div>
+      </article>`;
   }
 
   function hotelDetailRoomPanelHTML(searchHotel, d, rt) {
@@ -10810,34 +11071,11 @@
     </section>`;
   }
 
-  function detailRoomTypeRowHTML(rt, isOpen, hotelScore, roomPrices, roomIdx, bookHotel) {
-    let html = roomTypeHTML(
-      rt,
-      isOpen,
-      hotelScore,
-      roomPrices,
-      _hasDateSearch,
-      'detail',
-      false,
-      bookHotel
-    );
-    return html
-      .replace(
-        '<div class="room-type-row',
-        `<div class="room-type-row" data-room-idx="${roomIdx}"`
-      )
-      .replace(
-        'onclick="toggleRoom(this.parentElement)"',
-        'onclick="hpageToggleRoomRow(this.parentElement)"'
-      );
-  }
-
   function hotelDetailOtherRoomsListHTML(searchHotel, d) {
     const rooms = hotelDetailSortedRooms(searchHotel);
     if (rooms.length < 2) return '';
     const others = rooms.slice(1);
     const bookHotel = { id: d.hotel_id, name: d.name, city: S.city, ...searchHotel };
-    const hotelScore = searchHotel.hotelScore ?? searchHotel.vectorScore ?? 0;
     const roomPrices = searchHotel.roomPrices || {};
 
     const indexedIdSet = new Set(
@@ -10846,17 +11084,12 @@
     const extraIds = Object.keys(roomPrices).filter((k) => !indexedIdSet.has(k));
     extraIds.sort((a, b) => (roomPrices[a] || 0) - (roomPrices[b] || 0));
 
-    const totalOthers = others.length + extraIds.length;
-    const openCompactIdx = _hpageOtherRoomIdx != null && _hpageOtherRoomIdx >= 1
-      ? _hpageOtherRoomIdx - 1
-      : -1;
-
     const entries = [];
     const pricedIndexed = [];
     const unpricedIndexed = [];
     others.forEach((rt, i) => {
       const hasP = rt.roomTypeId != null && roomPrices[rt.roomTypeId] != null;
-      const entry = { kind: 'indexed', rt, indexedIdx: i, roomIdx: i + 1 };
+      const entry = { kind: 'indexed', rt, roomIdx: i + 1 };
       (hasP ? pricedIndexed : unpricedIndexed).push(entry);
     });
     pricedIndexed.forEach((e) => entries.push(e));
@@ -10868,37 +11101,29 @@
 
     const renderEntry = (e, isHidden) => {
       if (e.kind === 'indexed') {
-        let row = detailRoomTypeRowHTML(
-          e.rt,
-          openCompactIdx >= 0 && e.indexedIdx === openCompactIdx,
-          hotelScore,
-          roomPrices,
-          e.roomIdx,
-          bookHotel
-        );
-        if (isHidden) row = row.replace('class="room-type-row', 'class="room-type-row room-hidden');
-        return row;
+        return hpageOtherRoomRowHTML(e.rt, bookHotel, roomPrices, {
+          isHidden,
+          roomIdx: e.roomIdx,
+        });
       }
-      return extraRateRowHTML(e.id, bookHotel, isHidden);
+      return hpageOtherRateRowHTML(e.id, bookHotel, isHidden);
     };
 
     const visibleHTML = visibleEntries.map((e) => renderEntry(e, false)).join('');
     const hiddenHTML = hiddenEntries.map((e) => renderEntry(e, true)).join('');
     const showMoreBtn = hiddenEntries.length > 0
-      ? `<button class="rooms-show-more" onclick="showMoreRooms(this)">Show ${hiddenEntries.length} more room type${hiddenEntries.length !== 1 ? 's' : ''} ↓</button>`
+      ? `<button type="button" class="hpage-other-rooms-more" onclick="showMoreRooms(this)">Show ${hiddenEntries.length} more room${hiddenEntries.length !== 1 ? 's' : ''} ↓</button>`
       : '';
 
-    return `
-      <div class="rooms-other-header">OTHER ROOM TYPES (${totalOthers})</div>
-      <div class="rooms-other">${visibleHTML}${hiddenHTML}${showMoreBtn}</div>`;
+    return `${visibleHTML}${hiddenHTML}${showMoreBtn}`;
   }
 
   function hotelDetailOtherRoomsHTML(searchHotel, d) {
     const listHTML = hotelDetailOtherRoomsListHTML(searchHotel, d);
     if (!listHTML) return '';
     return `<section class="hp-section hpage-other-rooms" aria-labelledby="hpage-other-rooms-title">
-      <h2 id="hpage-other-rooms-title" class="hpage-section-label">Other room options</h2>
-      <div class="hpage-rooms-list hpage-rooms">${listHTML}</div>
+      <h2 id="hpage-other-rooms-title" class="hpage-section-label">Similar rooms at this hotel</h2>
+      <div class="hpage-other-rooms-list">${listHTML}</div>
     </section>`;
   }
 
@@ -12134,7 +12359,7 @@
     section.setAttribute('aria-hidden', 'false');
 
     try {
-      const resp = await fetch(`${BACKEND}/api/neighborhoods?city=${encodeURIComponent(city)}`);
+      const resp = await apiFetch(`${BACKEND}/api/neighborhoods?city=${encodeURIComponent(city)}`);
       if (!resp.ok) {
         // City not indexed or error — hide neighborhood section, proceed to search directly
         hideNeighborhoodSection();
