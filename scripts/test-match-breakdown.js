@@ -77,4 +77,17 @@ assert.strictEqual(mb.must_haves.find((m) => m.fact_key === 'double_sinks').stat
 assert.ok(mb.nbhd_signals.walkability >= 0);
 assert.ok(humanizeFactKey('double_sinks').includes('sink'));
 
+const mbFeaturedMiss = buildMatchBreakdown({
+  hotelId: 'h1',
+  topScore: 40,
+  mustHaveKeys: ['double_sinks'],
+  hotelFactHits,
+  featuredRoom: { must_haves_met: false },
+});
+assert.strictEqual(
+  mbFeaturedMiss.must_haves.find((m) => m.fact_key === 'double_sinks').status,
+  'none',
+  'featured room without must-haves shows none even if hotel has fact elsewhere'
+);
+
 console.log('test-match-breakdown: ok');

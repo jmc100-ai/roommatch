@@ -2558,11 +2558,72 @@
     return db.length > 0 || !!musthaveFreetextSubline(profile);
   }
 
-  /** Line 2 on the must-haves chip: freetext wins over budget when both exist. */
-  function musthaveChipSubline(profile) {
+  function musthaveHasPicks(profile) {
+    const db = Array.isArray(profile?.dealbreakers) ? profile.dealbreakers : [];
+    return db.length > 0;
+  }
+
+  /** Short summary of selected must-have chips (from passed profile). */
+  function musthaveChipPicksLine(profile) {
+    const dealbreakers = new Set(Array.isArray(profile?.dealbreakers) ? profile.dealbreakers : []);
+    const mhQ = BOOP_QUESTIONS.find(q => q.id === 'musthaves');
+    const parts = [];
+    for (const o of (mhQ?.options || [])) {
+      if (dealbreakers.has(o.id)) parts.push(MUSTHAVE_CHIP_SHORT[o.id] || o.label);
+    }
+    if (parts.length === 0) return '';
+    if (parts.length <= 2) return parts.join(' + ');
+    return `${parts[0]} + ${parts.length - 1} more`;
+  }
+
+  /** Mobile must-haves chip line 1 — budget label only (no trailing · Add dates / Flexible). */
+  function musthaveChipLine1Html(profile) {
+    profile = profile || {};
+    const budget = budgetFilterChipBaseLabel(_budgetFilter);
+    const prefix = musthaveHasPicks(profile) ? '' : 'Must-Haves / ';
+    return escHtml(`${prefix}${budget}`);
+  }
+
+  function musthaveChipLine1Aria(profile) {
+    profile = profile || {};
+    const budget = budgetFilterChipBaseLabel(_budgetFilter);
+    const prefix = musthaveHasPicks(profile) ? '' : 'Must-Haves / ';
+    return `${prefix}${budget}`;
+  }
+
+  /** Mobile must-haves chip line 2 — picks, freetext, or budget hints (never repeats line 1). */
+  function musthaveChipLine2Html(profile) {
+    profile = profile || {};
+    const ft = musthaveFreetextSubline(profile);
+    if (ft) return escHtml(ft);
+    const picks = musthaveChipPicksLine(profile);
+    if (picks) return escHtml(picks);
+    const pendingDates = budgetFilterIsActive(_budgetFilter)
+      && budgetFilterNeedsRates(_budgetFilter)
+      && !budgetHasValidDates();
+    if (pendingDates) return addDatesLink('Add dates', 'chip');
+    const filter = _budgetFilter || { mode: 'any' };
+    if (budgetFilterHasCap(filter) && _budgetFlex !== false && budgetHasValidDates()) {
+      return 'Flexible';
+    }
+    return '';
+  }
+
+  function musthaveChipLine2Aria(profile) {
+    profile = profile || {};
     const ft = musthaveFreetextSubline(profile);
     if (ft) return ft;
-    return budgetFilterChipLabel(_budgetFilter, _budgetFlex);
+    const picks = musthaveChipPicksLine(profile);
+    if (picks) return picks;
+    const pendingDates = budgetFilterIsActive(_budgetFilter)
+      && budgetFilterNeedsRates(_budgetFilter)
+      && !budgetHasValidDates();
+    if (pendingDates) return 'Add dates';
+    const filter = _budgetFilter || { mode: 'any' };
+    if (budgetFilterHasCap(filter) && _budgetFlex !== false && budgetHasValidDates()) {
+      return 'Flexible';
+    }
+    return '';
   }
 
   const FINE_TUNE_COMPACT_BUDGET_PILLS = [
@@ -2687,9 +2748,8 @@
       if (stepKey === 'musthaves') {
         const freetext = musthaveFreetextSubline(profile);
         if (isMobileCmdTripUi()) {
-          const summary = finetuneChipSummary();
           const isEmpty = !musthaveHasChipContent(profile);
-          chips.push(_musthaveChipHtml(summary, isEmpty, musthaveChipSubline(profile)));
+          chips.push(_musthaveChipHtml(isEmpty, profile));
           continue;
         }
         const mh = BOOP_QUESTIONS.find(q => q.id === 'musthaves');
@@ -2835,6 +2895,10 @@
   function addDatesLink(label, extraClass) {
     const safe = escHtml(label || 'Add dates');
     const cls = extraClass ? ` add-dates-link--${extraClass}` : '';
+    // Inside vibe/budget chips the outer control is already a <button> — nested <button> is invalid HTML.
+    if (extraClass === 'chip') {
+      return `<span role="button" tabindex="0" class="add-dates-link${cls}" onclick="openAddDatesPopover(event)" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openAddDatesPopover(event);}">${safe}</span>`;
+    }
     return `<button type="button" class="add-dates-link${cls}" onclick="openAddDatesPopover(event)">${safe}</button>`;
   }
 
@@ -3291,17 +3355,16 @@
     return `${parts[0]} + ${parts.length - 1} more`;
   }
 
-  function _musthaveChipHtml(label, isEmpty, budgetSubline) {
-    const safeLabel = escHtml(label);
-    const pendingDates = budgetFilterIsActive(_budgetFilter)
-      && budgetFilterNeedsRates(_budgetFilter)
-      && !budgetHasValidDates();
-    const budgetLine2 = pendingDates
-      ? `${escHtml(budgetFilterChipBaseLabel(_budgetFilter))} · ${addDatesLink('Add dates', 'chip')}`
-      : escHtml(budgetSubline || budgetFilterChipLabel(_budgetFilter, _budgetFlex));
-    const textHtml = `<span class="vibe-chip-text vibe-chip-text--stacked"><span class="vibe-chip-line1">${safeLabel}</span><span class="vibe-chip-line2">${budgetLine2}</span></span>`;
-    const ariaBudget = budgetSubline || budgetFilterChipLabel(_budgetFilter, _budgetFlex);
-    const ariaLabel = escHtml(`Edit preferences: ${label}, ${ariaBudget}`);
+  function _musthaveChipHtml(isEmpty, profile) {
+    profile = profile || {};
+    const line1 = musthaveChipLine1Html(profile);
+    const line2Raw = musthaveChipLine2Html(profile);
+    const line2Html = line2Raw
+      ? `<span class="vibe-chip-line2">${line2Raw}</span>`
+      : '';
+    const textHtml = `<span class="vibe-chip-text vibe-chip-text--stacked"><span class="vibe-chip-line1">${line1}</span>${line2Html}</span>`;
+    const ariaLine2 = musthaveChipLine2Aria(profile);
+    const ariaLabel = escHtml(`Edit preferences: ${musthaveChipLine1Aria(profile)}${ariaLine2 ? `, ${ariaLine2}` : ''}`);
     const emptyClass = isEmpty ? ' vibe-chip-empty' : '';
     if (isEmpty) {
       return `<button type="button" class="vibe-chip vibe-chip--stacked${emptyClass}" data-vibe-step="musthaves" onclick="openFineTuneSheet()" aria-label="${ariaLabel}">${textHtml}</button>`;
@@ -5503,7 +5566,10 @@
     const ids = cityDateIds(context);
     const pop = document.getElementById(ids.pop);
     const trigger = document.getElementById(ids.trigger);
-    if (pop) pop.classList.remove('open');
+    if (pop) {
+      pop.classList.remove('open');
+      resetCityDatePopoverPlacement(pop);
+    }
     if (trigger) trigger.setAttribute('aria-expanded', 'false');
     if (context === 'cmd') {
       clearDatePickerBudgetContext();
@@ -5578,12 +5644,27 @@
     syncAllDateRangeUIs();
   }
 
+  function isHomeV2DesktopDatesPopover(context) {
+    if (context !== 'city') return false;
+    const home = document.getElementById('home-v2');
+    if (!home || home.offsetParent === null) return false;
+    return window.matchMedia && window.matchMedia('(min-width: 901px)').matches;
+  }
+
+  function resetCityDatePopoverPlacement(pop) {
+    if (!pop) return;
+    ['position', 'left', 'right', 'top', 'bottom', 'transform'].forEach((p) => {
+      pop.style.removeProperty(p);
+    });
+  }
+
   function updateCityDatePopoverPosition(context = CITY_DATE_PICKER.context || 'city') {
     const ids = cityDateIds(context);
     const pop = document.getElementById(ids.pop);
     const trigger = document.getElementById(ids.trigger);
     const range = document.getElementById('cmd-date-range');
     if (!pop || !trigger) return;
+    resetCityDatePopoverPlacement(pop);
     if (window.matchMedia && window.matchMedia('(max-width: 760px)').matches) {
       pop.style.removeProperty('--city-date-pop-max-h');
       return;
@@ -5593,6 +5674,16 @@
       return;
     }
     const rect = trigger.getBoundingClientRect();
+    if (isHomeV2DesktopDatesPopover(context)) {
+      pop.style.position = 'fixed';
+      pop.style.left = '50%';
+      pop.style.transform = 'translateX(-50%)';
+      pop.style.bottom = `${Math.round(window.innerHeight - rect.top + 12)}px`;
+      pop.style.top = 'auto';
+      const maxH = Math.max(240, Math.floor(rect.top - 18));
+      pop.style.setProperty('--city-date-pop-max-h', `${maxH}px`);
+      return;
+    }
     const available = (context === 'cmd')
       ? window.innerHeight - rect.bottom - 24
       : rect.top - 18;
@@ -8149,10 +8240,12 @@
   function roomVibeMatchDisplayPct(h) {
     const allRooms = h?.roomTypes || [];
     if (allRooms.length === 0) return Math.round(h?.vectorScore || 0);
-    const bestRoomScore = Math.max(0, ...allRooms.map(rt => rt.score || 0));
-    // Stub hotels lazy-load rooms with score=0 (outside Phase-B window).
-    // Fall back to vectorScore so the badge doesn't drop to 0 after rooms load.
-    return bestRoomScore > 0 ? Math.round(bestRoomScore) : Math.round(h?.vectorScore || 0);
+    const featured = pickFeaturedRoomType(h);
+    if (featured && (featured.score || 0) > 0) return Math.round(featured.score);
+    const fr = h?.featured_room;
+    if (fr && Number(fr.score) > 0) return Math.round(Number(fr.score));
+    if (featured) return Math.round(h?.vectorScore || 0);
+    return 0;
   }
 
   /**
@@ -8225,6 +8318,8 @@
   }
 
   function topRoomForVibeTour(hotel) {
+    const featured = pickFeaturedRoomType(hotel);
+    if (featured && (featured.photos || []).length) return featured;
     const rooms = hotel?.roomTypes || [];
     return rooms.find(r => (r.photos || []).length) || rooms[0] || null;
   }
@@ -9021,7 +9116,7 @@
     // a hotel-level filter (see hotelPassesAvailFilter), not a room-level one.
     // Unmatched rooms render with their existing "not available" cue.
     const allRoomTypes = h.roomTypes || [];
-    const visibleRooms = allRoomTypes;
+    const visibleRooms = sortRoomsForCard(allRoomTypes, h);
 
     const topRoom = visibleRooms[0];
     const previewPhotos = topRoom ? (topRoom.photos || []).slice(0, 3) : [];
@@ -9942,6 +10037,77 @@
       ${othersSection}`;
   }
 
+  // Featured room — keep in sync with lib/featured-room.js
+  function getActiveMustHaveKeys() {
+    const keys = [...(S.mustHaves || [])];
+    return [...new Set(keys.filter(Boolean))];
+  }
+
+  function featuredRoomContext() {
+    return {
+      mustKeys: getActiveMustHaveKeys(),
+      availOnly: _showAvailOnly && _hasDateSearch && _pricesLoaded,
+      priceSort: _currentSort === 'price',
+    };
+  }
+
+  function roomTypeMustHavesMet(rt, mustKeys) {
+    if (!mustKeys?.length) return true;
+    if (rt?.must_haves_met === true) return true;
+    if (rt?.must_haves_met === false) return false;
+    return null;
+  }
+
+  function roomTypeHasPrice(rt, hotel) {
+    if (!rt || rt.roomTypeId == null || !hotel?.roomPrices) return false;
+    return hotel.roomPrices[rt.roomTypeId] != null;
+  }
+
+  function pickFeaturedRoomType(hotel) {
+    const ctx = featuredRoomContext();
+    const mustKeys = ctx.mustKeys;
+    const rooms = (hotel?.roomTypes || []).filter(rt => !isDetailPseudoRoom(rt));
+    if (!rooms.length) return null;
+
+    let eligible = rooms.filter(rt => {
+      const met = roomTypeMustHavesMet(rt, mustKeys);
+      if (met === false) return false;
+      if (!ctx.availOnly || roomTypeHasPrice(rt, hotel)) {
+        if (met === true) return true;
+        if (!mustKeys.length) return true;
+      }
+      return false;
+    });
+    if (!eligible.length && mustKeys.length) {
+      const hasExplicit = rooms.some(rt => rt?.must_haves_met === true || rt?.must_haves_met === false);
+      if (!hasExplicit) {
+        const fr = hotel?.featured_room;
+        if (fr) {
+          const srv = rooms.find(rt =>
+            (fr.roomTypeId != null && String(rt.roomTypeId) === String(fr.roomTypeId)) ||
+            (fr.name && rt.name === fr.name)
+          );
+          if (srv && (!ctx.availOnly || roomTypeHasPrice(srv, hotel))) return srv;
+        }
+      }
+    }
+    if (!eligible.length) return null;
+
+    if (ctx.priceSort && ctx.availOnly) {
+      return [...eligible].sort(
+        (a, b) => (hotel.roomPrices[a.roomTypeId] || 0) - (hotel.roomPrices[b.roomTypeId] || 0)
+      )[0];
+    }
+    return [...eligible].sort((a, b) => (b.score || 0) - (a.score || 0))[0];
+  }
+
+  function sameRoomType(a, b) {
+    if (!a || !b) return false;
+    if (a === b) return true;
+    if (a.roomTypeId != null && b.roomTypeId != null && String(a.roomTypeId) === String(b.roomTypeId)) return true;
+    return !!(a.name && b.name && a.name === b.name);
+  }
+
   // When the user has "Available only" on, push bookable scored rooms to the
   // front so the featured room slot shows something with a real vibe score
   // that's also bookable (except on Best Price — cheapest priced room wins).
@@ -9963,28 +10129,40 @@
           (a, b) => (hotel.roomPrices[a.roomTypeId] || 0) - (hotel.roomPrices[b.roomTypeId] || 0)
         );
         const rest = rooms.filter((rt) => !priced.includes(rt));
-        return cheapestFirst.concat(rest);
+        const ordered = cheapestFirst.concat(rest);
+        const featured = pickFeaturedRoomType(hotel);
+        if (!featured) return ordered;
+        const tail = ordered.filter(rt => !sameRoomType(rt, featured));
+        return [featured, ...tail];
       }
     }
 
     const scoredFirst = [...rooms].sort((a, b) => (b.score || 0) - (a.score || 0));
 
     const filterActive = _showAvailOnly && _hasDateSearch && _pricesLoaded;
-    if (!filterActive) return scoredFirst;
-
-    const scoredPriced   = [];
-    const scoredUnpriced = [];
-    const unscoredPriced = [];
-    const unscoredUnpriced = [];
-    for (const rt of scoredFirst) {
-      const hasPrice = rt && rt.roomTypeId != null && hotel?.roomPrices?.[rt.roomTypeId] != null;
-      const hasScore = (rt.score || 0) > 0;
-      if (hasPrice && hasScore)  scoredPriced.push(rt);
-      else if (hasScore)         scoredUnpriced.push(rt);
-      else if (hasPrice)         unscoredPriced.push(rt);
-      else                       unscoredUnpriced.push(rt);
+    let ordered;
+    if (!filterActive) {
+      ordered = scoredFirst;
+    } else {
+      const scoredPriced   = [];
+      const scoredUnpriced = [];
+      const unscoredPriced = [];
+      const unscoredUnpriced = [];
+      for (const rt of scoredFirst) {
+        const hasPrice = rt && rt.roomTypeId != null && hotel?.roomPrices?.[rt.roomTypeId] != null;
+        const hasScore = (rt.score || 0) > 0;
+        if (hasPrice && hasScore)  scoredPriced.push(rt);
+        else if (hasScore)         scoredUnpriced.push(rt);
+        else if (hasPrice)         unscoredPriced.push(rt);
+        else                       unscoredUnpriced.push(rt);
+      }
+      ordered = [...scoredPriced, ...scoredUnpriced, ...unscoredPriced, ...unscoredUnpriced];
     }
-    return [...scoredPriced, ...scoredUnpriced, ...unscoredPriced, ...unscoredUnpriced];
+
+    const featured = pickFeaturedRoomType(hotel);
+    if (!featured) return ordered;
+    const rest = ordered.filter(rt => !sameRoomType(rt, featured));
+    return [featured, ...rest];
   }
 
   // ── Rate-only row ─────────────────────────────────────────────────────────
@@ -10300,6 +10478,7 @@
   let _hpLightboxIdx  = 0;
   let _hpLightboxUrls = [];
   let _hpDetailPhotos = [];
+  let _hpLightboxPortalHome = null;
   // Reviews UI state — purely in-memory, never persisted client-side either.
   // (We rely on the server for caching; this just tracks pagination + IO observer.)
   const _hpReviewsState = { hotelId: null, offset: 0, limit: 10, total: null, loading: false, observer: null };
@@ -10465,6 +10644,7 @@
     const root = document.getElementById('st-hotel-detail');
     if (!root || root.style.display === 'none') return;
 
+    closeHpLightbox();
     clearHotelDetailMobileCta();
     root.style.display = 'none';
     root.innerHTML = ''; // free memory
@@ -10658,17 +10838,18 @@
       const key = phrase.toLowerCase();
       if (seen.has(key)) return;
       seen.add(key);
-      cards.push({ icon, phrase, pct: Math.round(pct) });
+      cards.push({ icon, phrase, pct: Math.round(Math.max(0, Math.min(100, pct))) });
     };
-    if (mb.room_pct != null) add('☀', 'Room vibe · bright & spacious', mb.room_pct);
-    for (const f of (mb.query_features || []).filter((x) => x.pct >= 40)) {
+    for (const f of (mb.query_features || []).filter((x) => x.pct > 0)) {
       add('☀', f.label, f.pct);
     }
-    for (const f of (mb.hotel_character_facts || []).filter((x) => x.pct >= 35)) {
+    for (const f of (mb.hotel_character_facts || []).filter((x) => x.pct > 0)) {
       add('🛋', f.label, f.pct);
     }
+    if (mb.room_pct != null) add('🛏', 'Room vibe match', mb.room_pct);
+    if (mb.hotel_pct != null) add('✦', 'Hotel character match', mb.hotel_pct);
     if (mb.nbhd_pct != null) {
-      add('🚶', mb.primary_nbhd_name ? `Near ${mb.primary_nbhd_name}` : 'Neighbourhood fit', mb.nbhd_pct);
+      add('📍', mb.primary_nbhd_name ? `Near ${mb.primary_nbhd_name}` : 'Neighbourhood fit', mb.nbhd_pct);
     }
     const ns = mb.nbhd_signals;
     if (ns?.walkability >= 50) add('🚶', 'Walkable area', ns.walkability);
@@ -10676,8 +10857,18 @@
     if (pageOpts?.sr2_badge && pageOpts.sr2_match_pct != null) {
       add('✦', pageOpts.sr2_badge, pageOpts.sr2_match_pct);
     }
-    if (mb.hotel_pct != null) add('✦', 'Hotel character match', mb.hotel_pct);
     return cards.sort((a, b) => b.pct - a.pct).slice(0, 5);
+  }
+
+  function hotelDetailWhyMatchListHTML(searchHotel, pageOpts) {
+    const cards = buildHotelDetailVibeCards(searchHotel, pageOpts);
+    if (!cards.length) return '';
+    return cards.map((c) => `
+      <div class="hpage-why-match-row">
+        <span class="hpage-why-match-icon" aria-hidden="true">${c.icon}</span>
+        <span class="hpage-why-match-phrase">${escHtml(c.phrase)}</span>
+        <span class="hpage-why-match-pct">${c.pct}%</span>
+      </div>`).join('');
   }
 
   function hotelDetailVibeCardsHTML(searchHotel, pageOpts) {
@@ -10692,7 +10883,7 @@
     const vibeNote = getEffectiveBoopProfileForScoring()
       ? 'Based on your search and saved vibe preferences'
       : 'Based on your search';
-    return `<section class="hp-section hpage-why-vibe" aria-labelledby="hpage-why-vibe-title">
+    return `<section class="hp-section hpage-why-vibe hpage-why-vibe--mobile" aria-labelledby="hpage-why-vibe-title">
       <h2 id="hpage-why-vibe-title" class="hpage-section-label">Why this hotel matches your vibe</h2>
       ${hpageCarouselWrap(cells, 'Why this hotel matches your vibe')}
       <p class="hpage-vibe-cards-foot">${vibeNote} <span class="hpage-vibe-info" title="Scores reflect your room description, vibe wizard answers, and indexed hotel photos">ⓘ</span></p>
@@ -10767,24 +10958,34 @@
             </div>
             ${reviewMeta}
           </div>
-          <div class="hpage-match-action-vibe hpage-match-action-vibe--sidebar">
-            <button type="button" class="hpage-cta hpage-cta--vibe" onclick="openVibeTourForHotel('${hotelIdAttr}')"><span aria-hidden="true">✦</span> Take a Vibe Tour</button>
-          </div>
         </div>`
       : '';
     const gridCls = hasGuestRating ? 'hpage-match-card-grid' : 'hpage-match-card-grid hpage-match-card-grid--solo';
-    return `<aside class="hpage-sidebar hpage-match-card" aria-label="Match summary">
+    const whyList = hotelDetailWhyMatchListHTML(searchHotel, pageOpts);
+    const whyDesktop = `
+      <div class="hpage-why-vibe hpage-why-vibe--desktop">
+        <h3 class="hpage-vibe-module-subhead">Why it matches</h3>
+        ${whyList
+          ? `<div class="hpage-why-match-list">${whyList}</div>`
+          : '<p class="hpage-why-match-empty">Run a vibe search to see how this hotel matches your preferences.</p>'}
+      </div>`;
+    return `<aside class="hpage-sidebar hpage-match-card hpage-vibe-module" aria-label="Your vibe match">
+      <h2 class="hpage-vibe-module-title">Your Vibe Match</h2>
       <div class="${gridCls}">
         <div class="hpage-match-card-col hpage-match-card-col--score">
           <div class="hpage-match-ring" style="--match-pct:${overall}" aria-label="${overall} percent overall match">
             <span class="hpage-match-ring-val">${overall}%</span>
             <span class="hpage-match-ring-lbl">Overall Match</span>
           </div>
-          <div class="hpage-match-action-book">
-            ${bookLinkHTML(bookHotel, null, 'hotel_detail', { className: 'hpage-cta hpage-cta--primary hpage-cta--match-book', label: 'Book' })}
-          </div>
         </div>
         ${guestColHTML}
+      </div>
+      ${whyDesktop}
+      <div class="hpage-vibe-module-foot">
+        <div class="hpage-match-action-book">
+          ${bookLinkHTML(bookHotel, null, 'hotel_detail', { className: 'hpage-cta hpage-cta--primary hpage-cta--match-book', label: 'Book' })}
+        </div>
+        <button type="button" class="hpage-cta hpage-cta--vibe hpage-cta--vibe-foot" onclick="openVibeTourForHotel('${hotelIdAttr}')"><span aria-hidden="true">✦</span> Take a Vibe Tour</button>
       </div>
     </aside>`;
   }
@@ -10894,10 +11095,49 @@
       </div>`).join('')}</div>`;
   }
 
+  function normalizeRoomNameForRate(name) {
+    return String(name || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+  }
+
   function roomPricePerNight(roomPrices, roomTypeId) {
     if (roomTypeId == null || !roomPrices) return null;
     const v = roomPrices[roomTypeId] ?? roomPrices[String(roomTypeId)];
-    return v != null ? v : null;
+    return v != null && Number.isFinite(Number(v)) ? Number(v) : null;
+  }
+
+  /** LiteAPI mappedRoomId often differs from index roomTypeId — match by rate room name. */
+  function findRateIdByRoomName(roomNames, roomPrices, targetName) {
+    if (!roomNames || !targetName) return null;
+    const target = normalizeRoomNameForRate(targetName);
+    if (!target) return null;
+    let bestId = null;
+    let bestLen = 0;
+    for (const [id, label] of Object.entries(roomNames)) {
+      if (roomPricePerNight(roomPrices, id) == null) continue;
+      const n = normalizeRoomNameForRate(label);
+      if (!n) continue;
+      if (n === target) return id;
+      if (n.includes(target) || target.includes(n)) {
+        const len = Math.min(n.length, target.length);
+        if (len > bestLen) { bestLen = len; bestId = id; }
+      }
+    }
+    return bestId;
+  }
+
+  function resolveRoomRateForType(rt, hotel) {
+    const roomPrices = hotel?.roomPrices;
+    if (!roomPrices) return { price: null, bookRoomTypeId: rt?.roomTypeId ?? null };
+    let bookId = rt?.roomTypeId ?? null;
+    let price = roomPricePerNight(roomPrices, bookId);
+    if (price == null && rt?.name) {
+      const altId = findRateIdByRoomName(hotel.roomNames, roomPrices, rt.name);
+      if (altId != null) {
+        const altPrice = roomPricePerNight(roomPrices, altId);
+        if (altPrice != null) { bookId = altId; price = altPrice; }
+      }
+    }
+    return { price, bookRoomTypeId: bookId };
   }
 
   function hpageOtherRoomPriceColHTML(sym, priceVal, showFc) {
@@ -11015,9 +11255,17 @@
     const score = Math.round(rt.score || roomVibeMatchDisplayPct(searchHotel));
     const bookHotel = { id: d.hotel_id, name: d.name, city: S.city, ...searchHotel };
     const sym = ratesCurrencySymbol(_priceCurrency);
-    const price = rt.roomTypeId != null && searchHotel.roomPrices?.[rt.roomTypeId] != null
-      ? `${sym}${searchHotel.roomPrices[rt.roomTypeId].toLocaleString()}<span class="hpage-room-price-per">/night</span>`
-      : '';
+    const { price: priceVal, bookRoomTypeId } = resolveRoomRateForType(rt, searchHotel);
+    let price = '';
+    if (priceVal != null) {
+      price = `${sym}${priceVal.toLocaleString()}<span class="hpage-room-price-per">/night</span>`;
+    } else if (_hasDateSearch && _fetchingPrices) {
+      price = '<span class="hpage-other-room-price-muted">Loading rates…</span>';
+    } else if (_hasDateSearch && _pricesLoaded) {
+      price = '<span class="hpage-other-room-price-muted">See all rates on booking</span>';
+    } else if (!_hasDateSearch) {
+      price = addDatesLink('Add travel dates for price', 'hpage-best');
+    }
     const bullets = hotelDetailRoomWhyBullets(searchHotel, rt);
     const thumbHTML = thumbs.map((url, i) => {
       const overlay = i === thumbs.length - 1 && extra > 0
@@ -11026,8 +11274,10 @@
     }).join('');
     const specsHTML = hotelDetailRoomSpecsHTML(rt);
     return `<div class="hpage-best-room-grid">
+      <div class="hpage-best-room-photos">
       ${hero ? `<button type="button" class="hpage-best-room-hero" onclick="openHpLightbox(${lbIdx(hero)})"><img src="${escHtml(hero)}" alt="" loading="eager"></button>` : '<div class="hpage-best-room-hero hpage-best-room-hero--ph"></div>'}
       <div class="hpage-best-room-stack">${thumbHTML}</div>
+      </div>
       <div class="hpage-best-room-info">
         ${score > 0 ? `<span class="hpage-room-match-pill" aria-label="${score} percent room match">${score}% room match</span>` : ''}
         <h3 class="hpage-best-room-name">${escHtml(rt.name || 'Room')}</h3>
@@ -11038,7 +11288,7 @@
         </div>` : ''}
         ${price ? `<p class="hpage-best-room-price">${price}</p>` : ''}
         <div class="hpage-best-room-cta-wrap">
-          ${bookLinkHTML(bookHotel, rt.roomTypeId, 'room_row', { className: 'hpage-cta hpage-cta--primary hpage-cta--book-room', label: 'Book This Room →' })}
+          ${bookLinkHTML(bookHotel, bookRoomTypeId, 'room_row', { className: 'hpage-cta hpage-cta--primary hpage-cta--book-room', label: 'Book This Room →' })}
         </div>
       </div>
     </div>`;
@@ -11088,7 +11338,7 @@
     const pricedIndexed = [];
     const unpricedIndexed = [];
     others.forEach((rt, i) => {
-      const hasP = rt.roomTypeId != null && roomPrices[rt.roomTypeId] != null;
+      const hasP = resolveRoomRateForType(rt, searchHotel).price != null;
       const entry = { kind: 'indexed', rt, roomIdx: i + 1 };
       (hasP ? pricedIndexed : unpricedIndexed).push(entry);
     });
@@ -11247,14 +11497,13 @@
         <div class="hpage-topbar">
           <button class="hpage-back" onclick="closeHotelDetailPage()" aria-label="Back">← Back</button>
         </div>
-        <div class="hpage-hero hp-skeleton" style="min-height:320px;margin:0 24px;border-radius:14px"></div>
         <div class="hpage-body">
+          <div class="hpage-hero hp-skeleton" style="min-height:272px;border-radius:14px"></div>
           <div class="hpage-main hpage-main-top">
             <div class="hp-skeleton" style="height:40px;width:72%;margin:8px 0;border-radius:8px"></div>
-            <div class="hp-skeleton" style="height:120px;border-radius:12px;margin-bottom:16px"></div>
-            <div class="hp-skeleton" style="height:280px;border-radius:12px"></div>
+            <div class="hp-skeleton" style="height:48px;width:55%;border-radius:8px"></div>
           </div>
-          <aside class="hpage-sidebar hp-skeleton" style="min-height:360px;border-radius:16px"></aside>
+          <aside class="hpage-sidebar hp-skeleton hpage-match-vibe-bundle" style="min-height:360px;border-radius:16px"></aside>
         </div>
       </div>`;
   }
@@ -11304,11 +11553,11 @@
         <div class="hpage-topbar">
           <button class="hpage-back" onclick="closeHotelDetailPage()" aria-label="Back">← Back</button>
         </div>
-        <div class="hpage-hero">
-          <div class="hp-gallery-mobile">${carouselHTML}</div>
-          <div class="hp-gallery-desktop">${mosaicHTML}</div>
-        </div>
         <div class="hpage-body">
+          <div class="hpage-hero">
+            <div class="hp-gallery-mobile">${carouselHTML}</div>
+            <div class="hp-gallery-desktop">${mosaicHTML}</div>
+          </div>
           <div class="hpage-main hpage-main-top">
             ${hotelDetailIntroHTML(d, searchHotel)}
           </div>
@@ -11322,7 +11571,7 @@
           <div class="hpage-fullbleed hpage-fullbleed--other">
             ${hotelDetailOtherRoomsHTML(searchHotel, d)}
           </div>
-          <div class="hpage-main hpage-main-tail">
+          <div class="hpage-main hpage-main-tail" id="hpage-main-tail">
             ${hotelDetailNbhdHTML(d, searchHotel)}
             ${descHTML}
             ${amenHTML}
@@ -11640,25 +11889,61 @@
     if (_hpCarouselIdx >= imgs.length) hpCarouselGo(imgs.length - 1);
   }
 
-  // Swipe support for carousel on mobile
+  // Swipe support for carousel + detail lightbox on mobile
   (function() {
     let swipeX = 0;
+    let swipeY = 0;
+    let swipeMode = null; // 'carousel' | 'lightbox'
     document.addEventListener('touchstart', e => {
+      if (e.touches.length !== 1) return;
+      const lb = document.getElementById('hp-lightbox');
+      if (lb?.classList.contains('open') && e.target.closest('.hp-lb-stage')) {
+        swipeMode = 'lightbox';
+        swipeX = e.touches[0].clientX;
+        swipeY = e.touches[0].clientY;
+        return;
+      }
       const el = e.target.closest('#hp-carousel');
-      if (el) swipeX = e.touches[0].clientX;
+      if (el) {
+        swipeMode = 'carousel';
+        swipeX = e.touches[0].clientX;
+        swipeY = 0;
+      }
     }, { passive: true });
     document.addEventListener('touchend', e => {
-      const el = e.target.closest('#hp-carousel');
-      if (!el) return;
-      const dx = e.changedTouches[0].clientX - swipeX;
-      if (Math.abs(dx) > 40) hpCarouselStep(dx < 0 ? 1 : -1);
+      if (!swipeMode) return;
+      const mode = swipeMode;
+      swipeMode = null;
+      const t = e.changedTouches[0];
+      const dx = t.clientX - swipeX;
+      const dy = mode === 'lightbox' ? t.clientY - swipeY : 0;
+      if (Math.abs(dx) <= 40 || (mode === 'lightbox' && Math.abs(dx) < Math.abs(dy))) return;
+      if (mode === 'lightbox') hpLightboxStep(dx < 0 ? 1 : -1);
+      else if (e.target.closest('#hp-carousel')) hpCarouselStep(dx < 0 ? 1 : -1);
     }, { passive: true });
   })();
 
   // ── Hotel panel lightbox ───────────────────────────────────────────────────
 
+  function portalHpLightboxToBody() {
+    const lb = document.getElementById('hp-lightbox');
+    if (!lb || lb.parentElement === document.body) return;
+    _hpLightboxPortalHome = { parent: lb.parentElement, next: lb.nextSibling };
+    document.body.appendChild(lb);
+  }
+
+  function restoreHpLightboxPortal() {
+    const lb = document.getElementById('hp-lightbox');
+    if (!lb || !_hpLightboxPortalHome) return;
+    const { parent, next } = _hpLightboxPortalHome;
+    if (parent) {
+      if (next && next.parentNode === parent) parent.insertBefore(lb, next);
+      else parent.appendChild(lb);
+    }
+    _hpLightboxPortalHome = null;
+  }
+
   function openHpLightbox(idx) {
-    if (window.matchMedia('(max-width: 760px)').matches) return;
     if (_hpDetailPhotos.length) {
       _hpLightboxUrls = _hpDetailPhotos.slice();
     } else {
@@ -11669,16 +11954,20 @@
     if (!_hpLightboxUrls.length) return;
     const lb = document.getElementById('hp-lightbox');
     if (!lb) return;
+    portalHpLightboxToBody();
     lb.classList.add('open');
+    document.body.classList.add('has-hp-lightbox');
     document.body.style.overflow = 'hidden';
     hpLightboxGo(idx);
   }
 
-  function closeHpLightbox() {
+  function closeHpLightbox(ev) {
     const lb = document.getElementById('hp-lightbox');
-    if (!lb) return;
+    if (!lb || !lb.classList.contains('open')) return;
+    if (ev && ev.target !== lb) return;
     lb.classList.remove('open');
-    // Only restore overflow if panel is also not needing it locked
+    document.body.classList.remove('has-hp-lightbox');
+    restoreHpLightboxPortal();
     if (_detailHotelId) document.body.style.overflow = 'hidden';
     else document.body.style.overflow = '';
   }

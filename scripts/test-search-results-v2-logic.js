@@ -20,11 +20,10 @@ const sandbox = {
     body: { classList: { add() {}, remove() {} }, appendChild() {} },
   },
 };
+const { featuredRoomMatchPct } = require('../lib/featured-room');
 sandbox.window.RoomMatchResultsBridge = {
   roomVibeMatchDisplayPct(h) {
-    const rooms = h?.roomTypes || [];
-    if (rooms.length) return Math.round(Math.max(0, ...rooms.map((r) => r.score || 0)));
-    return Math.round(Number(h.vectorScore) || 0);
+    return featuredRoomMatchPct(h, { mustKeys: [], availOnly: false });
   },
   hotelStyleMatchDisplayPct(h) {
     const raw = Number(h.hotelScore);

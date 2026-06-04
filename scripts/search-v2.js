@@ -16,6 +16,7 @@
 
 const { buildFactIntent, buildFactIntentLLM, scoreFactSet, mergeStayVibeIntoIntent, STAY_VIBE_TO_VISUAL_STYLE } = require("./fact-catalog");
 const { buildMatchBreakdown } = require("../lib/match-breakdown");
+const { factsMeetMustKeys } = require("../lib/featured-room");
 const { normalizePolygonRing, pointInPolygon, bboxFromRing } = require("./neighborhood-vibe-data");
 
 function slimStubsEnabled() {
@@ -484,6 +485,9 @@ async function runV2Search({ req, supabase, supabaseAdmin, resolveCityName }) {
   ].filter(Boolean);
   const hasFlags = detectedFactKeys.length > 0;
   const hardFilterKeys = (intent.hard_filters || []).map((x) => x.fact_key).filter(Boolean);
+  // BOOP must_haves + LLM hard_filters — featured room & hotel vectorScore only consider
+  // room types that satisfy ALL of these at the room-type facts level.
+  const mustRequireKeys = [...new Set([...mustHaves, ...hardFilterKeys].filter(Boolean))];
 
   // intentType: "bathroom" when bathroom facts are in query (mirrors V1 extractIntentType)
   const intentType = detectedFactKeys.some((k) => BATHROOM_FACT_KEYS.has(k))
@@ -1054,6 +1058,7 @@ async function runV2Search({ req, supabase, supabaseAdmin, resolveCityName }) {
     if (totalAll > 0) {
       const sortedRooms = rooms.slice().sort((a, b) => (b.rawScore || 0) - (a.rawScore || 0));
       for (const r of sortedRooms) {
+        if (mustRequireKeys.length && !factsMeetMustKeys(r.features, mustRequireKeys)) continue;
         // Penalty uses TOTAL photo_count, matching roomEntries' use of
         // entry.photos.length (which is total photos for the room, not
         // intent-filtered). useIntent only affects the SKIP filter so we
@@ -1329,7 +1334,7 @@ async function runV2Search({ req, supabase, supabaseAdmin, resolveCityName }) {
     stayVibe,
     factWeightsRaw,
   };
-  function matchBreakdownFor(hotelId, topScore, hotelScore, primaryNbhd, nbhdFitPct) {
+  function matchBreakdownFor(hotelId, topScore, hotelScore, primaryNbhd, nbhdFitPct, featuredRoom) {
     return buildMatchBreakdown({
       hotelId,
       topScore,
@@ -1337,6 +1342,7 @@ async function runV2Search({ req, supabase, supabaseAdmin, resolveCityName }) {
       nbhdFitPct,
       ...breakdownCtx,
       primaryNbhd,
+      featuredRoom,
     });
   }
 
@@ -1388,7 +1394,7 @@ async function runV2Search({ req, supabase, supabaseAdmin, resolveCityName }) {
         property_type: propertyType,
         primary_nbhd: primaryNbhd,
         ...(nbhdFitPct != null ? { nbhd_fit_pct: nbhdFitPct } : {}),
-        match_breakdown: matchBreakdownFor(hotelId, score, hotelScore, primaryNbhd, nbhdFitPct),
+        match_breakdown: matchBreakdownFor(hotelId, score, hotelScore, primaryNbhd, nbhdFitPct, null),
       };
     }
 
@@ -1437,9 +1443,20 @@ async function runV2Search({ req, supabase, supabaseAdmin, resolveCityName }) {
       if (r.rawScore > prev) roomScoreByName.set(r.room_name, r.rawScore);
     }
 
+    const roomRowsForHotel = byHotel.get(hotelId) || [];
+    const featuresByRoomName = new Map();
+    for (const r of roomRowsForHotel) {
+      const prev = featuresByRoomName.get(r.room_name);
+      if (!prev || (r.rawScore || 0) > (prev.rawScore || 0)) {
+        featuresByRoomName.set(r.room_name, r);
+      }
+    }
+
     const roomEntries = [...roomMap.entries()].map(([name, entry]) => {
       // flagMatch: confirmed fact hits from room-type facts (reliable, independent of photo order)
       const flagMatch = roomFlagMatchMap.get(`${hotelId}::${name}`) ?? 0;
+      const rowFacts = featuresByRoomName.get(name)?.features || {};
+      const must_haves_met = factsMeetMustKeys(rowFacts, mustRequireKeys);
 
       // Per-room score: mean of top-3 intent-type photos (mirrors V1 roomScore logic)
       const intentPhotos = intentType
@@ -1461,20 +1478,32 @@ async function runV2Search({ req, supabase, supabaseAdmin, resolveCityName }) {
         photos:     entry.photos.map((p) => p.url),
         score:      Math.round(roomScore),
         flagMatch,
+        must_haves_met,
         size:       "",
         beds:       "",
         amenities:  [],
       };
     });
 
-    // ── Sort rooms: flagMatch DESC then score DESC (exact V1) ───────────────
+    // ── Sort rooms: must-haves met → flagMatch → score ───────────────────────
     roomEntries.sort((a, b) => {
+      if (mustRequireKeys.length && b.must_haves_met !== a.must_haves_met) {
+        return (b.must_haves_met ? 1 : 0) - (a.must_haves_met ? 1 : 0);
+      }
       if (hasFlags && b.flagMatch !== a.flagMatch) return b.flagMatch - a.flagMatch;
       return (b.score || 0) - (a.score || 0);
     });
 
     // Strip internal field before returning
     const roomTypes = roomEntries.map(({ flagMatch: _fm, ...rest }) => rest);
+    const featuredRoom = roomTypes[0]
+      ? {
+          name:        roomTypes[0].name,
+          score:       roomTypes[0].score,
+          roomTypeId:  roomTypes[0].roomTypeId,
+          must_haves_met: roomTypes[0].must_haves_met,
+        }
+      : null;
 
     return {
       id:          hotelId,
@@ -1487,13 +1516,14 @@ async function runV2Search({ req, supabase, supabaseAdmin, resolveCityName }) {
       mainPhoto:    null,
       hotelPhotos:  [],
       roomTypes:    roomTypes.slice(0, 8),
+      featured_room: featuredRoom,
       isMatched:    score > 0,
       vectorScore:  score,
       hotelScore,
       property_type: propertyType,
       primary_nbhd: primaryNbhd,
       ...(nbhdFitPct != null ? { nbhd_fit_pct: nbhdFitPct } : {}),
-      match_breakdown: matchBreakdownFor(hotelId, score, hotelScore, primaryNbhd, nbhdFitPct),
+      match_breakdown: matchBreakdownFor(hotelId, score, hotelScore, primaryNbhd, nbhdFitPct, featuredRoom),
       score_breakdown: {
         v2_room_match: score,
         v2_hotel_vibe: hotelScore,

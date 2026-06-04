@@ -418,7 +418,7 @@
     const title = b ? b.hotelDisplayTitle(h) : (h.name || 'Hotel');
     const nbhd = h.primary_nbhd?.name || h.city || '';
     const rating = h.rating > 0
-      ? `<span class="sr2-more-rating"><span class="sr2-stars">${'★'.repeat(Math.min(5, Math.max(0, Math.round(Number(h.starRating) || 0))))}</span> (${formatReviewCount(h.reviewCount)})</span>`
+      ? `<span class="sr2-more-rating">${starsHtml(h)} <strong>${Number(h.rating).toFixed(1)}</strong> (${formatReviewCount(h.reviewCount)})</span>`
       : '';
     const img = photo
       ? `<img class="sr2-more-img" src="${esc(photo)}" alt="" loading="lazy" />`
