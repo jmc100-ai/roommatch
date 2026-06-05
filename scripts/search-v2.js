@@ -531,7 +531,12 @@ async function runV2Search({ req, supabase, supabaseAdmin, resolveCityName }) {
     getCachedRates,
   } = require("../lib/lite-rates");
   const { buildFullRatesCacheKey } = require("../lib/rates-snapshot");
-  const { applyBookableRank, buildDatedDisplayOrder } = require("../lib/bookable-rank");
+  const {
+    applyBookableRank,
+    buildDatedDisplayOrder,
+    isHotelBookable,
+    attachRatesToHotel,
+  } = require("../lib/bookable-rank");
   const ratesDateCtx = parseRatesNights(
     String(req.query.checkin || "").trim(),
     String(req.query.checkout || "").trim()
@@ -1574,6 +1579,7 @@ async function runV2Search({ req, supabase, supabaseAdmin, resolveCityName }) {
   let bookableCount = rankedTotal;
   let unbookableVibeCount = 0;
   let bookableFirst = false;
+  let bookableOrderIds = null;
   let sortSource = "server_vibe";
 
   // Await full-city rates before shaping payload (no 8s partial embed when enabled).
@@ -1624,18 +1630,24 @@ async function runV2Search({ req, supabase, supabaseAdmin, resolveCityName }) {
   const fullRatesReady = embeddedRatesResult && !ratesTailPending && (embeddedRatesResult.pricedCount || 0) > 0;
 
   if (bookableRankEnabled() && fullRatesReady) {
+    for (const h of hotels) {
+      if (isHotelBookable(h.id, embeddedRatesResult)) {
+        attachRatesToHotel(h, embeddedRatesResult);
+      }
+    }
     const br = applyBookableRank(hotels, embeddedRatesResult, { requireFreeCancel });
     unbookableVibeCount = br.unbookableVibeCount;
     bookableCount = br.bookableCount;
-    hotels = buildDatedDisplayOrder(br.hotels, {
+    const bookableOrdered = buildDatedDisplayOrder(br.hotels, {
       nbhd_rank_weight: nbhdRankWeight,
       nbhd_blend_applied: !!(nbhdFitByHotelId?.size > 0 && nbhdRankWeight > 0),
     }, boopProfile);
-    bookableFirst = hotels.length > 0;
+    bookableOrderIds = bookableOrdered.map((h) => h.id);
+    bookableFirst = bookableCount > 0;
     sortSource = "server_bookable";
     console.log(
       `[v2 bookable] ${bookableCount} bookable / ${rankedTotal} ranked` +
-      (unbookableVibeCount ? ` (${unbookableVibeCount} unbookable vibe matches hidden)` : "")
+      (unbookableVibeCount ? ` (${unbookableVibeCount} unbookable vibe matches omitted when avail filter on)` : "")
     );
   }
 
@@ -1709,8 +1721,13 @@ async function runV2Search({ req, supabase, supabaseAdmin, resolveCityName }) {
         unbookable_vibe_count:    unbookableVibeCount,
         bookable_first:           bookableFirst,
         sort_source:              sortSource,
+        ...(bookableOrderIds?.length ? { bookable_order_ids: bookableOrderIds } : {}),
         ...(ratesAsOf ? { rates_as_of: ratesAsOf } : {}),
-        ...(hotels[0]?.id ? { hero_hotel_id: hotels[0].id } : {}),
+        ...(bookableOrderIds?.[0]
+          ? { hero_hotel_id: bookableOrderIds[0] }
+          : hotels[0]?.id
+            ? { hero_hotel_id: hotels[0].id }
+            : {}),
         detected_fact_keys:       detectedFactKeys,
         intent_type:              intentType,
         sim_max:                  parseFloat(SIM_MAX.toFixed(4)),

@@ -153,6 +153,8 @@
   let _lastVsearchStats = null;
   /** When true, Best Match preserves API bookable order (no client re-sort on first paint). */
   let _trustServerBookableOrder = false;
+  /** Server bookable-first order (dated Best Match + avail on). */
+  let _bookableOrderIds = null;
   /** Last full /api/vsearch response hotels array — for debug snapshot */
   let _lastVsearchHotels = null;
   /** Last vsearch URL params — for debug snapshot */
@@ -6312,6 +6314,15 @@
   function _syncRatesStatusAfterReveal() {
     if (_resolveRatesLoadingUi()) return;
     _applyRatesStatusMessage();
+    if (_hasDateSearch && _pricesLoaded) {
+      const availFilter = document.getElementById('availFilter');
+      if (availFilter) {
+        availFilter.style.display = 'flex';
+        const cb = document.getElementById('availOnlyCheck');
+        if (cb) cb.checked = _showAvailOnly;
+      }
+      scheduleSyncAvailFilterMount();
+    }
   }
 
   function startSearch() {
@@ -6925,6 +6936,9 @@
         _lastVsearchStats?.bookable_first ||
         _lastVsearchStats?.sort_source === 'server_bookable'
       );
+      _bookableOrderIds = Array.isArray(_lastVsearchStats?.bookable_order_ids)
+        ? _lastVsearchStats.bookable_order_ids
+        : null;
       _lastVsearchHotels = data.hotels || [];
       const st = data.stats;
       if (st && (st.nbhd_rank_weight_config != null || st.nbhd_blend_applied != null)) {
@@ -7091,6 +7105,9 @@
       console.warn(`[results] dropped ${(hotels || []).length - deduped.length} duplicate hotel card(s) by id`);
     }
     _lastHotels = deduped;
+    _bookableOrderIds = Array.isArray(_lastVsearchStats?.bookable_order_ids)
+      ? _lastVsearchStats.bookable_order_ids
+      : null;
     // Telemetry: each successful render is one "search executed" event from the
     // user's perspective. Properties stay coarse (no query text) so PostHog
     // never sees the search query itself.
@@ -8085,15 +8102,13 @@
     _hasDateSearch = true;
     syncBudgetChipUI();
     // Default "Available rooms only" to ON whenever the user searched with
-    // dates AND we actually got rates back — unless server already sent a
-    // bookable-first list (no post-paint reshuffle).
-    if (_lastVsearchStats?.bookable_first) {
+    // dates AND we actually got rates back. With bookable-first the list is
+    // already bookable-only on Best Match (server order trusted), but the
+    // toggle should still show ON — same UX as legacy, and it applies on
+    // price / match+price sorts and room-row filtering.
+    _showAvailOnly = pricedCount > 0;
+    if (_lastHotels.length > 0 && pricedCount === 0) {
       _showAvailOnly = false;
-    } else {
-      _showAvailOnly = pricedCount > 0;
-      if (_lastHotels.length > 0 && pricedCount === 0) {
-        _showAvailOnly = false;
-      }
     }
     _setPriceBtnsState(true);
 
@@ -9533,11 +9548,8 @@
   }
 
   function getSortedHotelsForDisplay() {
-    const trustServerOrder = _trustServerBookableOrder && _currentSort === 'match';
     let hotels = [..._lastHotels];
-    if (!trustServerOrder) {
-      hotels = hotels.filter(hotelPassesAvailFilter);
-    }
+    hotels = hotels.filter(hotelPassesAvailFilter);
     hotels = hotels
       .filter(hotelPassesFreeCancelFilter)
       .filter(hotelPassesBudgetFilter);
@@ -9551,10 +9563,25 @@
         return normalized === _propTypeFilter;
       });
     }
-    if (trustServerOrder) {
-      return hotels;
-    }
-    if (_currentSort === 'rating') {
+
+    const useBookableServerOrder = _trustServerBookableOrder
+      && _currentSort === 'match'
+      && _showAvailOnly
+      && _hasDateSearch
+      && _pricesLoaded
+      && Array.isArray(_bookableOrderIds)
+      && _bookableOrderIds.length > 0;
+
+    if (useBookableServerOrder) {
+      const rank = new Map(_bookableOrderIds.map((id, i) => [String(id), i]));
+      hotels.sort((a, b) => {
+        const ai = rank.get(String(a.id)) ?? 1e9;
+        const bi = rank.get(String(b.id)) ?? 1e9;
+        return ai - bi;
+      });
+    } else if (_currentSort === 'match' && !_showAvailOnly) {
+      // Full vibe-ranked catalog — preserve server insertion order after filters.
+    } else if (_currentSort === 'rating') {
       hotels.sort((a, b) => {
         const cmp = (b.rating || 0) - (a.rating || 0);
         return _sortReverse ? -cmp : cmp;
