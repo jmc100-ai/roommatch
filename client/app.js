@@ -457,10 +457,8 @@
   }
 
   function repaintHotelDetailRoomsIfOpen() {
-    if (!_detailHotelId) return;
-    const searchHotel = _searchHotelForDetail(_detailHotelId);
-    const roomsEl = document.getElementById('hpage-rooms');
-    if (!roomsEl || !searchHotel) return;
+    if (!_detailHotelId || !_detailHotelData) return;
+    if (!hotelDetailSearchContext(_detailHotelData)) return;
     repaintHotelDetailPageRooms();
   }
 
@@ -2967,6 +2965,88 @@
     return Math.round(baseMax + Math.min(60, baseMax * 0.15));
   }
 
+  function isIndexedGuestRoom(rt) {
+    return String(rt?.name || '').trim().toLowerCase() !== '__hotel_public__';
+  }
+
+  /** Budget cap is active for room-level price checks (not before rates load). */
+  function budgetCapActiveForFiltering() {
+    return budgetFilterHasCap(_budgetFilter) && _hasDateSearch && _pricesLoaded;
+  }
+
+  function budgetMaxNightlyCap(f, flex) {
+    const filter = normalizeBudgetFilter(f ?? _budgetFilter ?? { mode: 'any' });
+    const flexOn = flex !== false;
+    if (filter.mode === 'under') {
+      let max = filter.underMax;
+      if (flexOn) max = budgetFlexMaxPrice(max);
+      return max;
+    }
+    if (filter.mode === 'range' && filter.max != null) {
+      let max = filter.max;
+      if (flexOn) max = budgetFlexMaxPrice(max);
+      return max;
+    }
+    return null;
+  }
+
+  function budgetMinNightlyCap(f) {
+    const filter = normalizeBudgetFilter(f ?? _budgetFilter ?? { mode: 'any' });
+    if (filter.mode === 'range' && filter.min != null) return filter.min;
+    return null;
+  }
+
+  function roomResolvedNightly(rt, hotel) {
+    return resolveRoomRateForType(rt, hotel).price;
+  }
+
+  function roomMeetsBudgetCap(rt, hotel, maxCap, minCap) {
+    const p = roomResolvedNightly(rt, hotel);
+    if (p == null) return false;
+    if (maxCap != null && Number.isFinite(maxCap) && p > maxCap) return false;
+    if (minCap != null && Number.isFinite(minCap) && p < minCap) return false;
+    return true;
+  }
+
+  function roomsMatchingMustHavesForBudget(hotel, mustKeys) {
+    const rooms = (hotel?.roomTypes || []).filter(isIndexedGuestRoom);
+    if (!mustKeys?.length) return rooms;
+    let eligible = rooms.filter((rt) => roomTypeMustHavesMet(rt, mustKeys) === true);
+    if (!eligible.length) {
+      const hasExplicit = rooms.some(
+        (rt) => rt?.must_haves_met === true || rt?.must_haves_met === false
+      );
+      if (!hasExplicit && hotel?.featured_room) {
+        const fr = hotel.featured_room;
+        const srv = rooms.find((rt) =>
+          (fr.roomTypeId != null && String(rt.roomTypeId) === String(fr.roomTypeId)) ||
+          (fr.name && rt.name === fr.name)
+        );
+        if (srv) eligible = [srv];
+      }
+    }
+    return eligible;
+  }
+
+  function hotelHasInBudgetPricedRoom(h, maxCap, minCap) {
+    if (maxCap == null && minCap == null) return true;
+    const mustKeys = getActiveMustHaveKeys();
+    const candidates = roomsMatchingMustHavesForBudget(h, mustKeys);
+    for (const rt of candidates) {
+      if (roomMeetsBudgetCap(rt, h, maxCap, minCap)) return true;
+    }
+    if (!mustKeys.length) {
+      for (const price of Object.values(h?.roomPrices || {})) {
+        const p = Number(price);
+        if (!Number.isFinite(p)) continue;
+        if (maxCap != null && p > maxCap) continue;
+        if (minCap != null && p < minCap) continue;
+        return true;
+      }
+    }
+    return false;
+  }
+
   /** Derive wizard priceMatters (-100…100) from stay vibe + budget picks (no manual slider). */
   function derivePriceMattersFromSignals(stayVibe, filter, flex) {
     let pm = 0;
@@ -3292,19 +3372,14 @@
     }
     if (f.mode === 'under' || f.mode === 'range') {
       if (!_pricesLoaded || !_hasDateSearch) return true;
+      const maxCap = budgetMaxNightlyCap(f, _budgetFlex);
+      const minCap = budgetMinNightlyCap(f);
+      if (maxCap != null || minCap != null) {
+        return hotelHasInBudgetPricedRoom(h, maxCap, minCap);
+      }
       const p = hotelNightlyPrice(h);
       if (p == null) return false;
-      if (f.mode === 'under') {
-        let max = f.underMax;
-        if (_budgetFlex) max = budgetFlexMaxPrice(max);
-        return p <= max;
-      }
       if (f.min != null && p < f.min) return false;
-      if (f.max != null) {
-        let max = f.max;
-        if (_budgetFlex) max = budgetFlexMaxPrice(max);
-        if (p > max) return false;
-      }
       return true;
     }
     return true;
@@ -7720,6 +7795,74 @@
   // A batch of 1 hotel has no cap — LiteAPI returns all available room rates.
   // We parallel-fetch up to MAX_ENRICH targets then merge + re-render in place.
   let _hotelRatesEnrichReqId = 0;
+  let _detailRatesInflight = new Map();
+
+  function mergeHotelRatesPayload(h, data) {
+    if (!h || !data?.roomPrices) return false;
+    if (!h.roomPrices) h.roomPrices = {};
+    if (!h.roomNames) h.roomNames = {};
+    if (!h.offerIds) h.offerIds = {};
+    if (!h.roomFreeCancel) h.roomFreeCancel = {};
+
+    let addedAny = false;
+    for (const [rid, price] of Object.entries(data.roomPrices)) {
+      if (h.roomPrices[rid] == null || price < h.roomPrices[rid]) {
+        h.roomPrices[rid] = price;
+        addedAny = true;
+      }
+      if (data.roomNames?.[rid]) h.roomNames[rid] = data.roomNames[rid];
+      if (data.offerIds?.[rid]) h.offerIds[rid] = data.offerIds[rid];
+      if (data.roomFreeCancel?.[rid] != null) h.roomFreeCancel[rid] = data.roomFreeCancel[rid];
+    }
+    if (data.hotelFreeCancel) h.hotelFreeCancel = true;
+    if (data.price != null && (h.price == null || data.price < h.price)) h.price = data.price;
+    return addedAny;
+  }
+
+  function applyDetailClientRates(hotelId, data) {
+    if (!data?.roomPrices) return false;
+    const h = _searchHotelForDetail(hotelId);
+    if (h) return mergeHotelRatesPayload(h, data);
+    if (!_detailHotelData || String(_detailHotelData.hotel_id) !== String(hotelId)) return false;
+    const prev = _detailHotelData._clientRates || {};
+    _detailHotelData._clientRates = {
+      roomPrices: { ...(prev.roomPrices || {}), ...(data.roomPrices || {}) },
+      roomNames: { ...(prev.roomNames || {}), ...(data.roomNames || {}) },
+      offerIds: { ...(prev.offerIds || {}), ...(data.offerIds || {}) },
+      roomFreeCancel: { ...(prev.roomFreeCancel || {}), ...(data.roomFreeCancel || {}) },
+      hotelFreeCancel: data.hotelFreeCancel || prev.hotelFreeCancel,
+      price: data.price != null
+        ? (prev.price == null ? data.price : Math.min(prev.price, data.price))
+        : prev.price,
+    };
+    return true;
+  }
+
+  async function ensureDetailHotelRates(hotelId) {
+    if (!hotelId || !budgetHasValidDates()) return false;
+    if (_detailRatesInflight.has(hotelId)) {
+      try { return await _detailRatesInflight.get(hotelId); } catch (_) { return false; }
+    }
+    const work = (async () => {
+      const params = new URLSearchParams({
+        hotelId,
+        checkin: S.checkin,
+        checkout: S.checkout,
+        currency: getRatesCurrencyPref(),
+      });
+      const r = await apiFetch(`${BACKEND}/api/hotel-rates?` + params);
+      if (!r.ok) return false;
+      const data = await r.json();
+      return applyDetailClientRates(hotelId, data);
+    })();
+    _detailRatesInflight.set(hotelId, work);
+    try {
+      return await work;
+    } finally {
+      _detailRatesInflight.delete(hotelId);
+    }
+  }
+
   async function enrichHotelRates(searchReqId) {
     if (!_hasDateSearch || !_pricesLoaded || !S.checkin || !S.checkout) return;
 
@@ -7761,28 +7904,7 @@
       if (res.status !== 'fulfilled' || !res.value) continue;
       const d = res.value;
       const h = targets[i];
-      if (!d.roomPrices) continue;
-
-      if (!h.roomPrices) h.roomPrices = {};
-      if (!h.roomNames)  h.roomNames  = {};
-      if (!h.offerIds)   h.offerIds   = {};
-      if (!h.roomFreeCancel) h.roomFreeCancel = {};
-
-      let addedAny = false;
-      for (const [rid, price] of Object.entries(d.roomPrices)) {
-        // Never overwrite a lower price already known
-        if (h.roomPrices[rid] == null || price < h.roomPrices[rid]) {
-          h.roomPrices[rid] = price;
-          addedAny = true;
-        }
-        if (d.roomNames?.[rid])  h.roomNames[rid]  = d.roomNames[rid];
-        if (d.offerIds?.[rid])   h.offerIds[rid]   = d.offerIds[rid];
-        if (d.roomFreeCancel?.[rid] != null) h.roomFreeCancel[rid] = d.roomFreeCancel[rid];
-      }
-      if (d.hotelFreeCancel) h.hotelFreeCancel = true;
-      if (d.price != null && (h.price == null || d.price < h.price)) h.price = d.price;
-
-      if (!addedAny) continue;
+      if (!mergeHotelRatesPayload(h, d)) continue;
       enriched++;
 
       // Re-render this hotel's rooms section in place
@@ -7807,6 +7929,12 @@
         priceEl.innerHTML = `${sym}${h.price.toLocaleString()}<span class="price-per">/night</span>`;
       }
       updateOverallMatchBubbleOnCard(h);
+      if (_detailHotelId && String(_detailHotelId) === String(h.id)) {
+        repaintHotelDetailPageRooms();
+      }
+    }
+    if (enriched > 0 && budgetCapActiveForFiltering() && _initialRenderHappened) {
+      renderSortedSmooth();
     }
     console.log(`[perf] hotel-rates enrich: ${targets.length} targets, ${enriched} enriched, ${Date.now() - t0}ms`);
   }
@@ -10156,8 +10284,8 @@
   }
 
   function roomTypeHasPrice(rt, hotel) {
-    if (!rt || rt.roomTypeId == null || !hotel?.roomPrices) return false;
-    return hotel.roomPrices[rt.roomTypeId] != null;
+    if (!rt || !hotel?.roomPrices) return false;
+    return roomResolvedNightly(rt, hotel) != null;
   }
 
   function pickFeaturedRoomType(hotel) {
@@ -10189,6 +10317,14 @@
       }
     }
     if (!eligible.length) return null;
+
+    if (budgetCapActiveForFiltering()) {
+      const maxCap = budgetMaxNightlyCap();
+      const minCap = budgetMinNightlyCap();
+      const inBudget = eligible.filter((rt) => roomMeetsBudgetCap(rt, hotel, maxCap, minCap));
+      if (!inBudget.length) return null;
+      eligible = inBudget;
+    }
 
     if (ctx.priceSort && ctx.availOnly) {
       return [...eligible].sort(
@@ -10237,8 +10373,11 @@
     const scoredFirst = [...rooms].sort((a, b) => (b.score || 0) - (a.score || 0));
 
     const filterActive = _showAvailOnly && _hasDateSearch && _pricesLoaded;
+    const budgetActive = budgetCapActiveForFiltering();
+    const maxCap = budgetActive ? budgetMaxNightlyCap() : null;
+    const minCap = budgetActive ? budgetMinNightlyCap() : null;
     let ordered;
-    if (!filterActive) {
+    if (!filterActive && !budgetActive) {
       ordered = scoredFirst;
     } else {
       const scoredPriced   = [];
@@ -10246,14 +10385,22 @@
       const unscoredPriced = [];
       const unscoredUnpriced = [];
       for (const rt of scoredFirst) {
-        const hasPrice = rt && rt.roomTypeId != null && hotel?.roomPrices?.[rt.roomTypeId] != null;
+        const resolved = roomResolvedNightly(rt, hotel);
+        const hasPrice = resolved != null;
+        const inBudget = !budgetActive || roomMeetsBudgetCap(rt, hotel, maxCap, minCap);
         const hasScore = (rt.score || 0) > 0;
+        if (budgetActive && !inBudget) continue;
         if (hasPrice && hasScore)  scoredPriced.push(rt);
         else if (hasScore)         scoredUnpriced.push(rt);
         else if (hasPrice)         unscoredPriced.push(rt);
         else                       unscoredUnpriced.push(rt);
       }
-      ordered = [...scoredPriced, ...scoredUnpriced, ...unscoredPriced, ...unscoredUnpriced];
+      if (budgetActive && !scoredPriced.length && !scoredUnpriced.length
+          && !unscoredPriced.length && !unscoredUnpriced.length) {
+        ordered = [];
+      } else {
+        ordered = [...scoredPriced, ...scoredUnpriced, ...unscoredPriced, ...unscoredUnpriced];
+      }
     }
 
     const featured = pickFeaturedRoomType(hotel);
@@ -10695,6 +10842,24 @@
       // Defer scroll to reviews until after layout settles.
       if (scrollTo === 'reviews') {
         requestAnimationFrame(() => _hpScrollToReviews({ smooth: false }));
+      }
+      if (budgetHasValidDates()) {
+        ensureDetailHotelRates(hotelId).then((merged) => {
+          if (_detailHotelId !== hotelId || !merged) return;
+          repaintHotelDetailPageRooms();
+          const sh = hotelDetailSearchContext(_detailHotelData);
+          if (sh) {
+            mountHotelDetailMobileCta(
+              hotelDetailMobileCtaHTML(
+                { id: data.hotel_id, name: data.name, city: S.city, ...sh },
+                escHtml(String(data.hotel_id))
+              )
+            );
+          }
+          if (budgetCapActiveForFiltering() && _initialRenderHappened) {
+            renderSortedSmooth();
+          }
+        }).catch(() => {});
       }
     } catch (e) {
       root.innerHTML = `<div class="hpage-error">
@@ -11248,7 +11413,9 @@
         </div>`;
     }
     const noteHTML = _hasDateSearch
-      ? '<span class="hpage-other-room-price-muted">See all rates on booking</span>'
+      ? (budgetCapActiveForFiltering()
+        ? `<span class="hpage-other-room-price-muted">No rate under ${budgetMaxNightlyCap() != null ? '$' + budgetMaxNightlyCap().toLocaleString() : 'budget'}/night</span>`
+        : '<span class="hpage-other-room-price-muted">See all rates on booking</span>')
       : addDatesLink('Add travel dates', 'hpage-other');
     return `<div class="hpage-other-room-price-col hpage-other-room-price-col--muted">
         <div class="hpage-other-room-price-note">${noteHTML}</div>
@@ -11262,8 +11429,7 @@
     const hero = photos[0];
     const score = Math.round(rt.score || 0);
     const sym = ratesCurrencySymbol(_priceCurrency);
-    const rid = rt.roomTypeId;
-    const priceVal = roomPricePerNight(roomPrices, rid);
+    const { price: priceVal, bookRoomTypeId } = resolveRoomRateForType(rt, bookHotel);
     const hasPrice = priceVal != null;
     const lbIdx = (url) => {
       const i = _hpDetailPhotos.indexOf(url);
@@ -11278,10 +11444,10 @@
     const specsHTML = hotelDetailRoomSpecsHTML(rt, 'inline');
     const fcMap = bookHotel?.roomFreeCancel;
     const showFc = hasPrice && (
-      (fcMap && (fcMap[rid] === true || fcMap[String(rid)] === true))
+      (fcMap && (fcMap[bookRoomTypeId] === true || fcMap[String(bookRoomTypeId)] === true))
       || bookHotel?.hotelFreeCancel === true
     );
-    const bookHTML = bookLinkHTML(bookHotel, rid, 'room_row', {
+    const bookHTML = bookLinkHTML(bookHotel, bookRoomTypeId, 'room_row', {
       className: 'hpage-other-room-book',
       label: 'Book →',
       stopPropagation: true,
@@ -11340,7 +11506,8 @@
       </article>`;
   }
 
-  function hotelDetailRoomPanelHTML(searchHotel, d, rt) {
+  function hotelDetailRoomPanelHTML(searchHotel, d, rt, panelOpts) {
+    panelOpts = panelOpts || {};
     const photos = rt.photos || [];
     const hero = photos[0];
     const thumbs = photos.slice(1, 4);
@@ -11359,7 +11526,15 @@
     } else if (_hasDateSearch && _fetchingPrices) {
       price = '<span class="hpage-other-room-price-muted">Loading rates…</span>';
     } else if (_hasDateSearch && _pricesLoaded) {
-      price = '<span class="hpage-other-room-price-muted">See all rates on booking</span>';
+      if (budgetCapActiveForFiltering()) {
+        const cap = budgetMaxNightlyCap();
+        const capLabel = cap != null ? `$${cap.toLocaleString()}` : 'your budget';
+        price = panelOpts.inBudget === false
+          ? `<span class="hpage-other-room-price-muted">No confirmed rate under ${capLabel}/night for this room</span>`
+          : `<span class="hpage-other-room-price-muted">No live rate under ${capLabel}/night yet — check booking</span>`;
+      } else {
+        price = '<span class="hpage-other-room-price-muted">See all rates on booking</span>';
+      }
     } else if (!_hasDateSearch) {
       price = addDatesLink('Add travel dates for price', 'hpage-best');
     }
@@ -11410,10 +11585,17 @@
     const rooms = hotelDetailSortedRooms(searchHotel);
     const rt = rooms[0];
     if (!rt) return '';
+    const maxCap = budgetCapActiveForFiltering() ? budgetMaxNightlyCap() : null;
+    const minCap = budgetCapActiveForFiltering() ? budgetMinNightlyCap() : null;
+    const inBudget = !budgetCapActiveForFiltering()
+      || roomMeetsBudgetCap(rt, searchHotel, maxCap, minCap);
+    const label = inBudget
+      ? 'Your best room match'
+      : 'Top visual match';
     return `<section class="hp-section hpage-best-room" id="hpage-best-room" aria-labelledby="hpage-best-room-title">
-      <h2 id="hpage-best-room-title" class="hpage-section-label">Your best room match</h2>
+      <h2 id="hpage-best-room-title" class="hpage-section-label">${label}</h2>
       <div class="hpage-best-room-card">
-        ${hotelDetailRoomPanelHTML(searchHotel, d, rt)}
+        ${hotelDetailRoomPanelHTML(searchHotel, d, rt, { inBudget })}
       </div>
     </section>`;
   }
@@ -11514,9 +11696,21 @@
 
   function hotelDetailSearchContext(d) {
     const h = _searchHotelForDetail(d.hotel_id);
-    if (h?.roomTypes?.length) return h;
-    if (!d?.room_types?.length) return h || null;
-    return {
+    const overlay = d._clientRates || {};
+    const mergeRates = (base) => ({
+      ...(base || {}),
+      roomPrices: { ...(base?.roomPrices || {}), ...(overlay.roomPrices || {}) },
+      roomNames: { ...(base?.roomNames || {}), ...(overlay.roomNames || {}) },
+      offerIds: { ...(base?.offerIds || {}), ...(overlay.offerIds || {}) },
+      roomFreeCancel: { ...(base?.roomFreeCancel || {}), ...(overlay.roomFreeCancel || {}) },
+      price: overlay.price != null
+        ? (base?.price == null ? overlay.price : Math.min(base.price, overlay.price))
+        : base?.price,
+      hotelFreeCancel: overlay.hotelFreeCancel || base?.hotelFreeCancel,
+    });
+    if (h?.roomTypes?.length) return mergeRates(h);
+    if (!d?.room_types?.length) return h ? mergeRates(h) : null;
+    return mergeRates({
       ...(h || {}),
       id: d.hotel_id,
       name: d.name,
@@ -11538,7 +11732,7 @@
       nbhd_fit_pct: h?.nbhd_fit_pct ?? null,
       primary_nbhd: d.primary_nbhd || h?.primary_nbhd,
       match_breakdown: h?.match_breakdown,
-    };
+    });
   }
 
   function repaintHotelDetailPageRooms() {
