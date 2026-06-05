@@ -151,6 +151,8 @@
   const VIBE_TOUR_DEBUG = /^(localhost|127\.0\.0\.1)$/i.test(window.location.hostname);
   /** Last /api/vsearch `stats` — used to align match sort with server nbhd blend weight */
   let _lastVsearchStats = null;
+  /** When true, Best Match preserves API bookable order (no client re-sort on first paint). */
+  let _trustServerBookableOrder = false;
   /** Last full /api/vsearch response hotels array — for debug snapshot */
   let _lastVsearchHotels = null;
   /** Last vsearch URL params — for debug snapshot */
@@ -4063,6 +4065,7 @@
     // Save to history and rebuild chips so next visit shows it as recent
     writeHistory(CITY_HISTORY_KEY, city);
     buildCityChips();
+    prefetchCityRatesOnCitySelect();
     // Reset downstream selections when city changes
     if (prevCityKey && prevCityKey !== cityKey(city)) {
       for (const k of Object.keys(NBHD_CITY_ROWS)) delete NBHD_CITY_ROWS[k];
@@ -4716,7 +4719,7 @@
           for (const { cardId, h } of cardEntries) NBHD_CARD_DATA[cardId] = h;
           _indexNbhdNameToCard(cardEntries);
           grid.innerHTML = cardEntries.map(({ cardId, h }) => renderNbhdCard(h, cardId)).join('') + renderNbhdSkip(city);
-          renderNbhdMap(city, cardEntries);
+          scheduleNbhdMapRender(city, cardEntries);
           _flushNbhdPendingScroll();
           return;
         }
@@ -4735,7 +4738,7 @@
       for (const { cardId, h } of fallbackEntries) NBHD_CARD_DATA[cardId] = h;
       _indexNbhdNameToCard(fallbackEntries);
       grid.innerHTML = fallbackEntries.map(({ cardId, h }) => renderNbhdCard(h, cardId)).join('') + renderNbhdSkip(city);
-      renderNbhdMap(city, fallbackEntries);
+      scheduleNbhdMapRender(city, fallbackEntries);
       _flushNbhdPendingScroll();
     } else {
       // No neighbourhood data at all — skip step gracefully
@@ -6249,7 +6252,11 @@
       resultsEl.innerHTML = buildResultsSkeletonCardsHTML(5);
     }
     const rc = document.getElementById('resultCount');
-    if (rc) rc.textContent = 'Finalizing live rates for your dates…';
+    if (rc) {
+      rc.textContent = _lastVsearchStats?.bookable_first
+        ? `Checking live rates across ${S.city || 'your city'}…`
+        : 'Finalizing live rates for your dates…';
+    }
 
     const t0 = Date.now();
     const ratesP = _ratesArrivalPromise || Promise.resolve();
@@ -6914,6 +6921,10 @@
       }
       const data = await resp.json();
       _lastVsearchStats = data.stats || null;
+      _trustServerBookableOrder = !!(
+        _lastVsearchStats?.bookable_first ||
+        _lastVsearchStats?.sort_source === 'server_bookable'
+      );
       _lastVsearchHotels = data.hotels || [];
       const st = data.stats;
       if (st && (st.nbhd_rank_weight_config != null || st.nbhd_blend_applied != null)) {
@@ -6959,9 +6970,9 @@
         console.log(`[perf] render called: ${Date.now() - _t0search}ms`);
         render(hotels, hasDates);
         if (hasDates && data.rates && typeof data.rates.prices === 'object') {
-          if (data.rates.tail_pending) {
-            // Full "Available only" count needs the whole catalog — keep skeleton
-            // until tail lands (server prefetch may already be in flight / cached).
+          if (data.rates.full_city && !data.rates.tail_pending) {
+            applyVsearchEmbeddedRates(data.rates, reqId);
+          } else if (data.rates.tail_pending) {
             if (data.rates.pricedCount > 0) {
               applyPrices(
                 data.rates.prices,
@@ -7256,6 +7267,46 @@
     fetch(`${BACKEND}/api/rates?` + params, signal ? { signal } : undefined).catch(() => {});
   }
 
+  /** Best-effort warm when city is picked (+14/+3 nights if dates not set yet). */
+  function prefetchCityRatesOnCitySelect() {
+    if (!S.city) return;
+    let checkin = S.checkin;
+    let checkout = S.checkout;
+    if (!checkin || !checkout || checkin >= checkout) {
+      const d = new Date();
+      d.setDate(d.getDate() + 14);
+      checkin = d.toISOString().slice(0, 10);
+      const d2 = new Date(d);
+      d2.setDate(d2.getDate() + 3);
+      checkout = d2.toISOString().slice(0, 10);
+    }
+    const params = new URLSearchParams({
+      city: S.city,
+      checkin,
+      checkout,
+      currency: getRatesCurrencyPref(),
+      skip_detail: '1',
+    });
+    fetch(`${BACKEND}/api/rates?` + params).catch(() => {});
+    fetch(`${BACKEND}/api/warm-v2-city?` + new URLSearchParams({ city: S.city })).catch(() => {});
+    console.log('[perf] prefetch city rates + warm-v2-city on city select');
+  }
+
+  function scheduleNbhdMapRender(city, entries) {
+    const run = () => renderNbhdMap(city, entries);
+    if (!_initialRenderHappened && document.body.classList.contains('has-results')) {
+      const tick = () => {
+        if (_initialRenderHappened) {
+          if (typeof requestIdleCallback === 'function') requestIdleCallback(run, { timeout: 150 });
+          else setTimeout(run, 100);
+        } else setTimeout(tick, 50);
+      };
+      tick();
+      return;
+    }
+    run();
+  }
+
   /** After first paint: visible meta + stub photos; optional rate follow-ups (capped). */
   function _runPostRevealRatesWork(searchReqId) {
     if (searchReqId !== _ratesReqId) return;
@@ -7268,6 +7319,15 @@
       if (_hasDateSearch && _pricesLoaded) {
         await lazyFetchStubRooms(searchReqId, { maxTargets: 25 });
         if (searchReqId !== _ratesReqId) return;
+        if (_lastVsearchStats?.bookable_first) {
+          const top50 = rankedHotelIdsForRates(_lastHotels, 50);
+          if (top50.length) {
+            fetchPrices(S.city, S.checkin, S.checkout, searchReqId, top50, null, {
+              skipDetail: false,
+              background: true,
+            });
+          }
+        }
         enrichHotelRates(searchReqId);
         _refreshV2CuratedAfterRates();
       }
@@ -8025,12 +8085,15 @@
     _hasDateSearch = true;
     syncBudgetChipUI();
     // Default "Available rooms only" to ON whenever the user searched with
-    // dates AND we actually got rates back. Cuts a 3,500-hotel firehose down
-    // to a list the user can act on. Falls back to OFF if zero hotels priced
-    // (e.g. supplier outage) so the user still sees results.
-    _showAvailOnly = pricedCount > 0;
-    if (_lastHotels.length > 0 && pricedCount === 0) {
+    // dates AND we actually got rates back — unless server already sent a
+    // bookable-first list (no post-paint reshuffle).
+    if (_lastVsearchStats?.bookable_first) {
       _showAvailOnly = false;
+    } else {
+      _showAvailOnly = pricedCount > 0;
+      if (_lastHotels.length > 0 && pricedCount === 0) {
+        _showAvailOnly = false;
+      }
     }
     _setPriceBtnsState(true);
 
@@ -8154,6 +8217,7 @@
     // it, toggling direction on the active sort looked like the sort was
     // broken (the pinned hero stayed at #1 either way).
     _vibeTourLeadId = null;
+    _trustServerBookableOrder = false;
     if (sort === _currentSort) {
       _sortReverse = !_sortReverse;
     } else {
@@ -9469,8 +9533,12 @@
   }
 
   function getSortedHotelsForDisplay() {
-    let hotels = [..._lastHotels]
-      .filter(hotelPassesAvailFilter)
+    const trustServerOrder = _trustServerBookableOrder && _currentSort === 'match';
+    let hotels = [..._lastHotels];
+    if (!trustServerOrder) {
+      hotels = hotels.filter(hotelPassesAvailFilter);
+    }
+    hotels = hotels
       .filter(hotelPassesFreeCancelFilter)
       .filter(hotelPassesBudgetFilter);
     if (_nbhdFilter) {
@@ -9479,10 +9547,12 @@
     if (_propTypeFilter && _propTypeFilter !== 'all') {
       hotels = hotels.filter(h => {
         const pt = h.property_type || 'hotel';
-        // legacy apartment_rental maps to apartment
         const normalized = pt === 'apartment_rental' ? 'apartment' : pt;
         return normalized === _propTypeFilter;
       });
+    }
+    if (trustServerOrder) {
+      return hotels;
     }
     if (_currentSort === 'rating') {
       hotels.sort((a, b) => {

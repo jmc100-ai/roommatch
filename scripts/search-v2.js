@@ -33,6 +33,28 @@ function fullPayloadLimit() {
   return Math.max(50, Math.min(500, parseInt(process.env.VSEARCH_FULL_PAYLOAD_LIMIT || "250", 10)));
 }
 
+function fullRatesEmbedEnabled() {
+  const v = process.env.VSEARCH_FULL_RATES_EMBED;
+  if (v === "0" || v === "false") return false;
+  return v === "1" || v === "true" || v == null || v === "";
+}
+
+function bookableRankEnabled() {
+  const v = process.env.VSEARCH_BOOKABLE_RANK;
+  if (v === "0" || v === "false") return false;
+  return v === "1" || v === "true" || v == null || v === "";
+}
+
+function bookablePayloadEnabled() {
+  const v = process.env.VSEARCH_BOOKABLE_PAYLOAD;
+  if (v === "0" || v === "false") return false;
+  return v === "1" || v === "true" || v == null || v === "";
+}
+
+function matchBreakdownTopN() {
+  return Math.max(0, Math.min(250, parseInt(process.env.VSEARCH_MATCH_BREAKDOWN_TOPN || "25", 10)));
+}
+
 /** Minimal stub rows within the top-N full-payload window (no match_breakdown). */
 function slimStubPayload(h) {
   const out = {
@@ -100,7 +122,8 @@ function shapeVsearchHotelPayload(hotels) {
 // ── Phase-A in-memory cache (per city, 5-minute TTL) ─────────────────────────
 // Avoids re-fetching 3,500+ hotel cache rows + 9,600+ index rows on every search.
 const _phaseACache = new Map(); // city → { ts, hotelRows, indexRows }
-const PHASE_A_TTL_MS = 5 * 60 * 1000;
+const PHASE_A_TTL_MS = Math.max(60_000, Math.min(60 * 60 * 1000,
+  parseInt(process.env.PHASE_A_TTL_MS || "900000", 10)));
 
 function getPhaseACache(city) {
   const entry = _phaseACache.get(city);
@@ -507,13 +530,15 @@ async function runV2Search({ req, supabase, supabaseAdmin, resolveCityName }) {
     sanitizeRatesCurrency,
     getCachedRates,
   } = require("../lib/lite-rates");
+  const { buildFullRatesCacheKey } = require("../lib/rates-snapshot");
+  const { applyBookableRank, buildDatedDisplayOrder } = require("../lib/bookable-rank");
   const ratesDateCtx = parseRatesNights(
     String(req.query.checkin || "").trim(),
     String(req.query.checkout || "").trim()
   );
   const ratesCurrency = sanitizeRatesCurrency(req.query.currency);
   const ratesCacheKey = ratesDateCtx
-    ? `${city}|${ratesDateCtx.checkin}|${ratesDateCtx.checkout}|${ratesCurrency}`
+    ? buildFullRatesCacheKey(city, ratesDateCtx.checkin, ratesDateCtx.checkout, ratesCurrency)
     : null;
   let fullCityRatesPromise = null;
   let ratesTailPending = false;
@@ -537,7 +562,7 @@ async function runV2Search({ req, supabase, supabaseAdmin, resolveCityName }) {
         ratesDateCtx.checkin,
         ratesDateCtx.checkout,
         ratesCurrency,
-        { skipDetail: true, cacheKey: ratesCacheKey }
+        { skipDetail: true, cacheKey: ratesCacheKey, supabase: fetchClient }
       )
         .then((r) => {
           _perf.rates_full_ms = Date.now() - tRates0;
@@ -1545,34 +1570,32 @@ async function runV2Search({ req, supabase, supabaseAdmin, resolveCityName }) {
     console.warn(`[v2] deduped ${beforeDedupe - hotels.length} duplicate hotel_id row(s) in vsearch payload`);
   }
 
-  hotels = shapeVsearchHotelPayload(hotels);
+  const rankedTotal = hotels.length;
+  let bookableCount = rankedTotal;
+  let unbookableVibeCount = 0;
+  let bookableFirst = false;
+  let sortSource = "server_vibe";
 
-  const nbhdBlendApplied = !!(nbhdFitByHotelId?.size > 0 && nbhdRankWeight > 0);
-
-  console.log(
-    `[v2] ranked: ${hotels.length} hotels | SIM_MAX=${SIM_MAX.toFixed(4)} SIM_MIN=${SIM_MIN.toFixed(4)} ` +
-    `maxRaw=${maxRawSim.toFixed(4)} hotel_vibe=${hotelVibeModel}` +
-    (hotelVibeModel === "v2_facts"
-      ? ` HV_MAX=${HOTEL_SIM_MAX.toFixed(4)} HV_BLEND=${HOTEL_VIBE_BLEND_WEIGHT.toFixed(2)} (${hotelVibeRawMap.size} hotels scored)`
-      : "")
-  );
-  _perf.total_since_phase_a_ms = Date.now() - _t0;
-  _perf.wall_ms = Date.now() - _t0Total;
-
-  // If full-city rates started at phase-A, wait up to budget so cold searches
-  // often embed complete pricing in the vsearch response (no client tail hop).
-  if (fullCityRatesPromise && ratesTailPending && !embeddedRatesResult) {
-    const waitMs = Math.max(0, Math.min(15000,
-      parseInt(process.env.VSEARCH_RATES_WAIT_MS || "8000", 10)));
-    const tWait = Date.now();
-    const raced = await Promise.race([
-      fullCityRatesPromise,
-      new Promise((resolve) => setTimeout(() => resolve(null), waitMs)),
-    ]);
-    _perf.rates_embed_wait_ms = Date.now() - tWait;
-    if (raced?.pricedCount > 0) {
-      embeddedRatesResult = raced;
+  // Await full-city rates before shaping payload (no 8s partial embed when enabled).
+  if (ratesDateCtx && cityHotelIds.length && fullCityRatesPromise && !embeddedRatesResult) {
+    if (fullRatesEmbedEnabled()) {
+      const tWait = Date.now();
+      embeddedRatesResult = await fullCityRatesPromise;
+      _perf.rates_embed_wait_ms = Date.now() - tWait;
       ratesTailPending = false;
+    } else if (ratesTailPending) {
+      const waitMs = Math.max(0, Math.min(15000,
+        parseInt(process.env.VSEARCH_RATES_WAIT_MS || "8000", 10)));
+      const tWait = Date.now();
+      const raced = await Promise.race([
+        fullCityRatesPromise,
+        new Promise((resolve) => setTimeout(() => resolve(null), waitMs)),
+      ]);
+      _perf.rates_embed_wait_ms = Date.now() - tWait;
+      if (raced?.pricedCount > 0) {
+        embeddedRatesResult = raced;
+        ratesTailPending = false;
+      }
     }
   }
 
@@ -1597,9 +1620,53 @@ async function runV2Search({ req, supabase, supabaseAdmin, resolveCityName }) {
     console.log(`[v2 rates] tail pending (${cityHotelIds.length} catalog ids, wait budget exhausted)`);
   }
 
+  const requireFreeCancel = !!(boopProfile?.dealbreakers || []).includes("free_cancellation");
+  const fullRatesReady = embeddedRatesResult && !ratesTailPending && (embeddedRatesResult.pricedCount || 0) > 0;
+
+  if (bookableRankEnabled() && fullRatesReady) {
+    const br = applyBookableRank(hotels, embeddedRatesResult, { requireFreeCancel });
+    unbookableVibeCount = br.unbookableVibeCount;
+    bookableCount = br.bookableCount;
+    hotels = buildDatedDisplayOrder(br.hotels, {
+      nbhd_rank_weight: nbhdRankWeight,
+      nbhd_blend_applied: !!(nbhdFitByHotelId?.size > 0 && nbhdRankWeight > 0),
+    }, boopProfile);
+    bookableFirst = hotels.length > 0;
+    sortSource = "server_bookable";
+    console.log(
+      `[v2 bookable] ${bookableCount} bookable / ${rankedTotal} ranked` +
+      (unbookableVibeCount ? ` (${unbookableVibeCount} unbookable vibe matches hidden)` : "")
+    );
+  }
+
+  const breakdownTopN = matchBreakdownTopN();
+  if (breakdownTopN >= 0) {
+    hotels.forEach((h, idx) => {
+      if (idx >= breakdownTopN && h.match_breakdown) delete h.match_breakdown;
+    });
+  }
+
+  hotels = shapeVsearchHotelPayload(hotels);
+
+  const nbhdBlendApplied = !!(nbhdFitByHotelId?.size > 0 && nbhdRankWeight > 0);
+
+  console.log(
+    `[v2] ranked: ${hotels.length} hotels | SIM_MAX=${SIM_MAX.toFixed(4)} SIM_MIN=${SIM_MIN.toFixed(4)} ` +
+    `maxRaw=${maxRawSim.toFixed(4)} hotel_vibe=${hotelVibeModel}` +
+    (hotelVibeModel === "v2_facts"
+      ? ` HV_MAX=${HOTEL_SIM_MAX.toFixed(4)} HV_BLEND=${HOTEL_VIBE_BLEND_WEIGHT.toFixed(2)} (${hotelVibeRawMap.size} hotels scored)`
+      : "")
+  );
+  _perf.total_since_phase_a_ms = Date.now() - _t0;
+  _perf.wall_ms = Date.now() - _t0Total;
+
   console.log(
     `[v2 perf] TOTAL: ${_perf.total_since_phase_a_ms}ms (since phase-A) | wall: ${_perf.wall_ms}ms (since handler entry)`
   );
+
+  const ratesAsOf = embeddedRatesResult && fullRatesReady
+    ? new Date().toISOString()
+    : undefined;
 
   return {
     status: 200,
@@ -1637,6 +1704,13 @@ async function runV2Search({ req, supabase, supabaseAdmin, resolveCityName }) {
         query_router:             intent,
         nlp_router:               intent.router_version || "v2-regex",
         ranked_hotels:            hotels.length,
+        ranked_total:             rankedTotal,
+        bookable_count:           bookableCount,
+        unbookable_vibe_count:    unbookableVibeCount,
+        bookable_first:           bookableFirst,
+        sort_source:              sortSource,
+        ...(ratesAsOf ? { rates_as_of: ratesAsOf } : {}),
+        ...(hotels[0]?.id ? { hero_hotel_id: hotels[0].id } : {}),
         detected_fact_keys:       detectedFactKeys,
         intent_type:              intentType,
         sim_max:                  parseFloat(SIM_MAX.toFixed(4)),
@@ -1651,6 +1725,7 @@ async function runV2Search({ req, supabase, supabaseAdmin, resolveCityName }) {
         nbhd_blend_applied:       nbhdBlendApplied,
         slim_stubs:               slimStubsEnabled(),
         compact_tail:             compactTailEnabled(),
+        bookable_payload:         bookablePayloadEnabled() && bookableFirst,
         full_payload_limit:       compactTailEnabled() ? fullPayloadLimit() : null,
         nbhd_cache_hit:           nbhdCacheHit,
         price_matters:            priceMatters,
@@ -1662,8 +1737,9 @@ async function runV2Search({ req, supabase, supabaseAdmin, resolveCityName }) {
           ? { rates_embed_ms: _perf.rates_embed_ms, rates_embed_count: _perf.rates_embed_count ?? 0 }
           : {}),
         ...(nbhdBlendApplied ? { nbhd_rank_weight: nbhdRankWeight } : {}),
-        client_resort_note:
-          "API hotel order uses server primarySignal; the UI re-sorts with Best Match (room vibe % + nbhd blend + Boop price guards).",
+        client_resort_note: bookableFirst
+          ? "Dated search: API order is final bookable Best Match; client must not re-sort on first paint."
+          : "API hotel order uses server primarySignal; the UI re-sorts with Best Match (room vibe % + nbhd blend + Boop price guards).",
         ...(String(req.query.compare || "") === "1"
           ? { compare: { enabled: true, v2_top_ids: hotels.slice(0, 20).map((h) => h.id) } }
           : {}),
@@ -1672,4 +1748,35 @@ async function runV2Search({ req, supabase, supabaseAdmin, resolveCityName }) {
   };
 }
 
-module.exports = { runV2Search, invalidatePhaseACache };
+/** Warm phase-A DB cache + nbhd primary map during Boop wizard. */
+async function warmV2City(supabase, city) {
+  const fetchClient = supabase;
+  if (!fetchClient || !city) return { ok: false, reason: "missing_city" };
+
+  if (!getPhaseACache(city)) {
+    const [cacheResult, indexResult] = await Promise.all([
+      fetchClient.from("v2_hotels_cache").select("hotel_id, property_type").eq("city", city),
+      fetchClient
+        .from("v2_room_types_index")
+        .select("hotel_id,room_name,facts,photo_count,photo_type_counts")
+        .eq("city", city)
+        .limit(100000),
+    ]);
+    if (!cacheResult.error && cacheResult.data?.length) {
+      setPhaseACache(city, cacheResult.data, indexResult.data || []);
+    }
+  }
+
+  const { readPrimaryByCity } = require("../lib/nbhd-boop-cache");
+  await readPrimaryByCity(fetchClient, city);
+
+  await fetchClient.from("neighborhoods").select("id").eq("city", city).limit(1);
+
+  return {
+    ok: true,
+    phase_a_cached: !!getPhaseACache(city),
+    hotels: getPhaseACache(city)?.hotelRows?.length || 0,
+  };
+}
+
+module.exports = { runV2Search, invalidatePhaseACache, warmV2City };

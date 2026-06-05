@@ -7,6 +7,7 @@ const express = require("express");
 const cors    = require("cors");
 const path    = require("path");
 const crypto  = require("crypto");
+const zlib    = require("zlib");
 const fs      = require("fs");
 // Load .env from the repo root (next to server.js), not process.cwd() — IDEs/tasks
 // often start Node from another folder, which breaks local env on localhost.
@@ -111,7 +112,7 @@ const {
   pointInPolygon,
   bboxFromRing,
 } = require("./scripts/neighborhood-vibe-data");
-const { runV2Search, invalidatePhaseACache } = require("./scripts/search-v2");
+const { runV2Search, invalidatePhaseACache, warmV2City } = require("./scripts/search-v2");
 const {
   sanitizeRatesCurrency,
   fetchRatesForHotelIds,
@@ -119,12 +120,29 @@ const {
   mergeLiteRatesIntoMaps,
   RATES_DETAIL_TOPN,
 } = require("./lib/lite-rates");
+const { buildFullRatesCacheKey } = require("./lib/rates-snapshot");
 
 // ── Password gate helpers ─────────────────────────────────────────────────────
 const SITE_PASSWORD = process.env.SITE_PASSWORD || "";
 const SITE_PASSWORD_HASH = SITE_PASSWORD
   ? crypto.createHash("sha256").update(SITE_PASSWORD + "rm-salt-2026").digest("hex")
   : "";
+
+function sendJsonMaybeGzip(req, res, body, status = 200) {
+  const json = JSON.stringify(body);
+  const accept = String(req.headers["accept-encoding"] || "");
+  const gzipOff = process.env.VSEARCH_GZIP === "0" || process.env.VSEARCH_GZIP === "false";
+  if (!gzipOff && accept.includes("gzip") && json.length > 4096) {
+    zlib.gzip(json, (err, buf) => {
+      if (err) return res.status(status).json(body);
+      res.setHeader("Content-Encoding", "gzip");
+      res.setHeader("Content-Type", "application/json; charset=utf-8");
+      res.status(status).send(buf);
+    });
+    return;
+  }
+  res.status(status).json(body);
+}
 
 function parseCookies(cookieHeader) {
   const out = {};
@@ -2473,7 +2491,7 @@ app.get("/api/vsearch", async (req, res) => {
       // Boop price-matters / luxury sorts need starRating on the hotels that can
       // actually reach the top of the list. Pre-sort by room+nbhd (no stars) so
       // we fetch LiteAPI meta for the right IDs — not a fixed API-order prefix.
-      if (needsStarPenaltyMeta && nbhdWeightForMeta > 0) {
+      if (needsStarPenaltyMeta && nbhdWeightForMeta > 0 && v2.body.stats?.sort_source !== "server_bookable") {
         sortV2HotelsDefault(v2.body.hotels, nbhdWeightForMeta);
       }
       const allIds = v2.body.hotels.map((h) => String(h.id).trim()).filter(Boolean);
@@ -2536,7 +2554,7 @@ app.get("/api/vsearch", async (req, res) => {
       // ── Boop star-class ranking tweaks (no live rates) ─────────────────────
       try {
         const boopProfile = boopProfileForMeta || parseBoopProfileFromQuery(req.query);
-        if (boopProfile) {
+        if (boopProfile && v2.body.stats?.sort_source !== "server_bookable") {
           const luxuryPref  = Number(boopProfile?.prefs?.luxury ?? 0);
           const priceMatters = Number(boopProfile?.answers?.priceMatters);
           const hasBoopTailoredQuery = !!(
@@ -2582,7 +2600,7 @@ app.get("/api/vsearch", async (req, res) => {
       v2.body.stats.meta_sync_count = syncIds.length;
       v2.body.stats.handler_wall_ms = Date.now() - t0VsearchHandler;
 
-      return res.status(200).json(v2.body);
+      return sendJsonMaybeGzip(req, res, v2.body, 200);
     }
     // V2 returned no results (city not yet indexed in V2 or no matches) — fall through to V1.
     if (v2.status !== 200) {
@@ -3398,8 +3416,9 @@ app.get("/api/rates", async (req, res) => {
     const result = await fetchRatesForHotelIds(hotelIds, checkin, checkout, currency, {
       skipDetail,
       cacheKey: !(rawIds && typeof rawIds === "string" && rawIds.length > 0) && hotelIds.length >= 500
-        ? `${city}|${checkin}|${checkout}|${currency}`
+        ? buildFullRatesCacheKey(city, checkin, checkout, currency)
         : null,
+      supabase: supabaseAdmin || supabase,
     });
     if (!result) {
       return res.status(400).json({ error: "checkout must be after checkin" });
@@ -4528,6 +4547,25 @@ app.post("/api/v2/city-rollout", async (req, res) => {
       }
     })
     .finally(() => _v2RolloutActive.delete(city));
+});
+
+// Warm phase-A cache + nbhd primary map while user completes Boop wizard.
+app.get("/api/warm-v2-city", async (req, res) => {
+  const warmOff = process.env.V2_WARM_CITY === "0" || process.env.V2_WARM_CITY === "false";
+  if (warmOff) return res.json({ ok: false, skipped: true });
+  const cityInput = (req.query.city || "").trim();
+  if (!cityInput || !(supabaseAdmin || supabase)) {
+    return res.status(400).json({ error: "city required" });
+  }
+  try {
+    const db = supabaseAdmin || supabase;
+    const city = await resolveCityName(cityInput, db, ["v2_indexed_cities", "v2_hotels_cache", "hotels_cache"]);
+    const result = await warmV2City(db, city);
+    res.json({ city, ...result });
+  } catch (e) {
+    console.warn("[warm-v2-city]", e.message);
+    res.status(500).json({ error: e.message });
+  }
 });
 
 app.get("/api/v2/city-rollout/status", async (req, res) => {
