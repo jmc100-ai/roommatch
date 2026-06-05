@@ -103,6 +103,11 @@ function compactTailPayload(h) {
   return out;
 }
 
+function deprioritizeStubHotels(hotels, depth = 50) {
+  const { deprioritizeStubHotels: deprioritize } = require("../lib/v2-server-rank");
+  return deprioritize(hotels, depth);
+}
+
 function shapeVsearchHotelPayload(hotels) {
   const limit = fullPayloadLimit();
   if (compactTailEnabled()) {
@@ -1331,6 +1336,35 @@ async function runV2Search({ req, supabase, supabaseAdmin, resolveCityName }) {
     await backfillRoomPhotosFromInventory(fetchClient, missingPhotoIds, city, photosByHotel);
   }
 
+  // After backfill, demote final visible-top hotels that still have no indexed room photos.
+  const NO_ROOM_PHOTO_PENALTY = parseFloat(process.env.VSEARCH_NO_PHOTO_PENALTY || "0.88");
+  const finalTopIdSet = new Set(allHotels.slice(0, GALLERY_LIMIT).map((h) => h.hotel_id));
+  if (NO_ROOM_PHOTO_PENALTY > 0 && NO_ROOM_PHOTO_PENALTY < 1) {
+    let penalized = 0;
+    for (const h of allHotels) {
+      if (!finalTopIdSet.has(h.hotel_id)) continue;
+      if (!(photosByHotel.get(h.hotel_id) || []).length) {
+        h.topScore *= NO_ROOM_PHOTO_PENALTY;
+        penalized++;
+      }
+    }
+    if (penalized) {
+      console.log(`[v2] no_room_photo_penalty: ${penalized} hotel(s) × ${NO_ROOM_PHOTO_PENALTY} (post-backfill re-sort)`);
+      allHotels.sort(compareHotels);
+      if (nbhdFitByHotelId?.size > 0 && nbhdRankWeight > 0) {
+        const w = nbhdRankWeight;
+        allHotels.sort((a, b) => {
+          const nbA = nbhdFitByHotelId.get(a.hotel_id) ?? 62;
+          const nbB = nbhdFitByHotelId.get(b.hotel_id) ?? 62;
+          const ca  = (1 - w) * (primarySignal(a) / 100) + w * (nbA / 100);
+          const cb  = (1 - w) * (primarySignal(b) / 100) + w * (nbB / 100);
+          if (Math.abs(cb - ca) > 1e-6) return cb - ca;
+          return compareHotels(a, b);
+        });
+      }
+    }
+  }
+
   // LiteAPI catalog photos from v2_hotels_cache for cards still missing room rows.
   const catalogHeroByHotel = new Map();
   const stillBareIds = finalTopIds.filter((id) => !(photosByHotel.get(id) || []).length);
@@ -1384,7 +1418,7 @@ async function runV2Search({ req, supabase, supabaseAdmin, resolveCityName }) {
     return v != null ? v : NBHD_NEUTRAL_PCT;
   }
 
-  let hotels = allHotels.map(({ hotel_id: hotelId, topScore, hotelVibePct, rawHotelVibe }) => {
+  let hotels = allHotels.map(({ hotel_id: hotelId, topScore, hotelVibePct, rawHotelVibe, rawRoom }) => {
     const meta       = hotelMeta.get(hotelId) || {};
     const score      = Math.round(topScore);
     const allPhotos  = photosByHotel.get(hotelId) || [];
@@ -1424,7 +1458,17 @@ async function runV2Search({ req, supabase, supabaseAdmin, resolveCityName }) {
         property_type: propertyType,
         primary_nbhd: primaryNbhd,
         ...(nbhdFitPct != null ? { nbhd_fit_pct: nbhdFitPct } : {}),
+        ...(hotelVibePct != null ? { hotelVibePct: Math.round(hotelVibePct * 10) / 10 } : {}),
         match_breakdown: matchBreakdownFor(hotelId, score, hotelScore, primaryNbhd, nbhdFitPct, null),
+        score_breakdown: {
+          v2_room_match: score,
+          v2_hotel_vibe: hotelScore,
+          v2_hotel_vibe_pct: hotelVibePct != null ? Math.round(hotelVibePct * 10) / 10 : null,
+          raw_room: rawRoom != null ? parseFloat(Number(rawRoom).toFixed(6)) : 0,
+          raw_hotel_vibe: rawHotelVibe >= 0 ? parseFloat(rawHotelVibe.toFixed(6)) : null,
+          sim_max:       parseFloat(SIM_MAX.toFixed(4)),
+          sim_min:       parseFloat(SIM_MIN.toFixed(4)),
+        },
       };
     }
 
@@ -1554,9 +1598,13 @@ async function runV2Search({ req, supabase, supabaseAdmin, resolveCityName }) {
       primary_nbhd: primaryNbhd,
       ...(nbhdFitPct != null ? { nbhd_fit_pct: nbhdFitPct } : {}),
       match_breakdown: matchBreakdownFor(hotelId, score, hotelScore, primaryNbhd, nbhdFitPct, featuredRoom),
+      ...(hotelVibePct != null ? { hotelVibePct: Math.round(hotelVibePct * 10) / 10 } : {}),
       score_breakdown: {
         v2_room_match: score,
         v2_hotel_vibe: hotelScore,
+        v2_hotel_vibe_pct: hotelVibePct != null ? Math.round(hotelVibePct * 10) / 10 : null,
+        raw_room: rawRoom != null ? parseFloat(Number(rawRoom).toFixed(6)) : 0,
+        raw_hotel_vibe: rawHotelVibe >= 0 ? parseFloat(rawHotelVibe.toFixed(6)) : null,
         sim_max:       parseFloat(SIM_MAX.toFixed(4)),
         sim_min:       parseFloat(SIM_MIN.toFixed(4)),
       },
@@ -1658,6 +1706,7 @@ async function runV2Search({ req, supabase, supabaseAdmin, resolveCityName }) {
     });
   }
 
+  hotels = deprioritizeStubHotels(hotels, 50);
   hotels = shapeVsearchHotelPayload(hotels);
 
   const nbhdBlendApplied = !!(nbhdFitByHotelId?.size > 0 && nbhdRankWeight > 0);
@@ -1735,6 +1784,7 @@ async function runV2Search({ req, supabase, supabaseAdmin, resolveCityName }) {
         max_raw_fact_score:       parseFloat(maxRawSim.toFixed(4)),
         hotel_vibe_model:         hotelVibeModel,
         hotel_vibe_sim_max:       hotelVibeModel === "v2_facts" ? parseFloat(HOTEL_SIM_MAX.toFixed(4)) : null,
+        hotel_vibe_sim_min:       hotelVibeModel === "v2_facts" ? parseFloat(HOTEL_SIM_MIN.toFixed(4)) : null,
         hotel_vibe_blend_weight:  hotelVibeModel === "v2_facts" ? HOTEL_VIBE_BLEND_WEIGHT : null,
         hotel_vibe_fact_weights:  hotelVibeModel === "v2_facts" ? factWeightsRaw : null,
         nbhd_rank_weight_config:  Number.isFinite(rawNbhdW) ? rawNbhdW : undefined,

@@ -12,6 +12,7 @@ const fs      = require("fs");
 // Load .env from the repo root (next to server.js), not process.cwd() — IDEs/tasks
 // often start Node from another folder, which breaks local env on localhost.
 require("dotenv").config({ path: path.join(__dirname, ".env") });
+const { sortHotelsByServerVibe, deprioritizeStubHotels } = require("./lib/v2-server-rank");
 
 // ── Sentry (server) ───────────────────────────────────────────────────────────
 // Init must happen before other requires that throw, so errors during boot are
@@ -647,11 +648,9 @@ function parseBoopProfileFromQuery(query) {
   }
 }
 
-/** Extra LiteAPI meta sync when star class is needed for price-matters or luxury tweaks. */
+/** Extra LiteAPI meta sync when star class is needed for price-matters ranking tweaks. */
 function needsBoopStarMetaForRanking(profile) {
   if (!profile?.answers) return false;
-  const luxuryPref = Number(profile.prefs?.luxury ?? 0);
-  if (Number.isFinite(luxuryPref) && luxuryPref < -5) return true;
   const pm = Number(profile.answers.priceMatters);
   return Number.isFinite(pm) && pm !== 0;
 }
@@ -2488,12 +2487,9 @@ app.get("/api/vsearch", async (req, res) => {
       const boopMetaBoost = boopProfileForMeta
         ? Math.max(META_SYNC_LIMIT, parseInt(process.env.BOOP_META_SYNC_LIMIT || "50", 10))
         : META_SYNC_LIMIT;
-      // Boop price-matters / luxury sorts need starRating on the hotels that can
-      // actually reach the top of the list. Pre-sort by room+nbhd (no stars) so
-      // we fetch LiteAPI meta for the right IDs — not a fixed API-order prefix.
-      if (needsStarPenaltyMeta && nbhdWeightForMeta > 0 && v2.body.stats?.sort_source !== "server_bookable") {
-        sortV2HotelsDefault(v2.body.hotels, nbhdWeightForMeta);
-      }
+      // Boop price-matters sorts need starRating on hotels that can reach the top.
+      // Do NOT pre-sort here — search-v2 already emits primarySignal+nbhd order;
+      // an extra room+nbhd re-sort (driven by nbhd luxury prefs) was scrambling it.
       const allIds = v2.body.hotels.map((h) => String(h.id).trim()).filter(Boolean);
       const STAR_PENALTY_META_TOPN = Math.max(
         boopMetaBoost,
@@ -2572,7 +2568,7 @@ app.get("/api/vsearch", async (req, res) => {
                 h.vectorScore = Math.max(0, Math.round(h.vectorScore * (1 - penalty)));
               }
             }
-            sortV2HotelsDefault(v2.body.hotels, nbhdWeight);
+            sortHotelsByServerVibe(v2.body.hotels, v2.body.stats);
             v2.body.stats.luxury_star_penalty_applied = true;
             v2.body.stats.luxury_pref = luxuryPref;
           }
@@ -2589,10 +2585,40 @@ app.get("/api/vsearch", async (req, res) => {
               `[v2] price_matters: pm=${priceMatters} strength=${pmStrength.toFixed(2)} `
               + `mode=${v2.body.stats.price_matters_mode}`
             );
+            // Pre-sort meta fetch used pre-price order — refill names for the new top slice.
+            const postSortTopN = Math.min(v2.body.hotels.length, boopMetaBoost);
+            const weakIds = v2.body.hotels.slice(0, postSortTopN)
+              .map((h) => String(h.id).trim())
+              .filter((id) => {
+                const h = v2.body.hotels.find((x) => String(x.id).trim() === id);
+                return h && isPlaceholderHotelTitle(h.name, id);
+              });
+            if (weakIds.length) {
+              const refillMeta = await fetchHotelMetaBatch(weakIds);
+              let refilled = 0;
+              for (const h of v2.body.hotels) {
+                const sid = String(h.id).trim();
+                const m = refillMeta[sid];
+                if (!m) continue;
+                h.name = resolveHotelNameFromMeta(m, sid, h.name);
+                h.mainPhoto = m.mainPhoto || h.mainPhoto || null;
+                h.starRating = m.starRating || h.starRating || 0;
+                h.rating = m.guestRating || h.rating || 0;
+                h.address = m.address || h.address || "";
+                refilled++;
+              }
+              if (refilled) {
+                console.log(`[v2-meta] price_matters refill: ${refilled}/${weakIds.length} weak top names`);
+              }
+            }
           }
         }
       } catch (e) {
         console.warn("[v2] star-penalty failed (non-fatal):", e.message);
+      }
+
+      if (v2.body.stats?.sort_source !== "server_bookable") {
+        v2.body.hotels = deprioritizeStubHotels(v2.body.hotels, 50);
       }
 
       if (!v2.body.stats) v2.body.stats = {};
