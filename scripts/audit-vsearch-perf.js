@@ -4,6 +4,7 @@
  *
  *   node scripts/audit-vsearch-perf.js
  *   node scripts/audit-vsearch-perf.js --dates
+ *   node scripts/audit-vsearch-perf.js --dates --prefetch
  *   node scripts/audit-vsearch-perf.js --dates --runs=5
  *   node scripts/audit-vsearch-perf.js --base-url=http://localhost:3000 --dates --city="Paris"
  *
@@ -21,6 +22,7 @@ const BASE = (argv.find((a) => a.startsWith("--base-url=")) || "--base-url=http:
   .replace(/\/$/, "");
 const RUNS = Math.max(1, parseInt(argv.find((a) => a.startsWith("--runs="))?.split("=")[1] || "5", 10));
 const DATED = argv.includes("--dates");
+const PREFETCH = argv.includes("--prefetch");
 const CITY_FILTER = argv.find((a) => a.startsWith("--city="))?.split("=").slice(1).join("=") || null;
 const OUT = argv.find((a) => a.startsWith("--out="))?.split("=").slice(1).join("=") || null;
 
@@ -154,11 +156,36 @@ async function oneRun(city, runIndex, dates) {
   return row;
 }
 
+/** Simulate Boop city-step prefetch: warm /api/rates before first vsearch run. */
+async function prefetchRates(city, dates) {
+  const params = new URLSearchParams({
+    city,
+    checkin: dates.checkin,
+    checkout: dates.checkout,
+    currency: "USD",
+    skip_detail: "1",
+  });
+  const headers = {};
+  if (process.env.INDEX_SECRET) headers["x-index-secret"] = process.env.INDEX_SECRET;
+  const t0 = Date.now();
+  const r = await fetch(`${BASE}/api/rates?${params}`, { headers });
+  await r.arrayBuffer();
+  const wall = Date.now() - t0;
+  console.log(`  Prefetch /api/rates: ${wall}ms HTTP ${r.status}`);
+  return { ok: r.ok, wall_ms: wall, status: r.status };
+}
+
 async function auditCity(city) {
   const dates = DATED ? auditDates() : null;
   console.log(`\n${"═".repeat(72)}`);
   console.log(`City: ${city}${DATED ? `  dates=${dates.checkin}→${dates.checkout}` : "  (no dates)"}`);
+  if (PREFETCH && DATED) console.log("  Mode: Boop prefetch simulated before run 1");
   console.log(`${"═".repeat(72)}`);
+
+  let prefetch = null;
+  if (PREFETCH && DATED) {
+    prefetch = await prefetchRates(city, dates);
+  }
 
   const rows = [];
   for (let i = 0; i < RUNS; i++) {
@@ -178,6 +205,7 @@ async function auditCity(city) {
   const summary = {
     city,
     dated: DATED,
+    prefetch_simulated: PREFETCH && DATED ? prefetch : null,
     dates,
     runs: RUNS,
     base_url: BASE,
@@ -215,7 +243,7 @@ async function auditCity(city) {
 (async () => {
   console.log(`Vsearch perf audit`);
   console.log(`  Base: ${BASE}`);
-  console.log(`  Mode: ${DATED ? "dated Boop + rates embed" : "undated"}`);
+  console.log(`  Mode: ${DATED ? "dated Boop + rates embed" : "undated"}${PREFETCH && DATED ? " + prefetch before run1" : ""}`);
   console.log(`  Runs/city: ${RUNS}`);
 
   const cities = CITY_FILTER ? [CITY_FILTER] : CITIES;

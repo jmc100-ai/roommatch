@@ -5897,6 +5897,9 @@
     if (ct1) ct1.value = ciStr;
     if (ct2) ct2.value = coStr;
     ensureMinCheckoutAfterCheckin(ct1, ct2);
+    S.checkin = ciStr;
+    S.checkout = coStr;
+    schedulePrefetchCityRatesForDates('flow-dates-init');
   }
 
   function confirmDates() {
@@ -5915,6 +5918,7 @@
     if (ct2) ct2.value = co;
     ensureMinCheckoutAfterCheckin(ct1, ct2);
     refreshStory('results');
+    prefetchCityRatesForDates('dates-step');
     startSearch();
   }
 
@@ -5938,11 +5942,17 @@
     ensureMinCheckoutAfterCheckin(document.getElementById('d-ci'), document.getElementById('d-co'));
     ensureMinCheckoutAfterCheckin(document.getElementById('ct-ci'), document.getElementById('ct-co'));
     syncAllDateRangeUIs();
+    schedulePrefetchCityRatesForDates('city-dates');
   }
 
   function clearCityDates() {
     S.checkin  = null;
     S.checkout = null;
+    _cityRatesPrefetchKey = '';
+    if (_cityRatesPrefetchTimer) {
+      clearTimeout(_cityRatesPrefetchTimer);
+      _cityRatesPrefetchTimer = null;
+    }
     ['city-d-ci','city-d-co','d-ci','d-co','ct-ci','ct-co'].forEach(id => {
       const el = document.getElementById(id); if (el) el.value = '';
     });
@@ -7076,9 +7086,11 @@
           } else {
             applyVsearchEmbeddedRates(data.rates, reqId);
           }
-        } else if (hasDates) {
-          // Legacy fallback — older server builds without embedded full-city rates
+        } else if (hasDates && !(_lastVsearchStats?.rates_full_city || data.rates?.full_city)) {
+          // Legacy fallback when server did not embed full-city rates (prefetch may have warmed cache).
           fetchPrices(city, checkin, checkout, reqId, [], null, { skipDetail: true });
+        } else if (hasDates && data.rates?.full_city) {
+          applyVsearchEmbeddedRates(data.rates, reqId);
         } else {
           // No dates — unlock price sort buttons immediately, no availability state
           _pricesLoaded = true;
@@ -7341,10 +7353,24 @@
   let _backgroundRatesReqId = 0;
   let _postRevealWorkReqId = 0;
   let _cityRatesPrefetchCtrl = null;
+  let _cityRatesPrefetchTimer = null;
+  let _cityRatesPrefetchKey = '';
+
+  /** Debounced prefetch when user picks check-in/out on the city step (Boop buys ~30–60s). */
+  function schedulePrefetchCityRatesForDates(source) {
+    if (_cityRatesPrefetchTimer) clearTimeout(_cityRatesPrefetchTimer);
+    _cityRatesPrefetchTimer = setTimeout(() => {
+      _cityRatesPrefetchTimer = null;
+      prefetchCityRatesForDates(source || 'scheduled');
+    }, 350);
+  }
 
   /** Warm full-city /api/rates cache while user finishes the search UI (dates → search). */
-  function prefetchCityRatesForDates() {
+  function prefetchCityRatesForDates(source) {
     if (!S.city || !S.checkin || !S.checkout || S.checkin >= S.checkout) return;
+    const key = `${S.city}|${S.checkin}|${S.checkout}|${getRatesCurrencyPref()}`;
+    if (key === _cityRatesPrefetchKey) return;
+    _cityRatesPrefetchKey = key;
     try { _cityRatesPrefetchCtrl?.abort(); } catch (_) {}
     _cityRatesPrefetchCtrl = typeof AbortController !== 'undefined' ? new AbortController() : null;
     const params = new URLSearchParams({
@@ -7355,33 +7381,22 @@
       skip_detail: '1',
     });
     const signal = _cityRatesPrefetchCtrl?.signal;
-    console.log('[perf] prefetch city rates (dates confirmed)');
+    const tag = source ? ` (${source})` : '';
+    console.log(`[perf] prefetch city rates${tag}: ${S.city} ${S.checkin}→${S.checkout}`);
     fetch(`${BACKEND}/api/rates?` + params, signal ? { signal } : undefined).catch(() => {});
   }
 
-  /** Best-effort warm when city is picked (+14/+3 nights if dates not set yet). */
+  /** Best-effort warm when city is picked; rates prefetch waits until real dates are set. */
   function prefetchCityRatesOnCitySelect() {
     if (!S.city) return;
-    let checkin = S.checkin;
-    let checkout = S.checkout;
-    if (!checkin || !checkout || checkin >= checkout) {
-      const d = new Date();
-      d.setDate(d.getDate() + 14);
-      checkin = d.toISOString().slice(0, 10);
-      const d2 = new Date(d);
-      d2.setDate(d2.getDate() + 3);
-      checkout = d2.toISOString().slice(0, 10);
-    }
-    const params = new URLSearchParams({
-      city: S.city,
-      checkin,
-      checkout,
-      currency: getRatesCurrencyPref(),
-      skip_detail: '1',
-    });
-    fetch(`${BACKEND}/api/rates?` + params).catch(() => {});
     fetch(`${BACKEND}/api/warm-v2-city?` + new URLSearchParams({ city: S.city })).catch(() => {});
-    console.log('[perf] prefetch city rates + warm-v2-city on city select');
+    if (S.checkin && S.checkout && S.checkin < S.checkout) {
+      prefetchCityRatesForDates('city-select');
+      console.log('[perf] prefetch warm-v2-city + city rates on city select');
+    } else {
+      _cityRatesPrefetchKey = '';
+      console.log('[perf] prefetch warm-v2-city on city select (rates deferred until dates set)');
+    }
   }
 
   function scheduleNbhdMapRender(city, entries) {
