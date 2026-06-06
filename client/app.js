@@ -7957,17 +7957,7 @@
   /** After stub rooms or meta load, fill a blank hero from room/gallery photos. */
   function patchHotelHeroFromRoomPhotos(h) {
     if (!h?.id) return;
-    const heroUrls = [];
-    if (h.mainPhoto) heroUrls.push(h.mainPhoto);
-    for (const url of (h.hotelPhotos || [])) {
-      if (url && !heroUrls.includes(url)) heroUrls.push(url);
-    }
-    for (const rt of (h.roomTypes || [])) {
-      for (const url of (rt.photos || [])) {
-        if (url && !heroUrls.includes(url)) { heroUrls.push(url); break; }
-      }
-      if (heroUrls.length >= 3) break;
-    }
+    const heroUrls = buildHotelHeroPhotoUrls(h, 3);
     if (!heroUrls.length) return;
     if (!h.mainPhoto) h.mainPhoto = heroUrls[0];
 
@@ -8537,6 +8527,37 @@
 
   function firstUsablePhoto(list) {
     return (list || []).find(Boolean) || '';
+  }
+
+  /** Card / Top Picks hero — LiteAPI mainPhoto is the canonical property thumbnail. */
+  function pickCardHeroPhoto(h) {
+    if (h?.mainPhoto) return h.mainPhoto;
+    const catalog = firstUsablePhoto(h?.hotelPhotos);
+    if (catalog) return catalog;
+    for (const rt of (h?.roomTypes || [])) {
+      const p = (rt.photos || [])[0];
+      if (p) return typeof p === 'string' ? p : p.url;
+    }
+    return '';
+  }
+
+  function buildHotelHeroPhotoUrls(h, max = 3) {
+    const heroPhotos = [];
+    if (h?.mainPhoto) heroPhotos.push(h.mainPhoto);
+    for (const url of (h?.hotelPhotos || [])) {
+      if (url && !heroPhotos.includes(url)) heroPhotos.push(url);
+      if (heroPhotos.length >= max) break;
+    }
+    if (heroPhotos.length < max) {
+      for (const rt of (h?.roomTypes || [])) {
+        for (const photo of (rt.photos || [])) {
+          const url = typeof photo === 'string' ? photo : photo?.url;
+          if (url && !heroPhotos.includes(url)) heroPhotos.push(url);
+        }
+        if (heroPhotos.length >= max) break;
+      }
+    }
+    return heroPhotos.slice(0, max);
   }
 
   function topRoomForVibeTour(hotel) {
@@ -11446,10 +11467,7 @@
     const sym = ratesCurrencySymbol(_priceCurrency);
     const { price: priceVal, bookRoomTypeId } = resolveRoomRateForType(rt, bookHotel);
     const hasPrice = priceVal != null;
-    const lbIdx = (url) => {
-      const i = _hpDetailPhotos.indexOf(url);
-      return i >= 0 ? i : 0;
-    };
+    const lbIdx = (url) => hpDetailPhotoIndex(url);
     const thumbHTML = hero
       ? `<button type="button" class="hpage-other-room-thumb" onclick="event.stopPropagation();openHpLightbox(${lbIdx(hero)})"><img src="${escAttr(hero)}" alt="" loading="lazy" onerror="this.parentElement.classList.add('hpage-other-room-thumb--ph')"></button>`
       : '<div class="hpage-other-room-thumb hpage-other-room-thumb--ph" aria-hidden="true">🛏</div>';
@@ -11527,10 +11545,7 @@
     const hero = photos[0];
     const thumbs = photos.slice(1, 4);
     const extra = Math.max(0, photos.length - 4);
-    const lbIdx = (url) => {
-      const i = _hpDetailPhotos.indexOf(url);
-      return i >= 0 ? i : 0;
-    };
+    const lbIdx = (url) => hpDetailPhotoIndex(url);
     const score = Math.round(rt.score || roomVibeMatchDisplayPct(searchHotel));
     const bookHotel = { id: d.hotel_id, name: d.name, city: S.city, ...searchHotel };
     const sym = ratesCurrencySymbol(_priceCurrency);
@@ -11814,19 +11829,63 @@
       </div>`;
   }
 
+  const HP_DETAIL_GALLERY_MAX = 50;
+
+  function hpPhotoBasename(url) {
+    if (!url) return '';
+    return String(url).split('?')[0].split('/').pop() || '';
+  }
+
+  /**
+   * Hero mosaic + lightbox gallery. Search-context room photos (what the best-room
+   * panel shows) are listed first so a 30-cap fill from catalog/dorm rows cannot
+   * drop the featured room's must-have photos from the lightbox.
+   */
+  function buildHotelDetailPhotoGallery(d, searchHotel) {
+    const seen = new Set();
+    const out = [];
+    const push = (url) => {
+      const u = String(url || '').trim();
+      if (!u || seen.has(u)) return;
+      seen.add(u);
+      out.push(u);
+    };
+
+    if (searchHotel?.roomTypes?.length) {
+      for (const rt of hotelDetailSortedRooms(searchHotel)) {
+        for (const url of rt.photos || []) push(url);
+      }
+    }
+
+    for (const url of d.hotel_photos || []) push(url);
+
+    for (const rt of d.room_types || []) {
+      for (const url of rt.photos || []) {
+        push(url);
+        if (out.length >= HP_DETAIL_GALLERY_MAX) return out;
+      }
+    }
+    return out.slice(0, HP_DETAIL_GALLERY_MAX);
+  }
+
+  function hpDetailPhotoIndex(url) {
+    if (!url || !_hpDetailPhotos.length) return 0;
+    const exact = _hpDetailPhotos.indexOf(url);
+    if (exact >= 0) return exact;
+    const base = hpPhotoBasename(url);
+    if (base) {
+      const byName = _hpDetailPhotos.findIndex((u) => hpPhotoBasename(u) === base);
+      if (byName >= 0) return byName;
+    }
+    return 0;
+  }
+
   function hotelDetailPageHTML(d, pageOpts) {
     pageOpts = pageOpts || {};
     const searchHotel = hotelDetailSearchContext(d);
     pageOpts.searchHotel = searchHotel;
 
-    const allPhotos = [...(d.hotel_photos || [])];
-    for (const rt of (d.room_types || [])) {
-      for (const url of (rt.photos || [])) {
-        if (!allPhotos.includes(url)) allPhotos.push(url);
-        if (allPhotos.length >= 30) break;
-      }
-      if (allPhotos.length >= 30) break;
-    }
+    const allPhotos = buildHotelDetailPhotoGallery(d, searchHotel);
     _hpDetailPhotos = allPhotos.slice();
 
     const carouselHTML = hotelDetailCarouselHTML(allPhotos);
@@ -12339,6 +12398,7 @@
     hotelStyleMatchDisplayPct,
     hotelEffectiveScore,
     overallMatchDisplayPct,
+    pickCardHeroPhoto,
     renderRoomsSection(hotel, pickKind) {
       let rooms = sortRoomsForCard([...(hotel?.roomTypes || [])], hotel);
       if (pickKind === 'room_match' && rooms.length > 1) {
@@ -12404,22 +12464,8 @@
       ? `<div class="no-avail-notice">Available for your dates — room photos not in our visual index yet</div>`
       : '';
 
-    // ── Hotel hero: mainPhoto (large left) + up to 2 gallery/room photos (stacked right) ──
-    const heroPhotos = [];
-    if (h.mainPhoto) heroPhotos.push(h.mainPhoto);
-    const galleryFill = (h.hotelPhotos && h.hotelPhotos.length > 0) ? h.hotelPhotos : [];
-    for (const url of galleryFill) {
-      if (!heroPhotos.includes(url)) heroPhotos.push(url);
-      if (heroPhotos.length >= 3) break;
-    }
-    if (heroPhotos.length < 3) {
-      for (const rt of (h.roomTypes || [])) {
-        for (const photo of (rt.photos || [])) {
-          if (!heroPhotos.includes(photo)) { heroPhotos.push(photo); break; }
-        }
-        if (heroPhotos.length >= 3) break;
-      }
-    }
+    // ── Hotel hero: LiteAPI mainPhoto first, then catalog gallery, then room photos ──
+    const heroPhotos = buildHotelHeroPhotoUrls(h, 3);
     const heroCount = heroPhotos.length;
     const heroClass = heroCount <= 1 ? 'hero-1' : heroCount === 2 ? 'hero-2' : '';
     const heroImgs  = heroPhotos.map(url =>

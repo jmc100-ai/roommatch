@@ -1365,24 +1365,24 @@ async function runV2Search({ req, supabase, supabaseAdmin, resolveCityName }) {
     }
   }
 
-  // LiteAPI catalog photos from v2_hotels_cache for cards still missing room rows.
+  // LiteAPI catalog photos from v2_hotels_cache — fallback thumbnails until
+  // synchronous meta fetch sets mainPhoto on each hotel payload.
   const catalogHeroByHotel = new Map();
-  const stillBareIds = finalTopIds.filter((id) => !(photosByHotel.get(id) || []).length);
-  if (stillBareIds.length) {
+  if (finalTopIds.length) {
     const { data: cacheRows, error: cacheErr } = await fetchClient
       .from("v2_hotels_cache")
       .select("hotel_id, hotel_photos")
-      .in("hotel_id", stillBareIds)
+      .in("hotel_id", finalTopIds)
       .eq("city", city);
     if (cacheErr) {
-      console.warn(`[v2] catalog_hero_backfill: ${cacheErr.message}`);
+      console.warn(`[v2] catalog_hero: ${cacheErr.message}`);
     } else {
       for (const row of cacheRows || []) {
         const urls = (Array.isArray(row.hotel_photos) ? row.hotel_photos : []).filter(Boolean);
         if (urls.length) catalogHeroByHotel.set(row.hotel_id, urls);
       }
       if (catalogHeroByHotel.size) {
-        console.log(`[v2] catalog_hero_backfill: ${catalogHeroByHotel.size}/${stillBareIds.length} hotels`);
+        console.log(`[v2] catalog_hero: ${catalogHeroByHotel.size}/${finalTopIds.length} hotels in top ${GALLERY_LIMIT}`);
       }
     }
   }
@@ -1579,6 +1579,8 @@ async function runV2Search({ req, supabase, supabaseAdmin, resolveCityName }) {
         }
       : null;
 
+    const catalogUrls = catalogHeroByHotel.get(hotelId) || [];
+
     return {
       id:          hotelId,
       name:        "", // real name from LiteAPI merged in server.js (never use raw id as title)
@@ -1588,7 +1590,7 @@ async function runV2Search({ req, supabase, supabaseAdmin, resolveCityName }) {
       starRating:   0,
       rating:       0,
       mainPhoto:    null,
-      hotelPhotos:  [],
+      hotelPhotos:  catalogUrls.slice(0, 8),
       roomTypes:    roomTypes.slice(0, 8),
       featured_room: featuredRoom,
       isMatched:    score > 0,

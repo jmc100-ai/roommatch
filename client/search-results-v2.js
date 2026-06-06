@@ -327,6 +327,8 @@
   }
 
   function heroPhotoUrl(h) {
+    const b = bridge();
+    if (b?.pickCardHeroPhoto) return b.pickCardHeroPhoto(h) || '';
     if (h?.mainPhoto) return h.mainPhoto;
     if (Array.isArray(h?.hotelPhotos) && h.hotelPhotos[0]) return h.hotelPhotos[0];
     const rooms = h?.roomTypes || [];
