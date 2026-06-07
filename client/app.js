@@ -5840,7 +5840,11 @@
     }
 
     return `<div class="city-date-month">
-      <div class="city-date-month-title">${title}</div>
+      <div class="city-date-month-head">
+        <button type="button" class="city-date-month-nav" onclick="shiftCityDateMonth(-1)" aria-label="Previous month">‹</button>
+        <div class="city-date-month-title">${title}</div>
+        <button type="button" class="city-date-month-nav" onclick="shiftCityDateMonth(1)" aria-label="Next month">›</button>
+      </div>
       <div class="city-date-weekdays">${CITY_DATE_WEEKDAYS.map(w => `<span>${w}</span>`).join('')}</div>
       <div class="city-date-grid">${cells.join('')}</div>
     </div>`;
@@ -6618,17 +6622,17 @@
       how: {
         title: 'How it works',
         html: `
-          <p>${BRAND_HTML} helps you choose <strong>where to stay</strong>, <strong>what the area should feel like</strong>, and <strong>which room actually looks right</strong> — using real hotel photos, not marketing fluff alone.</p>
+          <p>Most sites show one hero photo and a star rating. ${BRAND_HTML} is different: we use <strong>AI to scan real room and neighborhood photos</strong> — bathrooms, beds, lobby, street scenes — and rank hotels against what you actually want from a stay.</p>
           <h2>1 · Pick a city (and optional dates)</h2>
-          <p>Start with your destination and who is travelling. Add check-in and check-out when you want live nightly rates from our booking partner; you can browse matches first and add dates later.</p>
-          <h2>2 · Shape your vibe</h2>
-          <p>A short wizard (about a minute) captures how you like to travel — first visit or not, stay style, neighbourhood energy, and must-haves like a balcony or spa-style bath. We save this per city so you can tweak it from the results bar anytime.</p>
-          <h2>3 · See matches ranked for you</h2>
-          <p>We score hotels using indexed room and hotel photos plus your vibe answers. Match percentages are a guide, not a guarantee. Use sort options, budget, dates, and “available only” when you are ready to narrow the list.</p>
+          <p>Choose where you are going and who is travelling. Dates are optional — browse matches first, or add check-in and check-out when you want live nightly rates.</p>
+          <h2>2 · Tell us your vibe</h2>
+          <p>A short wizard (about a minute) asks how you like to travel: stay style, neighborhood feel, and must-haves like a balcony or walk-in shower. We save this per city so you can update it anytime from your results.</p>
+          <h2>3 · See what the AI found</h2>
+          <p>We compare your answers to thousands of real photos from each hotel — room by room, area by area — and show you the best matches with scores and photos you can click through. Match % is a guide, not a guarantee. Use sort, budget, dates, and “available only” to narrow the list when you are ready.</p>
           <h2>4 · Book when you are ready</h2>
-          <p>“Find &amp; Book” opens our partner’s checkout with your dates when we have them. Always confirm price, cancellation, and accessibility on the booking site before you pay.</p>
+          <p>Tap <strong>Find &amp; Book</strong> to open our partner’s checkout with your dates when you have them. Always confirm price, cancellation, and accessibility on the booking site before you pay.</p>
           <h2>While we are in beta</h2>
-          <p>Coverage and polish keep improving city by city. If something looks off, use the purple <strong>Feedback</strong> button — we read it.</p>
+          <p>We are adding cities and improving match quality all the time. If a photo looks wrong or a ranking feels off, use the purple <strong>Feedback</strong> button — we read every note.</p>
           ${commonFoot}`,
       },
       about: {
@@ -6684,8 +6688,6 @@
           <h2>Email</h2>
           <p><a href="mailto:hello@travelbyvibe.com">hello@travelbyvibe.com</a> — general product notes and hellos.</p>
           <p><a href="mailto:beta@travelbyvibe.com">beta@travelbyvibe.com</a> — beta access, privacy, or data requests.</p>
-          <h2>Developers</h2>
-          <p>Spotted a bug in open-source pieces? <a href="https://github.com/jmc100-ai/roommatch/issues" target="_blank" rel="noopener noreferrer">Open an issue on GitHub</a>.</p>
           ${commonFoot}`,
       },
     };
