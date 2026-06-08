@@ -800,7 +800,22 @@
   const BUDGET_UNDER_PRESETS = [150, 250, 400, 600];
   const BUDGET_DESKTOP_CARD_IDS = ['any', 'under_250', 'under_400', 'luxury', 'custom'];
   const RATES_CURRENCIES = ['USD', 'EUR', 'GBP', 'CAD', 'AUD', 'MXN'];
+  /** Approx FX from USD for nightly budget presets (LiteAPI returns rates in requested currency). */
+  const BUDGET_FX_FROM_USD = { USD: 1, EUR: 0.92, GBP: 0.79, CAD: 1.36, AUD: 1.52, MXN: 18 };
   const RM_CURRENCY_KEY = 'rm_rates_currency';
+  function budgetFxRate(currency) {
+    const c = normalizeRatesCurrencyClient(currency || _priceCurrency);
+    return BUDGET_FX_FROM_USD[c] ?? 1;
+  }
+  /** Convert a USD budget preset (250, 400, …) into the active rates currency. */
+  function budgetUsdPresetToCap(usdAmount, currency) {
+    const usd = Number(usdAmount);
+    if (!Number.isFinite(usd)) return null;
+    return Math.round(usd * budgetFxRate(currency));
+  }
+  function budgetLuxuryMinPrice(currency) {
+    return budgetUsdPresetToCap(BUDGET_LUXURY_MIN_PRICE, currency);
+  }
   function getRatesCurrencyPref() {
     try {
       const v = (localStorage.getItem(RM_CURRENCY_KEY) || 'USD').trim().toUpperCase();
@@ -2352,6 +2367,34 @@
   //   Built from roomStyle choice + musthaves picks + optional freetext (extras screen).
   // hotelSeed: trip / hotelPersonality / nbhdScene (pace+location) + optional freetext
   //   — embedded against hotel_profile_index (lobby/bar/pool/description vibe).
+  // Map phrases in the must-haves "your words" field → DB flags + HyDE seed nudges.
+  const FREETEXT_FEATURE_PATTERNS = [
+    { rx: /\bdouble\s+sink/i,            flag: 'double_sinks',       seed: 'double vanity sinks' },
+    { rx: /\brainfall\s+shower/i,         flag: 'rainfall_shower',    seed: 'rainfall shower head' },
+    { rx: /\brain\s+shower/i,             flag: 'rainfall_shower',    seed: 'rainfall shower head' },
+    { rx: /\bsoaking\s+tub\b/i,           flag: 'soaking_tub',        seed: 'soaking tub, freestanding bathtub' },
+    { rx: /\bfreestanding\s+tub\b/i,      flag: 'soaking_tub',        seed: 'freestanding soaking tub' },
+    { rx: /\bwalk[\s-]in\s+shower\b/i,    flag: 'walk_in_shower',     seed: 'walk-in shower, glass shower enclosure' },
+    { rx: /\bwalk[\s-]in\s+closet\b/i,    flag: 'walk_in_closet',     seed: 'walk-in closet' },
+    { rx: /\bprivate\s+balcony\b/i,       flag: 'private_balcony',    seed: 'private balcony, outdoor terrace' },
+    { rx: /\bbalcony\b/i,                 flag: 'private_balcony',    seed: 'balcony or terrace with view' },
+    { rx: /\bking\s+bed\b/i,              flag: 'king_bed',           seed: 'king size bed' },
+    { rx: /\bwater\s+view\b|\bocean\s+view\b|\bsea\s+view\b/i, flag: 'water_view', seed: 'water view from room' },
+    { rx: /\bskyline\s+view\b/i,          flag: 'skyline_view',       seed: 'city skyline view' },
+    { rx: /\bbidet\b/i,                   flag: 'bidet_washlet',      seed: 'bidet washlet' },
+    { rx: /\bespresso\b/i,                flag: 'espresso_station',   seed: 'in-room espresso station' },
+  ];
+
+  function extractMustHaveFlagsFromFreetext(freetext) {
+    const text = (freetext || '').trim();
+    if (!text) return [];
+    const keys = [];
+    for (const { rx, flag } of FREETEXT_FEATURE_PATTERNS) {
+      if (flag && rx.test(text) && !keys.includes(flag)) keys.push(flag);
+    }
+    return keys;
+  }
+
   // mustHaves: array of DB feature_flag names → passed as must_haves[] on /api/vsearch.
   function buildBoopSeeds(profile) {
     const ans = profile?.answers || {};
@@ -2374,29 +2417,14 @@
       if (o.id === 'work_desk') seedExtras.push('work desk, proper workspace, ergonomic chair');
     }
 
-    // Detect explicit feature requests in freetext and elevate them to must_haves.
-    // This ensures e.g. "double sinks" typed by the user is treated as a primary
-    // criterion rather than a same-weight soft preference alongside ambient style cues.
-    const FREETEXT_FLAG_PATTERNS = [
-      { rx: /\bdouble\s+sink/i,            flag: 'double_sinks' },
-      { rx: /\brainfall\s+shower/i,         flag: 'rainfall_shower' },
-      { rx: /\brain\s+shower/i,             flag: 'rainfall_shower' },
-      { rx: /\bsoaking\s+tub\b/i,           flag: 'soaking_tub' },
-      { rx: /\bfreestanding\s+tub\b/i,      flag: 'soaking_tub' },
-      { rx: /\bwalk[\s-]in\s+shower\b/i,    flag: 'walk_in_shower' },
-      { rx: /\bwalk[\s-]in\s+closet\b/i,    flag: 'walk_in_closet' },
-      { rx: /\bprivate\s+balcony\b/i,       flag: 'private_balcony' },
-      { rx: /\bbalcony\b/i,                 flag: 'private_balcony' },
-      { rx: /\bking\s+bed\b/i,              flag: 'king_bed' },
-      { rx: /\bwater\s+view\b|\bocean\s+view\b|\bsea\s+view\b/i, flag: 'water_view' },
-      { rx: /\bskyline\s+view\b/i,          flag: 'skyline_view' },
-      { rx: /\bbidet\b/i,                   flag: 'bidet_washlet' },
-      { rx: /\bespresso\b/i,                flag: 'espresso_station' },
-    ];
+    // User-typed must-haves (Q4 freetext) become hard filters — same as picking a chip.
+    // Only parsed from profile.freetext, not from HyDE seed prose (avoids silent ANDs
+    // when chip-only searches include feature words in the generated roomSeed).
     if (freetext) {
-      for (const { rx, flag } of FREETEXT_FLAG_PATTERNS) {
-        if (rx.test(freetext) && !mustHaves.includes(flag)) {
-          mustHaves.push(flag);
+      for (const { rx, flag, seed } of FREETEXT_FEATURE_PATTERNS) {
+        if (rx.test(freetext)) {
+          if (flag && !mustHaves.includes(flag)) mustHaves.push(flag);
+          if (seed) seedExtras.push(seed);
         }
       }
     }
@@ -2634,6 +2662,16 @@
     { id: 'under_400', title: 'Under $400', sub: 'per night' },
     { id: 'luxury', title: 'Luxury', sub: '$400+' },
   ];
+  function fineTuneBudgetPillsForCurrency() {
+    const sym = ratesCurrencySymbol(_priceCurrency);
+    const luxMin = budgetLuxuryMinPrice(_priceCurrency);
+    return [
+      { id: 'any', title: 'Any', sub: 'All ranges' },
+      { id: 'under_250', title: `Under ${sym}${budgetUsdPresetToCap(250).toLocaleString()}`, sub: 'per night' },
+      { id: 'under_400', title: `Under ${sym}${budgetUsdPresetToCap(400).toLocaleString()}`, sub: 'per night' },
+      { id: 'luxury', title: 'Luxury', sub: `${sym}${luxMin.toLocaleString()}+` },
+    ];
+  }
   /** Results command bar party-size labels + persisted profile. */
   const PARTY_SIZE_LABELS = { solo: '1 person', couple: '2 people', group: '3+ people' };
 
@@ -2917,15 +2955,32 @@
     if (!f || f.mode === 'any') return { mode: 'any' };
     if (f.mode === 'luxury') return { mode: 'luxury' };
     if (f.mode === 'under') {
+      const presetUsd = f.presetUsd != null ? Number(f.presetUsd) : null;
+      if (presetUsd != null && BUDGET_UNDER_PRESETS.includes(presetUsd)) {
+        return {
+          mode: 'under',
+          underMax: budgetUsdPresetToCap(presetUsd, _priceCurrency),
+          presetUsd,
+        };
+      }
       const n = Number(f.underMax);
-      if (BUDGET_UNDER_PRESETS.includes(n)) return { mode: 'under', underMax: n };
+      if (BUDGET_UNDER_PRESETS.includes(n)) {
+        return {
+          mode: 'under',
+          underMax: budgetUsdPresetToCap(n, _priceCurrency),
+          presetUsd: n,
+        };
+      }
+      if (Number.isFinite(n) && n > 0) return { mode: 'under', underMax: Math.round(n) };
     }
     if (f.mode === 'range') {
       const min = f.min != null && Number.isFinite(Number(f.min)) ? Math.max(0, Math.round(Number(f.min))) : null;
       const max = f.max != null && Number.isFinite(Number(f.max)) ? Math.max(0, Math.round(Number(f.max))) : null;
       if (min == null && max == null) return { mode: 'any' };
       if (min != null && max != null && min > max) return { mode: 'any' };
-      if (min === BUDGET_LUXURY_MIN_PRICE && max == null) return { mode: 'luxury' };
+      const luxMin = budgetLuxuryMinPrice(_priceCurrency);
+      if (min === luxMin && max == null) return { mode: 'luxury' };
+      if (min === BUDGET_LUXURY_MIN_PRICE && max == null && _priceCurrency === 'USD') return { mode: 'luxury' };
       return { mode: 'range', min, max };
     }
     return { mode: 'any' };
@@ -3008,41 +3063,31 @@
     return true;
   }
 
-  function roomsMatchingMustHavesForBudget(hotel, mustKeys) {
-    const rooms = (hotel?.roomTypes || []).filter(isIndexedGuestRoom);
-    if (!mustKeys?.length) return rooms;
-    let eligible = rooms.filter((rt) => roomTypeMustHavesMet(rt, mustKeys) === true);
-    if (!eligible.length) {
-      const hasExplicit = rooms.some(
-        (rt) => rt?.must_haves_met === true || rt?.must_haves_met === false
-      );
-      if (!hasExplicit && hotel?.featured_room) {
-        const fr = hotel.featured_room;
-        const srv = rooms.find((rt) =>
-          (fr.roomTypeId != null && String(rt.roomTypeId) === String(fr.roomTypeId)) ||
-          (fr.name && rt.name === fr.name)
-        );
-        if (srv) eligible = [srv];
-      }
-    }
-    return eligible;
-  }
-
   function hotelHasInBudgetPricedRoom(h, maxCap, minCap) {
     if (maxCap == null && minCap == null) return true;
-    const mustKeys = getActiveMustHaveKeys();
-    const candidates = roomsMatchingMustHavesForBudget(h, mustKeys);
-    for (const rt of candidates) {
-      if (roomMeetsBudgetCap(rt, h, maxCap, minCap)) return true;
+
+    function priceOk(p) {
+      if (p == null || !Number.isFinite(Number(p))) return false;
+      const n = Number(p);
+      if (maxCap != null && n > maxCap) return false;
+      if (minCap != null && n < minCap) return false;
+      return true;
     }
+
+    const mustKeys = getActiveMustHaveKeys();
     if (!mustKeys.length) {
       for (const price of Object.values(h?.roomPrices || {})) {
-        const p = Number(price);
-        if (!Number.isFinite(p)) continue;
-        if (maxCap != null && p > maxCap) continue;
-        if (minCap != null && p < minCap) continue;
-        return true;
+        if (priceOk(Number(price))) return true;
       }
+      return priceOk(hotelNightlyPrice(h));
+    }
+
+    // Must-haves are enforced separately (hotelPassesMustHaveFilter). Budget only
+    // needs any confirmed live rate under cap — LiteAPI often prices a different
+    // mappedRoomId than the indexed balconied / feature room type.
+    if (priceOk(hotelNightlyPrice(h))) return true;
+    for (const price of Object.values(h?.roomPrices || {})) {
+      if (priceOk(Number(price))) return true;
     }
     return false;
   }
@@ -3052,9 +3097,10 @@
     let pm = 0;
     const f = normalizeBudgetFilter(filter || { mode: 'any' });
     if (f.mode === 'under') {
-      if (f.underMax <= 150) pm += 50;
-      else if (f.underMax <= 250) pm += 40;
-      else if (f.underMax <= 400) pm += 28;
+      const tier = f.presetUsd != null ? f.presetUsd : f.underMax;
+      if (tier <= 150) pm += 50;
+      else if (tier <= 250) pm += 40;
+      else if (tier <= 400) pm += 28;
       else pm += 18;
     } else if (f.mode === 'range') {
       const cap = f.max;
@@ -3101,15 +3147,19 @@
   }
 
   function budgetFilterChipBaseLabel(f) {
-    const filter = f || _budgetFilter || { mode: 'any' };
+    const filter = normalizeBudgetFilter(f || _budgetFilter || { mode: 'any' });
+    const sym = ratesCurrencySymbol(_priceCurrency);
     if (filter.mode === 'any') return 'Any budget';
-    if (filter.mode === 'luxury') return 'Luxury $400+';
-    if (filter.mode === 'under') return `Under $${filter.underMax}`;
+    if (filter.mode === 'luxury') {
+      const luxMin = budgetLuxuryMinPrice(_priceCurrency);
+      return `Luxury (${sym}${luxMin.toLocaleString()}+)`;
+    }
+    if (filter.mode === 'under') return `Under ${sym}${filter.underMax.toLocaleString()}`;
     if (filter.mode === 'range') {
       const { min, max } = filter;
-      if (min != null && max != null) return `$${min}–$${max}`;
-      if (min != null) return `$${min}+`;
-      if (max != null) return `Under $${max}`;
+      if (min != null && max != null) return `${sym}${min.toLocaleString()}–${sym}${max.toLocaleString()}`;
+      if (min != null) return `${sym}${min.toLocaleString()}+`;
+      if (max != null) return `Under ${sym}${max.toLocaleString()}`;
       return 'Any budget';
     }
     return 'Any budget';
@@ -3153,12 +3203,16 @@
     if (filter.mode === 'any') return 'any';
     if (filter.mode === 'luxury') return 'luxury';
     if (filter.mode === 'under') {
-      if (filter.underMax === 250) return 'under_250';
-      if (filter.underMax === 400) return 'under_400';
+      if (filter.presetUsd === 250) return 'under_250';
+      if (filter.presetUsd === 400) return 'under_400';
+      if (filter.underMax === 250 && _priceCurrency === 'USD') return 'under_250';
+      if (filter.underMax === 400 && _priceCurrency === 'USD') return 'under_400';
       return 'custom';
     }
     if (filter.mode === 'range') {
-      if (filter.min === 400 && filter.max == null) return 'luxury';
+      const luxMin = budgetLuxuryMinPrice(_priceCurrency);
+      if (filter.min === luxMin && filter.max == null) return 'luxury';
+      if (filter.min === BUDGET_LUXURY_MIN_PRICE && filter.max == null && _priceCurrency === 'USD') return 'luxury';
       return 'custom';
     }
     return 'any';
@@ -3168,7 +3222,8 @@
     if (!cardId || cardId === 'any') return { mode: 'any' };
     if (cardId === 'luxury') return { mode: 'luxury' };
     if (cardId.startsWith('under_')) {
-      return normalizeBudgetFilter({ mode: 'under', underMax: parseInt(cardId.slice(6), 10) });
+      const presetUsd = parseInt(cardId.slice(6), 10);
+      return normalizeBudgetFilter({ mode: 'under', presetUsd });
     }
     if (cardId === 'custom') {
       const minRaw = (customMin || '').trim();
@@ -3176,7 +3231,7 @@
       const min = minRaw !== '' ? Math.max(0, parseInt(minRaw, 10)) : null;
       const max = maxRaw !== '' ? Math.max(0, parseInt(maxRaw, 10)) : null;
       if ((minRaw !== '' && !Number.isFinite(min)) || (maxRaw !== '' && !Number.isFinite(max))) {
-        return { error: 'Enter valid whole-dollar amounts.' };
+        return { error: 'Enter valid whole-number amounts.' };
       }
       if (min != null && max != null && min > max) return { error: 'Min cannot be greater than max.' };
       if (minRaw === '' && maxRaw === '') return { mode: 'any' };
@@ -3368,7 +3423,7 @@
       if (!_pricesLoaded || !_hasDateSearch) return true;
       const p = hotelNightlyPrice(h);
       if (p == null) return false;
-      return p >= BUDGET_LUXURY_MIN_PRICE;
+      return p >= budgetLuxuryMinPrice(_priceCurrency);
     }
     if (f.mode === 'under' || f.mode === 'range') {
       if (!_pricesLoaded || !_hasDateSearch) return true;
@@ -3452,12 +3507,21 @@
   }
 
   function budgetFilterToMobileCardId(f) {
-    const filter = f || { mode: 'any' };
+    const filter = normalizeBudgetFilter(f || { mode: 'any' });
     if (filter.mode === 'any') return 'any';
     if (filter.mode === 'luxury') return 'luxury';
-    if (filter.mode === 'under' && [250, 400].includes(filter.underMax)) return `under_${filter.underMax}`;
-    if (filter.mode === 'under' && filter.underMax === 150) return 'under_250';
-    if (filter.mode === 'range' && filter.min === 400 && filter.max == null) return 'luxury';
+    if (filter.mode === 'under') {
+      if (filter.presetUsd === 250) return 'under_250';
+      if (filter.presetUsd === 400) return 'under_400';
+      if (filter.underMax === 250 && _priceCurrency === 'USD') return 'under_250';
+      if (filter.underMax === 400 && _priceCurrency === 'USD') return 'under_400';
+      if (filter.underMax === 150 && _priceCurrency === 'USD') return 'under_250';
+    }
+    if (filter.mode === 'range') {
+      const luxMin = budgetLuxuryMinPrice(_priceCurrency);
+      if (filter.min === luxMin && filter.max == null) return 'luxury';
+      if (filter.min === BUDGET_LUXURY_MIN_PRICE && filter.max == null && _priceCurrency === 'USD') return 'luxury';
+    }
     if (filter.mode === 'under' || filter.mode === 'range') return 'custom';
     return 'any';
   }
@@ -3466,7 +3530,8 @@
     if (!cardId || cardId === 'any') return { mode: 'any' };
     if (cardId === 'luxury' || cardId === 'luxury_400') return { mode: 'luxury' };
     if (cardId.startsWith('under_')) {
-      return normalizeBudgetFilter({ mode: 'under', underMax: parseInt(cardId.slice(6), 10) });
+      const presetUsd = parseInt(cardId.slice(6), 10);
+      return normalizeBudgetFilter({ mode: 'under', presetUsd });
     }
     if (cardId === 'custom') {
       const minRaw = (customMin || '').trim();
@@ -3474,7 +3539,7 @@
       const min = minRaw !== '' ? Math.max(0, parseInt(minRaw, 10)) : null;
       const max = maxRaw !== '' ? Math.max(0, parseInt(maxRaw, 10)) : null;
       if ((minRaw !== '' && !Number.isFinite(min)) || (maxRaw !== '' && !Number.isFinite(max))) {
-        return { error: 'Enter valid whole-dollar amounts.' };
+        return { error: 'Enter valid whole-number amounts.' };
       }
       if (min != null && max != null && min > max) return { error: 'Min cannot be greater than max.' };
       if (minRaw === '' && maxRaw === '') return { mode: 'any' };
@@ -3551,7 +3616,7 @@
     const showDatesHint = budgetFilterNeedsRates(draftFilter) && !budgetHasValidDates();
     const availDisabled = !_hasDateSearch;
 
-    const budgetPillsHtml = FINE_TUNE_COMPACT_BUDGET_PILLS.map((c) => {
+    const budgetPillsHtml = fineTuneBudgetPillsForCurrency().map((c) => {
       const active = d.budgetCard === c.id;
       return `<button type="button" class="fine-tune-budget-pill${active ? ' active' : ''}" aria-pressed="${active ? 'true' : 'false'}" onclick="fineTunePickBudgetCard('${c.id}')">${escHtml(c.title)}<span class="fine-tune-budget-pill-sub">${escHtml(c.sub)}</span></button>`;
     }).join('');
@@ -3916,7 +3981,7 @@
   // Build seeds + trigger vector search. Shared by boopFinish() and the
   // returning-user review screen's "Find hotels" button.
   function runBoopSearch(profile) {
-    const { roomSeed: autoRoomSeed, hotelSeed, mustHaves } = buildBoopSeeds(profile);
+    const { roomSeed: autoRoomSeed, hotelSeed } = buildBoopSeeds(profile);
     // If the user edited the "Search keywords (advanced)" textarea on Q5 we
     // honour their override as the room-side HyDE seed. The hotel seed +
     // mustHaves are still derived from the wizard answers.
@@ -3924,7 +3989,7 @@
     const roomSeed = overrideKw || autoRoomSeed;
     S.q = roomSeed;   // store as the active query so breadcrumbs + refinements work
     S.hotelQ = hotelSeed;
-    S.mustHaves = mustHaves;
+    S.mustHaves = getActiveMustHaveKeys(profile);
     // Post-Boop auto vibe tour disabled — go straight to results (re-enable: _vibeTourPending = true)
     _vibeTourPending = false;
     _vibeTourVisible = false;
@@ -5731,11 +5796,48 @@
     return window.matchMedia && window.matchMedia('(min-width: 901px)').matches;
   }
 
+  const CITY_DATE_POP_EDGE_PAD = 18;
+  const CITY_DATE_POP_GAP = 12;
+  const CITY_DATE_POP_MIN_H = 240;
+  const CITY_DATE_POP_NATURAL_H = 500;
+
   function resetCityDatePopoverPlacement(pop) {
     if (!pop) return;
+    pop.classList.remove('city-date-pop--below');
     ['position', 'left', 'right', 'top', 'bottom', 'transform'].forEach((p) => {
       pop.style.removeProperty(p);
     });
+  }
+
+  function setCityDatePopMaxHeight(pop, availablePx) {
+    const avail = Math.floor(availablePx);
+    if (avail >= CITY_DATE_POP_NATURAL_H) {
+      pop.style.removeProperty('--city-date-pop-max-h');
+    } else {
+      pop.style.setProperty('--city-date-pop-max-h', `${Math.max(CITY_DATE_POP_MIN_H, avail)}px`);
+    }
+  }
+
+  function shouldCityDatePopoverOpenBelow(spaceAbove, spaceBelow) {
+    if (spaceAbove >= CITY_DATE_POP_NATURAL_H) return false;
+    return spaceBelow > spaceAbove;
+  }
+
+  function placeCityDatePopoverFixed(pop, triggerRect, openBelow) {
+    pop.style.position = 'fixed';
+    pop.style.left = '50%';
+    pop.style.transform = 'translateX(-50%)';
+    const spaceAbove = triggerRect.top - CITY_DATE_POP_EDGE_PAD;
+    const spaceBelow = window.innerHeight - triggerRect.bottom - CITY_DATE_POP_GAP - 12;
+    if (openBelow) {
+      pop.style.top = `${Math.round(triggerRect.bottom + CITY_DATE_POP_GAP)}px`;
+      pop.style.bottom = 'auto';
+      setCityDatePopMaxHeight(pop, spaceBelow);
+    } else {
+      pop.style.top = 'auto';
+      pop.style.bottom = `${Math.round(window.innerHeight - triggerRect.top + CITY_DATE_POP_GAP)}px`;
+      setCityDatePopMaxHeight(pop, spaceAbove);
+    }
   }
 
   function updateCityDatePopoverPosition(context = CITY_DATE_PICKER.context || 'city') {
@@ -5754,21 +5856,19 @@
       return;
     }
     const rect = trigger.getBoundingClientRect();
+    const spaceAbove = rect.top - CITY_DATE_POP_EDGE_PAD;
+    const spaceBelow = window.innerHeight - rect.bottom - CITY_DATE_POP_GAP - 12;
     if (isHomeV2DesktopDatesPopover(context)) {
-      pop.style.position = 'fixed';
-      pop.style.left = '50%';
-      pop.style.transform = 'translateX(-50%)';
-      pop.style.bottom = `${Math.round(window.innerHeight - rect.top + 12)}px`;
-      pop.style.top = 'auto';
-      const maxH = Math.max(240, Math.floor(rect.top - 18));
-      pop.style.setProperty('--city-date-pop-max-h', `${maxH}px`);
+      placeCityDatePopoverFixed(pop, rect, shouldCityDatePopoverOpenBelow(spaceAbove, spaceBelow));
       return;
     }
-    const available = (context === 'cmd')
-      ? window.innerHeight - rect.bottom - 24
-      : rect.top - 18;
-    const maxH = Math.max(240, Math.floor(available));
-    pop.style.setProperty('--city-date-pop-max-h', `${maxH}px`);
+    if (context === 'cmd') {
+      setCityDatePopMaxHeight(pop, spaceBelow);
+      return;
+    }
+    const openBelow = shouldCityDatePopoverOpenBelow(spaceAbove, spaceBelow);
+    pop.classList.toggle('city-date-pop--below', openBelow);
+    setCityDatePopMaxHeight(pop, openBelow ? spaceBelow : spaceAbove);
   }
 
   function openCityDateRangePicker(context = 'city') {
@@ -5858,6 +5958,8 @@
     const next = new Date(cur.getFullYear(), cur.getMonth() + 1, 1);
     monthsEl.innerHTML = cityDateMonthHTML(cur) + cityDateMonthHTML(next);
     syncAllDateRangeUIs();
+    const pop = document.getElementById(ids.pop);
+    if (pop?.classList.contains('open')) updateCityDatePopoverPosition(CITY_DATE_PICKER.context || 'city');
   }
 
   function selectCityDate(ymd) {
@@ -6816,6 +6918,34 @@
     }));
     const snap = {
       url: _lastVsearchUrl,
+      filters: typeof describeActiveResultFilters === 'function' ? describeActiveResultFilters() : [],
+      must_haves_active: typeof getActiveMustHaveKeys === 'function' ? getActiveMustHaveKeys() : [],
+      must_haves_explicit: typeof getExplicitMustHaveKeys === 'function'
+        ? getExplicitMustHaveKeys()
+        : [],
+      must_haves_freetext: typeof getFreetextMustHaveKeys === 'function'
+        ? getFreetextMustHaveKeys()
+        : [],
+      dealbreakers: S.boopProfile?.dealbreakers || null,
+      freetext: S.boopProfile?.freetext || null,
+      avail_only: _showAvailOnly,
+      budget: _budgetFilter,
+      prop_type: _propTypeFilter,
+      visible_count: sorted.length,
+      raw_count: _lastHotels?.length ?? 0,
+      pipeline: typeof dumpRmFilters === 'function' ? (() => {
+        let afterAvail = 0;
+        let afterMust = 0;
+        let afterBudget = 0;
+        if (_lastHotels?.length) {
+          const a = _lastHotels.filter(hotelPassesAvailFilter);
+          afterAvail = a.length;
+          const b = a.filter(hotelPassesFreeCancelFilter).filter(hotelPassesMustHaveFilter);
+          afterMust = b.length;
+          afterBudget = b.filter(hotelPassesBudgetFilter).length;
+        }
+        return { after_avail: afterAvail, after_must: afterMust, after_budget: afterBudget, visible: sorted.length };
+      })() : null,
       sort_source: 'client_best_match',
       sort_note: 'Top 10 uses client Best Match order (room vibe % + nbhd blend + price guards). API response order may differ.',
       stats: {
@@ -6992,8 +7122,9 @@
       }
       // BOOP v4 — pass hotel_query + must_haves when boopFinish populated them.
       if (S.hotelQ)    vsearchParams.hotel_query = S.hotelQ;
-      if (Array.isArray(S.mustHaves) && S.mustHaves.length) {
-        vsearchParams.must_haves = S.mustHaves.join(',');
+      const activeMustKeys = getActiveMustHaveKeys();
+      if (activeMustKeys.length) {
+        vsearchParams.must_haves = activeMustKeys.join(',');
       }
       if (S.boopProfile && typeof S.boopProfile === 'object') {
         syncPriceMattersIntoProfile(S.boopProfile);
@@ -8385,6 +8516,7 @@
   }
 
   function setAvailFilter(availOnly) {
+    // Hotel-level only — must-haves (balcony, etc.) stay enforced via hotelPassesMustHaveFilter.
     _showAvailOnly  = availOnly;
     _displayedCount = 10;
     renderSorted();
@@ -9491,6 +9623,26 @@
     return false;
   }
 
+  /** Must-haves (e.g. balcony) apply independently of "Available only". */
+  function hotelPassesMustHaveFilter(h) {
+    if (_vibeTourLeadId && String(h.id) === _vibeTourLeadId) return true;
+    const mustKeys = getActiveMustHaveKeys();
+    if (!mustKeys.length) return true;
+
+    // Server-computed hotel flag survives compact tail payloads (roomTypes=[]).
+    if (h?.hotel_must_haves_met === true) return true;
+    if (h?.hotel_must_haves_met === false) return false;
+
+    if (h?.featured_room?.must_haves_met === true) return true;
+
+    const mb = h?.match_breakdown?.must_haves_summary;
+    if (mb && mb.total > 0 && mb.met >= mb.total) return true;
+
+    const rooms = (h?.roomTypes || []).filter(isIndexedGuestRoom);
+    if (rooms.some((rt) => rt?.must_haves_met === true)) return true;
+    return false;
+  }
+
   /** Wizard "How much should price matter" (-100…100) for Match+Price ranking. */
   function boopPriceMattersForSort() {
     const pm = Number(S.boopProfile?.answers?.priceMatters);
@@ -9715,10 +9867,22 @@
 
   function getSortedHotelsForDisplay() {
     let hotels = [..._lastHotels];
+    const rawCount = hotels.length;
     hotels = hotels.filter(hotelPassesAvailFilter);
+    const afterAvail = hotels.length;
     hotels = hotels
       .filter(hotelPassesFreeCancelFilter)
+      .filter(hotelPassesMustHaveFilter)
       .filter(hotelPassesBudgetFilter);
+    const afterCore = hotels.length;
+    if (window._RM_FILTER_DEBUG && rawCount > 0) {
+      console.log(
+        `[filters] raw=${rawCount} avail=${afterAvail} after_must_budget=${afterCore}` +
+        ` budget=${JSON.stringify(_budgetFilter?.mode || 'any')}` +
+        ` must=${getActiveMustHaveKeys().join(',') || '—'}` +
+        ` availOnly=${_showAvailOnly && _pricesLoaded}`
+      );
+    }
     if (_nbhdFilter) {
       hotels = hotels.filter(h => h?.primary_nbhd?.name === _nbhdFilter);
     }
@@ -10065,6 +10229,40 @@
     }
   }
 
+  function describeActiveResultFilters() {
+    const parts = [];
+    const mustKeys = getActiveMustHaveKeys();
+    if (mustKeys.length) {
+      const mhQ = BOOP_QUESTIONS.find(q => q.id === 'musthaves');
+      for (const key of mustKeys) {
+        const opt = (mhQ?.options || []).find(o => o.flag === key);
+        parts.push(opt?.label || key.replace(/_/g, ' '));
+      }
+    }
+    if (_requireFreeCancel) parts.push('Free cancellation');
+    if (budgetFilterIsActive(_budgetFilter) && budgetFilterNeedsRates(_budgetFilter) && _pricesLoaded) {
+      parts.push(budgetFilterChipLabel(_budgetFilter, _budgetFlex));
+    }
+    if (_showAvailOnly && _hasDateSearch && _pricesLoaded) parts.push('Available rooms only');
+    if (_propTypeFilter && _propTypeFilter !== 'all') {
+      const labels = { hotel: 'Hotels only', apartment: 'Apartments only', vacation_home: 'Vacation homes', villa: 'Villas', hostel: 'Hostels only' };
+      parts.push(labels[_propTypeFilter] || _propTypeFilter);
+    }
+    if (_nbhdFilter) parts.push(`Neighbourhood: ${_nbhdFilter}`);
+    return parts;
+  }
+
+  /** Empty-state helper: budget → Any only; must-haves + Available only unchanged. */
+  function relaxResultFiltersForEmptyState() {
+    _budgetFilter = { mode: 'any' };
+    syncBudgetChipUI();
+    persistBudgetToProfile();
+    if (_lastHotels?.length) {
+      _displayedCount = 10;
+      renderSorted();
+    }
+  }
+
   function buildResultsEmptyStateHTML() {
     const raw = _lastHotels.length;
     let priced = 0;
@@ -10075,11 +10273,28 @@
       ? ` for ${S.checkin} → ${S.checkout}`
       : '';
     const availOn = _showAvailOnly && _hasDateSearch && _pricesLoaded;
+    const filters = describeActiveResultFilters();
+    const filterLine = filters.length
+      ? `<p>Active filters: <strong>${escHtml(filters.join(' · '))}</strong>.</p>`
+      : '';
     if (availOn && raw > 0 && priced === 0) {
       return `<div class="empty-state results-empty-state">
         <h3>No bookable rooms for these dates</h3>
         <p>LiteAPI returned no rates${escHtml(datesLine)}. Try different dates or turn off <strong>Available rooms only</strong>.</p>
         <button type="button" class="btn-ghost" onclick="setAvailFilter(false)">Show all ${raw} matches</button>
+      </div>`;
+    }
+    if (raw > 0 && filters.length) {
+      return `<div class="empty-state results-empty-state">
+        <h3>No hotels match your filters</h3>
+        <p>We found ${raw} hotels that match your vibe${escHtml(datesLine)}, but none pass the current filters${priced ? ` (${priced} have live rates)` : ''}.</p>
+        ${filterLine}
+        <p class="results-empty-hint">Must-haves stay on whether <strong>Available only</strong> is on or off. If budget is the blocker, clear it below — availability and must-haves are unchanged.</p>
+        <div class="results-empty-actions">
+          <button type="button" class="btn-ghost" onclick="relaxResultFiltersForEmptyState()">Clear budget filter</button>
+          ${availOn ? `<button type="button" class="btn-ghost" onclick="setAvailFilter(false)">Show matches without bookable rates</button>` : ''}
+          <button type="button" class="btn-ghost" onclick="openFineTuneSheet()">Fine-tune preferences</button>
+        </div>
       </div>`;
     }
     if (availOn && raw > 0) {
@@ -10300,10 +10515,39 @@
       ${othersSection}`;
   }
 
-  // Featured room — keep in sync with lib/featured-room.js
-  function getActiveMustHaveKeys() {
-    const keys = [...(S.mustHaves || [])];
+  // Wizard dealbreaker chips with a DB flag (Balcony, Work desk, …).
+  function getExplicitMustHaveKeys(profile) {
+    profile = profile || S.boopProfile || (S.city ? loadBoopProfileForCity(S.city) : null);
+    if (!profile) return [];
+    const picked = new Set(Array.isArray(profile.dealbreakers) ? profile.dealbreakers : []);
+    const mhQ = BOOP_QUESTIONS.find(q => q.id === 'musthaves');
+    const keys = [];
+    for (const o of (mhQ?.options || []).filter(o => picked.has(o.id))) {
+      if (o.flag) keys.push(o.flag);
+    }
     return [...new Set(keys.filter(Boolean))];
+  }
+
+  /** Must-haves parsed from the must-haves step "your words" field only. */
+  function getFreetextMustHaveKeys(profile) {
+    profile = profile || S.boopProfile || (S.city ? loadBoopProfileForCity(S.city) : null);
+    return extractMustHaveFlagsFromFreetext(profile?.freetext || '');
+  }
+
+  // Featured room — keep in sync with lib/featured-room.js
+  function getActiveMustHaveKeys(profile) {
+    profile = profile || S.boopProfile || (S.city ? loadBoopProfileForCity(S.city) : null);
+    const merged = [
+      ...new Set([
+        ...getExplicitMustHaveKeys(profile),
+        ...getFreetextMustHaveKeys(profile),
+      ].filter(Boolean)),
+    ];
+    if (merged.length) return merged;
+    if (Array.isArray(S.mustHaves) && S.mustHaves.length) {
+      return [...new Set(S.mustHaves.filter(Boolean))];
+    }
+    return [];
   }
 
   function featuredRoomContext() {
@@ -10360,8 +10604,11 @@
       const maxCap = budgetMaxNightlyCap();
       const minCap = budgetMinNightlyCap();
       const inBudget = eligible.filter((rt) => roomMeetsBudgetCap(rt, hotel, maxCap, minCap));
-      if (!inBudget.length) return null;
-      eligible = inBudget;
+      if (inBudget.length) {
+        eligible = inBudget;
+      } else if (!hotelHasInBudgetPricedRoom(hotel, maxCap, minCap)) {
+        return null;
+      }
     }
 
     if (ctx.priceSort && ctx.availOnly) {
@@ -10416,7 +10663,14 @@
     const minCap = budgetActive ? budgetMinNightlyCap() : null;
     let ordered;
     if (!filterActive && !budgetActive) {
-      ordered = scoredFirst;
+      const mustKeys = getActiveMustHaveKeys();
+      if (mustKeys.length) {
+        const mustRooms = scoredFirst.filter((rt) => roomTypeMustHavesMet(rt, mustKeys) === true);
+        const rest = scoredFirst.filter((rt) => !mustRooms.includes(rt));
+        ordered = mustRooms.concat(rest);
+      } else {
+        ordered = scoredFirst;
+      }
     } else {
       const scoredPriced   = [];
       const scoredUnpriced = [];
@@ -12379,10 +12633,55 @@
     return Math.round(room);
   }
 
+  /** Paste output into chat when filter counts look wrong. */
+  function dumpRmFilters() {
+    const profile = S.boopProfile || (S.city ? loadBoopProfileForCity(S.city) : null);
+    let afterAvail = 0;
+    let afterMust = 0;
+    let afterBudget = 0;
+    if (_lastHotels?.length) {
+      const a = _lastHotels.filter(hotelPassesAvailFilter);
+      afterAvail = a.length;
+      const b = a.filter(hotelPassesFreeCancelFilter).filter(hotelPassesMustHaveFilter);
+      afterMust = b.length;
+      afterBudget = b.filter(hotelPassesBudgetFilter).length;
+    }
+    const out = {
+      city: S.city,
+      dates: { checkin: S.checkin, checkout: S.checkout },
+      vsearch_url: _lastVsearchUrl,
+      must_haves_in_url: (_lastVsearchUrl?.match(/must_haves=([^&]+)/) || [])[1] || null,
+      must_haves_active: getActiveMustHaveKeys(),
+      must_haves_explicit: getExplicitMustHaveKeys(profile),
+      must_haves_freetext: getFreetextMustHaveKeys(profile),
+      S_mustHaves: S.mustHaves,
+      dealbreakers: profile?.dealbreakers || [],
+      freetext: profile?.freetext || '',
+      filters_ui: describeActiveResultFilters(),
+      avail_only: _showAvailOnly,
+      prices_loaded: _pricesLoaded,
+      budget: _budgetFilter,
+      prop_type: _propTypeFilter,
+      nbhd_filter: _nbhdFilter,
+      pipeline: {
+        raw: _lastHotels?.length ?? 0,
+        after_avail: afterAvail,
+        after_must: afterMust,
+        after_budget: afterBudget,
+        visible: getSortedHotelsForDisplay().length,
+      },
+      stats: _lastVsearchStats || null,
+    };
+    console.log('[dumpRmFilters]', out);
+    return out;
+  }
+  window.dumpRmFilters = dumpRmFilters;
+
   // Read-only bridge for SearchResultsV2 — keeps classic render/search logic in app.js.
   window.RoomMatchResultsBridge = {
     getSortedHotelsForDisplay: () => getSortedHotelsForDisplay(),
     getLastHotels: () => _lastHotels,
+    describeActiveResultFilters: () => describeActiveResultFilters(),
     getSearchUiState: () => ({
       hasDateSearch: _hasDateSearch,
       datesEntered: _userHasTravelDates(),
@@ -13187,10 +13486,14 @@
     if (ev.key === 'Escape') closeCityDateRangePicker();
     if (ev.key === 'Escape') closeNbhdRefineDropdown();
   });
-  window.addEventListener('resize', () => {
-    const pop = document.getElementById(cityDateIds().pop);
-    if (pop && pop.classList.contains('open')) updateCityDatePopoverPosition();
-  });
+  function repositionOpenCityDatePopover() {
+    const cityPop = document.getElementById('city-date-pop');
+    const cmdPop = document.getElementById('cmd-date-pop');
+    if (cityPop?.classList.contains('open')) updateCityDatePopoverPosition('city');
+    if (cmdPop?.classList.contains('open')) updateCityDatePopoverPosition('cmd');
+  }
+  window.addEventListener('resize', repositionOpenCityDatePopover);
+  window.addEventListener('scroll', repositionOpenCityDatePopover, { passive: true });
 
   // Keyboard nav on city input
   document.addEventListener('DOMContentLoaded', () => {
@@ -13564,6 +13867,10 @@
         const v = normalizeRatesCurrencyClient(curSel.value);
         try { localStorage.setItem(RM_CURRENCY_KEY, v); } catch (_) {}
         _priceCurrency = v;
+        if (_budgetFilter && _budgetFilter.mode !== 'any') {
+          _budgetFilter = normalizeBudgetFilter(_budgetFilter);
+          syncBudgetChipUI();
+        }
         if (S.city && S.checkin && S.checkout && S.checkin < S.checkout && _lastHotels && _lastHotels.length) {
           const reqId = ++_ratesReqId;
           _fetchingPrices = true;

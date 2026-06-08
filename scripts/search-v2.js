@@ -71,6 +71,10 @@ function slimStubPayload(h) {
   if (h.starRating) out.starRating = h.starRating;
   if (h.rating) out.rating = h.rating;
   if (h.address) out.address = h.address;
+  if (h.hotel_must_haves_met != null) out.hotel_must_haves_met = h.hotel_must_haves_met;
+  if (h.featured_room) out.featured_room = h.featured_room;
+  if (h.price != null) out.price = h.price;
+  if (h.roomPrices && Object.keys(h.roomPrices).length) out.roomPrices = h.roomPrices;
   if (h.primary_nbhd) {
     out.primary_nbhd = { id: h.primary_nbhd.id, name: h.primary_nbhd.name };
     if (h.nbhd_fit_pct == null && h.primary_nbhd.vibe_short) {
@@ -96,6 +100,10 @@ function compactTailPayload(h) {
   if (h.starRating) out.starRating = h.starRating;
   if (h.rating) out.rating = h.rating;
   if (h.address) out.address = h.address;
+  if (h.hotel_must_haves_met != null) out.hotel_must_haves_met = h.hotel_must_haves_met;
+  if (h.featured_room) out.featured_room = h.featured_room;
+  if (h.price != null) out.price = h.price;
+  if (h.roomPrices && Object.keys(h.roomPrices).length) out.roomPrices = h.roomPrices;
   if (h.primary_nbhd) {
     out.primary_nbhd = { id: h.primary_nbhd.id, name: h.primary_nbhd.name };
     if (h.primary_nbhd.vibe_short) out.primary_nbhd.vibe_short = h.primary_nbhd.vibe_short;
@@ -1410,6 +1418,13 @@ async function runV2Search({ req, supabase, supabaseAdmin, resolveCityName }) {
     });
   }
 
+  /** Index-level must (v2_room_types_index facts) — works without Phase-B photos. */
+  function hotelMustMetFromIndex(hotelId) {
+    if (!mustRequireKeys.length) return undefined;
+    const rooms = roomTypeMap.get(hotelId) || [];
+    return rooms.some((r) => factsMeetMustKeys(r.facts, mustRequireKeys));
+  }
+
   // ── Build response payload ─────────────────────────────────────────────────
   const NBHD_NEUTRAL_PCT = parseFloat(process.env.VSEARCH_NBHD_NEUTRAL_PCT || "62");
   function resolveNbhdFitPct(hotelId) {
@@ -1441,6 +1456,7 @@ async function runV2Search({ req, supabase, supabaseAdmin, resolveCityName }) {
 
     if (!hasPhotos) {
       const catalogUrls = catalogHeroByHotel.get(hotelId) || [];
+      const hotelMustFromIndex = hotelMustMetFromIndex(hotelId);
       return {
         id:           hotelId,
         name:         "", // real name from LiteAPI merged in server.js (never use raw id as title)
@@ -1459,6 +1475,7 @@ async function runV2Search({ req, supabase, supabaseAdmin, resolveCityName }) {
         primary_nbhd: primaryNbhd,
         ...(nbhdFitPct != null ? { nbhd_fit_pct: nbhdFitPct } : {}),
         ...(hotelVibePct != null ? { hotelVibePct: Math.round(hotelVibePct * 10) / 10 } : {}),
+        ...(mustRequireKeys.length ? { hotel_must_haves_met: !!hotelMustFromIndex } : {}),
         match_breakdown: matchBreakdownFor(hotelId, score, hotelScore, primaryNbhd, nbhdFitPct, null),
         score_breakdown: {
           v2_room_match: score,
@@ -1579,6 +1596,10 @@ async function runV2Search({ req, supabase, supabaseAdmin, resolveCityName }) {
         }
       : null;
 
+    const hotelMustHavesMet = mustRequireKeys.length
+      ? (hotelMustMetFromIndex(hotelId) || roomTypes.some((rt) => rt.must_haves_met === true))
+      : undefined;
+
     const catalogUrls = catalogHeroByHotel.get(hotelId) || [];
 
     return {
@@ -1593,6 +1614,7 @@ async function runV2Search({ req, supabase, supabaseAdmin, resolveCityName }) {
       hotelPhotos:  catalogUrls.slice(0, 8),
       roomTypes:    roomTypes.slice(0, 8),
       featured_room: featuredRoom,
+      ...(hotelMustHavesMet != null ? { hotel_must_haves_met: hotelMustHavesMet } : {}),
       isMatched:    score > 0,
       vectorScore:  score,
       hotelScore,

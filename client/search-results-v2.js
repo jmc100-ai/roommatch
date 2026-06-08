@@ -366,9 +366,22 @@
     return `<span class="sr2-stars" aria-label="${n} stars">${'★'.repeat(n)}</span>`;
   }
 
-  function renderPickCard(h, slot) {
+  function renderEmptyPickCard(showAdjustHint) {
+    const hint = showAdjustHint
+      ? '<p class="sr2-pick-empty-hint">Try adjusting dates, must-haves or budget</p>'
+      : '';
+    return (
+      '<div class="sr2-pick-card sr2-pick-card--empty">' +
+      '<div class="sr2-pick-empty-copy">' +
+      '<p class="sr2-pick-empty">Not enough matches yet</p>' +
+      hint +
+      '</div></div>'
+    );
+  }
+
+  function renderPickCard(h, slot, showAdjustHint) {
     if (!h) {
-      return `<div class="sr2-pick-card sr2-pick-card--empty"><p class="sr2-pick-empty">Not enough matches yet</p></div>`;
+      return renderEmptyPickCard(!!showAdjustHint);
     }
     const pct = pickMetricPct(h, slot.id);
     const photo = heroPhotoUrl(h);
@@ -486,10 +499,41 @@
     );
   }
 
+  function renderFilteredEmptyStateHtml(rawCount) {
+    const b = bridge();
+    const filters = b?.describeActiveResultFilters?.() || [];
+    const filterLine = filters.length
+      ? `<p class="sr2-sub">Active filters: <strong>${esc(filters.join(' · '))}</strong></p>`
+      : '';
+    return (
+      '<div class="sr2-root">' +
+      '<section class="sr2-section sr2-section--picks">' +
+      '<div class="sr2-section-head"><h2 class="sr2-heading"><span class="sr2-heading-icon" aria-hidden="true">✦</span> Top Picks For Your Vibe</h2></div>' +
+      `<p class="sr2-sub">We found ${rawCount} vibe matches, but none pass your current filters.</p>` +
+      filterLine +
+      '<p class="sr2-sub">Must-haves stay on whether <strong>Available only</strong> is on or off. Use Clear budget if price is blocking results.</p>' +
+      '<div class="sr2-empty-actions">' +
+      '<button type="button" class="sr2-link-btn" onclick="relaxResultFiltersForEmptyState()">Clear budget filter</button>' +
+      '<button type="button" class="sr2-link-btn" onclick="openFineTuneSheet()">Fine-tune preferences</button>' +
+      '</div>' +
+      '<div class="sr2-picks-grid">' +
+      PICK_SLOTS.map(() => '<div class="sr2-pick-card sr2-pick-card--empty"><p class="sr2-pick-empty">No matches with current filters</p></div>').join('') +
+      '</div></section>' +
+      renderMoreHotelsSectionSkeleton() +
+      '</div>'
+    );
+  }
+
   function renderMainPanel(ctx) {
     const sorted = ctx.sortedHotels || [];
     const picks = selectTopPicks(sorted);
-    const pickCards = PICK_SLOTS.map((slot) => renderPickCard(picks[slot.id], slot)).join('');
+    let firstEmptyHint = true;
+    const pickCards = PICK_SLOTS.map((slot) => {
+      const h = picks[slot.id];
+      const showHint = !h && firstEmptyHint;
+      if (!h) firstEmptyHint = false;
+      return renderPickCard(h, slot, showHint);
+    }).join('');
     const total = ctx.total ?? sorted.length;
     const sub = `Different ways to match your vibe · ${total} hotel${total === 1 ? '' : 's'} in this search`;
 
@@ -684,9 +728,10 @@
         panel.dataset.moreCount = '0';
         return;
       }
-      const ctx = _ctx || refreshCtx();
+      const ctx = refreshCtx();
+      const rawCount = bridge()?.getLastHotels?.()?.length ?? 0;
       if (!ctx || !ctx.sortedHotels?.length) {
-        panel.innerHTML = renderEmptyStateHtml();
+        panel.innerHTML = rawCount > 0 ? renderFilteredEmptyStateHtml(rawCount) : renderEmptyStateHtml();
       } else {
         panel.innerHTML = renderMainPanel(ctx);
       }
