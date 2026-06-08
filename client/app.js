@@ -1104,7 +1104,7 @@
       type:'chips',
       options:[
         { id:'free_cancellation', flag:null, label:'Free cancellation', hint:'When your dates are set, we favour rates you can cancel without a fee.', image:'https://images.unsplash.com/photo-1526778548025-fa2f459cd5c1?auto=format&fit=crop&w=1200&q=80', meta:'Add check-in and check-out first' },
-        { id:'balcony',      flag:'private_balcony', label:'Balcony or view',    hint:'Outdoor space or a real view from the room.',                         image:'images/wizard/musthave-balcony.png' },
+        { id:'balcony',      flag:null, label:'Balcony or view',    hint:'Outdoor space or a real view from the room.',                         image:'images/wizard/musthave-balcony.png' },
         { id:'spa_bathroom', flag:null,        label:'Spa-style bathroom', hint:'Soaking tub or rain shower plus larger counter / double vanity.',     image:'images/wizard/musthave-spa-bathroom.png', seed:'spa-like bathroom, soaking tub, rainfall shower, marble vanity, generous counter space, double sinks' },
         { id:'spacious',     flag:null,        label:'Spacious room',      hint:'Room to spread out, not a closet.',                                    image:'images/wizard/musthave-spacious.png', seed:'spacious hotel room, generous layout, open feel' },
         { id:'work_desk',    flag:'ergonomic_workspace', label:'Work desk',          hint:'Proper desk to get a few hours done.',                                 image:'images/wizard/musthave-work-desk.png' },
@@ -2457,7 +2457,12 @@
     return keys;
   }
 
-  // mustHaves: array of DB feature_flag names → passed as must_haves[] on /api/vsearch.
+  function mhSpecApi() {
+    return window.RM_MUST_HAVE_SPEC || null;
+  }
+
+  // mustHaveSpec: AND of facts / OR groups → boop_profile + server filter.
+  // mustHaves: flat URL keys only (OR groups omitted; server uses mustHaveSpec).
   function buildBoopSeeds(profile) {
     const ans = profile?.answers || {};
     const picked = new Set(profile?.dealbreakers || []);
@@ -2466,30 +2471,28 @@
     const mustHavesQ = BOOP_QUESTIONS.find(q => q.id === 'musthaves');
     const mustHaveOptions = (mustHavesQ?.options || []).filter(o => picked.has(o.id));
 
-    const mustHaves = [];
     const seedExtras = [];
     for (const o of mustHaveOptions) {
-      if (o.flag) mustHaves.push(o.flag);
       if (o.seed) seedExtras.push(o.seed);
-
-      // Extra synonym nudges for flag-only options so HyDE lands near the
-      // right photo embeddings even when the DB flag filter is what's really
-      // doing the work.
       if (o.id === 'balcony')   seedExtras.push('private balcony, outdoor terrace, view from room');
       if (o.id === 'work_desk') seedExtras.push('work desk, proper workspace, ergonomic chair');
     }
 
-    // User-typed must-haves (Q4 freetext) become hard filters — same as picking a chip.
-    // Only parsed from profile.freetext, not from HyDE seed prose (avoids silent ANDs
-    // when chip-only searches include feature words in the generated roomSeed).
+    const freetextFacts = [];
     if (freetext) {
       for (const { rx, flag, seed } of FREETEXT_FEATURE_PATTERNS) {
         if (rx.test(freetext)) {
-          if (flag && !mustHaves.includes(flag)) mustHaves.push(flag);
+          if (flag) freetextFacts.push(flag);
           if (seed) seedExtras.push(seed);
         }
       }
     }
+
+    const api = mhSpecApi();
+    const mustHaveSpec = api
+      ? api.buildMustHaveSpecFromDealbreakers([...picked], freetextFacts)
+      : [];
+    const mustHaves = api ? api.flattenMustHavesForUrl(mustHaveSpec) : [];
 
     // Room seed: roomStyle aesthetic → primary signal + feature nudges + freetext.
     const roomStyleLabel = {
@@ -2537,7 +2540,7 @@
     ].filter(Boolean);
     const hotelSeed = hotelBits.join('. ');
 
-    return { roomSeed, hotelSeed, mustHaves };
+    return { roomSeed, hotelSeed, mustHaves, mustHaveSpec };
   }
 
   // Light keyword nudges so optional free-text influences neighbourhood vibe %
@@ -2582,6 +2585,10 @@
       updatedAt: Date.now(),
     };
     syncPriceMattersIntoProfile(profile);
+    try {
+      const seeds = buildBoopSeeds(profile);
+      profile.mustHaveSpec = seeds.mustHaveSpec;
+    } catch (_) { /* keep profile without spec */ }
     BOOP.answers = normalizedAnswers;
     _budgetFilter = normalizeBudgetFilter(profile.budgetFilter);
     _budgetFlex = profile.budgetFlex !== false;
@@ -4147,8 +4154,8 @@
       const continueHandler = 'boopFinish()';
       const backHandler = overlayMode ? 'closeBoopOverlay()' : 'boopBack()';
       const backLabel = overlayMode ? 'Cancel' : '&lt; back';
-      // Build "Your words" freetext block (moved from former screen 5).
-      // Sits above the Free cancellation chip as the first input on this screen.
+      // Optional freetext + advanced keywords on the must-haves screen (former screen 5).
+      // Layout: chips → back/continue → "Anything else?" → fine-tune details.
       const previewProfile = {
         answers: { ...(BOOP.answers || {}) },
         prefs:   { ...(BOOP.prefs   || {}) },
@@ -4158,23 +4165,7 @@
       let autoKeywords = '';
       try { autoKeywords = buildBoopSeeds(previewProfile).roomSeed || ''; } catch (_) { autoKeywords = ''; }
       const kwValue = (BOOP.advancedKeywords && BOOP.advancedKeywords.trim()) ? BOOP.advancedKeywords : autoKeywords;
-      body = `<div class="boop-deal-toolbar boop-deal-toolbar--compact">
-        <div class="boop-deal-toolbar-actions">
-          <a class="boop-deal-back-link" href="#" onclick="event.preventDefault();${backHandler};">${backLabel}</a>
-          <button type="button" class="boop-btn primary" onclick="${continueHandler}">${continueLabel}</button>
-        </div>
-      </div>
-      <div class="boop-deal-freetext boop-deal-freetext--inline">
-        <label for="boop-freetext-input" class="boop-deal-freetext-label">Anything else? <span class="boop-deal-freetext-opt">(optional)</span></label>
-        <p class="boop-deal-freetext-sub">Street energy, character, views, or small details — anything else we should factor in.</p>
-        <input id="boop-freetext-input" type="text" placeholder="e.g. quiet side street, small design hotel, dark moody suite, river views"
-               value="${escHtml(BOOP.freetext)}"
-               oninput="BOOP.freetext=this.value"
-               onkeydown="if(event.key==='Enter'){event.preventDefault();boopFinish();}"
-               class="boop-deal-freetext-input" />
-      </div>
-      <p class="boop-note boop-musthave-instruction">${mustHaveInstruction}</p>
-      <div class="boop-deal-list-shell"><div class="boop-deal-list">${q.options.map(o => `
+      const dealListHtml = q.options.map(o => `
         <button type="button" class="boop-deal-row ${BOOP.dealbreakers.has(o.id) ? 'active' : ''}" aria-pressed="${BOOP.dealbreakers.has(o.id) ? 'true' : 'false'}" aria-label="${escHtml(o.label)}${o.hint ? '. ' + escHtml(o.hint) : ''}" onclick="boopToggleDealbreaker('${o.id}')">
           <div class="boop-deal-row-media">
             <img src="${boopGetDynamicImage(q.id, o.id, o.image || 'https://images.unsplash.com/photo-1477959858617-67f85cf4f1df?auto=format&fit=crop&w=1200&q=80')}" alt="" role="presentation" loading="lazy" onerror="this.onerror=null;this.src='https://images.unsplash.com/photo-1477959858617-67f85cf4f1df?auto=format&fit=crop&w=1200&q=80'" />
@@ -4186,7 +4177,24 @@
           </div>
           <div class="boop-deal-row-check" aria-hidden="true">${BOOP.dealbreakers.has(o.id) ? '✓' : '+'}</div>
         </button>
-      `).join('')}</div></div>
+      `).join('');
+      body = `<p class="boop-note boop-musthave-instruction">${mustHaveInstruction}</p>
+      <div class="boop-deal-list-shell"><div class="boop-deal-list">${dealListHtml}</div></div>
+      <div class="boop-deal-toolbar boop-deal-toolbar--compact boop-deal-toolbar--mid">
+        <div class="boop-deal-toolbar-actions">
+          <a class="boop-deal-back-link" href="#" onclick="event.preventDefault();${backHandler};">${backLabel}</a>
+          <button type="button" class="boop-btn primary" onclick="${continueHandler}">${continueLabel}</button>
+        </div>
+      </div>
+      <div class="boop-deal-freetext boop-deal-freetext--inline boop-deal-freetext--bottom">
+        <label for="boop-freetext-input" class="boop-deal-freetext-label">Anything else? <span class="boop-deal-freetext-opt">(optional)</span></label>
+        <p class="boop-deal-freetext-sub">Street energy, character, views, or small details — anything else we should factor in.</p>
+        <input id="boop-freetext-input" type="text" placeholder="e.g. quiet side street, small design hotel, dark moody suite, river views"
+               value="${escHtml(BOOP.freetext)}"
+               oninput="BOOP.freetext=this.value"
+               onkeydown="if(event.key==='Enter'){event.preventDefault();boopFinish();}"
+               class="boop-deal-freetext-input" />
+      </div>
       <details class="boop-keywords-details">
         <summary class="boop-keywords-summary">
           <span class="boop-keywords-summary-label">Fine-tune room search text</span>
@@ -10580,8 +10588,23 @@
       ${othersSection}`;
   }
 
-  // Wizard dealbreaker chips with a DB flag (Balcony, Work desk, …).
+  function getActiveMustHaveSpec(profile) {
+    profile = profile || S.boopProfile || (S.city ? loadBoopProfileForCity(S.city) : null);
+    const api = mhSpecApi();
+    if (!profile || !api) return [];
+    if (profile.mustHaveSpec?.length) {
+      return api.normalizeMustHaveSpec(profile.mustHaveSpec);
+    }
+    return api.buildMustHaveSpecFromDealbreakers(
+      profile.dealbreakers || [],
+      getFreetextMustHaveKeys(profile)
+    );
+  }
+
+  // Wizard dealbreaker chips with a DB flag (Work desk, …). Balcony uses OR group in mustHaveSpec.
   function getExplicitMustHaveKeys(profile) {
+    const api = mhSpecApi();
+    if (api) return api.flattenMustHavesForUrl(getActiveMustHaveSpec(profile));
     profile = profile || S.boopProfile || (S.city ? loadBoopProfileForCity(S.city) : null);
     if (!profile) return [];
     const picked = new Set(Array.isArray(profile.dealbreakers) ? profile.dealbreakers : []);
@@ -10599,16 +10622,10 @@
     return extractMustHaveFlagsFromFreetext(profile?.freetext || '');
   }
 
-  // Featured room — keep in sync with lib/featured-room.js
+  // Flat fact keys for must_haves URL (OR groups live in boop_profile.mustHaveSpec).
   function getActiveMustHaveKeys(profile) {
-    profile = profile || S.boopProfile || (S.city ? loadBoopProfileForCity(S.city) : null);
-    const merged = [
-      ...new Set([
-        ...getExplicitMustHaveKeys(profile),
-        ...getFreetextMustHaveKeys(profile),
-      ].filter(Boolean)),
-    ];
-    if (merged.length) return merged;
+    const keys = getExplicitMustHaveKeys(profile);
+    if (keys.length) return keys;
     if (Array.isArray(S.mustHaves) && S.mustHaves.length) {
       return [...new Set(S.mustHaves.filter(Boolean))];
     }

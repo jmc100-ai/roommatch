@@ -1,0 +1,404 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>How it works — copy + layout preview (not shipped)</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500&family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #0c0c0e;
+      --card: #121215;
+      --text: #e8e4dc;
+      --muted: #9a9590;
+      --accent: #c9a96e;
+      --accent2: #e8d5b0;
+      --border: rgba(255, 255, 255, 0.12);
+      --radius: 16px;
+      --gutter: 20px;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: 'DM Sans', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+    }
+
+    /* ── Prototype chrome (outside the real overlay) ── */
+    .proto-banner {
+      position: sticky;
+      top: 0;
+      z-index: 50;
+      padding: 10px var(--gutter);
+      background: rgba(201, 169, 110, 0.12);
+      border-bottom: 1px solid rgba(201, 169, 110, 0.28);
+      font-size: 12px;
+      line-height: 1.45;
+      color: var(--accent2);
+      text-align: center;
+    }
+    .proto-banner strong { color: var(--text); }
+
+    /* ── Matches production static overlay ── */
+    .static-overlay {
+      display: flex;
+      align-items: flex-start;
+      justify-content: center;
+      padding: 48px var(--gutter) 64px;
+      min-height: calc(100vh - 44px);
+    }
+    .static-panel {
+      width: 100%;
+      max-width: 680px;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 28px 32px 36px;
+      position: relative;
+      box-shadow: 0 28px 100px rgba(0, 0, 0, 0.5);
+    }
+    .static-close {
+      position: absolute;
+      top: 12px;
+      right: 12px;
+      width: 40px;
+      height: 40px;
+      border: none;
+      border-radius: 10px;
+      background: rgba(255, 255, 255, 0.06);
+      color: var(--muted);
+      font-size: 22px;
+      line-height: 1;
+      cursor: default;
+    }
+    .static-panel h1 {
+      font-family: 'Cormorant Garamond', serif;
+      font-size: 26px;
+      font-weight: 500;
+      color: var(--text);
+      margin: 0 44px 16px 0;
+      letter-spacing: 0.02em;
+    }
+    .static-lead {
+      font-size: 15px;
+      line-height: 1.65;
+      color: rgba(232, 228, 220, 0.92);
+      margin: 0 0 8px;
+    }
+    .static-lead .brand { color: var(--accent); }
+
+    /* ── New step layout (proposed) ── */
+    .static-steps { margin: 8px 0 0; }
+    .static-step {
+      margin: 28px 0 0;
+      padding: 0;
+    }
+    .static-step:first-child { margin-top: 20px; }
+    .static-step h2 {
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--accent2);
+      margin: 14px 0 10px;
+    }
+    .static-step ul {
+      margin: 0;
+      padding-left: 1.15em;
+      font-size: 14px;
+      line-height: 1.65;
+      color: rgba(232, 228, 220, 0.9);
+    }
+    .static-step li { margin-bottom: 6px; }
+    .static-step li:last-child { margin-bottom: 0; }
+    .static-step-note {
+      margin: 10px 0 0;
+      font-size: 13px;
+      line-height: 1.55;
+      color: var(--muted);
+    }
+
+    .static-step-fig {
+      margin: 0 0 4px;
+      border-radius: 12px;
+      overflow: hidden;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      background: rgba(255, 255, 255, 0.03);
+    }
+    .static-step-fig img {
+      display: block;
+      width: 100%;
+      height: auto;
+    }
+    .static-step-fig--collage {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 6px;
+      padding: 8px;
+    }
+    .static-step-fig--collage img {
+      border-radius: 8px;
+      aspect-ratio: 4 / 3;
+      object-fit: cover;
+      width: 100%;
+      height: 100%;
+    }
+
+    /* CSS-only UI mocks (stand in for future screenshots) */
+    .ui-mock {
+      padding: 14px 16px 16px;
+      background: linear-gradient(180deg, rgba(255,255,255,0.04) 0%, rgba(255,255,255,0.02) 100%);
+    }
+    .ui-mock-label {
+      font-size: 9px;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: rgba(154, 149, 144, 0.85);
+      margin-bottom: 10px;
+    }
+    .ui-mock-field {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 12px 14px;
+      border-radius: 12px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      background: rgba(255, 255, 255, 0.04);
+      margin-bottom: 8px;
+      font-size: 13px;
+      color: var(--text);
+    }
+    .ui-mock-field .ico {
+      width: 28px;
+      height: 28px;
+      border-radius: 8px;
+      background: rgba(201, 169, 110, 0.15);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 12px;
+      color: var(--accent2);
+      flex-shrink: 0;
+    }
+    .ui-mock-field .sub {
+      display: block;
+      font-size: 10px;
+      color: var(--muted);
+      margin-top: 2px;
+    }
+    .ui-mock-field .val { font-weight: 500; }
+
+    .ui-mock-card {
+      border-radius: 14px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      overflow: hidden;
+      background: rgba(0, 0, 0, 0.25);
+    }
+    .ui-mock-card-hero {
+      height: 88px;
+      background: linear-gradient(135deg, rgba(201,169,110,0.25) 0%, rgba(80,70,55,0.4) 100%);
+      position: relative;
+    }
+    .ui-mock-card-hero .badge {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      padding: 4px 10px;
+      border-radius: 100px;
+      background: rgba(12, 12, 14, 0.75);
+      border: 1px solid rgba(201, 169, 110, 0.4);
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--accent2);
+    }
+    .ui-mock-card-body { padding: 10px 12px 12px; }
+    .ui-mock-card-body .name {
+      font-size: 13px;
+      font-weight: 600;
+      margin-bottom: 4px;
+    }
+    .ui-mock-card-body .meta {
+      font-size: 11px;
+      color: var(--muted);
+    }
+    .ui-mock-thumbs {
+      display: flex;
+      gap: 4px;
+      margin-top: 8px;
+    }
+    .ui-mock-thumbs span {
+      flex: 1;
+      height: 32px;
+      border-radius: 6px;
+      background: rgba(255, 255, 255, 0.06);
+    }
+
+    .ui-mock-book {
+      display: inline-flex;
+      align-items: center;
+      padding: 10px 18px;
+      border-radius: 100px;
+      background: linear-gradient(180deg, var(--accent2) 0%, var(--accent) 100%);
+      color: #1a1a1a;
+      font-size: 13px;
+      font-weight: 600;
+      margin-top: 4px;
+    }
+
+    .static-beta {
+      margin-top: 32px;
+      padding-top: 20px;
+      border-top: 1px solid var(--border);
+    }
+    .static-beta h2 {
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--accent2);
+      margin: 0 0 10px;
+    }
+    .static-beta p {
+      font-size: 14px;
+      line-height: 1.65;
+      color: rgba(232, 228, 220, 0.9);
+      margin: 0;
+    }
+    .static-muted {
+      font-size: 12px;
+      line-height: 1.55;
+      color: var(--muted);
+      margin-top: 28px;
+      padding-top: 20px;
+      border-top: 1px solid var(--border);
+    }
+    .static-muted a { color: var(--accent2); }
+
+    @media (max-width: 520px) {
+      .static-panel { padding: 22px 18px 28px; }
+      .static-panel h1 { font-size: 24px; }
+      .static-step-fig--collage { grid-template-columns: repeat(3, 1fr); gap: 4px; padding: 6px; }
+    }
+  </style>
+</head>
+<body>
+  <p class="proto-banner">
+    <strong>Prototype only</strong> — revised “How it works” copy + step images.
+    Open <code>client/prototype-how-it-works.html</code> in a browser. Not wired into the app yet.
+  </p>
+
+  <div class="static-overlay" aria-hidden="false">
+    <div class="static-panel">
+      <button type="button" class="static-close" aria-label="Close (demo)">&times;</button>
+
+      <h1 id="static-title">How it works</h1>
+
+      <p class="static-lead">
+        <span class="brand">TravelByVibe</span> helps you find a hotel that actually <em>feels</em> right —
+        the neighbourhood, the room, the details you care about — using real photos,
+        not just a single hero shot and a star rating.
+      </p>
+
+      <div class="static-steps">
+
+        <!-- Step 1 -->
+        <article class="static-step">
+          <figure class="static-step-fig" aria-hidden="true">
+            <div class="ui-mock">
+              <div class="ui-mock-label">Preview · replace with home screenshot</div>
+              <div class="ui-mock-field">
+                <span class="ico">⌖</span>
+                <span>
+                  <span class="val">Mexico City</span>
+                  <span class="sub">Where are you going?</span>
+                </span>
+              </div>
+              <div class="ui-mock-field">
+                <span class="ico">◇</span>
+                <span>
+                  <span class="val">Add dates <span style="font-weight:400;color:var(--muted)">(optional)</span></span>
+                  <span class="sub">Check-in — Check-out</span>
+                </span>
+              </div>
+            </div>
+          </figure>
+          <h2>1 · Start with your trip</h2>
+          <ul>
+            <li><strong>Pick a city</strong> and who’s travelling.</li>
+            <li><strong>Dates are optional.</strong> Browse matches first, or add check-in and check-out anytime to see live nightly rates.</li>
+          </ul>
+        </article>
+
+        <!-- Step 2 -->
+        <article class="static-step">
+          <figure class="static-step-fig static-step-fig--collage">
+            <img src="images/wizard/sleek-polished.png" alt="" width="200" height="150" loading="lazy" />
+            <img src="images/wizard/nbhd-trendy.png" alt="" width="200" height="150" loading="lazy" />
+            <img src="images/wizard/musthave-spa-bathroom.png" alt="" width="200" height="150" loading="lazy" />
+          </figure>
+          <p class="static-step-note">Wizard art from the live app — or swap for one screenshot of the vibe wizard.</p>
+          <h2>2 · Tell us your vibe</h2>
+          <ul>
+            <li>A <strong>short wizard</strong> (about a minute) asks how you like to travel: first visit or not, stay style, neighbourhood feel, and must-haves like a balcony or spa-style bath.</li>
+            <li>Your answers are <strong>saved for that city</strong>. Change them anytime from the bar at the top of your results.</li>
+          </ul>
+        </article>
+
+        <!-- Step 3 -->
+        <article class="static-step">
+          <figure class="static-step-fig" aria-hidden="true">
+            <div class="ui-mock">
+              <div class="ui-mock-label">Preview · replace with results screenshot</div>
+              <div class="ui-mock-card">
+                <div class="ui-mock-card-hero">
+                  <span class="badge">87% match</span>
+                </div>
+                <div class="ui-mock-card-body">
+                  <div class="name">Boutique Hotel Roma Norte</div>
+                  <div class="meta">Roma Norte · ★★★★ · from $189/night</div>
+                  <div class="ui-mock-thumbs"><span></span><span></span><span></span></div>
+                </div>
+              </div>
+            </div>
+          </figure>
+          <h2>3 · Browse matches ranked for you</h2>
+          <ul>
+            <li>We compare <strong>real room and hotel photos</strong> to what you asked for and rank the best fits.</li>
+            <li><strong>Match % is a guide</strong>, not a guarantee — use it to spot strong options, then dig into photos and details.</li>
+            <li><strong>Narrow the list</strong> with sort, budget, dates, and “available only” when you’re ready.</li>
+          </ul>
+        </article>
+
+        <!-- Step 4 -->
+        <article class="static-step">
+          <h2>4 · Book when you’re ready</h2>
+          <ul>
+            <li>Tap <strong>Find &amp; Book</strong> to open our partner’s checkout (with your dates when you’ve added them).</li>
+            <li><strong>Always double-check</strong> price, cancellation policy, and accessibility on the booking site before you pay.</li>
+          </ul>
+          <span class="ui-mock-book">Find &amp; Book →</span>
+        </article>
+
+      </div>
+
+      <section class="static-beta">
+        <h2>While we’re in beta</h2>
+        <p>
+          We’re adding cities and tuning match quality all the time.
+          If something looks off — wrong photo, weird ranking, confusing copy —
+          hit the purple <strong>Feedback</strong> button. We read every note.
+        </p>
+      </section>
+
+      <p class="static-muted">
+        TravelByVibe is in beta. This page is a plain-language overview, not legal advice,
+        and we may update it as the product changes. Operated by TravelBoop, LLC.
+        For full legal text, see <a href="/privacy">Privacy</a> and <a href="/terms">Terms</a>.
+      </p>
+    </div>
+  </div>
+</body>
+</html>

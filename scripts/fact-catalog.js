@@ -282,9 +282,11 @@ function _writeIntentToDb(supabase, cacheKey, intent) {
  */
 async function buildFactIntentLLM(query, opts = {}, geminiKey = "") {
   const queryNorm = String(query || "").trim().toLowerCase();
-  // Include mustHaves in the cache key so different must_haves get separate cache entries
+  // Include must-have shape in cache key (flat URL keys + boop OR-group fingerprint).
+  const specFp = opts.mustHaveSpecFingerprint || "";
   const sortedMH = [...(Array.isArray(opts.mustHaves) ? opts.mustHaves : [])].sort().join(",");
-  const cacheKey = sortedMH ? `${queryNorm}|mh:${sortedMH}` : queryNorm;
+  const mhPart = specFp || sortedMH;
+  const cacheKey = mhPart ? `${queryNorm}|mh:${mhPart}` : queryNorm;
 
   // L1 — in-memory LRU
   if (_nlpCache.has(cacheKey)) return _nlpCache.get(cacheKey);

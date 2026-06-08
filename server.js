@@ -1577,6 +1577,11 @@ app.get("/api/config", (req, res) => {
 
 // Static assets — set { index: false } so Express never auto-serves
 // client/index.html (we own that via serveAppHtml so injection always happens).
+app.get("/must-have-spec.js", (_req, res) => {
+  res.type("application/javascript");
+  res.sendFile(path.join(__dirname, "lib", "must-have-spec.js"));
+});
+
 app.use(express.static(path.join(__dirname, "client"), {
   index: false,
   setHeaders(res, filePath) {

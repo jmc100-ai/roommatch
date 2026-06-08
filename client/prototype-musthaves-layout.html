@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Must-haves layout — before / after (prototype, not shipped)</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500&family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #0c0c0e;
+      --card: #18181c;
+      --row: #1c1c21;
+      --text: #e8e4dc;
+      --muted: #9a9590;
+      --accent: #c9a96e;
+      --accent2: #e8d5b0;
+      --green: #8bc4ad;
+      --border: rgba(255,255,255,0.08);
+      --radius: 14px;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: 'DM Sans', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.4;
+    }
+    .proto-banner {
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      padding: 12px 16px;
+      background: rgba(201,169,110,0.14);
+      border-bottom: 1px solid rgba(201,169,110,0.3);
+      font-size: 13px;
+      color: var(--accent2);
+      text-align: center;
+    }
+    .proto-banner strong { color: var(--text); }
+    .compare {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 24px;
+      max-width: 920px;
+      margin: 0 auto;
+      padding: 24px 16px 48px;
+    }
+    @media (max-width: 780px) {
+      .compare { grid-template-columns: 1fr; }
+    }
+    .panel-wrap h2 {
+      font-size: 11px;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin: 0 0 10px 4px;
+      font-weight: 600;
+    }
+    .panel-wrap.proposed h2 { color: var(--accent); }
+    .phone {
+      max-width: 390px;
+      margin: 0 auto;
+      background: #0f0f12;
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 16px 14px 20px;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.45);
+    }
+    .progress {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 11px;
+      color: var(--muted);
+      margin-bottom: 14px;
+    }
+    .progress-bar {
+      flex: 1;
+      height: 3px;
+      background: rgba(255,255,255,0.08);
+      border-radius: 2px;
+      overflow: hidden;
+    }
+    .progress-bar i {
+      display: block;
+      height: 100%;
+      width: 100%;
+      background: var(--accent);
+    }
+    .q-title {
+      font-family: 'Cormorant Garamond', serif;
+      font-size: 26px;
+      font-weight: 500;
+      margin-bottom: 6px;
+    }
+    .q-note {
+      font-size: 12px;
+      color: var(--green);
+      margin: 10px 0 12px;
+    }
+    .toolbar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+      margin: 8px 0 14px;
+    }
+    .toolbar--mid {
+      margin: 14px 0 16px;
+      justify-content: stretch;
+    }
+    .toolbar--mid .btn-primary { flex: 1; text-align: center; }
+    .back-link {
+      font-size: 13px;
+      color: var(--muted);
+      text-decoration: none;
+      padding: 8px 6px;
+      white-space: nowrap;
+    }
+    .btn-primary {
+      border: none;
+      border-radius: 10px;
+      padding: 11px 18px;
+      font-size: 14px;
+      font-weight: 600;
+      background: linear-gradient(180deg, #d8b27a 0%, #c9a96e 100%);
+      color: #1a1510;
+      cursor: default;
+    }
+    .freetext {
+      margin-top: 0;
+      padding: 12px 14px;
+      background: rgba(255,255,255,0.03);
+      border: 1px solid rgba(201,169,110,0.22);
+      border-radius: 12px;
+    }
+    .freetext-label {
+      font-size: 14px;
+      font-weight: 600;
+      margin-bottom: 4px;
+    }
+    .freetext-opt { font-weight: 400; color: var(--muted); }
+    .freetext-sub {
+      font-size: 12px;
+      color: var(--muted);
+      margin: 0 0 8px;
+    }
+    .freetext-input {
+      width: 100%;
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 8px;
+      background: rgba(0,0,0,0.25);
+      color: var(--text);
+      padding: 10px 12px;
+      font-size: 13px;
+      font-family: inherit;
+    }
+    .chip-list {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .chip-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      width: 100%;
+      text-align: left;
+      padding: 10px 12px;
+      background: var(--row);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      color: inherit;
+    }
+    .chip-thumb {
+      width: 52px;
+      height: 52px;
+      border-radius: 10px;
+      background: linear-gradient(135deg, #2a2826, #3d3830);
+      flex-shrink: 0;
+    }
+    .chip-text { flex: 1; min-width: 0; }
+    .chip-title { font-size: 14px; font-weight: 600; }
+    .chip-hint { font-size: 12px; color: var(--muted); margin-top: 2px; }
+    .chip-meta { font-size: 11px; color: var(--accent2); margin-top: 4px; }
+    .chip-check {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      border: 1px solid rgba(255,255,255,0.25);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 18px;
+      color: var(--muted);
+      flex-shrink: 0;
+    }
+    .chip-row.active .chip-check {
+      background: rgba(201,169,110,0.2);
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+    .fine-tune {
+      margin-top: 12px;
+      font-size: 12px;
+      color: var(--muted);
+      padding: 8px 0;
+    }
+    .arrow-flow {
+      max-width: 920px;
+      margin: 0 auto 8px;
+      padding: 0 16px;
+      font-size: 13px;
+      color: var(--accent2);
+    }
+    .arrow-flow ol {
+      margin: 8px 0 0;
+      padding-left: 20px;
+    }
+    .arrow-flow li { margin: 4px 0; }
+    .highlight-box {
+      outline: 2px dashed rgba(201,169,110,0.55);
+      outline-offset: 4px;
+      border-radius: 12px;
+    }
+    .zone-label {
+      font-size: 10px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--accent);
+      margin: 0 0 6px 2px;
+      font-weight: 600;
+    }
+  </style>
+</head>
+<body>
+  <div class="proto-banner">
+    <strong>Layout prototype only</strong> — same chips &amp; copy as production.
+    Open this file in a browser: <code>client/prototype-musthaves-layout.html</code>
+  </div>
+
+  <div class="arrow-flow">
+    <strong>Proposed change (right panel):</strong> only reorder blocks — no new options, no copy changes.
+    <ol>
+      <li>Title + progress stay at top</li>
+      <li>Must-have chips (unchanged)</li>
+      <li><strong>← Back</strong> + <strong>Find hotels →</strong> move here</li>
+      <li><strong>Anything else?</strong> moves to bottom</li>
+      <li>Fine-tune room search text stays last</li>
+    </ol>
+  </div>
+
+  <div class="compare">
+    <!-- CURRENT -->
+    <div class="panel-wrap">
+      <h2>Current (today)</h2>
+      <div class="phone">
+        <div class="progress"><span>4 of 4</span><div class="progress-bar"><i></i></div></div>
+        <div class="q-title">What matters most?</div>
+
+        <div class="zone-label">① Toolbar (top)</div>
+        <div class="toolbar">
+          <a class="back-link" href="#">&lt; back</a>
+          <button type="button" class="btn-primary">Find hotels →</button>
+        </div>
+
+        <div class="zone-label">② Anything else (above chips)</div>
+        <div class="freetext">
+          <div class="freetext-label">Anything else? <span class="freetext-opt">(optional)</span></div>
+          <p class="freetext-sub">Street energy, character, views, or small details — anything else we should factor in.</p>
+          <input class="freetext-input" type="text" placeholder="e.g. quiet side street, small design hotel, dark moody suite, river views" readonly />
+        </div>
+
+        <p class="q-note">Optional - pick any that matter.</p>
+
+        <div class="zone-label">③ Chip list</div>
+        <div class="chip-list">
+          <div class="chip-row"><div class="chip-thumb"></div><div class="chip-text"><div class="chip-title">Free cancellation</div><div class="chip-hint">When your dates are set, we favour rates you can cancel without a fee.</div><div class="chip-meta">Add check-in and check-out first</div></div><div class="chip-check">+</div></div>
+          <div class="chip-row active"><div class="chip-thumb"></div><div class="chip-text"><div class="chip-title">Balcony or view</div><div class="chip-hint">Outdoor space or a real view from the room.</div></div><div class="chip-check">✓</div></div>
+          <div class="chip-row"><div class="chip-thumb"></div><div class="chip-text"><div class="chip-title">Spa-style bathroom</div><div class="chip-hint">Soaking tub or rain shower plus larger counter / double vanity.</div></div><div class="chip-check">+</div></div>
+          <div class="chip-row"><div class="chip-thumb"></div><div class="chip-text"><div class="chip-title">Spacious room</div><div class="chip-hint">Room to spread out, not a closet.</div></div><div class="chip-check">+</div></div>
+          <div class="chip-row"><div class="chip-thumb"></div><div class="chip-text"><div class="chip-title">Work desk</div><div class="chip-hint">Proper desk to get a few hours done.</div></div><div class="chip-check">+</div></div>
+        </div>
+
+        <div class="fine-tune">▸ Fine-tune room search text</div>
+      </div>
+    </div>
+
+    <!-- PROPOSED -->
+    <div class="panel-wrap proposed">
+      <h2>Proposed</h2>
+      <div class="phone highlight-box">
+        <div class="progress"><span>4 of 4</span><div class="progress-bar"><i></i></div></div>
+        <div class="q-title">What matters most?</div>
+        <p class="q-note">Optional - pick any that matter.</p>
+
+        <div class="zone-label">① Chip list (unchanged)</div>
+        <div class="chip-list">
+          <div class="chip-row"><div class="chip-thumb"></div><div class="chip-text"><div class="chip-title">Free cancellation</div><div class="chip-hint">When your dates are set, we favour rates you can cancel without a fee.</div><div class="chip-meta">Add check-in and check-out first</div></div><div class="chip-check">+</div></div>
+          <div class="chip-row active"><div class="chip-thumb"></div><div class="chip-text"><div class="chip-title">Balcony or view</div><div class="chip-hint">Outdoor space or a real view from the room.</div></div><div class="chip-check">✓</div></div>
+          <div class="chip-row"><div class="chip-thumb"></div><div class="chip-text"><div class="chip-title">Spa-style bathroom</div><div class="chip-hint">Soaking tub or rain shower plus larger counter / double vanity.</div></div><div class="chip-check">+</div></div>
+          <div class="chip-row"><div class="chip-thumb"></div><div class="chip-text"><div class="chip-title">Spacious room</div><div class="chip-hint">Room to spread out, not a closet.</div></div><div class="chip-check">+</div></div>
+          <div class="chip-row"><div class="chip-thumb"></div><div class="chip-text"><div class="chip-title">Work desk</div><div class="chip-hint">Proper desk to get a few hours done.</div></div><div class="chip-check">+</div></div>
+        </div>
+
+        <div class="zone-label">② Toolbar (moved here)</div>
+        <div class="toolbar toolbar--mid">
+          <a class="back-link" href="#">&lt; back</a>
+          <button type="button" class="btn-primary">Find hotels →</button>
+        </div>
+
+        <div class="zone-label">③ Anything else (moved to bottom)</div>
+        <div class="freetext">
+          <div class="freetext-label">Anything else? <span class="freetext-opt">(optional)</span></div>
+          <p class="freetext-sub">Street energy, character, views, or small details — anything else we should factor in.</p>
+          <input class="freetext-input" type="text" placeholder="e.g. quiet side street, small design hotel, dark moody suite, river views" readonly />
+        </div>
+
+        <div class="fine-tune">▸ Fine-tune room search text</div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

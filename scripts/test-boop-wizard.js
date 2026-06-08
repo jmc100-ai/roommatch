@@ -120,8 +120,16 @@ function runUnitTests() {
     { trip: "first", stayVibe: "sleek_polished", nbhdScene: "buzz_central", group_size: "couple" },
     ["balcony"]
   );
-  const { mustHaves: mhBalcony } = buildBoopSeeds(balconyProfile);
-  assert(mhBalcony.includes("private_balcony"), `balcony must-have → private_balcony (got ${mhBalcony})`);
+  const balconySeeds = buildBoopSeeds(balconyProfile);
+  assert(
+    Array.isArray(balconySeeds.mustHaveSpec?.[0]) && balconySeeds.mustHaveSpec[0].includes("skyline_view"),
+    `balcony chip → OR mustHaveSpec (got ${JSON.stringify(balconySeeds.mustHaveSpec)})`
+  );
+  assert(
+    !balconySeeds.mustHaves.includes("private_balcony"),
+    "balcony OR group not flattened into must_haves URL"
+  );
+  assert(balconyProfile.mustHaveSpec?.length, "buildBoopProfile attaches mustHaveSpec");
 
   const deskProfile = buildBoopProfile(
     { trip: "repeat", stayVibe: "cozy_warm", nbhdScene: "leafy_local", group_size: "couple" },
@@ -144,7 +152,7 @@ function runUnitTests() {
   const factSet = new Set(FACT_CATALOG);
   for (const opt of MUSTHAVE_OPTIONS) {
     if (opt.flag) assert(factSet.has(opt.flag), `must-have flag ${opt.flag} not in FACT_CATALOG`);
-    if (opt.id === "balcony") assert(opt.flag === "private_balcony", "balcony → private_balcony");
+    if (opt.id === "balcony") assert(opt.orFacts?.length > 0, "balcony chip uses orFacts");
   }
 
   return failures;
