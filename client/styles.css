@@ -149,6 +149,7 @@
       outline-offset: 2px;
     }
     .topnav-beta {
+      font-family: inherit;
       font-size: 10px;
       letter-spacing: .1em;
       text-transform: uppercase;
@@ -157,7 +158,11 @@
       border: 1px solid rgba(201,169,110,.25);
       border-radius: 20px;
       padding: 3px 10px;
+      cursor: default;
+      line-height: 1;
+      flex-shrink: 0;
     }
+    .topnav-beta-line2 { display: none; }
     .topnav-menu-btn {
       display: none;
       align-items: center;
@@ -204,6 +209,26 @@
       }
       .topnav-currency {
         gap: 0;
+      }
+      .topnav-beta {
+        display: inline-flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 3px 7px;
+        line-height: 1.1;
+        cursor: pointer;
+        letter-spacing: .07em;
+        -webkit-tap-highlight-color: transparent;
+      }
+      .topnav-beta-line2 {
+        display: block;
+        font-size: 8px;
+        letter-spacing: .05em;
+        margin-top: 1px;
+      }
+      .topnav-beta:active {
+        background: rgba(201,169,110,.22);
       }
       .topnav-links {
         order: 10;
@@ -259,6 +284,7 @@
         order: 3;
         margin-left: auto;
       }
+      .topnav-beta { pointer-events: none; }
     }
 
     /* ── Static pages (About, Terms, …) overlay ─────────── */
