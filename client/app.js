@@ -1016,6 +1016,10 @@
   const BOOP_TRIP_LOAD_PROMISES = new Map();
   /** cityKeys where trip prefetch finished (success or failure) — safe to use static fallbacks. */
   const BOOP_TRIP_READY = new Set();
+  /** cityKeys where trip card pixels finished decoding (URLs may exist earlier). */
+  const BOOP_TRIP_PIXELS_PRELOADED = new Set();
+  /** Dedupes wizard image preloads by resolved src (static + proxied external). */
+  const _boopPreloadedSrc = new Set();
   // BOOP v5 wizard — 4 screens:
   //   1. Trip context       (3 cards)
   //   2. Stay vibe          (4 cards; maps to roomStyle + hotelPersonality internally)
@@ -1917,7 +1921,8 @@
 
   function boopPreloadImageUrl(href) {
     const src = boopWizardImageUrl(href);
-    if (!src) return Promise.resolve();
+    if (!src || _boopPreloadedSrc.has(src)) return Promise.resolve();
+    _boopPreloadedSrc.add(src);
     return new Promise((resolve) => {
       const img = new Image();
       img.onload = img.onerror = () => resolve();
@@ -1932,11 +1937,59 @@
     );
   }
 
-  /** Load city-specific trip card photos. Resolves when API returns (not image decode). */
-  function prefetchBoopTripWizardImages(city, { preloadImages = false } = {}) {
+  /** Static PNG/JPEG fallbacks for steps 2–4 (same for every city). */
+  function boopPreloadStaticWizardImages() {
+    const hrefs = [];
+    for (const q of BOOP_QUESTIONS) {
+      if (q.id === 'trip') continue;
+      for (const o of q.options || []) {
+        if (o.image) hrefs.push(o.image);
+      }
+    }
+    return Promise.all(hrefs.map((href) => boopPreloadImageUrl(href)));
+  }
+
+  /** Decode every image URL a wizard step will paint (dynamic + static fallbacks). */
+  function boopPreloadQuestionStepImages(stepIdx, city) {
+    const q = BOOP_QUESTIONS[stepIdx];
+    if (!q) return Promise.resolve();
+    const cityK = cityKey(city);
+    const hrefs = [];
+    for (const o of q.options || []) {
+      const dynamic = boopGetDynamicImage(q.id, o.id, o.image);
+      if (dynamic) {
+        hrefs.push(dynamic);
+        continue;
+      }
+      if (q.id === 'trip' && cityK && !BOOP_TRIP_READY.has(cityK)) continue;
+      if (o.image) hrefs.push(o.image);
+    }
+    return Promise.all(hrefs.map((href) => boopPreloadImageUrl(href)));
+  }
+
+  /** While the user reads step N, warm step N+1 (and trip fallbacks once API settles). */
+  function boopPreloadWizardStepAhead(fromIdx, city) {
+    const nextIdx = fromIdx + 1;
+    if (nextIdx < BOOP_QUESTIONS.length) {
+      boopPreloadQuestionStepImages(nextIdx, city);
+    }
+    if (fromIdx === 0 && city) {
+      prefetchBoopTripWizardImages(city);
+    }
+  }
+
+  /** Load city-specific trip card photos. Resolves when API returns; optionally decodes pixels. */
+  function prefetchBoopTripWizardImages(city, { preloadImages = true } = {}) {
     const cityK = cityKey(city);
     if (!cityK) return Promise.resolve();
-    if (BOOP_WIZARD_IMAGES[cityK]?.trip?.first) return Promise.resolve();
+    const existingTrip = BOOP_WIZARD_IMAGES[cityK]?.trip;
+    if (existingTrip?.first) {
+      if (preloadImages && !BOOP_TRIP_PIXELS_PRELOADED.has(cityK)) {
+        BOOP_TRIP_PIXELS_PRELOADED.add(cityK);
+        return boopPreloadTripWizardImages(existingTrip);
+      }
+      return Promise.resolve();
+    }
     const pending = BOOP_TRIP_LOAD_PROMISES.get(cityK);
     if (pending) return pending;
 
@@ -1957,6 +2010,11 @@
             };
             if (preloadImages) {
               await boopPreloadTripWizardImages(BOOP_WIZARD_IMAGES[cityK].trip);
+              BOOP_TRIP_PIXELS_PRELOADED.add(cityK);
+              // Trip static fallbacks used when a slot misses or onerror fires.
+              for (const o of BOOP_QUESTIONS.find((x) => x.id === 'trip')?.options || []) {
+                if (o.image) await boopPreloadImageUrl(o.image);
+              }
             }
           }
         }
@@ -1967,7 +2025,11 @@
         BOOP_TRIP_READY.add(cityK);
         BOOP_TRIP_LOAD_PROMISES.delete(cityK);
         const q = BOOP_QUESTIONS[BOOP.idx];
-        if (q?.id === 'trip' && document.getElementById('st-boop')?.style.display !== 'none') {
+        if (
+          q?.id === 'trip' &&
+          cityKey(S.city) === cityK &&
+          document.getElementById('st-boop')?.style.display !== 'none'
+        ) {
           renderBoopQuestion();
         }
       }
@@ -4170,6 +4232,7 @@
       document.documentElement.scrollTop = 0;
       document.body.scrollTop = 0;
     }
+    if (S.city) boopPreloadWizardStepAhead(BOOP.idx, S.city);
   }
 
   // ── CITY ─────────────────────────────────────────────
@@ -4219,6 +4282,7 @@
       BOOP_TRIP_FETCHING.clear();
       BOOP_TRIP_LOAD_PROMISES.clear();
       BOOP_TRIP_READY.clear();
+      BOOP_TRIP_PIXELS_PRELOADED.clear();
     }
     S.nbhd = null;
     S.nbhdBbox = null;
@@ -4231,6 +4295,7 @@
     resetBudgetFilter();
     prefetchBoopTripWizardImages(city);
     prefetchBoopWizardImages(city);
+    boopPreloadStaticWizardImages();
 
     // BOOP v4 — saved-profile review screen temporarily disabled; always send
     // users straight into the wizard. We still load the saved profile so the
@@ -8081,7 +8146,7 @@
         repaintHotelDetailPageRooms();
       }
     }
-    if (enriched > 0 && budgetCapActiveForFiltering() && _initialRenderHappened) {
+    if (enriched > 0 && budgetCapActiveForFiltering() && shouldRepaintResultsGridBehindDetail()) {
       renderSortedSmooth();
     }
     console.log(`[perf] hotel-rates enrich: ${targets.length} targets, ${enriched} enriched, ${Date.now() - t0}ms`);
@@ -8265,7 +8330,7 @@
         const stars    = '★'.repeat(Math.min(Math.max(Math.round(h.starRating || 0), 0), 5));
         const location = [h.address, h.city, h.country].filter(Boolean).join(', ');
         const rating   = h.rating > 0
-          ? `<button type="button" class="hotel-guest-score" data-hotel-id="${escHtml(String(h.id))}" onclick="event.stopPropagation();openHotelDetailPage(this.dataset.hotelId, { scrollTo: 'reviews' })" title="See guest reviews"><strong>${parseFloat(h.rating).toFixed(1)}</strong> guest score</button>`
+          ? `<button type="button" class="hotel-guest-score" data-hotel-id="${escHtml(String(h.id))}"${hotelDetailPrefetchIntentAttrs(h.id)} onclick="event.stopPropagation();openHotelDetailPage(this.dataset.hotelId, { scrollTo: 'reviews' })" title="See guest reviews"><strong>${parseFloat(h.rating).toFixed(1)}</strong> guest score</button>`
           : '';
         const propChip = propertyTypeChipsHTML(h);
         metaEl.innerHTML =
@@ -11005,6 +11070,59 @@
   let _detailHotelId    = null;
   let _detailHotelData  = null;       // last loaded payload (for sticky-sidebar duplication, etc.)
   const _detailInflight = new Map();
+  const _detailPayloadCache = new Map(); // hotelId → { data, expiresAt }
+  const _detailPrefetchStarted = new Set();
+  const DETAIL_PAYLOAD_CACHE_TTL_MS = 5 * 60 * 1000;
+
+  function _getCachedHotelDetailPayload(hotelId) {
+    const row = _detailPayloadCache.get(String(hotelId));
+    if (!row || row.expiresAt <= Date.now()) return null;
+    return row.data;
+  }
+
+  function _fetchHotelDetailPayload(hotelId) {
+    const id = String(hotelId || '').trim();
+    if (!id) return Promise.reject(new Error('hotel_id_required'));
+
+    const cached = _getCachedHotelDetailPayload(id);
+    if (cached) return Promise.resolve(cached);
+
+    if (_detailInflight.has(id)) return _detailInflight.get(id);
+
+    const p = apiFetch(`${BACKEND}/api/hotel/${encodeURIComponent(id)}`)
+      .then((r) => {
+        if (!r.ok) throw new Error(`hotel_detail_http_${r.status}`);
+        return r.json();
+      })
+      .then((data) => {
+        if (!data || data.error) throw new Error(data?.error || 'hotel_detail_failed');
+        if (!data.hotel_id) data.hotel_id = id;
+        _detailPayloadCache.set(id, { data, expiresAt: Date.now() + DETAIL_PAYLOAD_CACHE_TTL_MS });
+        return data;
+      })
+      .finally(() => _detailInflight.delete(id));
+
+    _detailInflight.set(id, p);
+    return p;
+  }
+
+  /** Fire-and-forget — warms cache before click (pointerenter / touchstart). */
+  function prefetchHotelDetail(hotelId) {
+    const id = String(hotelId || '').trim();
+    if (!id || _detailHotelId === id) return;
+    if (_getCachedHotelDetailPayload(id) || _detailInflight.has(id) || _detailPrefetchStarted.has(id)) return;
+    _detailPrefetchStarted.add(id);
+    _fetchHotelDetailPayload(id).catch(() => {});
+  }
+
+  function hotelDetailPrefetchIntentAttrs(hotelId) {
+    const id = escAttr(String(hotelId));
+    return ` data-prefetch-hotel-id="${id}" onpointerenter="prefetchHotelDetail(this.dataset.prefetchHotelId)" ontouchstart="prefetchHotelDetail(this.dataset.prefetchHotelId)"`;
+  }
+
+  function shouldRepaintResultsGridBehindDetail() {
+    return _initialRenderHappened && !document.body.classList.contains('has-hotel-detail');
+  }
   // Saved view state so closing the detail page restores the user's prior
   // results/discovery view + scroll position without re-running search.
   let _detailReturnState = null;      // { results: bool, scrollY: number }
@@ -11109,14 +11227,7 @@
     }
 
     try {
-      if (!_detailInflight.has(hotelId)) {
-        _detailInflight.set(hotelId,
-          fetch(`${BACKEND}/api/hotel/${encodeURIComponent(hotelId)}`)
-            .then(r => r.json())
-            .finally(() => _detailInflight.delete(hotelId))
-        );
-      }
-      const data = await _detailInflight.get(hotelId);
+      const data = await _fetchHotelDetailPayload(hotelId);
       if (_detailHotelId !== hotelId) return; // user navigated away
       _detailHotelData = data;
       root.innerHTML = hotelDetailPageHTML(data, _detailPageOpts);
@@ -11148,7 +11259,7 @@
               )
             );
           }
-          if (budgetCapActiveForFiltering() && _initialRenderHappened) {
+          if (budgetCapActiveForFiltering() && shouldRepaintResultsGridBehindDetail()) {
             renderSortedSmooth();
           }
         }).catch(() => {});
@@ -11310,26 +11421,27 @@
   function hotelDetailCarouselHTML(allPhotos) {
     const photoCount = allPhotos.length;
     if (!photoCount) return `<div class="hp-hero-placeholder"></div>`;
-    const carouselImgs = allPhotos.map((url, i) =>
+    const visible = allPhotos.slice(0, HP_DETAIL_HERO_DOM_MAX);
+    const carouselImgs = visible.map((url, i) =>
       `<img class="hp-carousel-img${i === 0 ? ' active' : ''}" src="${escHtml(url)}" data-idx="${i}" alt="" loading="${i === 0 ? 'eager' : 'lazy'}" onerror="this.remove();hpCarouselReindex()">`
     ).join('');
     return `
       <div class="hp-carousel" id="hp-carousel">
         <div class="hp-carousel-track" id="hp-carousel-track">${carouselImgs}</div>
-        ${photoCount > 1 ? `
+        ${visible.length > 1 ? `
         <button class="hp-carousel-btn hp-carousel-prev" onclick="hpCarouselStep(-1)" aria-label="Previous photo">‹</button>
         <button class="hp-carousel-btn hp-carousel-next" onclick="hpCarouselStep(1)" aria-label="Next photo">›</button>
-        <div class="hp-carousel-dots" id="hp-carousel-dots">${allPhotos.map((_, i) => `<span class="hp-dot${i === 0 ? ' active' : ''}" onclick="hpCarouselGo(${i})"></span>`).join('')}</div>
+        <div class="hp-carousel-dots" id="hp-carousel-dots">${visible.map((_, i) => `<span class="hp-dot${i === 0 ? ' active' : ''}" onclick="hpCarouselGo(${i})"></span>`).join('')}</div>
         ` : ''}
       </div>`;
   }
 
-  function hotelDetailMosaicHTML(allPhotos) {
+  function hotelDetailMosaicHTML(allPhotos, photoTotal) {
     const n = allPhotos.length;
     if (!n) return `<div class="hp-hero-placeholder"></div>`;
+    const total = photoTotal != null ? photoTotal : n;
     const countClass = `hp-mosaic--count-${Math.min(n, 5)}`;
-    const showAllOnLast = n > 1;
-    const total = n;
+    const showAllOnLast = total > 1;
     if (n === 1) {
       return `<div class="hp-mosaic ${countClass}">${_hpMosaicCellHTML(allPhotos[0], 0, 'hp-mosaic-main', false, total)}</div>`;
     }
@@ -12039,13 +12151,7 @@
     }
   }
 
-  function hotelDetailLightboxHTML(allPhotos) {
-    if (!allPhotos.length) return '';
-    const thumbs = allPhotos.map((url, i) =>
-      `<button type="button" class="hp-lb-thumb${i === 0 ? ' active' : ''}" data-idx="${i}" onclick="event.stopPropagation();hpLightboxGo(${i})" aria-label="Photo ${i + 1}">
-        <img src="${escHtml(url)}" alt="">
-      </button>`
-    ).join('');
+  function hotelDetailLightboxShellHTML() {
     return `
       <div class="hp-lightbox" id="hp-lightbox" onclick="closeHpLightbox(event)">
         <div class="hp-lb-stage" onclick="event.stopPropagation()">
@@ -12055,8 +12161,21 @@
           <button type="button" class="hp-lb-next" onclick="hpLightboxStep(1)" aria-label="Next photo">›</button>
           <div class="hp-lb-counter" id="hp-lb-counter" aria-live="polite"></div>
         </div>
-        <div class="hp-lb-strip" id="hp-lb-strip" onclick="event.stopPropagation()">${thumbs}</div>
+        <div class="hp-lb-strip" id="hp-lb-strip" onclick="event.stopPropagation()"></div>
       </div>`;
+  }
+
+  function _ensureHpLightboxThumbsBuilt() {
+    const strip = document.getElementById('hp-lb-strip');
+    if (!strip || strip.dataset.built === '1') return;
+    const urls = _hpLightboxUrls.length ? _hpLightboxUrls : _hpDetailPhotos;
+    if (!urls.length) return;
+    strip.innerHTML = urls.map((url, i) =>
+      `<button type="button" class="hp-lb-thumb${i === 0 ? ' active' : ''}" data-idx="${i}" onclick="event.stopPropagation();hpLightboxGo(${i})" aria-label="Photo ${i + 1}">
+        <img src="${escHtml(url)}" alt="" loading="lazy">
+      </button>`
+    ).join('');
+    strip.dataset.built = '1';
   }
 
   function _hpMetaSubRowHTML(stars, ratingBadge, nbhdChip, propChip) {
@@ -12086,6 +12205,8 @@
   }
 
   const HP_DETAIL_GALLERY_MAX = 50;
+  /** Max photos rendered in hero carousel/mosaic DOM on first paint (full set stays in lightbox). */
+  const HP_DETAIL_HERO_DOM_MAX = 5;
 
   function hpPhotoBasename(url) {
     if (!url) return '';
@@ -12143,10 +12264,12 @@
 
     const allPhotos = buildHotelDetailPhotoGallery(d, searchHotel);
     _hpDetailPhotos = allPhotos.slice();
+    _hpLightboxUrls = [];
 
-    const carouselHTML = hotelDetailCarouselHTML(allPhotos);
-    const mosaicHTML = hotelDetailMosaicHTML(allPhotos);
-    const lightboxHTML = hotelDetailLightboxHTML(allPhotos);
+    const heroPhotos = allPhotos.slice(0, HP_DETAIL_HERO_DOM_MAX);
+    const carouselHTML = hotelDetailCarouselHTML(heroPhotos);
+    const mosaicHTML = hotelDetailMosaicHTML(heroPhotos, allPhotos.length);
+    const lightboxHTML = hotelDetailLightboxShellHTML();
     const hotelIdAttr = escHtml(String(d.hotel_id));
     const bookHotel = { id: d.hotel_id, name: d.name, city: S.city };
 
@@ -12576,6 +12699,7 @@
     const lb = document.getElementById('hp-lightbox');
     if (!lb) return;
     portalHpLightboxToBody();
+    _ensureHpLightboxThumbsBuilt();
     lb.classList.add('open');
     document.body.classList.add('has-hp-lightbox');
     document.body.style.overflow = 'hidden';
@@ -12719,6 +12843,7 @@
     bookLinkHTML,
     ratesCurrencySymbol: (cur) => ratesCurrencySymbol(cur || _priceCurrency),
     openHotelDetailPage,
+    prefetchHotelDetail,
     openVibeTourForHotel,
     bindFeaturedStripNavs,
     buildBookUrl,
@@ -12731,10 +12856,11 @@
     const stars    = '★'.repeat(Math.min(Math.max(Math.round(h.starRating || 0), 0), 5));
     const location = [h.address, h.city, h.country].filter(Boolean).join(', ');
     const rating   = h.rating > 0
-      ? `<button type="button" class="hotel-guest-score" data-hotel-id="${escHtml(String(h.id))}" onclick="event.stopPropagation();openHotelDetailPage(this.dataset.hotelId, { scrollTo: 'reviews' })" title="See guest reviews"><strong>${parseFloat(h.rating).toFixed(1)}</strong> guest score</button>`
+      ? `<button type="button" class="hotel-guest-score" data-hotel-id="${escHtml(String(h.id))}"${hotelDetailPrefetchIntentAttrs(h.id)} onclick="event.stopPropagation();openHotelDetailPage(this.dataset.hotelId, { scrollTo: 'reviews' })" title="See guest reviews"><strong>${parseFloat(h.rating).toFixed(1)}</strong> guest score</button>`
       : '';
     const clipBadge = h.clipScore > 0 ? `<span class="clip-score-badge">&#9889; ${h.clipScore}% photo match</span>` : '';
     const hotelIdAttr = escHtml(String(h.id));
+    const detailPrefetch = hotelDetailPrefetchIntentAttrs(h.id);
 
     const overallBubble = overallMatchBubbleHTML(h.id, overallMatchDisplayPct(h));
 
@@ -12775,8 +12901,8 @@
     // Hero is clickable → opens dedicated /hotel/:id page. Inner pills/badges stop propagation so they keep their own actions.
     const heroOnClick = `onclick="openHotelDetailPage('${hotelIdAttr}')" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openHotelDetailPage('${hotelIdAttr}');}"`;
     const heroInner = heroCount > 0
-      ? `<div class="hotel-hero hotel-hero--clickable ${heroClass}" ${heroOnClick}>${heroImgs}</div>`
-      : `<div class="hotel-hero hotel-hero--clickable hero-1" ${heroOnClick}><div class="hotel-hero-img hotel-hero-blank"></div></div>`;
+      ? `<div class="hotel-hero hotel-hero--clickable ${heroClass}" ${heroOnClick}${detailPrefetch}>${heroImgs}</div>`
+      : `<div class="hotel-hero hotel-hero--clickable hero-1" ${heroOnClick}${detailPrefetch}><div class="hotel-hero-img hotel-hero-blank"></div></div>`;
     const heroStrip = `<div class="hotel-hero-wrap">${nbhdPill}${heroInner}</div>`;
 
     // ── Price display ────────────────────────────────────────────────────────
@@ -12815,7 +12941,7 @@
                 <span class="hotel-fc-badge" id="hotel-fc-badge-${h.id}" style="display:none">✓ Free cancel</span>
               </div>
               <button type="button" class="hotel-tour-link" data-hotel-id="${hotelIdAttr}" onclick="openVibeTourForHotel(this.dataset.hotelId)">Vibe tour</button>
-              <button type="button" class="hotel-details-btn" data-hotel-id="${hotelIdAttr}" onclick="openHotelDetailPage(this.dataset.hotelId)">Details</button>
+              <button type="button" class="hotel-details-btn" data-hotel-id="${hotelIdAttr}"${detailPrefetch} onclick="openHotelDetailPage(this.dataset.hotelId)">Details</button>
               ${bookLinkHTML(h, null, 'card_header')}
             </div>
           </div>
@@ -13522,7 +13648,10 @@
       S.city = normalizeCityName(cityInput.value.trim()) || DEFAULT_HOME_CITY;
     }
     updateHomePolaroids(cityInput.value.trim() || DEFAULT_HOME_CITY);
-    if (S.city) prefetchBoopTripWizardImages(S.city);
+    if (S.city) {
+      prefetchBoopTripWizardImages(S.city);
+      boopPreloadStaticWizardImages();
+    }
     cityInput.addEventListener('input', () => {
       const v = (cityInput.value || '').trim();
       if (TOP_CITIES.some((c) => c.name.toLowerCase() === v.toLowerCase())) {

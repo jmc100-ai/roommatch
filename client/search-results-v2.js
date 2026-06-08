@@ -398,7 +398,7 @@
     const hid = hotelKey(h);
     return `
       <article class="sr2-pick-card" data-hotel-id="${esc(hid)}" data-pick="${esc(slot.id)}"
-        role="button" tabindex="0"
+        role="button" tabindex="0"${detailPrefetchAttrs(hid)}
         onclick="SearchResultsV2.openOffer('${esc(hid)}', '${esc(slot.id)}')"
         onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();SearchResultsV2.openOffer('${esc(hid)}', '${esc(slot.id)}');}">
         <div class="sr2-pick-media">
@@ -440,7 +440,7 @@
       : `<div class="sr2-more-img sr2-more-img--ph" aria-hidden="true"></div>`;
     const hid = hotelKey(h);
     return `
-      <article class="sr2-more-card" data-hotel-id="${esc(hid)}" role="button" tabindex="0"
+      <article class="sr2-more-card" data-hotel-id="${esc(hid)}" role="button" tabindex="0"${detailPrefetchAttrs(hid)}
         onclick="SearchResultsV2.openOffer('${esc(hid)}', 'overall')"
         onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();SearchResultsV2.openOffer('${esc(hid)}', 'overall');}">
         <div class="sr2-more-media">
@@ -624,7 +624,7 @@
         <footer class="sr2-offer-ft">
           <button type="button" class="sr2-offer-ghost" onclick="SearchResultsV2.openVibeTour('${esc(String(hotel.id))}')">Vibe tour</button>
           ${b.bookLinkHTML(hotel, null, 'card_header', { className: 'sr2-offer-book', label: 'Find & Book →' })}
-          <button type="button" class="sr2-offer-link" onclick="SearchResultsV2.openFullDetail('${esc(String(hotel.id))}')">Full hotel details →</button>
+          <button type="button" class="sr2-offer-link"${detailPrefetchAttrs(hotel.id)} onclick="SearchResultsV2.openFullDetail('${esc(String(hotel.id))}')">Full hotel details →</button>
         </footer>
       </div>`;
 
@@ -830,6 +830,14 @@
     return (b?.getLastHotels?.() || []).find((h) => hotelKey(h) === id)
       || (_ctx?.sortedHotels || []).find((h) => hotelKey(h) === id)
       || null;
+  }
+
+  /** Warms /api/hotel/:id before the user clicks through to the full detail page. */
+  function detailPrefetchAttrs(hotelId) {
+    if (!bridge()?.prefetchHotelDetail) return '';
+    const id = String(hotelId).replace(/['"\\]/g, '');
+    if (!id) return '';
+    return ` onpointerenter="prefetchHotelDetail('${id}')" ontouchstart="prefetchHotelDetail('${id}')"`;
   }
 
   /** Pick context + metric for blended hotel detail (full page + search rooms). */
