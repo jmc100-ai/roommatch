@@ -270,7 +270,7 @@ async function auditCuratedTopPicks(page) {
   const pickCount = await page.locator(".sr2-pick-card[data-hotel-id]:visible").count();
   if (pickCount < 3) findings.push(`sr2_picks_sparse:${pickCount}`);
 
-  const badges = page.locator(".sr2-pick-card:visible .match-bubble, .sr2-more-card:visible .match-bubble");
+  const badges = page.locator(".sr2-pick-card:visible .sr2-pick-ring, .sr2-more-card:visible .match-bubble");
   const n = await badges.count();
   for (let i = 0; i < Math.min(n, 8); i++) {
     const t = ((await badges.nth(i).textContent()) || "").trim();

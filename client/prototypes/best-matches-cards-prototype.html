@@ -1,0 +1,608 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Best matches cards — design prototype (not shipped)</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600&family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #0c0c0e;
+      --surface: #131316;
+      --text: #e8e4dc;
+      --muted: #9a9590;
+      --accent: #c9a96e;
+      --accent2: #e8d5b0;
+      --border: rgba(255, 255, 255, 0.1);
+      --max: 1180px;
+      --gutter: clamp(20px, 4vw, 56px);
+      --pick-overall: #c9a96e;
+      --pick-room: #a882dc;
+      --pick-area: #5ab482;
+      --pick-style: #dc78a0;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'DM Sans', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+    }
+
+    .proto-banner {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      padding: 10px var(--gutter);
+      background: rgba(201, 169, 110, 0.12);
+      border-bottom: 1px solid rgba(201, 169, 110, 0.28);
+      font-size: 12px;
+      line-height: 1.45;
+      color: var(--accent2);
+      text-align: center;
+    }
+    .proto-banner strong { color: var(--text); }
+
+    .page {
+      max-width: var(--max);
+      margin: 0 auto;
+      padding: 24px var(--gutter) 64px;
+    }
+
+    /* ── Mock search context (trimmed) ── */
+    .mock-strip {
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      background: rgba(255, 255, 255, 0.02);
+      padding: 14px 16px;
+      margin-bottom: 28px;
+      font-size: 12px;
+      color: var(--muted);
+    }
+    .mock-strip strong { color: var(--text); font-weight: 600; }
+
+    /* ── Section header ── */
+    .bm-section { margin-bottom: 36px; }
+    .bm-head {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 16px;
+      margin-bottom: 8px;
+    }
+    .bm-title-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+    .bm-title {
+      font-size: clamp(20px, 2.4vw, 24px);
+      font-weight: 600;
+      letter-spacing: -0.01em;
+      color: var(--text);
+    }
+    .bm-info-wrap { position: relative; }
+    .bm-info-btn {
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      background: rgba(255, 255, 255, 0.04);
+      color: var(--muted);
+      font-size: 14px;
+      font-weight: 700;
+      font-family: inherit;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: border-color 0.15s, color 0.15s;
+    }
+    .bm-info-btn:hover,
+    .bm-info-btn[aria-expanded="true"] {
+      border-color: rgba(201, 169, 110, 0.45);
+      color: var(--accent2);
+    }
+    .bm-tooltip {
+      position: absolute;
+      top: calc(100% + 12px);
+      left: 50%;
+      transform: translateX(-50%);
+      width: min(300px, calc(100vw - 40px));
+      padding: 16px 18px;
+      border-radius: 12px;
+      border: 1px solid rgba(201, 169, 110, 0.35);
+      background: #1a1a1f;
+      box-shadow: 0 16px 48px rgba(0, 0, 0, 0.55);
+      z-index: 20;
+    }
+    .bm-tooltip::before {
+      content: '';
+      position: absolute;
+      top: -7px;
+      left: 50%;
+      transform: translateX(-50%) rotate(45deg);
+      width: 12px;
+      height: 12px;
+      background: #1a1a1f;
+      border-left: 1px solid rgba(201, 169, 110, 0.35);
+      border-top: 1px solid rgba(201, 169, 110, 0.35);
+    }
+    .bm-tooltip[hidden] { display: none; }
+    .bm-tooltip h3 {
+      margin: 0 0 8px;
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text);
+    }
+    .bm-tooltip p {
+      margin: 0 0 12px;
+      font-size: 13px;
+      line-height: 1.5;
+      color: var(--muted);
+    }
+    .bm-tooltip .got-it {
+      font: inherit;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--accent2);
+      background: none;
+      border: none;
+      padding: 0;
+      cursor: pointer;
+    }
+    .bm-tooltip .got-it:hover { text-decoration: underline; }
+
+    .bm-sub {
+      margin: 0 0 18px;
+      font-size: 14px;
+      line-height: 1.5;
+      color: var(--muted);
+      max-width: 62ch;
+    }
+
+    /* ── Card grid ── */
+    .bm-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 14px;
+    }
+    @media (max-width: 960px) {
+      .bm-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
+    @media (max-width: 520px) {
+      .bm-grid {
+        grid-template-columns: repeat(4, minmax(240px, 1fr));
+        overflow-x: auto;
+        scroll-snap-type: x proximity;
+        padding-bottom: 6px;
+      }
+      .bm-card { scroll-snap-align: start; }
+    }
+
+    .bm-card {
+      border-radius: 14px;
+      border: 1px solid var(--border);
+      background: rgba(255, 255, 255, 0.03);
+      overflow: hidden;
+      cursor: pointer;
+      transition: border-color 0.15s, transform 0.12s;
+    }
+    .bm-card:hover {
+      border-color: rgba(201, 169, 110, 0.4);
+      transform: translateY(-2px);
+    }
+
+    .bm-media {
+      position: relative;
+      aspect-ratio: 1000 / 1138;
+      background: rgba(0, 0, 0, 0.35);
+    }
+    .bm-media img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+
+    /* Upper-left dimension badge */
+    .bm-badge {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 5px 9px 5px 7px;
+      border-radius: 8px;
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      line-height: 1;
+    }
+    .bm-badge svg {
+      width: 12px;
+      height: 12px;
+      flex-shrink: 0;
+    }
+    .bm-badge--overall { background: rgba(201, 169, 110, 0.92); color: #1a1a1e; }
+    .bm-badge--room { background: rgba(160, 130, 220, 0.92); color: #141018; }
+    .bm-badge--area { background: rgba(90, 180, 130, 0.92); color: #0e1814; }
+    .bm-badge--style { background: rgba(220, 120, 160, 0.92); color: #1a1014; }
+
+    /* Larger match ring — dimension label instead of "Match" */
+    .bm-ring {
+      position: absolute;
+      left: 10px;
+      bottom: 10px;
+      width: 76px;
+      height: 76px;
+      pointer-events: none;
+    }
+    .bm-ring svg {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+    .bm-ring-pct {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      line-height: 1.05;
+    }
+    .bm-ring-pct .pct {
+      font-size: 17px;
+      font-weight: 700;
+      color: var(--text);
+    }
+    .bm-ring-pct .dim {
+      margin-top: 2px;
+      font-size: 8px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+
+    .bm-body { padding: 12px 12px 14px; }
+    .bm-name {
+      margin: 0 0 6px;
+      font-size: 14px;
+      font-weight: 600;
+      line-height: 1.3;
+      color: var(--text);
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+    .bm-meta {
+      margin: 0 0 4px;
+      font-size: 12px;
+      color: var(--muted);
+      line-height: 1.4;
+    }
+    .bm-stars { color: var(--accent); letter-spacing: 0.04em; }
+    .bm-guest {
+      margin: 0 0 10px;
+      font-size: 12px;
+      color: var(--muted);
+    }
+    .bm-cta {
+      margin: 0;
+      font-size: 13px;
+      font-weight: 600;
+    }
+    .bm-cta--overall { color: var(--pick-overall); }
+    .bm-cta--room { color: var(--pick-room); }
+    .bm-cta--area { color: var(--pick-area); }
+    .bm-cta--style { color: var(--pick-style); }
+
+    /* ── More hotels teaser ── */
+    .more-head {
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 14px;
+    }
+    .more-head h2 {
+      font-size: 18px;
+      font-weight: 600;
+      margin-bottom: 4px;
+    }
+    .more-head p {
+      font-size: 13px;
+      color: var(--muted);
+    }
+    .more-link {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--accent2);
+      white-space: nowrap;
+    }
+    .more-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 14px;
+      opacity: 0.45;
+      pointer-events: none;
+    }
+    @media (max-width: 960px) {
+      .more-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
+    .more-card {
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      background: rgba(255, 255, 255, 0.02);
+      height: 180px;
+    }
+
+    /* ── Change log panel ── */
+    .changelog {
+      margin-top: 48px;
+      padding: 20px 22px;
+      border-radius: 14px;
+      border: 1px dashed rgba(201, 169, 110, 0.35);
+      background: rgba(201, 169, 110, 0.05);
+    }
+    .changelog h2 {
+      font-size: 15px;
+      margin-bottom: 12px;
+      color: var(--accent2);
+    }
+    .changelog ul {
+      margin: 0;
+      padding-left: 18px;
+      font-size: 13px;
+      line-height: 1.6;
+      color: var(--muted);
+    }
+    .changelog li { margin-bottom: 6px; }
+    .changelog code {
+      font-size: 12px;
+      color: var(--accent2);
+    }
+    .compare {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin-top: 16px;
+    }
+    @media (max-width: 700px) {
+      .compare { grid-template-columns: 1fr; }
+    }
+    .compare-box {
+      padding: 12px 14px;
+      border-radius: 10px;
+      background: rgba(0, 0, 0, 0.25);
+      border: 1px solid var(--border);
+      font-size: 12px;
+      line-height: 1.5;
+      color: var(--muted);
+    }
+    .compare-box strong {
+      display: block;
+      margin-bottom: 6px;
+      color: var(--text);
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+  </style>
+</head>
+<body>
+  <div class="proto-banner">
+    <strong>Design prototype only</strong> — not wired into search-results-v2.js.
+    Open via <code>/prototypes/best-matches-cards-prototype.html</code> (local server) or double-click this file.
+  </div>
+
+  <main class="page">
+    <div class="mock-strip">
+      Mock context: <strong>Mexico City</strong> · Sleek &amp; polished · Historic &amp; energetic · 2 guests · no dates
+    </div>
+
+    <section class="bm-section" aria-labelledby="bm-heading">
+      <div class="bm-head">
+        <div>
+          <div class="bm-title-row">
+            <h1 id="bm-heading" class="bm-title">Best matches for your vibe</h1>
+            <div class="bm-info-wrap">
+              <button type="button" class="bm-info-btn" id="bm-info-btn" aria-expanded="false" aria-controls="bm-tooltip" aria-label="Why are these scores different?">i</button>
+              <div class="bm-tooltip" id="bm-tooltip" hidden role="dialog" aria-labelledby="bm-tooltip-title">
+                <h3 id="bm-tooltip-title">Why are these scores different?</h3>
+                <p>Each card shows the best match for a different dimension. That's why the scores aren't in descending order.</p>
+                <button type="button" class="got-it" id="bm-tooltip-close">Got it</button>
+              </div>
+            </div>
+          </div>
+          <p class="bm-sub">Each card highlights a different strength—overall vibe, room experience, area fit, or style.</p>
+        </div>
+      </div>
+
+      <div class="bm-grid">
+        <!-- Card 1: Best Overall -->
+        <article class="bm-card" tabindex="0">
+          <div class="bm-media">
+            <img src="https://images.unsplash.com/photo-1566073771259-6a8506099945?w=600&h=680&fit=crop" alt="" loading="lazy" />
+            <span class="bm-badge bm-badge--overall">
+              <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2l2.4 7.4H22l-6 4.6 2.3 7-6.3-4.6L5.7 21 8 14 2 9.4h7.6L12 2z"/></svg>
+              Best overall
+            </span>
+            <div class="bm-ring" aria-label="93 percent overall">
+              <svg viewBox="0 0 76 76" aria-hidden="true">
+                <circle cx="38" cy="38" r="34" fill="rgba(12,12,14,0.88)" stroke="rgba(255,255,255,0.12)" stroke-width="4"/>
+                <circle cx="38" cy="38" r="34" fill="none" stroke="#c9a96e" stroke-width="4" stroke-linecap="round"
+                  stroke-dasharray="213.6" stroke-dashoffset="14.95" transform="rotate(-90 38 38)"/>
+              </svg>
+              <div class="bm-ring-pct"><span class="pct">93%</span><span class="dim">Overall</span></div>
+            </div>
+          </div>
+          <div class="bm-body">
+            <h2 class="bm-name">Hilton Mexico City Reforma</h2>
+            <p class="bm-meta">Centro Histórico · <span class="bm-stars">★★★★</span></p>
+            <p class="bm-guest">9.0 (guest reviews)</p>
+            <p class="bm-cta bm-cta--overall">Add dates for rates</p>
+          </div>
+        </article>
+
+        <!-- Card 2: Best Room -->
+        <article class="bm-card" tabindex="0">
+          <div class="bm-media">
+            <img src="https://images.unsplash.com/photo-1631049307264-da0ec9d70304?w=600&h=680&fit=crop" alt="" loading="lazy" />
+            <span class="bm-badge bm-badge--room">
+              <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M7 14c1.66 0 3-1.34 3-3S8.66 8 7 8s-3 1.34-3 3 1.34 3 3 3zm0-4c.55 0 1 .45 1 1s-.45 1-1 1-1-.45-1-1 .45-1 1-1zm12-3h-8v7H3V7c0-1.1.9-2 2-2h14c1.1 0 2 .9 2 2v10h-2V7z"/></svg>
+              Best room
+            </span>
+            <div class="bm-ring" aria-label="100 percent room">
+              <svg viewBox="0 0 76 76" aria-hidden="true">
+                <circle cx="38" cy="38" r="34" fill="rgba(12,12,14,0.88)" stroke="rgba(255,255,255,0.12)" stroke-width="4"/>
+                <circle cx="38" cy="38" r="34" fill="none" stroke="#a882dc" stroke-width="4" stroke-linecap="round"
+                  stroke-dasharray="213.6" stroke-dashoffset="0" transform="rotate(-90 38 38)"/>
+              </svg>
+              <div class="bm-ring-pct"><span class="pct">100%</span><span class="dim">Room</span></div>
+            </div>
+          </div>
+          <div class="bm-body">
+            <h2 class="bm-name">Live Aqua Urban Resort Mexico</h2>
+            <p class="bm-meta">Polanco · <span class="bm-stars">★★★★★</span></p>
+            <p class="bm-guest">8.5 (guest reviews)</p>
+            <p class="bm-cta bm-cta--room">Add dates for rates</p>
+          </div>
+        </article>
+
+        <!-- Card 3: Best Area -->
+        <article class="bm-card" tabindex="0">
+          <div class="bm-media">
+            <img src="https://images.unsplash.com/photo-1551882547-ff40c63fe5fa?w=600&h=680&fit=crop" alt="" loading="lazy" />
+            <span class="bm-badge bm-badge--area">
+              <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg>
+              Best area
+            </span>
+            <div class="bm-ring" aria-label="95 percent area">
+              <svg viewBox="0 0 76 76" aria-hidden="true">
+                <circle cx="38" cy="38" r="34" fill="rgba(12,12,14,0.88)" stroke="rgba(255,255,255,0.12)" stroke-width="4"/>
+                <circle cx="38" cy="38" r="34" fill="none" stroke="#5ab482" stroke-width="4" stroke-linecap="round"
+                  stroke-dasharray="213.6" stroke-dashoffset="10.68" transform="rotate(-90 38 38)"/>
+              </svg>
+              <div class="bm-ring-pct"><span class="pct">95%</span><span class="dim">Area</span></div>
+            </div>
+          </div>
+          <div class="bm-body">
+            <h2 class="bm-name">Hotel MX Reforma</h2>
+            <p class="bm-meta">Centro Histórico · <span class="bm-stars">★★★★</span></p>
+            <p class="bm-guest">8.7 (guest reviews)</p>
+            <p class="bm-cta bm-cta--area">Add dates for rates</p>
+          </div>
+        </article>
+
+        <!-- Card 4: Most Stylish -->
+        <article class="bm-card" tabindex="0">
+          <div class="bm-media">
+            <img src="https://images.unsplash.com/photo-1590490360182-c33d57733427?w=600&h=680&fit=crop" alt="" loading="lazy" />
+            <span class="bm-badge bm-badge--style">
+              <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2l1.5 4.5H18l-3.7 2.7 1.4 4.3L12 11.8 8.3 13.5l1.4-4.3L6 6.5h4.5L12 2z"/></svg>
+              Most stylish
+            </span>
+            <div class="bm-ring" aria-label="91 percent style">
+              <svg viewBox="0 0 76 76" aria-hidden="true">
+                <circle cx="38" cy="38" r="34" fill="rgba(12,12,14,0.88)" stroke="rgba(255,255,255,0.12)" stroke-width="4"/>
+                <circle cx="38" cy="38" r="34" fill="none" stroke="#dc78a0" stroke-width="4" stroke-linecap="round"
+                  stroke-dasharray="213.6" stroke-dashoffset="19.22" transform="rotate(-90 38 38)"/>
+              </svg>
+              <div class="bm-ring-pct"><span class="pct">91%</span><span class="dim">Style</span></div>
+            </div>
+          </div>
+          <div class="bm-body">
+            <h2 class="bm-name">Hotel MX Condesa</h2>
+            <p class="bm-meta">Condesa · <span class="bm-stars">★★★★</span></p>
+            <p class="bm-guest">9.2 (guest reviews)</p>
+            <p class="bm-cta bm-cta--style">Add dates for rates</p>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <section aria-label="More hotels preview">
+      <div class="more-head">
+        <div>
+          <h2>More hotels you'll probably love</h2>
+          <p>More stays that fit your vibe and trip preferences.</p>
+        </div>
+        <span class="more-link">See all 3497 matches →</span>
+      </div>
+      <div class="more-grid" aria-hidden="true">
+        <div class="more-card"></div>
+        <div class="more-card"></div>
+        <div class="more-card"></div>
+        <div class="more-card"></div>
+      </div>
+    </section>
+
+    <aside class="changelog">
+      <h2>Changes vs. current shipped UI</h2>
+      <ul>
+        <li>Section title: <code>Top Picks For Your Vibe</code> → <code>Best matches for your vibe</code> (no ✦ icon)</li>
+        <li>Subtext: dimension-focused copy instead of hotel count / "Different ways to match…"</li>
+        <li><code>Why these?</code> link → inline <strong>i</strong> tooltip (same content, lighter pattern)</li>
+        <li>Corner badges: shorter labels + icons — <code>Best overall</code>, <code>Best room</code>, <code>Best area</code>, <code>Most stylish</code></li>
+        <li>Match bubble: 52px + "Match" → <strong>76px ring</strong> with dimension label — <code>93% Overall</code>, <code>100% Room</code>, etc.</li>
+        <li>Ring border color matches card dimension (gold / purple / green / pink), not all gold</li>
+        <li>CTA line color-coded per dimension (<code>Add dates for rates</code>)</li>
+      </ul>
+      <div class="compare">
+        <div class="compare-box">
+          <strong>Before (production)</strong>
+          Badge: "Best Room Match"<br>
+          Bubble: 52px · 100%<br>
+          <span style="font-size:9px;color:#9a9590">MATCH</span>
+        </div>
+        <div class="compare-box">
+          <strong>After (this prototype)</strong>
+          Badge: 🛏 Best room<br>
+          Ring: 76px · 100%<br>
+          <span style="font-size:9px;color:#9a9590">ROOM</span>
+        </div>
+      </div>
+    </aside>
+  </main>
+
+  <script>
+    (function () {
+      var btn = document.getElementById('bm-info-btn');
+      var tip = document.getElementById('bm-tooltip');
+      var close = document.getElementById('bm-tooltip-close');
+      if (!btn || !tip) return;
+
+      function openTip() {
+        tip.hidden = false;
+        btn.setAttribute('aria-expanded', 'true');
+      }
+      function closeTip() {
+        tip.hidden = true;
+        btn.setAttribute('aria-expanded', 'false');
+      }
+
+      btn.addEventListener('click', function (e) {
+        e.stopPropagation();
+        if (tip.hidden) openTip();
+        else closeTip();
+      });
+      close.addEventListener('click', closeTip);
+      document.addEventListener('click', function (e) {
+        if (!tip.hidden && !tip.contains(e.target) && e.target !== btn) closeTip();
+      });
+      document.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape') closeTip();
+      });
+    })();
+  </script>
+</body>
+</html>

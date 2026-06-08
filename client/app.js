@@ -6062,6 +6062,8 @@
   }
 
   function _initFlowDates() {
+    // Legacy st-dates step only: pre-fill visible date inputs as picker suggestions.
+    // Do NOT set S.checkin/S.checkout here — dates stay blank until the user confirms.
     const tomorrow = new Date();
     tomorrow.setDate(tomorrow.getDate() + 1);
     const ciStr = ymdFromLocalDate(tomorrow);
@@ -6071,14 +6073,6 @@
     if (ci) ci.value = ciStr;
     if (co) co.value = coStr;
     ensureMinCheckoutAfterCheckin(ci, co);
-    const ct1 = document.getElementById('ct-ci');
-    const ct2 = document.getElementById('ct-co');
-    if (ct1) ct1.value = ciStr;
-    if (ct2) ct2.value = coStr;
-    ensureMinCheckoutAfterCheckin(ct1, ct2);
-    S.checkin = ciStr;
-    S.checkout = coStr;
-    schedulePrefetchCityRatesForDates('flow-dates-init');
   }
 
   function confirmDates() {
@@ -11052,7 +11046,7 @@
     return (
       `<span class="match-bubble match-bubble--inline" id="hotel-overall-match-${id}" ` +
       `title="${escHtml(OVERALL_MATCH_BUBBLE_TITLE)}" aria-label="Overall match ${v} percent">` +
-      `${v}%<small>Match</small></span>`
+      `${v}%<small>Overall</small></span>`
     );
   }
 
@@ -11074,7 +11068,7 @@
     el.className = 'match-bubble match-bubble--inline';
     el.title = OVERALL_MATCH_BUBBLE_TITLE;
     el.setAttribute('aria-label', `Overall match ${v} percent`);
-    el.innerHTML = `${v}%<small>Match</small>`;
+    el.innerHTML = `${v}%<small>Overall</small>`;
   }
 
   // ── Hotel Details — full page (replaces the legacy slide-out panel) ────────
@@ -11679,11 +11673,12 @@
     const locText = nbhdName
       ? `${hotelDetailNbhdNameLinkHTML(nbhdName)}${d.city ? `, ${escHtml(d.city)}` : ''}`
       : (d.city ? escHtml(d.city) : '');
-    const hotelStylePct = searchHotel ? hotelStyleMatchDisplayPct(searchHotel) : null;
     const nbhdFitPct = searchHotel ? nbhdAreaFitDisplayPct(searchHotel) : null;
-    const hotelBadge = hotelStylePct != null && hotelStylePct > 0
-      ? hotelDetailMetricBadgeHTML(hotelStylePct, 'hpage-metric-badge--hotel', { title: 'Hotel style match' })
-      : '';
+    // Temporarily hidden — style match % beside the hotel name was confusing.
+    // const hotelStylePct = searchHotel ? hotelStyleMatchDisplayPct(searchHotel) : null;
+    // const hotelBadge = hotelStylePct != null && hotelStylePct > 0
+    //   ? hotelDetailMetricBadgeHTML(hotelStylePct, 'hpage-metric-badge--hotel', { title: 'Hotel style match' })
+    //   : '';
     const nbhdBadge = nbhdFitPct != null
       ? hotelDetailMetricBadgeHTML(nbhdFitPct, 'hpage-metric-badge--nbhd', { title: 'Area fit', label: 'Area match' })
       : '';
@@ -11699,7 +11694,7 @@
       ?.find((o) => o.id === profile?.answers?.stayVibe);
     if (vibeOpt && !trip) pills.push(`<span class="hpage-intro-pill">${escHtml(vibeOpt.title || vibeOpt.label)}</span>`);
     return `<div class="hpage-intro" role="group" aria-label="Hotel overview">
-      <h1 class="hpage-intro-name">${escHtml(displayName)}${hotelBadge}</h1>
+      <h1 class="hpage-intro-name">${escHtml(displayName)}</h1>
       ${locText ? `<p class="hpage-intro-loc"><span class="hpage-intro-loc-text"><span aria-hidden="true">📍</span> ${locText}</span>${nbhdBadge}</p>` : (nbhdBadge ? `<p class="hpage-intro-loc">${nbhdBadge}</p>` : '')}
       ${pills.length ? `<div class="hpage-intro-pills">${pills.join('')}</div>` : ''}
     </div>`;
@@ -13646,7 +13641,7 @@
     if (vCards) vCards.classList.toggle('active', _viewMode === 'cards');
     if (vRows)  vRows.classList.toggle('active',  _viewMode === 'rows');
 
-    // Init date inputs with sensible defaults
+    // Legacy st-dates step date input defaults (does not set S.checkin/S.checkout)
     _initFlowDates();
     syncCityDateRangeUI();
 

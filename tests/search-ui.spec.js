@@ -44,7 +44,7 @@ async function topHotels(page, limit = 3) {
   for (let i = 0; i < Math.min(limit, count); i++) {
     const card = cards.nth(i);
     const name = (await card.locator(".sr2-pick-name, .sr2-more-name, .hotel-name").first().textContent())?.trim() || "(missing name)";
-    const matchText = ((await card.locator(".match-bubble, .hotel-match-badge").first().textContent().catch(() => "")) || "").trim();
+    const matchText = ((await card.locator(".sr2-pick-ring, .match-bubble, .hotel-match-badge").first().textContent().catch(() => "")) || "").trim();
     top.push({ name, matchText });
   }
 

@@ -70,7 +70,7 @@ for (const sc of UI_SCENARIOS) {
       const name = (await firstCard.locator(".sr2-pick-name, .sr2-more-name, .hotel-name").first().textContent())?.trim();
       if (!name || name === "Hotel" || name.length < 3) findings.push(`weak_name:${name || "empty"}`);
 
-      const badge = ((await firstCard.locator(".match-bubble, .hotel-match-badge").first().textContent().catch(() => "")) || "").trim();
+      const badge = ((await firstCard.locator(".sr2-pick-ring, .match-bubble, .hotel-match-badge").first().textContent().catch(() => "")) || "").trim();
       if (!/\d/.test(badge)) findings.push("missing_match_badge");
 
       const seeAll = page.locator('button:has-text("See all")').first();

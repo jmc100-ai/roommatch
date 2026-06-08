@@ -11,11 +11,55 @@
   const VIEW_CURATED = 'curated';
   const VIEW_FULL = 'full';
 
+  const BEST_MATCHES_SUB =
+    'Each card highlights a different strength—overall vibe, room experience, area fit, or style.';
+  const PICK_RING_CIRC = 213.6;
+
   const PICK_SLOTS = [
-    { id: 'overall', badge: 'Best Overall', badgeClass: 'pick-badge--overall', metricLabel: 'Overall match' },
-    { id: 'room_match', badge: 'Best Room Match', badgeClass: 'pick-badge--room', metricLabel: 'Room vibe match' },
-    { id: 'area_fit', badge: 'Best Area Fit', badgeClass: 'pick-badge--area', metricLabel: 'Area fit' },
-    { id: 'stylish', badge: 'Most Stylish', badgeClass: 'pick-badge--stylish', metricLabel: 'Hotel style match' },
+    {
+      id: 'overall',
+      badge: 'Best overall',
+      badgeClass: 'pick-badge--overall',
+      priceClass: 'sr2-pick-price--overall',
+      ringClass: 'pick-ring--overall',
+      ringColor: '#c9a96e',
+      ringDim: 'Overall',
+      metricLabel: 'Overall match',
+      icon: 'trophy',
+    },
+    {
+      id: 'room_match',
+      badge: 'Best room',
+      badgeClass: 'pick-badge--room',
+      priceClass: 'sr2-pick-price--room',
+      ringClass: 'pick-ring--room',
+      ringColor: '#a882dc',
+      ringDim: 'Room',
+      metricLabel: 'Room vibe match',
+      icon: 'bed',
+    },
+    {
+      id: 'area_fit',
+      badge: 'Best area',
+      badgeClass: 'pick-badge--area',
+      priceClass: 'sr2-pick-price--area',
+      ringClass: 'pick-ring--area',
+      ringColor: '#5ab482',
+      ringDim: 'Area',
+      metricLabel: 'Area fit',
+      icon: 'pin',
+    },
+    {
+      id: 'stylish',
+      badge: 'Most stylish',
+      badgeClass: 'pick-badge--stylish',
+      priceClass: 'sr2-pick-price--style',
+      ringClass: 'pick-ring--style',
+      ringColor: '#dc78a0',
+      ringDim: 'Style',
+      metricLabel: 'Hotel style match',
+      icon: 'sparkles',
+    },
   ];
 
   const LENSES = [
@@ -360,6 +404,66 @@
     return pl.html != null ? pl.html : esc(pl.text || '');
   }
 
+  function pickBadgeIconSvg(type) {
+    switch (type) {
+      case 'bed':
+        return '<svg class="sr2-pick-badge-icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M7 14c1.66 0 3-1.34 3-3S8.66 8 7 8s-3 1.34-3 3 1.34 3 3 3zm0-4c.55 0 1 .45 1 1s-.45 1-1 1-1-.45-1-1 .45-1 1-1zm12-3h-8v7H3V7c0-1.1.9-2 2-2h14c1.1 0 2 .9 2 2v10h-2V7z"/></svg>';
+      case 'pin':
+        return '<svg class="sr2-pick-badge-icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg>';
+      case 'sparkles':
+        return '<svg class="sr2-pick-badge-icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2l1.5 4.5H18l-3.7 2.7 1.4 4.3L12 11.8 8.3 13.5l1.4-4.3L6 6.5h4.5L12 2z"/></svg>';
+      default:
+        return '<svg class="sr2-pick-badge-icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2l2.4 7.4H22l-6 4.6 2.3 7-6.3-4.6L5.7 21 8 14 2 9.4h7.6L12 2z"/></svg>';
+    }
+  }
+
+  function renderPickBadge(slot) {
+    return `<span class="sr2-pick-badge ${slot.badgeClass}">${pickBadgeIconSvg(slot.icon)}${esc(slot.badge)}</span>`;
+  }
+
+  function renderPickMatchRing(pct, slot) {
+    const offset = (PICK_RING_CIRC * (1 - pct / 100)).toFixed(2);
+    return `
+      <div class="sr2-pick-ring ${slot.ringClass}" aria-label="${esc(slot.metricLabel)} ${pct} percent">
+        <svg viewBox="0 0 76 76" aria-hidden="true">
+          <circle cx="38" cy="38" r="34" fill="rgba(12,12,14,0.88)" stroke="rgba(255,255,255,0.12)" stroke-width="4"/>
+          <circle cx="38" cy="38" r="34" fill="none" stroke="${slot.ringColor}" stroke-width="4" stroke-linecap="round"
+            stroke-dasharray="${PICK_RING_CIRC}" stroke-dashoffset="${offset}" transform="rotate(-90 38 38)"/>
+        </svg>
+        <div class="sr2-pick-ring-label">
+          <span class="sr2-pick-ring-pct">${pct}%</span>
+          <span class="sr2-pick-ring-dim">${esc(slot.ringDim)}</span>
+        </div>
+      </div>`;
+  }
+
+  function renderBestMatchesHead(opts) {
+    const includeTooltip = opts?.tooltip !== false;
+    const sub = opts?.sub ?? BEST_MATCHES_SUB;
+    const tooltip = includeTooltip
+      ? `<div class="sr2-scores-tip-wrap">
+            <button type="button" class="sr2-scores-tip-btn" id="sr2-scores-tip-btn"
+              onclick="SearchResultsV2.toggleScoresTip(event)"
+              aria-expanded="false" aria-controls="sr2-scores-tip" aria-label="Why are these scores different?">i</button>
+            <div class="sr2-scores-tip" id="sr2-scores-tip" hidden role="dialog" aria-labelledby="sr2-scores-tip-title">
+              <h3 id="sr2-scores-tip-title">Why are these scores different?</h3>
+              <p>Each card shows the best match for a different dimension. That's why the scores aren't in descending order.</p>
+              <button type="button" class="sr2-scores-tip-close" onclick="SearchResultsV2.closeScoresTip(event)">Got it</button>
+            </div>
+          </div>`
+      : '';
+    return `
+      <div class="sr2-section-head sr2-section-head--picks">
+        <div class="sr2-picks-title-block">
+          <div class="sr2-picks-title-row">
+            <h2 id="sr2-picks-heading" class="sr2-heading sr2-heading--picks">Best matches for your vibe</h2>
+            ${tooltip}
+          </div>
+          <p class="sr2-sub sr2-sub--picks">${esc(sub)}</p>
+        </div>
+      </div>`;
+  }
+
   function starsHtml(h) {
     const n = Math.min(5, Math.max(0, Math.round(Number(h.starRating) || 0)));
     if (!n) return '';
@@ -388,8 +492,12 @@
     const b = bridge();
     const title = b ? b.hotelDisplayTitle(h) : (h.name || 'Hotel');
     const nbhd = h.primary_nbhd?.name || h.city || '';
-    const rating = h.rating > 0
-      ? `<span class="sr2-rating"><strong>${Number(h.rating).toFixed(1)}</strong> (${formatReviewCount(h.reviewCount)})</span>`
+    const stars = starsHtml(h);
+    const metaLine = nbhd || stars
+      ? `<p class="sr2-pick-meta">${nbhd ? `<span class="sr2-pick-nbhd">${esc(nbhd)}</span>` : ''}${nbhd && stars ? ' · ' : ''}${stars}</p>`
+      : '';
+    const guestLine = h.rating > 0
+      ? `<p class="sr2-pick-guest"><strong>${Number(h.rating).toFixed(1)}</strong> (${formatReviewCount(h.reviewCount)})</p>`
       : '';
     const img = photo
       ? `<img class="sr2-pick-img" src="${esc(photo)}" alt="" loading="lazy" />`
@@ -403,17 +511,14 @@
         onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();SearchResultsV2.openOffer('${esc(hid)}', '${esc(slot.id)}');}">
         <div class="sr2-pick-media">
           ${img}
-          <span class="sr2-pick-badge ${slot.badgeClass}">${esc(slot.badge)}</span>
-          <span class="match-bubble sr2-pick-match" aria-label="${esc(slot.metricLabel)} ${pct} percent">${pct}%<small>Match</small></span>
+          ${renderPickBadge(slot)}
+          ${renderPickMatchRing(pct, slot)}
         </div>
         <div class="sr2-pick-body">
           <h3 class="sr2-pick-name">${esc(title)}</h3>
-          <p class="sr2-pick-meta">
-            <span class="sr2-pick-nbhd">${esc(nbhd)}</span>
-            ${starsHtml(h)}
-            ${rating}
-          </p>
-          <p class="sr2-pick-price">${priceLineMarkup(h)}</p>
+          ${metaLine}
+          ${guestLine}
+          <p class="sr2-pick-price ${slot.priceClass}">${priceLineMarkup(h)}</p>
         </div>
       </article>`;
   }
@@ -445,7 +550,7 @@
         onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();SearchResultsV2.openOffer('${esc(hid)}', 'overall');}">
         <div class="sr2-more-media">
           ${img}
-          <span class="match-bubble match-bubble--more">${pct}%<small>Match</small></span>
+          <span class="match-bubble match-bubble--more" aria-label="Overall match ${pct} percent">${pct}%<small>Overall</small></span>
         </div>
         <div class="sr2-more-body">
           <h3 class="sr2-more-name">${esc(title)}</h3>
@@ -464,8 +569,8 @@
     return `
       <section class="sr2-section sr2-section--more" aria-labelledby="sr2-more-heading">
         <div class="sr2-section-head">
-          <h2 id="sr2-more-heading" class="sr2-heading">
-            <span class="sr2-heading-icon" aria-hidden="true">✦</span> More Hotels You'll Probably Love
+          <h2 id="sr2-more-heading" class="sr2-heading sr2-heading--more">
+            More hotels you'll probably love
           </h2>
           <button type="button" class="sr2-link-btn" onclick="SearchResultsV2.openSeeAllFullList()">${esc(seeAllLabel)}</button>
         </div>
@@ -480,7 +585,7 @@
       .join('');
     return (
       '<section class="sr2-section sr2-section--more" aria-hidden="true">' +
-      '<div class="sr2-section-head"><h2 class="sr2-heading">More Hotels You\'ll Probably Love</h2></div>' +
+      '<div class="sr2-section-head"><h2 class="sr2-heading sr2-heading--more">More hotels you\'ll probably love</h2></div>' +
       `<div class="sr2-more-grid">${skel}</div></section>`
     );
   }
@@ -489,8 +594,7 @@
     return (
       '<div class="sr2-root">' +
       '<section class="sr2-section sr2-section--picks">' +
-      '<div class="sr2-section-head"><h2 class="sr2-heading"><span class="sr2-heading-icon" aria-hidden="true">✦</span> Top Picks For Your Vibe</h2></div>' +
-      '<p class="sr2-sub">Run a search first to see curated top picks and more matches.</p>' +
+      renderBestMatchesHead({ tooltip: false, sub: 'Run a search first to see curated matches and more hotels.' }) +
       '<div class="sr2-picks-grid">' +
       PICK_SLOTS.map(() => '<div class="sr2-pick-card sr2-pick-card--empty"><p class="sr2-pick-empty">No results yet</p></div>').join('') +
       '</div></section>' +
@@ -508,8 +612,10 @@
     return (
       '<div class="sr2-root">' +
       '<section class="sr2-section sr2-section--picks">' +
-      '<div class="sr2-section-head"><h2 class="sr2-heading"><span class="sr2-heading-icon" aria-hidden="true">✦</span> Top Picks For Your Vibe</h2></div>' +
-      `<p class="sr2-sub">We found ${rawCount} vibe matches, but none pass your current filters.</p>` +
+      renderBestMatchesHead({
+        tooltip: false,
+        sub: `We found ${rawCount} vibe matches, but none pass your current filters.`,
+      }) +
       filterLine +
       '<p class="sr2-sub">Must-haves stay on whether <strong>Available only</strong> is on or off. Use Clear budget if price is blocking results.</p>' +
       '<div class="sr2-empty-actions">' +
@@ -535,25 +641,17 @@
       return renderPickCard(h, slot, showHint);
     }).join('');
     const total = ctx.total ?? sorted.length;
-    const sub = `Different ways to match your vibe · ${total} hotel${total === 1 ? '' : 's'} in this search`;
-
     return `
       <div class="sr2-root">
         <section class="sr2-section sr2-section--picks" aria-labelledby="sr2-picks-heading">
-          <div class="sr2-section-head">
-            <h2 id="sr2-picks-heading" class="sr2-heading">
-              <span class="sr2-heading-icon" aria-hidden="true">✦</span> Top Picks For Your Vibe
-            </h2>
-            <button type="button" class="sr2-link-btn" onclick="SearchResultsV2.openWhyModal()">Why these?</button>
-          </div>
-          <p class="sr2-sub">${sub}</p>
+          ${renderBestMatchesHead()}
           <div class="sr2-picks-grid">${pickCards}</div>
         </section>
         ${renderMoreHotelsSection(sorted, picks, total)}
         <aside class="sr2-explainer" aria-label="How matching works">
           <span class="sr2-explainer-icon" aria-hidden="true">✦</span>
           <p class="sr2-explainer-text">
-            We show a small set of strong matches first — each top pick highlights a different strength.
+            We show a small set of strong matches first — each card highlights a different strength.
             The grid below follows your current sort. See all matches for the full searchable list with
             filters and sort controls.
           </p>
@@ -567,22 +665,12 @@
     const host = document.createElement('div');
     host.id = 'sr2-modal-host';
     host.innerHTML = `
-      <div class="sr2-modal" id="sr2-modal-why" hidden role="dialog" aria-modal="true" aria-labelledby="sr2-modal-why-title">
-        <div class="sr2-modal-backdrop" onclick="SearchResultsV2.closeModals()"></div>
-        <div class="sr2-modal-panel">
-          <button type="button" class="sr2-modal-close" onclick="SearchResultsV2.closeModals()" aria-label="Close">×</button>
-          <h2 id="sr2-modal-why-title">Why these hotels?</h2>
-          <p>Each of the four cards is a different hotel — chosen for a distinct strength in your search.
-            Best Overall follows your main ranking; the other three highlight room match, neighbourhood fit,
-            or hotel character without repeating the same property or brand family.</p>
-        </div>
-      </div>
       <div class="sr2-modal" id="sr2-modal-how" hidden role="dialog" aria-modal="true" aria-labelledby="sr2-modal-how-title">
         <div class="sr2-modal-backdrop" onclick="SearchResultsV2.closeModals()"></div>
         <div class="sr2-modal-panel">
           <button type="button" class="sr2-modal-close" onclick="SearchResultsV2.closeModals()" aria-label="Close">×</button>
           <h2 id="sr2-modal-how-title">How it works</h2>
-          <p>TravelByVibe scores real room photos and hotel character against your saved vibe preferences and room description. Top picks highlight different strengths; the list below follows your current sort. Use <strong>See all matches</strong> for the full searchable grid with the same filters.</p>
+          <p>TravelByVibe scores real room photos and hotel character against your saved vibe preferences and room description. Best matches highlight different strengths; the list below follows your current sort. Use <strong>See all matches</strong> for the full searchable grid with the same filters.</p>
         </div>
       </div>`;
     document.body.appendChild(host);
@@ -642,7 +730,7 @@
       bar.id = 'sr2-full-list-bar';
       bar.className = 'sr2-full-list-bar';
       bar.innerHTML =
-        '<button type="button" class="sr2-full-list-back" onclick="SearchResultsV2.showCuratedView()">← Top picks for your vibe</button>';
+        '<button type="button" class="sr2-full-list-back" onclick="SearchResultsV2.showCuratedView()">← Best matches for your vibe</button>';
       stack.insertBefore(bar, results);
     }
     return bar;
@@ -864,23 +952,39 @@
     if (b?.openVibeTourForHotel) b.openVibeTourForHotel(hotelId);
   }
 
+  function toggleScoresTip(ev) {
+    ev?.stopPropagation?.();
+    const tip = document.getElementById('sr2-scores-tip');
+    const btn = document.getElementById('sr2-scores-tip-btn');
+    if (!tip || !btn) return;
+    const opening = tip.hidden;
+    tip.hidden = !opening;
+    btn.setAttribute('aria-expanded', opening ? 'true' : 'false');
+  }
+
+  function closeScoresTip(ev) {
+    ev?.stopPropagation?.();
+    const tip = document.getElementById('sr2-scores-tip');
+    const btn = document.getElementById('sr2-scores-tip-btn');
+    if (tip) tip.hidden = true;
+    if (btn) btn.setAttribute('aria-expanded', 'false');
+  }
+
   function openWhyModal() {
-    ensureModals();
-    const el = document.getElementById('sr2-modal-why');
-    if (el) el.hidden = false;
+    toggleScoresTip();
   }
 
   function openHowModal() {
     ensureModals();
+    closeScoresTip();
     const el = document.getElementById('sr2-modal-how');
     if (el) el.hidden = false;
   }
 
   function closeModals() {
-    ['sr2-modal-why', 'sr2-modal-how'].forEach((id) => {
-      const el = document.getElementById(id);
-      if (el) el.hidden = true;
-    });
+    closeScoresTip();
+    const el = document.getElementById('sr2-modal-how');
+    if (el) el.hidden = true;
   }
 
   function onPopState() {
@@ -897,6 +1001,13 @@
         if (_offerState) closeOffer();
         else closeModals();
       }
+    });
+    document.addEventListener('click', (e) => {
+      const tip = document.getElementById('sr2-scores-tip');
+      const btn = document.getElementById('sr2-scores-tip-btn');
+      if (!tip || tip.hidden) return;
+      if (tip.contains(e.target) || e.target === btn || btn?.contains(e.target)) return;
+      closeScoresTip();
     });
   }
 
@@ -934,6 +1045,8 @@
     openFullDetail,
     openVibeTour,
     openWhyModal,
+    toggleScoresTip,
+    closeScoresTip,
     openHowModal,
     closeModals,
     refreshCtx,
