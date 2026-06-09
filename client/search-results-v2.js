@@ -652,7 +652,7 @@
           <span class="sr2-explainer-icon" aria-hidden="true">✦</span>
           <p class="sr2-explainer-text">
             We show a small set of strong matches first — each card highlights a different strength.
-            The grid below follows your current sort. See all matches for the full searchable list with
+            The grid <span class="sr2-grid-dir sr2-grid-dir--desktop">below</span><span class="sr2-grid-dir sr2-grid-dir--mobile">above</span> follows your current sort. See all matches for the full searchable list with
             filters and sort controls.
           </p>
           <button type="button" class="sr2-link-btn" onclick="SearchResultsV2.openHowModal()">How it works →</button>

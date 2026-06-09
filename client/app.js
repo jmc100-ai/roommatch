@@ -6669,26 +6669,29 @@
     if (cd) { cd.textContent = fmtDate(ci) + ' – ' + fmtDate(co); cd.classList.remove('ph'); }
     const sb = document.getElementById('s-dates-btn');
     if (sb) { sb.textContent = fmtDate(ci) + ' – ' + fmtDate(co); sb.classList.add('set'); }
+    // Capture before closeDateRangePicker — it clears _datesConfirmHotelDetail on context cmd.
+    const fromHotelDetail = _datesConfirmHotelDetail;
+    _datesConfirmHotelDetail = false;
     closeDateRangePicker('cmd');
     document.getElementById('cmd-tray')?.classList.remove('open');
     restoreCmdDateRangeFromHotelDetailPortal();
     clearDatePickerBudgetContext();
     syncCommandBarFromState();
     prefetchCityRatesForDates();
-    const fromHotelDetail = _datesConfirmHotelDetail;
-    _datesConfirmHotelDetail = false;
     if (finishCmdTripSheetSubflow('Dates updated — tap Update results when ready')) return;
     if (fromHotelDetail && document.body.classList.contains('has-hotel-detail')) {
+      beginHotelDetailRatesLoad();
       if (S.q && S.city) {
         startSearch();
         return;
       }
       if (S.city && S.checkin && S.checkout && _detailHotelId) {
         const reqId = ++_ratesReqId;
-        _fetchingPrices = true;
-        _pricesLoaded = false;
         fetchPrices(S.city, S.checkin, S.checkout, reqId, [_detailHotelId], null, { skipDetail: false })
-          .finally(() => repaintHotelDetailPageRooms());
+          .finally(() => {
+            syncHotelDetailRatesStatus();
+            repaintHotelDetailPageRooms();
+          });
         return;
       }
     }
@@ -6799,7 +6802,7 @@
           <h2>3 · See what the AI found</h2>
           <p>We compare your answers to thousands of real photos from each hotel — room by room, area by area — and show you the best matches with scores and photos you can click through. Match % is a guide, not a guarantee. Use sort, budget, dates, and “available only” to narrow the list when you are ready.</p>
           <h2>4 · Book when you are ready</h2>
-          <p>Tap <strong>Find &amp; Book</strong> to open our partner’s checkout with your dates when you have them. Always confirm price, cancellation, and accessibility on the booking site before you pay.</p>
+          <p>Tap <strong>Find &amp; Book</strong> to open <strong>Nuitée’s</strong> secure checkout (via <a href="https://liteapi.travel" target="_blank" rel="noopener">LiteAPI</a>) with your dates when you have them. Always confirm price, cancellation, and accessibility on the booking site before you pay.</p>
           <h2>While we are in beta</h2>
           <p>We are adding cities and improving match quality all the time. If a photo looks wrong or a ranking feels off, use the purple <strong>Feedback</strong> button — we read every note.</p>
           ${commonFoot}`,
@@ -6809,7 +6812,7 @@
         html: `
           <p><strong>${BRAND_HTML}</strong> is a visual hotel search built for travellers who care how a stay <em>feels</em>, not just the star rating on a listing.</p>
           <p>Most sites show one hero image and a wall of text. We rank stays using real room photos and neighbourhood context so you can picture the bathroom, the light, and the street energy before you commit.</p>
-          <p>Tell us your vibe in plain language — sleek and polished, leafy and quiet, must-have rain shower — and we surface hotels and areas that line up. When you add dates, we pull live rates from our travel partner so you can compare and book in one flow.</p>
+          <p>Tell us your vibe in plain language — sleek and polished, leafy and quiet, must-have rain shower — and we surface hotels and areas that line up. Hotel photos and live rates come from <strong>Nuitée (LiteAPI)</strong>, our booking partner — when you add dates, you can compare and book in one flow.</p>
           <p>We are ${BRAND_HTML} in name; ${COMPANY_LEGAL} is the company behind the product.</p>
           <h2>Currently in beta</h2>
           <p>We are adding cities, tuning match quality, and shipping improvements regularly. Use the purple <strong>Feedback</strong> button anytime — your notes directly shape what we build next.</p>
@@ -6826,8 +6829,16 @@
             <li><strong>A sign-in cookie</strong> — only during closed beta, so you do not re-enter your invite code every visit.</li>
             <li><strong>Anonymous usage and crash reports</strong> — to fix bugs and improve the product. We do not send your exact search words in those analytics.</li>
           </ul>
+          <h2>Partners &amp; data sources</h2>
+          <ul>
+            <li><strong>Nuitée Travel Limited (LiteAPI)</strong> — hotel names, photos, rates, availability, descriptions, amenities, and guest reviews; booking checkout.</li>
+            <li><strong>Google (Gemini)</strong> — neighbourhood descriptions, photo analysis, and search matching.</li>
+            <li><strong>Geoapify</strong> — city search and geocoding.</li>
+            <li><strong>MapTiler &amp; OpenStreetMap</strong> — neighbourhood maps.</li>
+            <li><strong>Unsplash &amp; Google Maps</strong> — neighbourhood card photos (credited on each card).</li>
+          </ul>
           <h2>Who helps us run the site</h2>
-          <p>Hotel listings, photos, and prices come from our travel data partners. Some matching features use Google’s AI. Hosting, maps, email, and analytics tools each have their own privacy policies.</p>
+          <p>We also use trusted vendors for hosting, email, anonymous usage analytics, and error reporting — each has its own privacy policy.</p>
           <h2>Your choices</h2>
           <p>Email <a href="mailto:beta@travelbyvibe.com">beta@travelbyvibe.com</a> to ask a question or request deletion. We are a small team and will respond as soon as we can.</p>
           ${commonFoot}`,
@@ -6841,7 +6852,8 @@
           <h2>No guarantees</h2>
           <p>The service is provided “as is.” We do not promise availability, accurate prices, or that any hotel is right for your trip.</p>
           <h2>Bookings</h2>
-          <p>When you click through to book, you are on our partner’s site and their terms apply. We are not a party to your reservation.</p>
+          <p>When you click <strong>Find &amp; Book</strong>, you complete your reservation on <strong>Nuitée Travel Limited’s</strong> secure checkout (LiteAPI white-label). <a href="https://liteapi.travel/terms/" target="_blank" rel="noopener">Nuitée’s terms</a> govern the booking; ${BRAND_PLAIN} is not a party to your reservation.</p>
+          <p>Hotel names, photos, rates, and availability are supplied by Nuitée (LiteAPI) and may change before you book. Always confirm price, cancellation, and accessibility on the checkout site before you pay.</p>
           <h2>Fair use</h2>
           <p>Please do not scrape, overload, or misuse the beta in ways that harm other users. We may pause access if needed to protect the service.</p>
           <h2>Liability</h2>
@@ -6854,9 +6866,13 @@
         title: 'Contact',
         html: `
           <p>Questions, rough edges, or ideas — we read what you send.</p>
-          <h2>Email</h2>
+          <h2>General Inquiries</h2>
           <p><a href="mailto:hello@travelbyvibe.com">hello@travelbyvibe.com</a> — general product notes and hellos.</p>
           <p><a href="mailto:beta@travelbyvibe.com">beta@travelbyvibe.com</a> — beta access, privacy, or data requests.</p>
+          <h2>For booking support</h2>
+          <p>Reservations are processed by <strong>Nuitée (LiteAPI)</strong>. For help with an existing booking:</p>
+          <p>Email: <a href="mailto:vip.support@nuitee.com">vip.support@nuitee.com</a></p>
+          <p>Phone: <a href="tel:+18663383099">1-866-338-3099</a></p>
           ${commonFoot}`,
       },
     };
@@ -7690,6 +7706,7 @@
       _ratesFetchDone = false;
       _setPriceBtnsState(false);
       _setRatesStatus('loading', 'Checking live rates…');
+      if (document.body.classList.contains('has-hotel-detail')) syncHotelDetailRatesStatus();
     }
     const _signalRatesArrived = () => {
       if (isBackground) return;
@@ -8470,6 +8487,10 @@
       // in-flight label here so "Checking live rates…" doesn't stick after the
       // list is visible; _syncRatesStatusAfterReveal() will show ✓ Live rates.
       _setRatesStatus('', '');
+      if (document.body.classList.contains('has-hotel-detail')) {
+        syncHotelDetailRatesStatus();
+        repaintHotelDetailPageRooms();
+      }
       return;
     }
     const priceDependentSort = _currentSort === 'match+price' || _currentSort === 'price';
@@ -11697,6 +11718,7 @@
       <h1 class="hpage-intro-name">${escHtml(displayName)}</h1>
       ${locText ? `<p class="hpage-intro-loc"><span class="hpage-intro-loc-text"><span aria-hidden="true">📍</span> ${locText}</span>${nbhdBadge}</p>` : (nbhdBadge ? `<p class="hpage-intro-loc">${nbhdBadge}</p>` : '')}
       ${pills.length ? `<div class="hpage-intro-pills">${pills.join('')}</div>` : ''}
+      <p class="hp-reviews-attr hp-data-attr">Hotel photos, rates, and details provided by <a href="https://liteapi.travel" target="_blank" rel="noopener">LiteAPI</a> (Nuitée).</p>
     </div>`;
   }
 
@@ -11803,19 +11825,89 @@
     return bestId;
   }
 
+  /** Priced room label: live LiteAPI rate name when direct mappedRoomId match differs from catalog. */
   function resolveRoomRateForType(rt, hotel) {
     const roomPrices = hotel?.roomPrices;
-    if (!roomPrices) return { price: null, bookRoomTypeId: rt?.roomTypeId ?? null };
+    const catalogName = rt?.name || 'Room';
+    const empty = { price: null, bookRoomTypeId: rt?.roomTypeId ?? null, displayName: catalogName };
+    if (!roomPrices) return empty;
     let bookId = rt?.roomTypeId ?? null;
     let price = roomPricePerNight(roomPrices, bookId);
+    let matchKind = price != null ? 'direct' : 'none';
     if (price == null && rt?.name) {
       const altId = findRateIdByRoomName(hotel.roomNames, roomPrices, rt.name);
       if (altId != null) {
         const altPrice = roomPricePerNight(roomPrices, altId);
-        if (altPrice != null) { bookId = altId; price = altPrice; }
+        if (altPrice != null) {
+          bookId = altId;
+          price = altPrice;
+          matchKind = 'fuzzy';
+        }
       }
     }
-    return { price, bookRoomTypeId: bookId };
+    let displayName = catalogName;
+    if (matchKind === 'direct' && price != null && bookId != null) {
+      const rateLabel = hotel.roomNames?.[bookId] ?? hotel.roomNames?.[String(bookId)];
+      if (
+        rateLabel
+        && normalizeRoomNameForRate(rateLabel) !== normalizeRoomNameForRate(catalogName)
+      ) {
+        displayName = String(rateLabel).trim();
+      }
+    }
+    return { price, bookRoomTypeId: bookId, displayName };
+  }
+
+  function hotelDetailRatesLoading() {
+    return budgetHasValidDates() && _fetchingPrices && !_pricesLoaded;
+  }
+
+  function beginHotelDetailRatesLoad() {
+    _fetchingPrices = true;
+    _pricesLoaded = false;
+    syncHotelDetailRatesStatus();
+    repaintHotelDetailPageRooms();
+  }
+
+  let _hpageRatesStatusFadeTimer = null;
+
+  function syncHotelDetailRatesStatus() {
+    const el = document.getElementById('hpage-rates-status');
+    if (!el || !document.body.classList.contains('has-hotel-detail')) return;
+    if (_hpageRatesStatusFadeTimer) {
+      clearTimeout(_hpageRatesStatusFadeTimer);
+      _hpageRatesStatusFadeTimer = null;
+    }
+    if (!budgetHasValidDates()) {
+      el.hidden = true;
+      el.className = 'hpage-rates-status';
+      el.textContent = '';
+      return;
+    }
+    if (hotelDetailRatesLoading()) {
+      el.hidden = false;
+      el.className = 'hpage-rates-status loading';
+      el.textContent = 'Checking live rates…';
+      return;
+    }
+    if (_pricesLoaded) {
+      el.hidden = false;
+      el.className = 'hpage-rates-status done';
+      el.textContent = '✓ Live rates';
+      _hpageRatesStatusFadeTimer = setTimeout(() => {
+        el.classList.add('fade');
+        _hpageRatesStatusFadeTimer = setTimeout(() => {
+          el.hidden = true;
+          el.className = 'hpage-rates-status';
+          el.textContent = '';
+          _hpageRatesStatusFadeTimer = null;
+        }, 500);
+      }, 4000);
+      return;
+    }
+    el.hidden = true;
+    el.className = 'hpage-rates-status';
+    el.textContent = '';
   }
 
   function hpageOtherRoomPriceColHTML(sym, priceVal, showFc) {
@@ -11828,11 +11920,16 @@
           ${showFc ? '<span class="room-fc-badge hpage-other-room-fc">Free cancel</span>' : ''}
         </div>`;
     }
-    const noteHTML = _hasDateSearch
-      ? (budgetCapActiveForFiltering()
+    let noteHTML;
+    if (hotelDetailRatesLoading()) {
+      noteHTML = '<span class="hpage-other-room-price-muted hpage-rates-loading">Checking live rates…</span>';
+    } else if (_hasDateSearch) {
+      noteHTML = budgetCapActiveForFiltering()
         ? `<span class="hpage-other-room-price-muted">No rate under ${budgetMaxNightlyCap() != null ? '$' + budgetMaxNightlyCap().toLocaleString() : 'budget'}/night</span>`
-        : '<span class="hpage-other-room-price-muted">See all rates on booking</span>')
-      : addDatesLink('Add travel dates', 'hpage-other');
+        : '<span class="hpage-other-room-price-muted">See all rates on booking</span>';
+    } else {
+      noteHTML = addDatesLink('Add travel dates', 'hpage-other');
+    }
     return `<div class="hpage-other-room-price-col hpage-other-room-price-col--muted">
         <div class="hpage-other-room-price-note">${noteHTML}</div>
       </div>`;
@@ -11845,7 +11942,7 @@
     const hero = photos[0];
     const score = Math.round(rt.score || 0);
     const sym = ratesCurrencySymbol(_priceCurrency);
-    const { price: priceVal, bookRoomTypeId } = resolveRoomRateForType(rt, bookHotel);
+    const { price: priceVal, bookRoomTypeId, displayName } = resolveRoomRateForType(rt, bookHotel);
     const hasPrice = priceVal != null;
     const lbIdx = (url) => hpDetailPhotoIndex(url);
     const thumbHTML = hero
@@ -11876,7 +11973,7 @@
         ${thumbHTML}
         <div class="hpage-other-room-main">
           <div class="hpage-other-room-title-row">
-            <h3 class="hpage-other-room-name">${escHtml(rt.name || 'Room')}</h3>
+            <h3 class="hpage-other-room-name">${escHtml(displayName)}</h3>
             ${matchPill}
           </div>
           ${specsHTML}
@@ -11929,12 +12026,12 @@
     const score = Math.round(rt.score || roomVibeMatchDisplayPct(searchHotel));
     const bookHotel = { id: d.hotel_id, name: d.name, city: S.city, ...searchHotel };
     const sym = ratesCurrencySymbol(_priceCurrency);
-    const { price: priceVal, bookRoomTypeId } = resolveRoomRateForType(rt, searchHotel);
+    const { price: priceVal, bookRoomTypeId, displayName } = resolveRoomRateForType(rt, searchHotel);
     let price = '';
     if (priceVal != null) {
       price = `${sym}${priceVal.toLocaleString()}<span class="hpage-room-price-per">/night</span>`;
-    } else if (_hasDateSearch && _fetchingPrices) {
-      price = '<span class="hpage-other-room-price-muted">Loading rates…</span>';
+    } else if (hotelDetailRatesLoading()) {
+      price = '<span class="hpage-other-room-price-muted hpage-rates-loading">Checking live rates…</span>';
     } else if (_hasDateSearch && _pricesLoaded) {
       if (budgetCapActiveForFiltering()) {
         const cap = budgetMaxNightlyCap();
@@ -11962,7 +12059,7 @@
       </div>
       <div class="hpage-best-room-info">
         ${score > 0 ? `<span class="hpage-room-match-pill" aria-label="${score} percent room match">${score}% room match</span>` : ''}
-        <h3 class="hpage-best-room-name">${escHtml(rt.name || 'Room')}</h3>
+        <h3 class="hpage-best-room-name">${escHtml(displayName)}</h3>
         ${specsHTML}
         ${bullets.length ? `<div class="hpage-room-why">
           <p class="hpage-room-why-title">Why you'll love it</p>
@@ -12150,6 +12247,7 @@
     const d = _detailHotelData;
     const searchHotel = hotelDetailSearchContext(d);
     if (!searchHotel) return;
+    syncHotelDetailRatesStatus();
     const best = document.getElementById('hpage-best-room');
     if (best) {
       const html = hotelDetailBestRoomHTML(searchHotel, d);
@@ -12316,6 +12414,7 @@
           </div>
           <div class="hpage-main hpage-main-top">
             ${hotelDetailIntroHTML(d, searchHotel)}
+            <div id="hpage-rates-status" class="hpage-rates-status" role="status" aria-live="polite" hidden></div>
           </div>
           <div class="hpage-match-vibe-bundle">
             ${hotelDetailMatchSidebarHTML(d, searchHotel, pageOpts)}
@@ -12364,7 +12463,7 @@
           <div class="hp-reviews-placeholder">Loading reviews…</div>
         </div>
         <button type="button" class="hp-reviews-more" id="hp-reviews-more" style="display:none" onclick="loadMoreHpReviews()">Show more reviews</button>
-        <div class="hp-reviews-attr">Reviews provided via <a href="https://liteapi.travel" target="_blank" rel="noopener">LiteAPI</a></div>
+        <div class="hp-reviews-attr">Reviews provided via <a href="https://liteapi.travel" target="_blank" rel="noopener">LiteAPI</a> (Nuitée).</div>
       </div>`;
   }
 

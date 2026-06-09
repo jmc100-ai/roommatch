@@ -1515,8 +1515,16 @@ app.get("/privacy", (_req, res) => {
       <li><strong>Crash and error reports</strong> — so we can fix bugs. We strip sensitive bits from those reports where we can.</li>
       <li><strong>Feedback you choose to send</strong> — your message, optional email, the page you were on, and a summary of what you were searching (not a full transcript).</li>
     </ul>
-    <h2>Partners</h2>
-    <p>Hotel listings, photos, and prices come from our travel data and booking partners. Some features use Google’s AI services. We use trusted vendors for hosting, maps, email, and the anonymous stats and error tools above — each has their own privacy terms.</p>
+    <h2>Partners &amp; data sources</h2>
+    <ul>
+      <li><strong>Nuitée Travel Limited (LiteAPI)</strong> — hotel names, photos, rates, availability, descriptions, amenities, and guest reviews; booking checkout.</li>
+      <li><strong>Google (Gemini)</strong> — neighbourhood descriptions, photo analysis, and search matching.</li>
+      <li><strong>Geoapify</strong> — city search and geocoding.</li>
+      <li><strong>MapTiler &amp; OpenStreetMap</strong> — neighbourhood maps.</li>
+      <li><strong>Unsplash &amp; Google Maps</strong> — neighbourhood card photos (credited on each card).</li>
+    </ul>
+    <h2>Who helps us run the site</h2>
+    <p>We also use trusted vendors for hosting, email, anonymous usage analytics, and error reporting — each has its own privacy policy.</p>
     <h2>Your choices</h2>
     <p>During beta we may adjust how long we keep certain data. To ask a question or request deletion, email <a href="mailto:beta@travelbyvibe.com">beta@travelbyvibe.com</a> — we are a small team and will reply as soon as we can.</p>`;
   res.setHeader("Content-Type", "text/html; charset=utf-8");
@@ -1531,7 +1539,8 @@ app.get("/terms", (_req, res) => {
     <h2>No guarantees</h2>
     <p>The service is provided “as is.” We do not promise that prices, availability, or any hotel will be right for your trip.</p>
     <h2>Bookings</h2>
-    <p>When you leave our site to book elsewhere, that site’s rules apply. We are not part of your reservation.</p>
+    <p>When you click <strong>Find &amp; Book</strong>, you complete your reservation on <strong>Nuitée Travel Limited’s</strong> secure checkout (LiteAPI white-label). <a href="https://liteapi.travel/terms/">Nuitée’s terms</a> govern the booking; TravelByVibe is not a party to your reservation.</p>
+    <p>Hotel names, photos, rates, and availability are supplied by Nuitée (LiteAPI) and may change before you book. Always confirm price, cancellation, and accessibility on the checkout site before you pay.</p>
     <h2>Please play fair</h2>
     <p>Do not abuse the service — for example by trying to break it, scrape it at huge volume, or ruin the experience for others. We may pause access if we need to protect the beta or other users.</p>
     <h2>Limitation of liability</h2>

@@ -849,6 +849,10 @@
       overflow: visible;
       min-height: 280px;
     }
+    #st-results.results-pending .results-stack {
+      overflow: hidden;
+      min-height: clamp(360px, 52vh, 640px);
+    }
     #st-results.results-ux-mode-v2.sr2-view-curated #results-v2.sr2-panel--visible,
     #st-results.results-ux-mode-v2.sr2-view-curated #results-v2.results-v2-panel:not([hidden]) {
       display: block !important;
@@ -873,6 +877,7 @@
     #st-results.results-pending .search-loading-overlay {
       opacity: 1;
       visibility: visible;
+      z-index: 20;
     }
     .search-loading-overlay-veil {
       position: absolute;
@@ -881,6 +886,17 @@
       backdrop-filter: blur(8px);
       -webkit-backdrop-filter: blur(8px);
       border-radius: 12px;
+    }
+    /* Solid cover — skeleton shimmer must not bleed through at edges */
+    #st-results.results-pending .search-loading-overlay-veil {
+      background: var(--bg);
+      border-radius: 0;
+      backdrop-filter: none;
+      -webkit-backdrop-filter: none;
+    }
+    #st-results.results-pending #results,
+    #st-results.results-pending #results-v2 {
+      pointer-events: none;
     }
     .search-loading-card {
       position: relative;
@@ -3969,6 +3985,12 @@
     #st-boop .chapter-sub {
       max-width: min(640px, 100%);
     }
+    #st-boop .chapter-h1 {
+      font-size: clamp(24px, 3.8vw, 46px);
+    }
+    @media (max-width: 600px) {
+      #st-boop .chapter-h1 { font-size: clamp(22px, 6.5vw, 34px); }
+    }
     .boop-progress {
       margin:10px 0 14px; height:6px; border-radius:999px; overflow:hidden;
       background:rgba(255,255,255,.08);
@@ -3995,9 +4017,9 @@
     .boop-skip-tray { flex:0 0 auto; }
     @media (max-width: 760px) {
       .boop-skip-tray .boop-btn { padding:6px 12px; font-size:12px; }
-      .boop-wrap .boop-q-head { margin-top:6px; }
+      .boop-wrap .boop-q-head { margin-top:4px; }
       #st-boop .chapter-sub { margin-bottom:0; }
-      #st-boop .boop-progress-row { margin-top:0; margin-bottom:2px; }
+      #st-boop .boop-progress-row { margin-top:0; margin-bottom:0; padding-bottom:12px; }
     }
     .boop-progress > i {
       display:block; height:100%; width:0%;
@@ -8689,6 +8711,45 @@
     .hpage-room-spec-label {
       min-width: 0;
     }
+    .hpage-rates-status {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin: 10px 0 4px;
+      padding: 8px 12px;
+      font-size: 13px;
+      letter-spacing: 0.02em;
+      color: rgba(232, 228, 220, 0.78);
+      background: rgba(201, 169, 110, 0.08);
+      border: 1px solid rgba(201, 169, 110, 0.18);
+      border-radius: 8px;
+    }
+    .hpage-rates-status[hidden] { display: none !important; }
+    .hpage-rates-status.loading { color: var(--muted); }
+    .hpage-rates-status.loading::before,
+    .hpage-rates-loading::before {
+      content: '';
+      display: inline-block;
+      width: 8px;
+      height: 8px;
+      border: 1.5px solid rgba(201, 169, 110, 0.3);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+      flex-shrink: 0;
+    }
+    .hpage-rates-status.done {
+      color: var(--green);
+      background: rgba(143, 212, 168, 0.08);
+      border-color: rgba(143, 212, 168, 0.22);
+      transition: opacity 0.5s;
+    }
+    .hpage-rates-status.done.fade { opacity: 0; }
+    .hpage-rates-loading {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
     .hpage-best-room-price {
       margin: 0 0 10px;
       font-size: 14px;
@@ -9215,6 +9276,7 @@
     }
     .hp-reviews-attr a { color: var(--muted); text-decoration: underline; }
     .hp-reviews-attr a:hover { color: var(--accent2); }
+    .hp-data-attr { text-align: left; margin-top: 12px; }
 
     /* Close footer */
     .hp-close-footer {
@@ -9975,6 +10037,15 @@
       gap: 8px;
     }
     .home-v2-trust-globe { font-size: 14px; opacity: 0.85; }
+    .home-v2-partners {
+      text-align: center;
+      font-size: 11px;
+      color: var(--muted);
+      padding: 0 var(--gutter) 28px;
+      margin: -12px 0 0;
+    }
+    .home-v2-partners a { color: var(--accent); text-decoration: none; }
+    .home-v2-partners a:hover { color: var(--accent2); }
     body.has-results .home-v2,
     body.has-hotel-detail .home-v2 { display: none !important; }
 
@@ -10337,6 +10408,10 @@
       text-transform: uppercase;
       color: var(--muted);
     }
+    /* Best matches row only (4 pick cards) — not the 8 “more hotels” bubbles */
+    .sr2-picks-grid .sr2-pick-ring-dim {
+      font-size: 8px;
+    }
     .match-bubble {
       width: 52px;
       height: 52px;
@@ -10382,6 +10457,10 @@
       font-size: 14px;
     }
     .match-bubble--more small {
+      font-size: 8px;
+    }
+    /* “More hotels” row (8 cards) — keep Overall label size unchanged */
+    .sr2-more-grid .match-bubble--more small {
       font-size: 8px;
     }
     .sr2-pick-body { padding: 12px 12px 14px; }
@@ -10572,6 +10651,11 @@
       font-size: 13px;
       line-height: 1.55;
       color: var(--muted);
+    }
+    .sr2-grid-dir--mobile { display: none; }
+    @media (max-width: 760px) {
+      .sr2-grid-dir--desktop { display: none; }
+      .sr2-grid-dir--mobile { display: inline; }
     }
     .sr2-modal { position: fixed; inset: 0; z-index: 10100; display: flex; align-items: center; justify-content: center; padding: 20px; }
     .sr2-modal[hidden] { display: none !important; }
