@@ -1,0 +1,23 @@
+# TravelByVibe closed-beta invite codes (one per tester).
+# Loaded automatically by server.js; lines starting with # are ignored.
+# Override or extend via SITE_PASSWORD / SITE_PASSWORDS env vars.
+vibe24
+cdmx88
+room77
+stay42
+paris6
+boop88
+mint45
+palm88
+cozy99
+warm55
+leaf33
+glow44
+sand66
+wave22
+loft55
+calm88
+gold77
+dusk44
+roam66
+nest55

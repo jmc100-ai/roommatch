@@ -124,10 +124,40 @@ const {
 const { buildFullRatesCacheKey } = require("./lib/rates-snapshot");
 
 // ── Password gate helpers ─────────────────────────────────────────────────────
-const SITE_PASSWORD = process.env.SITE_PASSWORD || "";
-const SITE_PASSWORD_HASH = SITE_PASSWORD
-  ? crypto.createHash("sha256").update(SITE_PASSWORD + "rm-salt-2026").digest("hex")
-  : "";
+function hashSitePassword(pw) {
+  return crypto.createHash("sha256").update(String(pw).trim() + "rm-salt-2026").digest("hex");
+}
+
+function loadSitePasswords() {
+  const out = [];
+  const single = (process.env.SITE_PASSWORD || "").trim();
+  if (single) out.push(single);
+  const multi = (process.env.SITE_PASSWORDS || "")
+    .split(/[\n,]+/)
+    .map((s) => s.trim())
+    .filter(Boolean);
+  out.push(...multi);
+  const codesFile = path.join(__dirname, "config", "beta-invite-codes.txt");
+  try {
+    if (fs.existsSync(codesFile)) {
+      out.push(
+        ...fs.readFileSync(codesFile, "utf8")
+          .split(/\r?\n/)
+          .map((s) => s.trim())
+          .filter((s) => s && !s.startsWith("#"))
+      );
+    }
+  } catch (_) { /* non-fatal */ }
+  return [...new Set(out)];
+}
+
+const SITE_PASSWORDS = loadSitePasswords();
+const SITE_PASSWORD_HASHES = new Set(SITE_PASSWORDS.map(hashSitePassword));
+const SITE_GATE_ACTIVE = SITE_PASSWORDS.length > 0;
+
+function siteGateCookieValid(cookieVal) {
+  return !!cookieVal && SITE_PASSWORD_HASHES.has(cookieVal);
+}
 
 function sendJsonMaybeGzip(req, res, body, status = 200) {
   const json = JSON.stringify(body);
@@ -277,7 +307,8 @@ app.get("/api/health/beta", (_req, res) => {
       posthog: !!(process.env.POSTHOG_API_KEY || process.env.POSTHOG_PROJECT_KEY),
       feedback_slack: !!process.env.SLACK_FEEDBACK_WEBHOOK,
       feedback_email: !!(process.env.BETA_FEEDBACK_EMAIL && process.env.RESEND_API_KEY && process.env.BETA_FROM),
-      site_gate: !!SITE_PASSWORD,
+      site_gate: SITE_GATE_ACTIVE,
+      site_gate_codes: SITE_PASSWORDS.length,
       supabase_admin: !!supabaseAdmin,
       posthog_person_links: !!String(process.env.POSTHOG_PROJECT_URL || "").trim(),
     },
@@ -1278,11 +1309,11 @@ app.use(/^\/api\/backfill-/, _rlAdmin);
 app.use(/^\/api\//,          _rlGeneric);
 
 // ── API beta gate ─────────────────────────────────────────────────────────────
-// When SITE_PASSWORD is set (closed beta), every /api/* request must carry the
-// rm_gate cookie set by /auth — otherwise return 401 JSON. INDEX_SECRET in the
-// body or `x-index-secret` header bypasses (admin/scripts). A small allowlist
-// keeps health checks, the public config endpoint, and unauth'd helpers usable
-// by monitors and the first paint.
+// When any beta invite code is configured (closed beta), every /api/* request
+// must carry the rm_gate cookie set by /auth — otherwise return 401 JSON.
+// INDEX_SECRET in the body or `x-index-secret` header bypasses (admin/scripts).
+// A small allowlist keeps health checks, the public config endpoint, and
+// unauth'd helpers usable by monitors and the first paint.
 const API_GATE_ALLOWLIST = new Set([
   "/api/health",
   "/api/health/beta",
@@ -1291,13 +1322,13 @@ const API_GATE_ALLOWLIST = new Set([
   "/api/nbhd-img",
 ]);
 function _apiBetaGate(req, res, next) {
-  if (!SITE_PASSWORD) return next();
+  if (!SITE_GATE_ACTIVE) return next();
   if (req.method === "OPTIONS") return next();
   const p = req.path || "";
   if (!p.startsWith("/api/")) return next();
   if (API_GATE_ALLOWLIST.has(p)) return next();
   const cookies = parseCookies(req.headers.cookie);
-  if (cookies.rm_gate === SITE_PASSWORD_HASH) return next();
+  if (siteGateCookieValid(cookies.rm_gate)) return next();
   const sec = req.body?.secret || req.headers["x-index-secret"] || req.query.secret;
   if (sec && sec === process.env.INDEX_SECRET) return next();
   return res.status(401).json({ error: "beta_gate_required" });
@@ -1328,21 +1359,19 @@ app.use((req, res, next) => {
   next();
 });
 
-// ── Password gate (only active when SITE_PASSWORD env var is set) ─────────────
-if (SITE_PASSWORD) {
+// ── Password gate (active when SITE_PASSWORD / SITE_PASSWORDS / config file set) ─
+if (SITE_GATE_ACTIVE) {
   // Handle login form submission
   app.post("/auth", express.urlencoded({ extended: false }), (req, res) => {
-    const entered = crypto.createHash("sha256")
-      .update((req.body.password || "").trim() + "rm-salt-2026")
-      .digest("hex");
-    if (entered === SITE_PASSWORD_HASH) {
+    const entered = hashSitePassword(req.body.password || "");
+    if (SITE_PASSWORD_HASHES.has(entered)) {
       // Secure flag: include only when we're actually behind HTTPS so localhost
       // sessions aren't silently rejected by Set-Cookie. SameSite=Lax (not
       // Strict) so the redirect from /auth → / and any same-site nav from
       // marketing pages preserves the cookie. HttpOnly so the cookie is not
       // readable from JS (defence in depth — the value is a hash anyway).
       const isHttps = ((req.headers["x-forwarded-proto"] || req.protocol || "").split(",")[0] || "").trim() === "https";
-      const cookie = `rm_gate=${SITE_PASSWORD_HASH}; Max-Age=2592000; Path=/; HttpOnly; SameSite=Lax${isHttps ? "; Secure" : ""}`;
+      const cookie = `rm_gate=${entered}; Max-Age=2592000; Path=/; HttpOnly; SameSite=Lax${isHttps ? "; Secure" : ""}`;
       res.setHeader("Set-Cookie", cookie);
       return res.redirect("/");
     }
@@ -1352,14 +1381,14 @@ if (SITE_PASSWORD) {
   // Gate the frontend — intercept GET / before static middleware serves index.html
   app.get("/", (req, res, next) => {
     const cookies = parseCookies(req.headers.cookie);
-    if (cookies.rm_gate === SITE_PASSWORD_HASH) return next();
+    if (siteGateCookieValid(cookies.rm_gate)) return next();
     return res.send(loginHtml());
   });
 
   // Gate the SPA hotel detail route the same way (it also serves index.html).
   app.get("/hotel/:hotelId", (req, res, next) => {
     const cookies = parseCookies(req.headers.cookie);
-    if (cookies.rm_gate === SITE_PASSWORD_HASH) return next();
+    if (siteGateCookieValid(cookies.rm_gate)) return next();
     return res.send(loginHtml());
   });
 }
