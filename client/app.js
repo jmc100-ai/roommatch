@@ -482,7 +482,7 @@
   }
 
   /** Build a white-label deep link for a specific room offer (offerId) or hotel page. */
-  function buildBookUrl(hotel, roomTypeId, prebookId) {
+  function buildBookUrl(hotel, roomTypeId, prebookId, explicitOfferId) {
     const wl = _wlBaseUrl();
     if (!wl) {
       // Fallback: Google search until white label is configured
@@ -495,7 +495,7 @@
       return _withBookAttribution(`${wl}/booking?prebookId=${encodeURIComponent(prebookId)}`, hotel, roomTypeId);
     }
     // If we have an offerId for this specific room → checkout (WL can auto-prebook if we skip server prebook)
-    const offerId = hotel.offerIds?.[roomTypeId];
+    const offerId = explicitOfferId || _offerIdForRoom(hotel, roomTypeId);
     if (offerId) return _withBookAttribution(`${wl}/booking?offerId=${encodeURIComponent(offerId)}`, hotel, roomTypeId);
 
     // Hotel details page with dates pre-filled (user picks their room on the WL).
@@ -508,36 +508,64 @@
     return _withBookAttribution(`${wl}/hotels/${hotel.id}?${params.toString()}`, hotel, roomTypeId);
   }
 
+  function _offerIdForRoom(hotel, roomTypeId) {
+    if (!hotel?.offerIds || roomTypeId == null) return null;
+    const direct = hotel.offerIds[roomTypeId] ?? hotel.offerIds[String(roomTypeId)];
+    if (direct) return direct;
+    // onclick may carry catalog roomTypeId while offerIds are keyed by mappedRoomId.
+    for (const rt of (hotel.roomTypes || [])) {
+      if (rt.roomTypeId != null && String(rt.roomTypeId) !== String(roomTypeId)) continue;
+      const { bookRoomTypeId } = resolveRoomRateForType(rt, hotel);
+      if (bookRoomTypeId == null) continue;
+      const oid = hotel.offerIds[bookRoomTypeId] ?? hotel.offerIds[String(bookRoomTypeId)];
+      if (oid) return oid;
+    }
+    return null;
+  }
+
   function _hotelForBook(hotelId) {
     const id = String(hotelId || '');
+    // Detail page: merge search + /api/hotel-rates (_clientRates) — not _detailHotelData.offerIds.
+    if (_detailHotelData && String(_detailHotelData.hotel_id) === id) {
+      const ctx = hotelDetailSearchContext(_detailHotelData);
+      if (ctx) {
+        return {
+          id,
+          name: _detailHotelData.name || ctx.name,
+          city: S.city || ctx.city,
+          offerIds: ctx.offerIds,
+          roomPrices: ctx.roomPrices,
+          roomNames: ctx.roomNames,
+          roomFreeCancel: ctx.roomFreeCancel,
+          hotelFreeCancel: ctx.hotelFreeCancel,
+          price: ctx.price,
+        };
+      }
+    }
     const fromSearch = (_lastVsearchHotels || []).find(h => String(h.id) === id);
     if (fromSearch) return { ...fromSearch, city: fromSearch.city || S.city };
-    if (_detailHotelData && String(_detailHotelData.hotel_id) === id) {
-      return {
-        id,
-        name: _detailHotelData.name,
-        offerIds: _detailHotelData.offerIds,
-        city: S.city,
-      };
-    }
+    const fromResults = _searchHotelForDetail(id);
+    if (fromResults) return { ...fromResults, city: fromResults.city || S.city };
     return { id, city: S.city };
   }
 
   /** Book CTA — prebooks server-side when offerId exists, then opens WL checkout. */
-  async function goToBook(hotelId, roomTypeId, surface, ev) {
+  async function goToBook(hotelId, roomTypeId, surface, ev, embeddedOfferId) {
     if (ev) {
       ev.preventDefault();
       if (typeof ev.stopPropagation === 'function') ev.stopPropagation();
     }
     fireFindBookClick(hotelId, roomTypeId, surface);
-    const hotel = _hotelForBook(hotelId);
     const rid = roomTypeId != null && roomTypeId !== 'null' ? roomTypeId : null;
-    const offerId = rid != null ? hotel.offerIds?.[rid] : null;
-    const wl = _wlBaseUrl();
+    let hotel = _hotelForBook(hotelId);
+    let offerId = embeddedOfferId && embeddedOfferId !== 'null'
+      ? embeddedOfferId
+      : _offerIdForRoom(hotel, rid);
     const btn = ev?.currentTarget;
     const prevLabel = btn?.textContent;
-
-    if (offerId && wl) {
+    // Batch /api/rates often has roomPrices but no offerIds (LiteAPI batch quirk / stale payload).
+    // Always try a single-hotel /api/hotel-rates fetch when we have dates but no offerId yet.
+    if (!offerId && rid != null && budgetHasValidDates()) {
       if (btn) {
         btn.classList.add('book-btn--loading');
         btn.setAttribute('aria-busy', 'true');
@@ -545,44 +573,18 @@
           btn.textContent = 'Checking…';
         }
       }
-      try {
-        const res = await fetch('/api/prebook', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          credentials: 'same-origin',
-          body: JSON.stringify({ offerId: String(offerId) }),
-        });
-        const data = await res.json().catch(() => ({}));
-        if (res.ok && data.prebookId) {
-          track('prebook_succeeded', {
-            hotel_id: String(hotelId || ''),
-            room_type_id: rid,
-            surface: surface || 'unknown',
-          });
-          window.open(buildBookUrl(hotel, rid, data.prebookId), '_blank', 'noopener');
-          return false;
-        }
-        if (res.status === 429) flashMsg('Too many booking attempts — try again in a moment.');
-        else if (data.detail) flashMsg(String(data.detail).slice(0, 120));
-        else flashMsg('Rate unavailable — opening booking page…');
-        track('prebook_failed', {
-          hotel_id: String(hotelId || ''),
-          room_type_id: rid,
-          surface: surface || 'unknown',
-          status: res.status,
-        });
-      } catch (_) {
-        flashMsg('Could not confirm rate — opening booking page…');
-      } finally {
-        if (btn) {
-          btn.classList.remove('book-btn--loading');
-          btn.removeAttribute('aria-busy');
-          if (prevLabel) btn.textContent = prevLabel;
-        }
+      try { await ensureDetailHotelRates(hotelId); } catch (_) {}
+      hotel = _hotelForBook(hotelId);
+      offerId = _offerIdForRoom(hotel, rid);
+      if (btn) {
+        btn.classList.remove('book-btn--loading');
+        btn.removeAttribute('aria-busy');
+        if (prevLabel) btn.textContent = prevLabel;
       }
     }
 
-    window.open(buildBookUrl(hotel, rid), '_blank', 'noopener');
+    // WL accepts offerId directly and runs prebook itself — skip our /api/prebook hop for speed.
+    window.open(buildBookUrl(hotel, rid, null, offerId), '_blank', 'noopener');
     return false;
   }
   window._tbGoToBook = goToBook;
@@ -597,13 +599,15 @@
     } = opts;
     const hotelId = escAttr(String(hotel?.id || ''));
     const ridArg = roomTypeId != null ? `'${escAttr(String(roomTypeId))}'` : 'null';
-    const fallbackUrl = escHtml(buildBookUrl(hotel, roomTypeId));
+    const offerId = _offerIdForRoom(hotel, roomTypeId);
+    const offerArg = offerId ? `'${escAttr(String(offerId))}'` : 'null';
+    const fallbackUrl = escHtml(buildBookUrl(hotel, roomTypeId, null, offerId));
     const stop = stopPropagation ? 'event.stopPropagation();' : '';
     const labelHtml = label.includes('&') ? label : escHtml(label);
     const inner = shortLabel
       ? `<span class="hpage-cta-label hpage-cta-label--full">${labelHtml}</span><span class="hpage-cta-label hpage-cta-label--short">${shortLabel.includes('&') ? shortLabel : escHtml(shortLabel)}</span>`
       : labelHtml;
-    return `<a class="${className}" href="${fallbackUrl}" target="_blank" rel="noopener" onclick="${stop}return window._tbGoToBook('${hotelId}', ${ridArg}, '${surface}', event)">${inner}</a>`;
+    return `<a class="${className}" href="${fallbackUrl}" target="_blank" rel="noopener" onclick="${stop}return window._tbGoToBook('${hotelId}', ${ridArg}, '${surface}', event, ${offerArg})">${inner}</a>`;
   }
 
   /** Fire-and-forget PostHog event for any "Find & Book" click. Inline-callable
@@ -8053,21 +8057,26 @@
 
   function applyDetailClientRates(hotelId, data) {
     if (!data?.roomPrices) return false;
+    let changed = false;
     const h = _searchHotelForDetail(hotelId);
-    if (h) return mergeHotelRatesPayload(h, data);
-    if (!_detailHotelData || String(_detailHotelData.hotel_id) !== String(hotelId)) return false;
-    const prev = _detailHotelData._clientRates || {};
-    _detailHotelData._clientRates = {
-      roomPrices: { ...(prev.roomPrices || {}), ...(data.roomPrices || {}) },
-      roomNames: { ...(prev.roomNames || {}), ...(data.roomNames || {}) },
-      offerIds: { ...(prev.offerIds || {}), ...(data.offerIds || {}) },
-      roomFreeCancel: { ...(prev.roomFreeCancel || {}), ...(data.roomFreeCancel || {}) },
-      hotelFreeCancel: data.hotelFreeCancel || prev.hotelFreeCancel,
-      price: data.price != null
-        ? (prev.price == null ? data.price : Math.min(prev.price, data.price))
-        : prev.price,
-    };
-    return true;
+    if (h) changed = mergeHotelRatesPayload(h, data) || changed;
+    // Always mirror onto detail overlay so _hotelForBook sees offerIds even when
+    // results-card hotel object was the merge target.
+    if (_detailHotelData && String(_detailHotelData.hotel_id) === String(hotelId)) {
+      const prev = _detailHotelData._clientRates || {};
+      _detailHotelData._clientRates = {
+        roomPrices: { ...(prev.roomPrices || {}), ...(data.roomPrices || {}) },
+        roomNames: { ...(prev.roomNames || {}), ...(data.roomNames || {}) },
+        offerIds: { ...(prev.offerIds || {}), ...(data.offerIds || {}) },
+        roomFreeCancel: { ...(prev.roomFreeCancel || {}), ...(data.roomFreeCancel || {}) },
+        hotelFreeCancel: data.hotelFreeCancel || prev.hotelFreeCancel,
+        price: data.price != null
+          ? (prev.price == null ? data.price : Math.min(prev.price, data.price))
+          : prev.price,
+      };
+      changed = true;
+    }
+    return changed;
   }
 
   async function ensureDetailHotelRates(hotelId) {
