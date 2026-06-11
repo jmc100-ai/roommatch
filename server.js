@@ -185,7 +185,161 @@ function parseCookies(cookieHeader) {
   return out;
 }
 
-function loginHtml(error = "") {
+function escapeGateHtml(s) {
+  return String(s || "").replace(/[&<>"']/g, (c) => (
+    { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]
+  ));
+}
+
+function betaGateMaxSlots() {
+  const v = parseInt(process.env.BETA_MAX_SLOTS || "0", 10);
+  return Number.isFinite(v) && v > 0 ? v : 0;
+}
+
+function betaGateOpen() {
+  const v = String(process.env.BETA_GATE_OPEN ?? "1").trim().toLowerCase();
+  return v !== "0" && v !== "false" && v !== "no";
+}
+
+function betaGateMessage() {
+  return String(process.env.BETA_GATE_MESSAGE || "").trim();
+}
+
+function isAdminGatePassword(plaintext) {
+  const admin = (process.env.SITE_PASSWORD || "").trim();
+  return !!(admin && String(plaintext || "").trim() === admin);
+}
+
+function hashGateMeta(val) {
+  return crypto.createHash("sha256").update(String(val) + "rm-gate-meta-2026").digest("hex").slice(0, 32);
+}
+
+async function getBetaGateSlotStatus() {
+  const max = betaGateMaxSlots();
+  if (!max) return { full: false, used: 0, max: 0, remaining: 0 };
+  if (!supabaseAdmin) {
+    console.warn("[beta-gate] no supabase admin — slot cap disabled (fail-open)");
+    return { full: false, used: 0, max, remaining: max };
+  }
+  try {
+    const { count, error } = await supabaseAdmin
+      .from("beta_gate_admissions")
+      .select("*", { count: "exact", head: true })
+      .eq("code_source", "public");
+    if (error) throw error;
+    const used = count || 0;
+    return { full: used >= max, used, max, remaining: Math.max(0, max - used) };
+  } catch (e) {
+    console.warn("[beta-gate] slot status failed (fail-open):", e.message);
+    return { full: false, used: 0, max, remaining: max };
+  }
+}
+
+async function betaGateAdmissionExists(gateCookieHash) {
+  if (!supabaseAdmin) return false;
+  try {
+    const { data, error } = await supabaseAdmin
+      .from("beta_gate_admissions")
+      .select("gate_cookie_hash")
+      .eq("gate_cookie_hash", gateCookieHash)
+      .maybeSingle();
+    if (error) throw error;
+    return !!data;
+  } catch (e) {
+    console.warn("[beta-gate] admission lookup failed (fail-open):", e.message);
+    return false;
+  }
+}
+
+async function recordBetaGateAdmission(gateCookieHash, codeSource, req) {
+  if (!supabaseAdmin) return;
+  try {
+    const { error } = await supabaseAdmin.from("beta_gate_admissions").insert({
+      gate_cookie_hash: gateCookieHash,
+      code_source: codeSource,
+      ip_hash: hashGateMeta(_clientIp(req)),
+      user_agent: String(req.headers["user-agent"] || "").slice(0, 512) || null,
+    });
+    if (error && !/duplicate|unique/i.test(error.message)) throw error;
+  } catch (e) {
+    console.warn("[beta-gate] admission insert failed (non-fatal):", e.message);
+  }
+}
+
+/**
+ * Decide whether a new /auth login may proceed. Existing rm_gate cookies are
+ * validated separately and are not re-checked here.
+ * Returns { allow, reason: 'ok'|'invalid'|'paused'|'full', isAdmin }.
+ */
+async function evaluateBetaGateLogin(plaintextPassword, gateCookieHash, req) {
+  if (!SITE_PASSWORD_HASHES.has(gateCookieHash)) {
+    return { allow: false, reason: "invalid", isAdmin: false };
+  }
+  const isAdmin = isAdminGatePassword(plaintextPassword);
+  if (isAdmin) return { allow: true, reason: "ok", isAdmin: true };
+
+  const returning = await betaGateAdmissionExists(gateCookieHash);
+  if (returning) return { allow: true, reason: "ok", isAdmin: false };
+
+  if (!betaGateOpen()) {
+    return { allow: false, reason: "paused", isAdmin: false };
+  }
+
+  const max = betaGateMaxSlots();
+  if (!max) return { allow: true, reason: "ok", isAdmin: false };
+
+  const slots = await getBetaGateSlotStatus();
+  if (slots.full) return { allow: false, reason: "full", isAdmin: false };
+
+  return { allow: true, reason: "ok", isAdmin: false };
+}
+
+function betaGateBlockedMessage(reason) {
+  const custom = betaGateMessage();
+  if (custom) return custom;
+  const max = betaGateMaxSlots();
+  if (reason === "paused") {
+    return "Beta access is paused for now. Check back soon or reply on the Reddit thread for the next wave.";
+  }
+  if (reason === "full") {
+    return max
+      ? `This beta round is full (${max} spots). Thanks for your interest — we'll open more spots soon.`
+      : "This beta round is full. Thanks for your interest — we'll open more spots soon.";
+  }
+  return "";
+}
+
+async function betaGateLoginView({ error = "", reason = "" } = {}) {
+  const subtitle = "TravelByVibe is in closed beta. Enter your invite code to continue.";
+  let notice = "";
+  let showForm = true;
+
+  if (!betaGateOpen()) {
+    notice = betaGateBlockedMessage("paused");
+    showForm = false;
+  } else if (betaGateMaxSlots() > 0) {
+    const slots = await getBetaGateSlotStatus();
+    if (slots.full) {
+      notice = betaGateBlockedMessage("full");
+      showForm = false;
+    }
+  }
+  if (reason === "paused" || reason === "full") {
+    notice = betaGateBlockedMessage(reason);
+    showForm = false;
+  }
+
+  return loginHtml({ error, subtitle, notice, showForm });
+}
+
+function loginHtml({ error = "", subtitle = "", notice = "", showForm = true } = {}) {
+  const sub = subtitle || "TravelByVibe is in closed beta. Enter your invite code to continue.";
+  const formBlock = showForm
+    ? `<form method="POST" action="/auth">
+      <input type="password" name="password" placeholder="Invite code" autofocus autocomplete="current-password"/>
+      <button type="submit">Continue</button>
+    </form>`
+    : "";
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -199,10 +353,13 @@ function loginHtml(error = "") {
     body { min-height: 100vh; display: flex; align-items: center; justify-content: center;
            background: #0c0c0e; font-family: 'DM Sans', sans-serif; color: #e8e4dc; }
     .card { background: #18181c; border: 1px solid rgba(255,255,255,0.07); border-radius: 16px;
-            padding: 48px 40px; width: 100%; max-width: 380px; text-align: center; }
+            padding: 48px 40px; width: 100%; max-width: 420px; text-align: center; }
     h1 { font-family: 'Cormorant Garamond', serif; font-size: 28px; font-weight: 300;
          letter-spacing: 0.05em; margin-bottom: 8px; color: #c9a96e; }
-    p.sub { font-size: 13px; color: rgba(232,228,220,0.5); margin-bottom: 32px; }
+    p.sub { font-size: 13px; color: rgba(232,228,220,0.5); margin-bottom: 24px; line-height: 1.5; }
+    p.notice { font-size: 13px; color: rgba(201,169,110,0.92); margin-bottom: 24px; line-height: 1.55;
+               background: rgba(201,169,110,0.08); border: 1px solid rgba(201,169,110,0.22);
+               border-radius: 10px; padding: 14px 16px; text-align: left; }
     input[type=password] { width: 100%; padding: 12px 16px; background: #0c0c0e;
       border: 1px solid rgba(201,169,110,0.3); border-radius: 8px; color: #e8e4dc;
       font-family: 'DM Sans', sans-serif; font-size: 15px; margin-bottom: 16px; outline: none; }
@@ -216,12 +373,10 @@ function loginHtml(error = "") {
 <body>
   <div class="card">
     <h1>TravelBy<span style="color:#c9a96e">Vibe</span></h1>
-    <p class="sub">TravelByVibe is in closed beta. Enter the invite code from your email to continue.</p>
-    <form method="POST" action="/auth">
-      <input type="password" name="password" placeholder="Invite code" autofocus autocomplete="current-password"/>
-      <button type="submit">Continue</button>
-      ${error ? `<p class="error">${error}</p>` : ""}
-    </form>
+    <p class="sub">${escapeGateHtml(sub)}</p>
+    ${notice ? `<p class="notice">${escapeGateHtml(notice)}</p>` : ""}
+    ${formBlock}
+    ${error ? `<p class="error">${escapeGateHtml(error)}</p>` : ""}
   </div>
 </body>
 </html>`;
@@ -296,7 +451,8 @@ app.head("/api/health", (_, res) => {
 });
 
 /** JSON readiness for beta launch (UptimeRobot should keep using /api/health). */
-app.get("/api/health/beta", (_req, res) => {
+app.get("/api/health/beta", async (_req, res) => {
+  const slots = await getBetaGateSlotStatus();
   res.json({
     ok: true,
     release: SENTRY_RELEASE,
@@ -311,6 +467,13 @@ app.get("/api/health/beta", (_req, res) => {
       site_gate_codes: SITE_PASSWORDS.length,
       supabase_admin: !!supabaseAdmin,
       posthog_person_links: !!String(process.env.POSTHOG_PROJECT_URL || "").trim(),
+      beta_gate: {
+        open: betaGateOpen(),
+        max_slots: slots.max,
+        used_slots: slots.used,
+        remaining_slots: slots.remaining,
+        full: slots.full,
+      },
     },
   });
 });
@@ -1362,9 +1525,19 @@ app.use((req, res, next) => {
 // ── Password gate (active when SITE_PASSWORD / SITE_PASSWORDS / config file set) ─
 if (SITE_GATE_ACTIVE) {
   // Handle login form submission
-  app.post("/auth", express.urlencoded({ extended: false }), (req, res) => {
-    const entered = hashSitePassword(req.body.password || "");
-    if (SITE_PASSWORD_HASHES.has(entered)) {
+  app.post("/auth", express.urlencoded({ extended: false }), async (req, res) => {
+    try {
+      const plaintext = String(req.body.password || "");
+      const entered = hashSitePassword(plaintext);
+      const decision = await evaluateBetaGateLogin(plaintext, entered, req);
+      if (!decision.allow) {
+        if (decision.reason === "invalid") {
+          return res.send(await betaGateLoginView({
+            error: "That code did not work. Double-check your invite and try again.",
+          }));
+        }
+        return res.send(await betaGateLoginView({ reason: decision.reason }));
+      }
       // Secure flag: include only when we're actually behind HTTPS so localhost
       // sessions aren't silently rejected by Set-Cookie. SameSite=Lax (not
       // Strict) so the redirect from /auth → / and any same-site nav from
@@ -1373,23 +1546,37 @@ if (SITE_GATE_ACTIVE) {
       const isHttps = ((req.headers["x-forwarded-proto"] || req.protocol || "").split(",")[0] || "").trim() === "https";
       const cookie = `rm_gate=${entered}; Max-Age=2592000; Path=/; HttpOnly; SameSite=Lax${isHttps ? "; Secure" : ""}`;
       res.setHeader("Set-Cookie", cookie);
+      const codeSource = decision.isAdmin ? "admin" : "public";
+      const returning = await betaGateAdmissionExists(entered);
+      if (!returning) await recordBetaGateAdmission(entered, codeSource, req);
       return res.redirect("/");
+    } catch (e) {
+      console.error("[beta-gate] /auth error (fail-open):", e.message);
+      const entered = hashSitePassword(req.body.password || "");
+      if (SITE_PASSWORD_HASHES.has(entered)) {
+        const isHttps = ((req.headers["x-forwarded-proto"] || req.protocol || "").split(",")[0] || "").trim() === "https";
+        const cookie = `rm_gate=${entered}; Max-Age=2592000; Path=/; HttpOnly; SameSite=Lax${isHttps ? "; Secure" : ""}`;
+        res.setHeader("Set-Cookie", cookie);
+        return res.redirect("/");
+      }
+      return res.send(await betaGateLoginView({
+        error: "Something went wrong. Please try again.",
+      }));
     }
-    return res.send(loginHtml("That code did not work. Double-check your invite email and try again."));
   });
 
   // Gate the frontend — intercept GET / before static middleware serves index.html
-  app.get("/", (req, res, next) => {
+  app.get("/", async (req, res, next) => {
     const cookies = parseCookies(req.headers.cookie);
     if (siteGateCookieValid(cookies.rm_gate)) return next();
-    return res.send(loginHtml());
+    return res.send(await betaGateLoginView());
   });
 
   // Gate the SPA hotel detail route the same way (it also serves index.html).
-  app.get("/hotel/:hotelId", (req, res, next) => {
+  app.get("/hotel/:hotelId", async (req, res, next) => {
     const cookies = parseCookies(req.headers.cookie);
     if (siteGateCookieValid(cookies.rm_gate)) return next();
-    return res.send(loginHtml());
+    return res.send(await betaGateLoginView());
   });
 }
 
