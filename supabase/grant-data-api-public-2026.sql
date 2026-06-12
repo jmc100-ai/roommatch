@@ -38,7 +38,8 @@ DECLARE
   beta_tables text[] := ARRAY[
     'beta_feedback',
     'beta_consents',
-    'beta_invitees'
+    'beta_invitees',
+    'beta_gate_admissions'
   ];
 BEGIN
   FOREACH t IN ARRAY api_tables

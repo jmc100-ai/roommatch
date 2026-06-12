@@ -214,41 +214,55 @@ function hashGateMeta(val) {
   return crypto.createHash("sha256").update(String(val) + "rm-gate-meta-2026").digest("hex").slice(0, 32);
 }
 
-async function getBetaGateSlotStatus() {
+async function getBetaGateRedemptionStats(gateCookieHash = null) {
   const max = betaGateMaxSlots();
-  if (!max) return { full: false, used: 0, max: 0, remaining: 0 };
+  if (!max) return { max: 0, total: 0, codeUsed: 0, codeRemaining: 0, codeFull: false };
   if (!supabaseAdmin) {
     console.warn("[beta-gate] no supabase admin — slot cap disabled (fail-open)");
-    return { full: false, used: 0, max, remaining: max };
+    return { max, total: 0, codeUsed: 0, codeRemaining: max, codeFull: false };
   }
   try {
-    const { count, error } = await supabaseAdmin
+    let total = 0;
+    let codeUsed = 0;
+    const { count: totalCount, error: totalErr } = await supabaseAdmin
       .from("beta_gate_admissions")
       .select("*", { count: "exact", head: true })
       .eq("code_source", "public");
-    if (error) throw error;
-    const used = count || 0;
-    return { full: used >= max, used, max, remaining: Math.max(0, max - used) };
+    if (totalErr) throw totalErr;
+    total = totalCount || 0;
+
+    if (gateCookieHash) {
+      const { count: codeCount, error: codeErr } = await supabaseAdmin
+        .from("beta_gate_admissions")
+        .select("*", { count: "exact", head: true })
+        .eq("code_source", "public")
+        .eq("gate_cookie_hash", gateCookieHash);
+      if (codeErr) throw codeErr;
+      codeUsed = codeCount || 0;
+    }
+
+    return {
+      max,
+      total,
+      codeUsed,
+      codeRemaining: Math.max(0, max - codeUsed),
+      codeFull: gateCookieHash ? codeUsed >= max : false,
+    };
   } catch (e) {
-    console.warn("[beta-gate] slot status failed (fail-open):", e.message);
-    return { full: false, used: 0, max, remaining: max };
+    console.warn("[beta-gate] redemption stats failed (fail-closed for new logins):", e.message);
+    return { max, total: null, codeUsed: null, codeRemaining: 0, codeFull: true, dbError: true };
   }
 }
 
-async function betaGateAdmissionExists(gateCookieHash) {
-  if (!supabaseAdmin) return false;
-  try {
-    const { data, error } = await supabaseAdmin
-      .from("beta_gate_admissions")
-      .select("gate_cookie_hash")
-      .eq("gate_cookie_hash", gateCookieHash)
-      .maybeSingle();
-    if (error) throw error;
-    return !!data;
-  } catch (e) {
-    console.warn("[beta-gate] admission lookup failed (fail-open):", e.message);
-    return false;
-  }
+async function getCodeUseCount(gateCookieHash) {
+  const stats = await getBetaGateRedemptionStats(gateCookieHash);
+  if (stats.dbError) return null;
+  return stats.codeUsed;
+}
+
+function hasExistingGateSession(req, gateCookieHash) {
+  const cookies = parseCookies(req.headers.cookie);
+  return cookies.rm_gate === gateCookieHash;
 }
 
 async function recordBetaGateAdmission(gateCookieHash, codeSource, req) {
@@ -260,7 +274,7 @@ async function recordBetaGateAdmission(gateCookieHash, codeSource, req) {
       ip_hash: hashGateMeta(_clientIp(req)),
       user_agent: String(req.headers["user-agent"] || "").slice(0, 512) || null,
     });
-    if (error && !/duplicate|unique/i.test(error.message)) throw error;
+    if (error) throw error;
   } catch (e) {
     console.warn("[beta-gate] admission insert failed (non-fatal):", e.message);
   }
@@ -269,29 +283,41 @@ async function recordBetaGateAdmission(gateCookieHash, codeSource, req) {
 /**
  * Decide whether a new /auth login may proceed. Existing rm_gate cookies are
  * validated separately and are not re-checked here.
- * Returns { allow, reason: 'ok'|'invalid'|'paused'|'full', isAdmin }.
+ * Returns { allow, reason, isAdmin, recordUse }.
  */
 async function evaluateBetaGateLogin(plaintextPassword, gateCookieHash, req) {
   if (!SITE_PASSWORD_HASHES.has(gateCookieHash)) {
-    return { allow: false, reason: "invalid", isAdmin: false };
+    return { allow: false, reason: "invalid", isAdmin: false, recordUse: false };
   }
   const isAdmin = isAdminGatePassword(plaintextPassword);
-  if (isAdmin) return { allow: true, reason: "ok", isAdmin: true };
+  if (isAdmin) {
+    return {
+      allow: true,
+      reason: "ok",
+      isAdmin: true,
+      recordUse: !hasExistingGateSession(req, gateCookieHash),
+    };
+  }
 
-  const returning = await betaGateAdmissionExists(gateCookieHash);
-  if (returning) return { allow: true, reason: "ok", isAdmin: false };
+  // Same browser re-submitting the code it already holds — do not burn another slot.
+  if (hasExistingGateSession(req, gateCookieHash)) {
+    return { allow: true, reason: "ok", isAdmin: false, recordUse: false };
+  }
 
   if (!betaGateOpen()) {
-    return { allow: false, reason: "paused", isAdmin: false };
+    return { allow: false, reason: "paused", isAdmin: false, recordUse: false };
   }
 
   const max = betaGateMaxSlots();
-  if (!max) return { allow: true, reason: "ok", isAdmin: false };
+  if (!max) return { allow: true, reason: "ok", isAdmin: false, recordUse: true };
 
-  const slots = await getBetaGateSlotStatus();
-  if (slots.full) return { allow: false, reason: "full", isAdmin: false };
+  const used = await getCodeUseCount(gateCookieHash);
+  if (used == null) {
+    return { allow: false, reason: "full", isAdmin: false, recordUse: false };
+  }
+  if (used >= max) return { allow: false, reason: "full", isAdmin: false, recordUse: false };
 
-  return { allow: true, reason: "ok", isAdmin: false };
+  return { allow: true, reason: "ok", isAdmin: false, recordUse: true };
 }
 
 function betaGateBlockedMessage(reason) {
@@ -303,7 +329,7 @@ function betaGateBlockedMessage(reason) {
   }
   if (reason === "full") {
     return max
-      ? `This beta round is full (${max} spots). Thanks for your interest — we'll open more spots soon.`
+      ? `This invite code has reached its limit (${max} uses). Thanks for your interest — we'll open more spots soon.`
       : "This beta round is full. Thanks for your interest — we'll open more spots soon.";
   }
   return "";
@@ -317,12 +343,6 @@ async function betaGateLoginView({ error = "", reason = "" } = {}) {
   if (!betaGateOpen()) {
     notice = betaGateBlockedMessage("paused");
     showForm = false;
-  } else if (betaGateMaxSlots() > 0) {
-    const slots = await getBetaGateSlotStatus();
-    if (slots.full) {
-      notice = betaGateBlockedMessage("full");
-      showForm = false;
-    }
   }
   if (reason === "paused" || reason === "full") {
     notice = betaGateBlockedMessage(reason);
@@ -452,7 +472,7 @@ app.head("/api/health", (_, res) => {
 
 /** JSON readiness for beta launch (UptimeRobot should keep using /api/health). */
 app.get("/api/health/beta", async (_req, res) => {
-  const slots = await getBetaGateSlotStatus();
+  const stats = await getBetaGateRedemptionStats();
   res.json({
     ok: true,
     release: SENTRY_RELEASE,
@@ -469,10 +489,14 @@ app.get("/api/health/beta", async (_req, res) => {
       posthog_person_links: !!String(process.env.POSTHOG_PROJECT_URL || "").trim(),
       beta_gate: {
         open: betaGateOpen(),
-        max_slots: slots.max,
-        used_slots: slots.used,
-        remaining_slots: slots.remaining,
-        full: slots.full,
+        max_uses_per_code: stats.max,
+        total_public_redemptions: stats.total,
+        db_error: !!stats.dbError,
+        // legacy field names (dashboards)
+        max_slots: stats.max,
+        used_slots: stats.total,
+        remaining_slots: stats.max ? stats.max : 0,
+        full: false,
       },
     },
   });
@@ -1547,8 +1571,7 @@ if (SITE_GATE_ACTIVE) {
       const cookie = `rm_gate=${entered}; Max-Age=2592000; Path=/; HttpOnly; SameSite=Lax${isHttps ? "; Secure" : ""}`;
       res.setHeader("Set-Cookie", cookie);
       const codeSource = decision.isAdmin ? "admin" : "public";
-      const returning = await betaGateAdmissionExists(entered);
-      if (!returning) await recordBetaGateAdmission(entered, codeSource, req);
+      if (decision.recordUse) await recordBetaGateAdmission(entered, codeSource, req);
       return res.redirect("/");
     } catch (e) {
       console.error("[beta-gate] /auth error (fail-open):", e.message);
