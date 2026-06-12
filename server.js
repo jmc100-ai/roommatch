@@ -1587,20 +1587,6 @@ if (SITE_GATE_ACTIVE) {
       }));
     }
   });
-
-  // Gate the frontend — intercept GET / before static middleware serves index.html
-  app.get("/", async (req, res, next) => {
-    const cookies = parseCookies(req.headers.cookie);
-    if (siteGateCookieValid(cookies.rm_gate)) return next();
-    return res.send(await betaGateLoginView());
-  });
-
-  // Gate the SPA hotel detail route the same way (it also serves index.html).
-  app.get("/hotel/:hotelId", async (req, res, next) => {
-    const cookies = parseCookies(req.headers.cookie);
-    if (siteGateCookieValid(cookies.rm_gate)) return next();
-    return res.send(await betaGateLoginView());
-  });
 }
 
 // ── Inject runtime client config into served index.html ──────────────────────
@@ -1655,6 +1641,17 @@ function serveAppHtml(res) {
   return res.send(html);
 }
 
+/** Gate then serve SPA shell — covers /, /index.html, /hotel/*, and client-side paths. */
+async function serveGatedAppHtml(req, res) {
+  if (SITE_GATE_ACTIVE) {
+    const cookies = parseCookies(req.headers.cookie);
+    if (!siteGateCookieValid(cookies.rm_gate)) {
+      return res.send(await betaGateLoginView());
+    }
+  }
+  return serveAppHtml(res);
+}
+
 function marketingOrigin(req) {
   let proto = (req.headers["x-forwarded-proto"] || "https").split(",")[0].trim();
   if (proto !== "http" && proto !== "https") proto = "https";
@@ -1682,10 +1679,11 @@ function serveMarketingHtml(req, res, filename) {
   }
 }
 
-// Always serve `/` and `/hotel/:hotelId` via our injecting helper (even when
-// SITE_PASSWORD is unset and the gate handlers above don't run).
-app.get("/", (_req, res) => serveAppHtml(res));
-app.get("/hotel/:hotelId", (_req, res) => serveAppHtml(res));
+// SPA entry points — gated when SITE_GATE_ACTIVE (see serveGatedAppHtml).
+// Register /index.html before express.static so static cannot bypass the gate.
+app.get("/", async (req, res) => serveGatedAppHtml(req, res));
+app.get("/index.html", async (req, res) => serveGatedAppHtml(req, res));
+app.get("/hotel/:hotelId", async (req, res) => serveGatedAppHtml(req, res));
 
 // SEO marketing landings (Mexico City launch) — before static so paths are not shadowed
 Object.entries(MARKETING_HTML).forEach(([route, file]) => {
@@ -5820,7 +5818,7 @@ if (process.env.SENTRY_DSN_SERVER) {
   Sentry.setupExpressErrorHandler(app);
 }
 
-app.get("*", (_req, res) => serveAppHtml(res));
+app.get("*", async (req, res) => serveGatedAppHtml(req, res));
 
 // ── Graceful shutdown: fix any cities stuck at "indexing" when Render deploys ──
 async function gracefulShutdown(signal) {
