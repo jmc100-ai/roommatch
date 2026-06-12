@@ -335,6 +335,25 @@ function betaGateBlockedMessage(reason) {
   return "";
 }
 
+function setSiteGateResponseHeaders(res) {
+  // Vary on Cookie so Cloudflare cannot serve a cached SPA (logged-in) to users without rm_gate.
+  res.setHeader("Cache-Control", "private, no-store, must-revalidate, no-cache");
+  res.setHeader("Pragma", "no-cache");
+  res.setHeader("Expires", "0");
+  res.setHeader("Vary", "Cookie");
+  res.setHeader("CDN-Cache-Control", "no-store");
+}
+
+async function sendBetaGateLoginView(res, opts = {}) {
+  setSiteGateResponseHeaders(res);
+  return res.send(await betaGateLoginView(opts));
+}
+
+function clearGateCookieHeader(req) {
+  const isHttps = ((req.headers["x-forwarded-proto"] || req.protocol || "").split(",")[0] || "").trim() === "https";
+  return `rm_gate=; Max-Age=0; Path=/; HttpOnly; SameSite=Lax${isHttps ? "; Secure" : ""}`;
+}
+
 async function betaGateLoginView({ error = "", reason = "" } = {}) {
   const subtitle = "TravelByVibe is in closed beta. Enter your invite code to continue.";
   let notice = "";
@@ -1556,11 +1575,11 @@ if (SITE_GATE_ACTIVE) {
       const decision = await evaluateBetaGateLogin(plaintext, entered, req);
       if (!decision.allow) {
         if (decision.reason === "invalid") {
-          return res.send(await betaGateLoginView({
+          return sendBetaGateLoginView(res, {
             error: "That code did not work. Double-check your invite and try again.",
-          }));
+          });
         }
-        return res.send(await betaGateLoginView({ reason: decision.reason }));
+        return sendBetaGateLoginView(res, { reason: decision.reason });
       }
       // Secure flag: include only when we're actually behind HTTPS so localhost
       // sessions aren't silently rejected by Set-Cookie. SameSite=Lax (not
@@ -1582,10 +1601,16 @@ if (SITE_GATE_ACTIVE) {
         res.setHeader("Set-Cookie", cookie);
         return res.redirect("/");
       }
-      return res.send(await betaGateLoginView({
+      return sendBetaGateLoginView(res, {
         error: "Something went wrong. Please try again.",
-      }));
+      });
     }
+  });
+
+  // Clear rm_gate (useful for testing incognito / switching accounts).
+  app.get("/auth/logout", (req, res) => {
+    res.setHeader("Set-Cookie", clearGateCookieHeader(req));
+    return res.redirect("/");
   });
 }
 
@@ -1634,19 +1659,22 @@ function serveAppHtml(res) {
     .replace(/__ENV__/g, env)
     .replace(/__BETA_BANNER__/g, bb)
     .replace(/__PARALLEL_RATES__/g, pr);
-  res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+  res.setHeader("Cache-Control", "private, no-store, must-revalidate, no-cache");
   res.setHeader("Pragma", "no-cache");
   res.setHeader("Expires", "0");
+  res.setHeader("Vary", "Cookie");
+  res.setHeader("CDN-Cache-Control", "no-store");
   res.setHeader("Content-Type", "text/html; charset=utf-8");
   return res.send(html);
 }
 
 /** Gate then serve SPA shell — covers /, /index.html, /hotel/*, and client-side paths. */
 async function serveGatedAppHtml(req, res) {
+  setSiteGateResponseHeaders(res);
   if (SITE_GATE_ACTIVE) {
     const cookies = parseCookies(req.headers.cookie);
     if (!siteGateCookieValid(cookies.rm_gate)) {
-      return res.send(await betaGateLoginView());
+      return sendBetaGateLoginView(res);
     }
   }
   return serveAppHtml(res);
