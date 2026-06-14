@@ -443,7 +443,7 @@ async function runV2Search({ req, supabase, supabaseAdmin, resolveCityName }) {
   const missPen = parseFloat(process.env.SOFT_FLAG_MISS_PENALTY    || "0.08");
   const rawNbhdW = parseFloat(process.env.VSEARCH_NBHD_RANK_WEIGHT || "0.58");
   // `let` not `const`: when the user expressed an explicit nbhdScene preference
-  // in Boop, we boost this 1.28× (capped at 0.76) below — same rule V1 applies
+  // in Boop, we boost this 1.28× (capped at 0.62) below — same rule V1 applies
   // in server.js. Without the boost, room match dominates so heavily that a 100%
   // room match in an 85% nbhd-fit area beats an 82% room match in a 95% nbhd-fit
   // area, even when the user explicitly told us neighbourhood matters.
@@ -757,9 +757,9 @@ async function runV2Search({ req, supabase, supabaseAdmin, resolveCityName }) {
       // hip_local, leafy_local, scenic_open), they told us neighbourhood matters
       // — bump the blend weight by 25% so a hotel in their preferred area can
       // outrank a hotel with marginally better room match in a different area.
-      // Capped at 0.76 to avoid an all-or-nothing nbhd dictatorship.
+      // Capped at 0.62 — higher values collapse leafy_local lists to a single hood.
       if (boopProfileForNbhd?.answers?.nbhdScene) {
-        const boosted = Math.min(0.76, nbhdRankWeight * 1.28);
+        const boosted = Math.min(0.62, nbhdRankWeight * 1.28);
         if (boosted > nbhdRankWeight) {
           console.log(`[v2] nbhd_rank_weight boost: ${nbhdRankWeight.toFixed(3)} → ${boosted.toFixed(3)} (nbhdScene=${boopProfileForNbhd.answers.nbhdScene})`);
           nbhdRankWeight = boosted;

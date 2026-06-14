@@ -148,6 +148,14 @@ function runUnitTests() {
   assert((buzzPrefs.nightlife || 0) > (leafyPrefs.nightlife || 0), "buzz_central nightlife > leafy_local");
   assert((leafyPrefs.calm || 0) > (buzzPrefs.calm || 0), "leafy_local calm > buzz_central");
 
+  const firstLeafy = buildBoopProfile({
+    trip: "first",
+    stayVibe: "sleek_polished",
+    nbhdScene: "leafy_local",
+  }).prefs;
+  assert((firstLeafy.central || 0) < 0, "first+leafy central prefs should be negative");
+  assert((firstLeafy.central || 0) < (buzzPrefs.central || 0), "first+leafy less central than first+buzz");
+
   const { FACT_CATALOG } = require("./fact-catalog");
   const factSet = new Set(FACT_CATALOG);
   for (const opt of MUSTHAVE_OPTIONS) {

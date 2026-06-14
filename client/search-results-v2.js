@@ -196,7 +196,7 @@
       return b ? b.overallMatchDisplayPct(h) : Math.round(Number(h.vectorScore) || 0);
     }
     if (pickId === 'room_match') {
-      return b ? b.roomVibeMatchDisplayPct(h) : Math.round(Number(h.vectorScore) || 0);
+      return b ? b.bestRoomPickDisplayPct(h) : Math.round(Number(h.vectorScore) || 0);
     }
     if (pickId === 'area_fit') {
       return h.nbhd_fit_pct != null ? Math.round(h.nbhd_fit_pct) : 0;
@@ -210,6 +210,10 @@
   function pickSortScore(h, pickId) {
     if (pickId === 'area_fit') {
       return h.nbhd_fit_pct != null ? Number(h.nbhd_fit_pct) : -1;
+    }
+    if (pickId === 'room_match') {
+      const b = bridge();
+      return b ? b.bestRoomPickSortScore(h) : pickMetricPct(h, pickId);
     }
     return pickMetricPct(h, pickId);
   }
@@ -274,8 +278,19 @@
     const takeBest = (slotId, pool) => {
       let best = null;
       let bestScore = -Infinity;
+      const b = bridge();
       for (const h of pool) {
         if (isBlocked(h)) continue;
+        if (slotId === 'room_match' && b?.eligibleForBestRoomPick && !b.eligibleForBestRoomPick(h)) {
+          continue;
+        }
+        if (slotId === 'room_match' && b?.compareBestRoomPick) {
+          if (!best || b.compareBestRoomPick(h, best) > 0) {
+            best = h;
+            bestScore = pickSortScore(h, slotId);
+          }
+          continue;
+        }
         const s = pickSortScore(h, slotId);
         if (s > bestScore) {
           bestScore = s;
@@ -301,6 +316,9 @@
    * Next N hotels in the active sort, excluding every Top Pick (by id).
    * Top Picks are metric-specific and often sit at ranks #2–#5, not only #1.
    */
+  /** Max cards from the same primary_nbhd in the "More hotels" row. */
+  const MORE_HOTELS_MAX_PER_NBHD = 2;
+
   function selectMoreHotels(sorted, picks, limit) {
     const list = sorted || [];
     const cap = Math.max(0, Number(limit) || 0);
@@ -315,9 +333,16 @@
     }
 
     const out = [];
+    const nbhdCounts = new Map();
     for (const h of list) {
       const id = hotelKey(h);
       if (!id || pickIds.has(id)) continue;
+      const nbhd = h.primary_nbhd?.name || '';
+      if (nbhd) {
+        const n = nbhdCounts.get(nbhd) || 0;
+        if (n >= MORE_HOTELS_MAX_PER_NBHD) continue;
+        nbhdCounts.set(nbhd, n + 1);
+      }
       out.push(h);
       if (out.length >= cap) break;
     }

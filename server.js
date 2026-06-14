@@ -838,7 +838,7 @@ function effectiveNbhdWeightForPriceMatters(baseW, pm) {
   const p = Number(pm) || 0;
   if (p <= 0) return w;
   const t = Math.abs(p) / 100;
-  return Math.min(0.76, w * (1 + BOOP_PRICE_NBHD_WEIGHT_BOOST * t));
+    return Math.min(0.62, w * (1 + BOOP_PRICE_NBHD_WEIGHT_BOOST * t));
 }
 
 /** Weak-nbhd hotel may beat strong-nbhd peer on price only with a large room lead. */
@@ -3254,7 +3254,7 @@ app.get("/api/vsearch", async (req, res) => {
     }
     // When the user explicitly picked a neighbourhood scene, give neighbourhood fit more pull.
     if (nbhdRankWeight > 0 && boopProfileForNbhd?.answers?.nbhdScene) {
-      nbhdRankWeight = Math.min(0.76, nbhdRankWeight * 1.28);
+      nbhdRankWeight = Math.min(0.62, nbhdRankWeight * 1.28);
     }
     if (nbhdRankWeight > 0 && boopProfileForNbhd && typeof boopProfileForNbhd === "object" && rankedHotels.length) {
       const { applyNbhdBoopRank } = require("./lib/nbhd-vibe-rank");

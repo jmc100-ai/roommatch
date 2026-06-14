@@ -1495,7 +1495,10 @@
       walkability: 6, central: 4, local: 6, calm: 5, culture: 5, iconic: 4,
       nightlife: 3, green: 5, cafes: 4, shopping: 3, luxury: 4, foodie: 4,
     };
-    const reconciledPrefs = reconcileTripEnvWeights(normalizedAnswers, { ...prefs });
+    const reconciledPrefs = reconcileTripSceneConflict(
+      normalizedAnswers,
+      reconcileTripEnvWeights(normalizedAnswers, { ...prefs }),
+    );
     return {
       answers: normalizedAnswers,
       prefs: reconciledPrefs,
@@ -1513,7 +1516,10 @@
   function buildLiveWizardBoopProfileForScoring() {
     if (!boopCurrentWizardHasSignal()) return null;
     const normalizedAnswers = migrateBoopProfileAnswersIfNeeded({ ...BOOP.answers });
-    const reconciledPrefs = reconcileTripEnvWeights(normalizedAnswers, { ...BOOP.prefs });
+    const reconciledPrefs = reconcileTripSceneConflict(
+      normalizedAnswers,
+      reconcileTripEnvWeights(normalizedAnswers, { ...BOOP.prefs }),
+    );
     return {
       answers: normalizedAnswers,
       prefs: reconciledPrefs,
@@ -2443,6 +2449,18 @@
     return out;
   }
 
+  /** Undo first-timer corridor bias when user picked quiet/local nbhd scene (card weights already applied). */
+  function reconcileTripSceneConflict(answers, rawPrefs) {
+    if (!rawPrefs || answers?.trip !== 'first') return rawPrefs;
+    const scene = answers?.nbhdScene;
+    if (scene !== 'leafy_local' && scene !== 'hip_local') return rawPrefs;
+    const out = { ...rawPrefs };
+    out.central = (out.central || 0) - 20;
+    out.iconic = (out.iconic || 0) - 18;
+    out.local = (out.local || 0) + 6;
+    return out;
+  }
+
   // ── BOOP v4 — Build search seeds from wizard answers + must-haves ────────
   // roomSeed: natural-language HyDE seed embedded against room_types_index.
   //   Built from roomStyle choice + musthaves picks + optional freetext (extras screen).
@@ -2591,7 +2609,10 @@
   function boopFinish() {
     const prev = S.boopProfile || loadBoopProfileForCity(S.city) || {};
     const normalizedAnswers = migrateBoopProfileAnswersIfNeeded({ ...BOOP.answers });
-    const reconciledPrefs = reconcileTripEnvWeights(normalizedAnswers, BOOP.prefs);
+    const reconciledPrefs = reconcileTripSceneConflict(
+      normalizedAnswers,
+      reconcileTripEnvWeights(normalizedAnswers, BOOP.prefs),
+    );
     const advancedKw = (BOOP.advancedKeywords || '').trim();
     const profile = {
       answers: normalizedAnswers,
@@ -9932,6 +9953,13 @@
   const MATCH_LIVE_RATE_NUDGE_MIN_RATIO = 3;
   /** Room lead ≥ this beats price nudges when slider is neutral (Option B). */
   const MATCH_LIVE_RATE_ROOM_DOMINANCE_GAP = 12;
+  /** Raised when user picked an nbhd scene — room lead must be larger to beat area blend. */
+  const BOOP_ROOM_DOMINANCE_GAP_NBHD_SCENE = 20;
+  const MATCH_LIVE_RATE_ROOM_DOMINANCE_GAP_NBHD_SCENE = 18;
+  const BOOP_ROOM_DOMINANCE_GAP_LEAFY = 22;
+  const MATCH_LIVE_RATE_ROOM_DOMINANCE_GAP_LEAFY = 20;
+  /** When area-fit gap ≥ this, skip room-dominance shortcut entirely. */
+  const BOOP_ROOM_DOMINANCE_NBHD_SKIP_GAP = 24;
   const MATCH_LIVE_RATE_RATIO_BOOST = 12;
   /** Absolute sort trim starts above this × median (was 2.2; Option B → 4). */
   const MATCH_LIVE_RATE_PRICE_RATIO = 4;
@@ -9961,6 +9989,27 @@
 
   const BOOP_PRICE_LUXURY_ROOM_GUARD_LEAN = 0.72;
 
+  function roomDominanceGapForProfile(profile, useLiveRateGap) {
+    const scene = profile?.answers?.nbhdScene;
+    if (!scene) {
+      return useLiveRateGap ? MATCH_LIVE_RATE_ROOM_DOMINANCE_GAP : BOOP_ROOM_DOMINANCE_GAP;
+    }
+    if (scene === 'leafy_local') {
+      return useLiveRateGap ? MATCH_LIVE_RATE_ROOM_DOMINANCE_GAP_LEAFY : BOOP_ROOM_DOMINANCE_GAP_LEAFY;
+    }
+    return useLiveRateGap
+      ? MATCH_LIVE_RATE_ROOM_DOMINANCE_GAP_NBHD_SCENE
+      : BOOP_ROOM_DOMINANCE_GAP_NBHD_SCENE;
+  }
+
+  function shouldSkipRoomDominance(a, b, profile) {
+    if (!profile?.answers?.nbhdScene) return false;
+    const na = a.nbhd_fit_pct;
+    const nb = b.nbhd_fit_pct;
+    if (na == null || nb == null) return false;
+    return Math.abs(nb - na) >= BOOP_ROOM_DOMINANCE_NBHD_SKIP_GAP;
+  }
+
   function shouldRoomGuardYieldToPrice(h, pct) {
     const stars = Number(h.starRating);
     if (Number.isFinite(stars) && stars >= 4) return true;
@@ -9973,7 +10022,7 @@
     const p = Number(pm) || 0;
     if (p <= 0) return w;
     const t = Math.abs(p) / 100;
-    return Math.min(0.76, w * (1 + BOOP_PRICE_NBHD_WEIGHT_BOOST * t));
+    return Math.min(0.62, w * (1 + BOOP_PRICE_NBHD_WEIGHT_BOOST * t));
   }
 
   function shouldNbhdGuardYieldToPrice(weakNbhdHotel, strongNbhdHotel) {
@@ -10144,8 +10193,6 @@
         const bi = rank.get(String(b.id)) ?? 1e9;
         return ai - bi;
       });
-    } else if (_currentSort === 'match' && !_showAvailOnly) {
-      // Full vibe-ranked catalog — preserve server insertion order after filters.
     } else if (_currentSort === 'rating') {
       hotels.sort((a, b) => {
         const cmp = (b.rating || 0) - (a.rating || 0);
@@ -10287,6 +10334,7 @@
         return 0;
       });
     } else if (_currentSort === 'match') {
+      const boopProfileForSort = S.boopProfile || loadBoopProfileForCity(S.city) || null;
       const wNbhdBase = typeof _lastVsearchStats?.nbhd_rank_weight === 'number' ? _lastVsearchStats.nbhd_rank_weight : 0;
       const pm = boopPriceMattersForSort();
       const pmStrength = boopPriceMattersStrength(pm);
@@ -10321,11 +10369,9 @@
         const roomA = roomMatchScore(a);
         const roomB = roomMatchScore(b);
         const useNeutralLiveSort = pmNeutral && pricePercentiles;
-        if (Math.abs(pm) <= BOOP_PRICE_NEUTRAL_BAND) {
+        if (Math.abs(pm) <= BOOP_PRICE_NEUTRAL_BAND && !shouldSkipRoomDominance(a, b, boopProfileForSort)) {
           const roomGap = roomB - roomA;
-          const domGap = useNeutralLiveSort
-            ? MATCH_LIVE_RATE_ROOM_DOMINANCE_GAP
-            : BOOP_ROOM_DOMINANCE_GAP;
+          const domGap = roomDominanceGapForProfile(boopProfileForSort, useNeutralLiveSort);
           if (roomGap >= domGap) {
             const cmp = 1;
             return _sortReverse ? -cmp : cmp;
@@ -13025,6 +13071,66 @@
     return Math.round(room);
   }
 
+  /** Area weight for "Best room" pick — room-led but vibe-aware when nbhdScene is set. */
+  const BEST_ROOM_NBHD_WEIGHT = 0.35;
+  const BEST_ROOM_NBHD_WEIGHT_LOCAL = 0.48;
+  const BEST_ROOM_AREA_SOFT_FLOOR = 55;
+
+  function activeBoopProfileForPicks() {
+    return S.boopProfile || (S.city ? loadBoopProfileForCity(S.city) : null);
+  }
+
+  function bestRoomPickNbhdWeight(profile) {
+    const scene = profile?.answers?.nbhdScene;
+    if (!scene) return 0;
+    if (scene === 'leafy_local' || scene === 'hip_local') return BEST_ROOM_NBHD_WEIGHT_LOCAL;
+    return BEST_ROOM_NBHD_WEIGHT;
+  }
+
+  /** Raw 0–100 score for Best room pick (room-led + area fit; used for sort + ring %). */
+  function bestRoomPickSortScore(h, profile) {
+    if (!h) return 0;
+    const prof = profile || activeBoopProfileForPicks();
+    const room = bestMatchRoomScore(h);
+    const w = bestRoomPickNbhdWeight(prof);
+    if (w <= 0 || h.nbhd_fit_pct == null) return room;
+    let score = (1 - w) * room + w * Number(h.nbhd_fit_pct);
+    const scene = prof?.answers?.nbhdScene;
+    if (
+      (scene === 'leafy_local' || scene === 'hip_local') &&
+      Number(h.nbhd_fit_pct) < BEST_ROOM_AREA_SOFT_FLOOR
+    ) {
+      score *= Number(h.nbhd_fit_pct) / BEST_ROOM_AREA_SOFT_FLOOR;
+    }
+    return Math.max(0, Math.min(100, score));
+  }
+
+  function bestRoomPickDisplayPct(h, profile) {
+    return Math.round(bestRoomPickSortScore(h, profile));
+  }
+
+  /** Tiebreak when Best room composite scores are equal — prefer better area fit, then room. */
+  function compareBestRoomPick(a, b, profile) {
+    const prof = profile || activeBoopProfileForPicks();
+    const sa = bestRoomPickSortScore(a, prof);
+    const sb = bestRoomPickSortScore(b, prof);
+    if (Math.abs(sa - sb) > 1e-6) return sa - sb;
+    const nbA = a?.nbhd_fit_pct;
+    const nbB = b?.nbhd_fit_pct;
+    if (nbA != null && nbB != null && nbA !== nbB) return nbA - nbB;
+    const roomDiff = bestMatchRoomScore(a) - bestMatchRoomScore(b);
+    if (roomDiff !== 0) return roomDiff;
+    return (a?.vectorScore || 0) - (b?.vectorScore || 0);
+  }
+
+  /** Best room pick requires a minimum room signal when user chose an area scene. */
+  function eligibleForBestRoomPick(h, profile) {
+    if (!h) return false;
+    const prof = profile || activeBoopProfileForPicks();
+    if (!prof?.answers?.nbhdScene) return true;
+    return bestMatchRoomScore(h) >= 40;
+  }
+
   /** Paste output into chat when filter counts look wrong. */
   function dumpRmFilters() {
     const profile = S.boopProfile || (S.city ? loadBoopProfileForCity(S.city) : null);
@@ -13091,6 +13197,10 @@
     hotelStyleMatchDisplayPct,
     hotelEffectiveScore,
     overallMatchDisplayPct,
+    bestRoomPickDisplayPct,
+    bestRoomPickSortScore,
+    compareBestRoomPick,
+    eligibleForBestRoomPick,
     pickCardHeroPhoto,
     renderRoomsSection(hotel, pickKind) {
       let rooms = sortRoomsForCard([...(hotel?.roomTypes || [])], hotel);
