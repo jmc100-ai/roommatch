@@ -155,6 +155,12 @@
   let _trustServerBookableOrder = false;
   /** Server bookable-first order (dated Best Match + avail on). */
   let _bookableOrderIds = null;
+  /** Compact unbookable rows from last dated vsearch (avail-OFF merge). */
+  let _unbookableCompact = [];
+  /** Full vibe rank order ids (parallel to unbookable_compact + bookable body). */
+  let _vibeRankIds = null;
+  /** True after user expanded avail-OFF to full vibe catalog via stash merge. */
+  let _fullCatalogExpanded = false;
   /** Last full /api/vsearch response hotels array — for debug snapshot */
   let _lastVsearchHotels = null;
   /** Last vsearch URL params — for debug snapshot */
@@ -168,6 +174,12 @@
   // Leave empty to fall back to Google search (placeholder).
   function _wlBaseUrl() {
     return (window._WL_BASE_URL || '').replace(/\/$/, '');
+  }
+
+  /** When WL_SANDBOX=1 on the server, append isSandbox=true to every WL booking URL. */
+  function _wlSandboxEnabled() {
+    const v = window._WL_SANDBOX;
+    return v === '1' || v === 1 || v === true;
   }
 
   function _parallelRatesEnabled() {
@@ -475,6 +487,9 @@
         u.searchParams.set('utm_content', roomTypeId ? 'room_offer' : 'hotel_page');
       }
       if (!u.searchParams.get('tb_distinct')) u.searchParams.set('tb_distinct', _TB_DISTINCT_ID);
+      if (_wlSandboxEnabled() && !u.searchParams.get('isSandbox')) {
+        u.searchParams.set('isSandbox', 'true');
+      }
       return u.toString();
     } catch (_) {
       return urlStr;
@@ -7244,6 +7259,9 @@
       _bookableOrderIds = Array.isArray(_lastVsearchStats?.bookable_order_ids)
         ? _lastVsearchStats.bookable_order_ids
         : null;
+      _unbookableCompact = Array.isArray(data.unbookable_compact) ? data.unbookable_compact : [];
+      _vibeRankIds = Array.isArray(data.vibe_rank_ids) ? data.vibe_rank_ids : null;
+      _fullCatalogExpanded = false;
       _lastVsearchHotels = data.hotels || [];
       const st = data.stats;
       if (st && (st.nbhd_rank_weight_config != null || st.nbhd_blend_applied != null)) {
@@ -7288,7 +7306,7 @@
         setStatus('');
         console.log(`[perf] render called: ${Date.now() - _t0search}ms`);
         render(hotels, hasDates);
-        if (hasDates && data.rates && typeof data.rates.prices === 'object') {
+        if (hasDates && data.rates && (typeof data.rates.prices === 'object' || data.rates.hotels_only)) {
           if (data.rates.full_city && !data.rates.tail_pending) {
             applyVsearchEmbeddedRates(data.rates, reqId);
           } else if (data.rates.tail_pending) {
@@ -7675,6 +7693,36 @@
         try { r(); } catch (_) {}
       }
     };
+    if (ratesPayload?.hotels_only) {
+      const pricedOnRows = (_lastHotels || []).filter((h) => {
+        if (h?.price != null && Number.isFinite(Number(h.price))) return true;
+        const rp = h?.roomPrices;
+        return rp && typeof rp === 'object' && Object.keys(rp).length > 0;
+      }).length;
+      const pricedCount = ratesPayload.pricedCount || pricedOnRows;
+      _pricesLoaded = pricedCount > 0;
+      _hasDateSearch = true;
+      _fetchingPrices = false;
+      _ratesFetchDone = true;
+      _showAvailOnly = pricedCount > 0;
+      if (_lastHotels.length > 0 && pricedCount === 0) _showAvailOnly = false;
+      _setPriceBtnsState(_pricesLoaded);
+      syncBudgetChipUI();
+      const availFilter = document.getElementById('availFilter');
+      if (availFilter) {
+        availFilter.style.display = 'flex';
+        const cb = document.getElementById('availOnlyCheck');
+        if (cb) cb.checked = _showAvailOnly;
+      }
+      scheduleSyncAvailFilterMount();
+      _resolveGate();
+      _applyRatesStatusMessage();
+      console.log(
+        `[perf] vsearch embedded rates (hotels_only): ${pricedCount} priced on rows` +
+        (ratesPayload.cache_hit ? ', cache hit' : '')
+      );
+      return;
+    }
     if (!ratesPayload?.prices || typeof ratesPayload.prices !== 'object') {
       _ratesFetchDone = true;
       _fetchingPrices = false;
@@ -8612,10 +8660,36 @@
     renderSorted();
   }
 
+  function expandToFullVibeCatalog() {
+    if (!_vibeRankIds?.length || !_unbookableCompact?.length) return;
+    const byId = new Map((_lastHotels || []).map((h) => [String(h.id), h]));
+    for (const stub of _unbookableCompact) {
+      if (stub?.id == null) continue;
+      const sid = String(stub.id);
+      if (!byId.has(sid)) byId.set(sid, { ...stub });
+    }
+    _lastHotels = _vibeRankIds.map((id) => byId.get(String(id))).filter(Boolean);
+    _fullCatalogExpanded = true;
+    console.log(`[avail] expanded to full vibe catalog: ${_lastHotels.length} hotels`);
+  }
+
+  function collapseToBookableCatalog() {
+    if (!_bookableOrderIds?.length) return;
+    const byId = new Map((_lastHotels || []).map((h) => [String(h.id), h]));
+    _lastHotels = _bookableOrderIds.map((id) => byId.get(String(id))).filter(Boolean);
+    _fullCatalogExpanded = false;
+    console.log(`[avail] collapsed to bookable catalog: ${_lastHotels.length} hotels`);
+  }
+
   function setAvailFilter(availOnly) {
     // Hotel-level only — must-haves (balcony, etc.) stay enforced via hotelPassesMustHaveFilter.
     _showAvailOnly  = availOnly;
     _displayedCount = 10;
+    if (!availOnly && !_fullCatalogExpanded && _unbookableCompact.length && _vibeRankIds?.length) {
+      expandToFullVibeCatalog();
+    } else if (availOnly && _fullCatalogExpanded && _bookableOrderIds?.length) {
+      collapseToBookableCatalog();
+    }
     renderSorted();
   }
 
@@ -10362,6 +10436,8 @@
 
   function buildResultsEmptyStateHTML() {
     const raw = _lastHotels.length;
+    const rankedTotal = _lastVsearchStats?.ranked_total ?? raw;
+    const showAllCount = (_unbookableCompact?.length && rankedTotal > raw) ? rankedTotal : raw;
     let priced = 0;
     for (const h of _lastHotels) {
       if (h?.price != null) priced++;
@@ -10378,7 +10454,7 @@
       return `<div class="empty-state results-empty-state">
         <h3>No bookable rooms for these dates</h3>
         <p>LiteAPI returned no rates${escHtml(datesLine)}. Try different dates or turn off <strong>Available rooms only</strong>.</p>
-        <button type="button" class="btn-ghost" onclick="setAvailFilter(false)">Show all ${raw} matches</button>
+        <button type="button" class="btn-ghost" onclick="setAvailFilter(false)">Show all ${showAllCount} matches</button>
       </div>`;
     }
     if (raw > 0 && filters.length) {
@@ -10398,7 +10474,7 @@
       return `<div class="empty-state results-empty-state">
         <h3>No available matches</h3>
         <p>We found ${raw} hotels that match your vibe, but none have bookable rooms${escHtml(datesLine)} with the current filters.</p>
-        <button type="button" class="btn-ghost" onclick="setAvailFilter(false)">Show all ${raw} matches</button>
+        <button type="button" class="btn-ghost" onclick="setAvailFilter(false)">Show all ${showAllCount} matches</button>
       </div>`;
     }
     return `<div class="empty-state results-empty-state">
@@ -10424,18 +10500,26 @@
     }
     const countEl = document.getElementById('resultCount');
     if (!countEl) return;
+    const stats = _lastVsearchStats || {};
+    const bookableFirst = !!stats.bookable_first;
+    const rankedTotal = stats.ranked_total;
+    const unbookableStashed = stats.unbookable_vibe_count;
     const budgetLabel = (budgetFilterIsActive(_budgetFilter) && budgetFilterNeedsRates(_budgetFilter) && budgetHasValidDates())
       ? `${total} match your budget`
       : null;
+    const bookableSuffix = (bookableFirst && rankedTotal != null && !_fullCatalogExpanded && unbookableStashed > 0 && !_showAvailOnly)
+      ? '' : (bookableFirst && rankedTotal != null && unbookableStashed > 0 && _showAvailOnly && !_fullCatalogExpanded)
+        ? ` · ${unbookableStashed} vibe match${unbookableStashed !== 1 ? 'es' : ''} hidden`
+        : '';
     countEl.textContent = total === 0 && _lastHotels.length > 0
       ? `0 of ${_lastHotels.length} hotels visible${nbhdSuffix}${pricedSuffix}`
       : (budgetLabel != null
         ? (remaining > 0
-          ? `Showing ${showing} of ${budgetLabel}${nbhdSuffix}${pricedSuffix}`
-          : `${budgetLabel}${nbhdSuffix}${pricedSuffix}`)
+          ? `Showing ${showing} of ${budgetLabel}${nbhdSuffix}${pricedSuffix}${bookableSuffix}`
+          : `${budgetLabel}${nbhdSuffix}${pricedSuffix}${bookableSuffix}`)
         : (remaining > 0
-          ? `Showing ${showing} of ${total} hotels${nbhdSuffix}${pricedSuffix}`
-          : `${total} hotel${total !== 1 ? 's' : ''}${nbhdSuffix}${pricedSuffix}`));
+          ? `Showing ${showing} of ${total} hotel${total !== 1 ? 's' : ''}${nbhdSuffix}${pricedSuffix}${bookableSuffix}`
+          : `${total} hotel${total !== 1 ? 's' : ''}${nbhdSuffix}${pricedSuffix}${bookableSuffix}`));
   }
 
   function renderSorted() {
@@ -13936,6 +14020,7 @@
     try {
       const cfg = await fetch(`${BACKEND}/api/config`).then(r => r.json());
       if (cfg.wl_base_url) window._WL_BASE_URL = cfg.wl_base_url;
+      if (cfg.wl_sandbox) window._WL_SANDBOX = '1';
     } catch (_) {}
   })();
 

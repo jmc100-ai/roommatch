@@ -109,6 +109,9 @@ async function oneRun(city, runIndex, dates) {
   } catch {
     return { ok: false, wall_ms: wall, runIndex, city, error: `HTTP ${r.status} not JSON` };
   }
+  const unbookableBytes = data.unbookable_compact
+    ? Buffer.byteLength(JSON.stringify(data.unbookable_compact), "utf8")
+    : 0;
 
   const st = data.stats || {};
   const perf = st.perf_ms || {};
@@ -130,6 +133,8 @@ async function oneRun(city, runIndex, dates) {
     hero_vector_score: hero?.vectorScore ?? null,
     hero_price: hero?.price ?? null,
     bookable_first: !!st.bookable_first,
+    bookable_payload: st.bookable_payload ?? null,
+    unbookable_stashed: data.unbookable_compact?.length ?? null,
     sort_source: st.sort_source ?? null,
     handler_wall_ms: st.handler_wall_ms ?? null,
     meta_sync_ms: st.meta_sync_ms ?? null,
@@ -139,6 +144,9 @@ async function oneRun(city, runIndex, dates) {
     rates_full_city: rates.full_city ?? null,
     rates_tail_pending: rates.tail_pending ?? null,
     rates_priced_count: rates.pricedCount ?? null,
+    rates_hotels_only: rates.hotels_only ?? null,
+    unbookable_stashed: data.unbookable_compact?.length ?? null,
+    unbookable_bytes: unbookableBytes || null,
     phase_a_ms: perf.phase_a_ms ?? null,
     phase_b_ms: perf.phase_b_ms ?? null,
     nlp_intent_ms: perf.nlp_intent_ms ?? null,

@@ -25,6 +25,9 @@ services:
       - key: SOFT_FLAG_HOTEL_CAP
         sync: false
       # Search perf flags (May 2026) — slim JSON stubs, parallel rates, nbhd BOOP L2 cache
+      # Append isSandbox=true to Nuitée WL checkout URLs (test card 4242…). Omit on production.
+      - key: WL_SANDBOX
+        sync: false
       - key: CLIENT_PARALLEL_RATES
         value: "1"
       - key: VSEARCH_SLIM_STUBS

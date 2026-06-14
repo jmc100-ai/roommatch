@@ -541,6 +541,7 @@ app.get("/api/public-config", (_req, res) => {
 app.listen(PORT, "0.0.0.0", () => {
   console.log(`[boot] listening on 0.0.0.0:${PORT}`);
   console.log(`[config] Using ${IS_PROD ? "PRODUCTION" : "SANDBOX"} LiteAPI key`);
+  if (_wlSandboxFromEnv()) console.log("[config] WL_SANDBOX=1 — Find & Book URLs append isSandbox=true");
   loadV2Cities();
   const nbhdW = parseFloat(process.env.VSEARCH_NBHD_RANK_WEIGHT || "0.22");
   console.log(
@@ -1623,6 +1624,10 @@ function _wlBaseUrlFromEnv() {
   const d = process.env.LITEAPI_WL_DOMAIN;
   return d ? `https://${d.replace(/^https?:\/\//, "").replace(/\/$/, "")}` : "";
 }
+function _wlSandboxFromEnv() {
+  const v = (process.env.WL_SANDBOX || "").trim().toLowerCase();
+  return v === "1" || v === "true" || v === "yes";
+}
 function _maptilerKeyFromEnv() {
   // Public-by-design (used in tile URLs that the browser fetches). MUST be
   // restricted by HTTP referrer in the Maptiler dashboard for production.
@@ -1649,6 +1654,7 @@ function serveAppHtml(res) {
   const env = safe(process.env.SENTRY_ENV || "production");
   const bb  = safe(process.env.BETA_BANNER || "");
   const pr  = (process.env.CLIENT_PARALLEL_RATES === "1" || process.env.CLIENT_PARALLEL_RATES === "true") ? "1" : "0";
+  const wls = _wlSandboxFromEnv() ? "1" : "0";
   const html = _readIndexHtml()
     .replace(/__WL_BASE_URL__/g, wl)
     .replace(/__MAPTILER_KEY__/g, mt)
@@ -1658,7 +1664,8 @@ function serveAppHtml(res) {
     .replace(/__RELEASE__/g, rel)
     .replace(/__ENV__/g, env)
     .replace(/__BETA_BANNER__/g, bb)
-    .replace(/__PARALLEL_RATES__/g, pr);
+    .replace(/__PARALLEL_RATES__/g, pr)
+    .replace(/__WL_SANDBOX__/g, wls);
   res.setHeader("Cache-Control", "private, no-store, must-revalidate, no-cache");
   res.setHeader("Pragma", "no-cache");
   res.setHeader("Expires", "0");
@@ -1842,6 +1849,7 @@ ${urls.join("\n")}
 app.get("/api/config", (req, res) => {
   res.json({
     wl_base_url:   _wlBaseUrlFromEnv(),
+    wl_sandbox:    _wlSandboxFromEnv(),
     maptiler_key:  _maptilerKeyFromEnv(),
     parallel_rates: process.env.CLIENT_PARALLEL_RATES === "1" || process.env.CLIENT_PARALLEL_RATES === "true",
     slim_stubs:    process.env.VSEARCH_SLIM_STUBS === "1" || process.env.VSEARCH_SLIM_STUBS === "true",

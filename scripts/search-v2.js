@@ -90,6 +90,13 @@ function slimStubPayload(h) {
   return out;
 }
 
+/** Unbookable rows stashed for avail-OFF merge — keep roomTypes when phase-B loaded them. */
+function unbookableStashPayload(h) {
+  const out = compactTailPayload(h);
+  if ((h.roomTypes || []).length > 0) out.roomTypes = h.roomTypes;
+  return out;
+}
+
 /** Rank 251+ — scores + identity fields; room gallery lazy-loaded on scroll. */
 function compactTailPayload(h) {
   const out = {
@@ -1671,6 +1678,7 @@ async function runV2Search({ req, supabase, supabaseAdmin, resolveCityName }) {
   let unbookableVibeCount = 0;
   let bookableFirst = false;
   let bookableOrderIds = null;
+  let bookableOrdered = null;
   let sortSource = "server_vibe";
 
   // Await full-city rates before shaping payload (no 8s partial embed when enabled).
@@ -1729,7 +1737,7 @@ async function runV2Search({ req, supabase, supabaseAdmin, resolveCityName }) {
     const br = applyBookableRank(hotels, embeddedRatesResult, { requireFreeCancel });
     unbookableVibeCount = br.unbookableVibeCount;
     bookableCount = br.bookableCount;
-    const bookableOrdered = buildDatedDisplayOrder(br.hotels, {
+    bookableOrdered = buildDatedDisplayOrder(br.hotels, {
       nbhd_rank_weight: nbhdRankWeight,
       nbhd_blend_applied: !!(nbhdFitByHotelId?.size > 0 && nbhdRankWeight > 0),
     }, boopProfile);
@@ -1743,14 +1751,38 @@ async function runV2Search({ req, supabase, supabaseAdmin, resolveCityName }) {
   }
 
   const breakdownTopN = matchBreakdownTopN();
-  if (breakdownTopN >= 0) {
-    hotels.forEach((h, idx) => {
-      if (idx >= breakdownTopN && h.match_breakdown) delete h.match_breakdown;
-    });
-  }
+  let unbookableCompact = [];
+  let vibeRankIds = null;
+  const useBookablePayload = !!(bookablePayloadEnabled() && bookableFirst && bookableOrdered?.length);
 
-  hotels = deprioritizeStubHotels(hotels, 50);
-  hotels = shapeVsearchHotelPayload(hotels);
+  if (useBookablePayload) {
+    vibeRankIds = hotels.map((h) => h.id);
+    const bookableIdSet = new Set(bookableOrderIds.map((id) => String(id)));
+    unbookableCompact = hotels
+      .filter((h) => !bookableIdSet.has(String(h.id)))
+      .map(unbookableStashPayload);
+
+    let bookableHotels = bookableOrdered;
+
+    if (breakdownTopN >= 0) {
+      bookableHotels.forEach((h, idx) => {
+        if (idx >= breakdownTopN && h.match_breakdown) delete h.match_breakdown;
+      });
+    }
+    hotels = deprioritizeStubHotels(bookableHotels, 50);
+    hotels = shapeVsearchHotelPayload(hotels);
+    console.log(
+      `[v2 payload] bookable-only: ${hotels.length} in body, ${unbookableCompact.length} stashed unbookable`
+    );
+  } else {
+    if (breakdownTopN >= 0) {
+      hotels.forEach((h, idx) => {
+        if (idx >= breakdownTopN && h.match_breakdown) delete h.match_breakdown;
+      });
+    }
+    hotels = deprioritizeStubHotels(hotels, 50);
+    hotels = shapeVsearchHotelPayload(hotels);
+  }
 
   const nbhdBlendApplied = !!(nbhdFitByHotelId?.size > 0 && nbhdRankWeight > 0);
 
@@ -1780,25 +1812,40 @@ async function runV2Search({ req, supabase, supabaseAdmin, resolveCityName }) {
       city,
       indexing:    false,
       indexStatus: "complete",
+      ...(unbookableCompact.length ? { unbookable_compact: unbookableCompact } : {}),
+      ...(vibeRankIds?.length ? { vibe_rank_ids: vibeRankIds } : {}),
       ...(embeddedRatesResult && ratesDateCtx
         ? {
-            rates: {
-              prices: embeddedRatesResult.prices || {},
-              roomPrices: embeddedRatesResult.roomPrices || {},
-              roomNames: embeddedRatesResult.roomNames || {},
-              offerIds: embeddedRatesResult.offerIds || {},
-              roomFreeCancel: embeddedRatesResult.roomFreeCancel || {},
-              hotelFreeCancel: embeddedRatesResult.hotelFreeCancel || {},
-              currency: embeddedRatesResult.currency,
-              nights: embeddedRatesResult.nights,
-              pricedCount: embeddedRatesResult.pricedCount || 0,
-              hotel_ids_fetched: embeddedRatesResult.hotel_ids_fetched,
-              embedded: true,
-              full_city: !ratesTailPending,
-              partial: !!ratesTailPending,
-              tail_pending: !!ratesTailPending,
-              cache_hit: !!embeddedRatesResult.cache_hit,
-            },
+            rates: useBookablePayload
+              ? {
+                  embedded: true,
+                  full_city: !ratesTailPending,
+                  partial: !!ratesTailPending,
+                  tail_pending: !!ratesTailPending,
+                  cache_hit: !!embeddedRatesResult.cache_hit,
+                  hotels_only: true,
+                  pricedCount: embeddedRatesResult.pricedCount || 0,
+                  currency: embeddedRatesResult.currency,
+                  nights: embeddedRatesResult.nights,
+                  hotel_ids_fetched: embeddedRatesResult.hotel_ids_fetched,
+                }
+              : {
+                  prices: embeddedRatesResult.prices || {},
+                  roomPrices: embeddedRatesResult.roomPrices || {},
+                  roomNames: embeddedRatesResult.roomNames || {},
+                  offerIds: embeddedRatesResult.offerIds || {},
+                  roomFreeCancel: embeddedRatesResult.roomFreeCancel || {},
+                  hotelFreeCancel: embeddedRatesResult.hotelFreeCancel || {},
+                  currency: embeddedRatesResult.currency,
+                  nights: embeddedRatesResult.nights,
+                  pricedCount: embeddedRatesResult.pricedCount || 0,
+                  hotel_ids_fetched: embeddedRatesResult.hotel_ids_fetched,
+                  embedded: true,
+                  full_city: !ratesTailPending,
+                  partial: !!ratesTailPending,
+                  tail_pending: !!ratesTailPending,
+                  cache_hit: !!embeddedRatesResult.cache_hit,
+                },
           }
         : {}),
       stats: {
@@ -1835,7 +1882,7 @@ async function runV2Search({ req, supabase, supabaseAdmin, resolveCityName }) {
         nbhd_blend_applied:       nbhdBlendApplied,
         slim_stubs:               slimStubsEnabled(),
         compact_tail:             compactTailEnabled(),
-        bookable_payload:         bookablePayloadEnabled() && bookableFirst,
+        bookable_payload:         useBookablePayload,
         full_payload_limit:       compactTailEnabled() ? fullPayloadLimit() : null,
         nbhd_cache_hit:           nbhdCacheHit,
         price_matters:            priceMatters,
