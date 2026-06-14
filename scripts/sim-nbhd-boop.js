@@ -155,9 +155,11 @@ const BOOP_OPTIONS = {
   buzz_central:  { label:'Historic & energetic',  weights:{ iconic:18, culture:14, central:20, nightlife:12, walkability:10, calm:-10, local:-2, luxury:-8 } },
   calm_central:  { label:'Upscale & Refined',    weights:{ luxury:28, shopping:14, calm:14, central:4, walkability:10, nightlife:-14, iconic:2, local:2 } },
   hip_local:     { label:'Trendy & café-filled',  weights:{ local:26, cafes:16, restaurants:12, nightlife:14, walkability:12, central:-12, calm:-2, iconic:-18, touristy:-18, luxury:-10 } },
-  leafy_local:   { label:'Quiet & residential',   weights:{ calm:24, green:24, local:20, nightlife:-18, iconic:-18, central:-16, cafes:10, walkability:6 } },
+  leafy_local:   { label:'Quiet & residential',   weights:{ calm:24, green:24, local:20, nightlife:-18, iconic:-18, central:-16, luxury:-14, touristy:-12, shopping:-6, cafes:10, walkability:6 } },
   scenic_open:   { label:'Central & connected',   weights:{ central:20, walkability:16, calm:8, iconic:10, green:4, nightlife:-4 } },
 };
+
+const { applyLeafyBusynessPenalty } = require("../lib/nbhd-vibe-rank");
 
 const STREET_ENERGY_SCORE = { 'very lively':90, lively:70, moderate:50, quiet:30, minimal:10 };
 
@@ -252,12 +254,18 @@ function boopScore(norm, weights) {
 for (const [sceneId, scene] of Object.entries(BOOP_OPTIONS)) {
   const raw = HOODS.map(h => ({ name: h.name, s: deriveSignals(h, sceneId) }));
   const normed = normalize(raw);
-  const scored = normed.map(n => ({
-    name: n.name,
-    score: boopScore(n.norm, scene.weights),
-    // print top signals
-    norm: n.norm,
-  }));
+  const scored = normed.map(n => {
+    const hood = HOODS.find(h => h.name === n.name);
+    let score = boopScore(n.norm, scene.weights);
+    if (sceneId === "leafy_local" && hood) {
+      score = applyLeafyBusynessPenalty(score, n.norm, sceneId, hood);
+    }
+    return {
+      name: n.name,
+      score,
+      norm: n.norm,
+    };
+  });
   scored.sort((a,b) => b.score - a.score);
 
   // Spread to 45-95 range

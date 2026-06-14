@@ -543,7 +543,7 @@ app.listen(PORT, "0.0.0.0", () => {
   console.log(`[config] Using ${IS_PROD ? "PRODUCTION" : "SANDBOX"} LiteAPI key`);
   if (_wlSandboxFromEnv()) console.log("[config] WL_SANDBOX=1 — Find & Book URLs append isSandbox=true");
   loadV2Cities();
-  const nbhdW = parseFloat(process.env.VSEARCH_NBHD_RANK_WEIGHT || "0.22");
+  const nbhdW = parseFloat(process.env.VSEARCH_NBHD_RANK_WEIGHT || "0.58");
   console.log(
     `[config] VSEARCH_NBHD_RANK_WEIGHT=${Number.isFinite(nbhdW) ? nbhdW : "invalid"} (parsed from env; 0 or missing → blend off)`
   );
@@ -838,7 +838,7 @@ function effectiveNbhdWeightForPriceMatters(baseW, pm) {
   const p = Number(pm) || 0;
   if (p <= 0) return w;
   const t = Math.abs(p) / 100;
-  return Math.min(0.72, w * (1 + BOOP_PRICE_NBHD_WEIGHT_BOOST * t));
+  return Math.min(0.76, w * (1 + BOOP_PRICE_NBHD_WEIGHT_BOOST * t));
 }
 
 /** Weak-nbhd hotel may beat strong-nbhd peer on price only with a large room lead. */
@@ -3241,7 +3241,7 @@ app.get("/api/vsearch", async (req, res) => {
       rankedHotels.forEach(h => { h.s_boosted = h.similarity; });
     }
 
-    const rawNbhdW = parseFloat(process.env.VSEARCH_NBHD_RANK_WEIGHT || "0.22");
+    const rawNbhdW = parseFloat(process.env.VSEARCH_NBHD_RANK_WEIGHT || "0.58");
     nbhdRankWeight = Number.isFinite(rawNbhdW) && rawNbhdW > 0 ? rawNbhdW : 0;
     let boopProfileForNbhd = null;
     const boopParam = req.query.boop_profile;
@@ -3254,7 +3254,7 @@ app.get("/api/vsearch", async (req, res) => {
     }
     // When the user explicitly picked a neighbourhood scene, give neighbourhood fit more pull.
     if (nbhdRankWeight > 0 && boopProfileForNbhd?.answers?.nbhdScene) {
-      nbhdRankWeight = Math.min(0.72, nbhdRankWeight * 1.25);
+      nbhdRankWeight = Math.min(0.76, nbhdRankWeight * 1.28);
     }
     if (nbhdRankWeight > 0 && boopProfileForNbhd && typeof boopProfileForNbhd === "object" && rankedHotels.length) {
       const { applyNbhdBoopRank } = require("./lib/nbhd-vibe-rank");

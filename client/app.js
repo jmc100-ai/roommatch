@@ -1108,7 +1108,7 @@
         { id:'buzz_central', emoji:'🏛️', label:'Historic & energetic', title:'Historic & energetic', note:'Big sights, busy streets, classic city energy — landmarks right outside.', image:'images/wizard/historic-energetic.png', weights:{ iconic:18, culture:14, central:20, nightlife:12, walkability:10, calm:-10, local:-2, luxury:-8 } },
         { id:'calm_central', emoji:'🏙️', label:'Upscale & Refined', title:'Upscale & Refined', note:'Modern, comfortable, and refined — great restaurants and shopping, quieter nights.', image:'images/wizard/upscale-polished.png', weights:{ luxury:28, shopping:14, calm:14, central:4, walkability:10, nightlife:-14, iconic:2, local:2 } },
         { id:'hip_local', emoji:'🌿', label:'Trendy & café-filled', title:'Trendy & café-filled', note:'Stylish, walkable streets — cafés, parks, bars, and local creative buzz.', image:'images/wizard/trendy-cafe-filled.png', weights:{ local:26, cafes:16, restaurants:12, nightlife:14, walkability:12, central:-12, calm:-2, iconic:-18, touristy:-18, luxury:-10 } },
-        { id:'leafy_local', emoji:'🌲', label:'Quiet & residential', title:'Quiet & residential', note:'Slower pace, leafy streets, everyday local life away from the crowds.', image:'images/wizard/quiet-residential-street.png', weights:{ calm:24, green:24, local:20, nightlife:-18, iconic:-18, central:-16, cafes:10, walkability:6 } },
+        { id:'leafy_local', emoji:'🌲', label:'Quiet & residential', title:'Quiet & residential', note:'Slower pace, leafy streets, everyday local life away from the crowds.', image:'images/wizard/quiet-residential-street.png', weights:{ calm:24, green:24, local:20, nightlife:-18, iconic:-18, central:-16, luxury:-14, touristy:-12, shopping:-6, cafes:10, walkability:6 } },
         { id:'scenic_open', emoji:'🌆', label:'Central & connected', title:'Central & connected', note:'Easy access to everything — transit, business, balanced city feel.', image:'images/wizard/central-connected.png', weights:{ central:20, walkability:16, calm:8, iconic:10, green:4, nightlife:-4 } },
       ]
     },
@@ -4460,6 +4460,69 @@
     return normByName;
   }
 
+  // Keep in sync with lib/nbhd-vibe-rank.js (leafy_local busyness penalty).
+  const LEAFY_BUSYNESS_PENALTY_MULT = 0.48;
+
+  function busynessScore(sig, h) {
+    const pick = (k, fallback = 50) => {
+      const v = sig[k];
+      return typeof v === 'number' ? Math.max(0, Math.min(100, v)) : fallback;
+    };
+    const weighted = [
+      [pick('nightlife'), 0.20],
+      [pick('central'), 0.18],
+      [pick('iconic'), 0.16],
+      [100 - pick('calm'), 0.16],
+      [pick('touristy'), 0.10],
+      [pick('luxury'), 0.08],
+      [pick('walkability'), 0.06],
+      [pick('shopping'), 0.06],
+    ];
+    let sum = 0;
+    let wSum = 0;
+    for (const [v, w] of weighted) {
+      sum += v * w;
+      wSum += w;
+    }
+    let score = wSum > 0 ? sum / wSum : 50;
+
+    if (h) {
+      const se = String(h.attributes?.street_energy || '').toLowerCase();
+      const energyBoost = {
+        'very lively': 16,
+        lively: 10,
+        moderate: 2,
+        quiet: -10,
+        minimal: -14,
+      }[se];
+      if (energyBoost) score += energyBoost;
+
+      const tags = (h.tags || []).map(t => String(t).toLowerCase());
+      if (tags.includes('business')) score += 12;
+      if (tags.includes('first-timers')) score += 8;
+      if (tags.includes('central')) score += 8;
+      if (tags.includes('iconic')) score += 6;
+      if (tags.includes('nightlife')) score += 4;
+      if (tags.includes('central') && tags.includes('nightlife')) score += 10;
+
+      const txt = `${h.vibe_short || ''} ${h.vibe_long || ''}`.toLowerCase();
+      if (/\b(lively nightlife|business hub|grand central boulevard|monuments|bustling|busy streets)\b/.test(txt)) {
+        score += 10;
+      }
+      if (/\b(calm local pace|village feel|residential|leafy|quiet|liveable|tree-lined)\b/.test(txt)) {
+        score -= 10;
+      }
+    }
+
+    return Math.max(0, Math.min(100, score));
+  }
+
+  function applyLeafyBusynessPenalty(fit, sig, nbhdScene, h) {
+    if (nbhdScene !== 'leafy_local') return fit;
+    const busy = busynessScore(sig, h) / 100;
+    return Math.max(0, fit * (1 - busy * LEAFY_BUSYNESS_PENALTY_MULT));
+  }
+
   function computeBoopMatch(h, profile, normByName) {
     if (!profile || !profile.prefs) return null;
     const scene = profile?.answers?.nbhdScene || null;
@@ -4488,6 +4551,7 @@
     if (db.has('touristy'))fit -= (((sig.touristy ?? 50) / 100) * 0.18);
     if (db.has('lowFood')) fit -= ((1 - ((sig.foodie ?? 50) / 100)) * 0.18);
 
+    fit = applyLeafyBusynessPenalty(fit, sig, scene, h);
     fit = Math.max(0, Math.min(1, fit));
     return fit; // raw fit, normalized later per city
   }
@@ -9909,7 +9973,7 @@
     const p = Number(pm) || 0;
     if (p <= 0) return w;
     const t = Math.abs(p) / 100;
-    return Math.min(0.72, w * (1 + BOOP_PRICE_NBHD_WEIGHT_BOOST * t));
+    return Math.min(0.76, w * (1 + BOOP_PRICE_NBHD_WEIGHT_BOOST * t));
   }
 
   function shouldNbhdGuardYieldToPrice(weakNbhdHotel, strongNbhdHotel) {

@@ -441,13 +441,12 @@ async function runV2Search({ req, supabase, supabaseAdmin, resolveCityName }) {
   const GALLERY_LIMIT = 250;
   const covMult = parseFloat(process.env.SOFT_FLAG_COVERAGE_MULT   || "0.28");
   const missPen = parseFloat(process.env.SOFT_FLAG_MISS_PENALTY    || "0.08");
-  const rawNbhdW = parseFloat(process.env.VSEARCH_NBHD_RANK_WEIGHT || "0");
+  const rawNbhdW = parseFloat(process.env.VSEARCH_NBHD_RANK_WEIGHT || "0.58");
   // `let` not `const`: when the user expressed an explicit nbhdScene preference
-  // in Boop, we boost this 1.25× (capped at 0.72) below — same rule V1 applies
-  // in server.js line ~2625. Without the boost, room match dominates so heavily
-  // that a 100% room match in a 85% nbhd-fit area beats a 82% room match in a
-  // 95% nbhd-fit area, even when the user explicitly told us neighbourhood
-  // matters. See commit msg for math (Hilton vs Ritz at MX City buzz_central).
+  // in Boop, we boost this 1.28× (capped at 0.76) below — same rule V1 applies
+  // in server.js. Without the boost, room match dominates so heavily that a 100%
+  // room match in an 85% nbhd-fit area beats an 82% room match in a 95% nbhd-fit
+  // area, even when the user explicitly told us neighbourhood matters.
   let nbhdRankWeight = Number.isFinite(rawNbhdW) && rawNbhdW > 0 ? rawNbhdW : 0;
 
   // ── Geo pre-filter (polygon preferred, then bbox) ─────────────────────────
@@ -758,9 +757,9 @@ async function runV2Search({ req, supabase, supabaseAdmin, resolveCityName }) {
       // hip_local, leafy_local, scenic_open), they told us neighbourhood matters
       // — bump the blend weight by 25% so a hotel in their preferred area can
       // outrank a hotel with marginally better room match in a different area.
-      // Capped at 0.72 to avoid an all-or-nothing nbhd dictatorship.
+      // Capped at 0.76 to avoid an all-or-nothing nbhd dictatorship.
       if (boopProfileForNbhd?.answers?.nbhdScene) {
-        const boosted = Math.min(0.72, nbhdRankWeight * 1.25);
+        const boosted = Math.min(0.76, nbhdRankWeight * 1.28);
         if (boosted > nbhdRankWeight) {
           console.log(`[v2] nbhd_rank_weight boost: ${nbhdRankWeight.toFixed(3)} → ${boosted.toFixed(3)} (nbhdScene=${boopProfileForNbhd.answers.nbhdScene})`);
           nbhdRankWeight = boosted;
@@ -795,7 +794,7 @@ async function runV2Search({ req, supabase, supabaseAdmin, resolveCityName }) {
         //
         // The final result order (lines below) blends room match with nbhd
         // fit via `(1 - w) * primarySignal + w * nbhd_fit_pct`. With nbhd
-        // weight set high (default 0.55 from .env), a hotel at position
+        // weight set high (default 0.58 from .env), a hotel at position
         // ~2000 by pure room match but with near-100% nbhd fit can leapfrog
         // hotels in the top 250.
         //
