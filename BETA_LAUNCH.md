@@ -3,7 +3,7 @@
 **Product:** TravelByVibe · **Site:** [travelbyvibe.com](https://www.travelbyvibe.com) (see `docs/DOMAIN.md` for legacy travelboop.com)  
 **Status:** Code ready for phased beta. Ops (Sentry/PostHog/Linear/invites) are manual.  
 **Cities:** Mexico City (primary) + Paris  
-**Last updated:** 2026-05-28
+**Last updated:** 2026-06-15
 
 > Open this file before each launch checkpoint. Tick boxes in order.
 
@@ -53,7 +53,7 @@ Use one shared `SITE_PASSWORD` for phases 0–1; rotate before phase 2 or switch
 | **Supabase migrations**     | Run `add-beta-tables.sql` then `add-beta-feedback-context.sql`                                                 |
 | **Render env**              | Table in §1 below                                                                                              |
 | **Resend domain**           | Verify `beta@travelbyvibe.com` (or your from-domain)                                                             |
-| **UptimeRobot**             | Monitor `GET /api/health` (plain `ok`) — not `/api/health/beta`                                                |
+| **Better Stack**            | External uptime monitors — see §9 (commercial use OK on free tier)                                             |
 | **Tester recruitment**      | Friends + Reddit/city subs + PH Upcoming — see §3                                                              |
 | **Jam / Marker.io**         | Optional for phase 2 if Slack feedback lacks repro detail                                                      |
 
@@ -74,6 +74,7 @@ Use one shared `SITE_PASSWORD` for phases 0–1; rotate before phase 2 or switch
 | Var                      | Value                                       | Notes                                                               |
 | ------------------------ | ------------------------------------------- | ------------------------------------------------------------------- |
 | `SITE_PASSWORD`          | fresh password                              | Email to testers; rotate between phases.                            |
+| `BETA_GATE_ENABLED`      | `1` (on) or `0` (off)                       | **Master switch** — `0` opens the site without clearing passwords or invite codes. |
 | `INDEX_SECRET`           | (already set)                               | Re-confirm.                                                         |
 | `SENTRY_DSN_SERVER`      | Sentry → Server DSN                         |                                                                     |
 | `SENTRY_DSN_CLIENT`      | Sentry → Browser DSN                        | Public-by-design.                                                   |
@@ -188,7 +189,7 @@ Find & Book URL includes `utm_source=travelbyvibe`, `utm_medium=beta`, `utm_camp
 - `GET /api/debug-sentry?secret=...` → error in Sentry within 30s  
 - PostHog Live Events: `beta_gate_passed`, `boop_completed`, `vsearch_executed`  
 - Feedback test → row in `beta_feedback` + Slack/email  
-- UptimeRobot on `/api/health`  
+- Better Stack monitors green (§9)  
 - `SITE_PASSWORD` rotated to beta value
 
 ### T-0
@@ -219,6 +220,8 @@ Find & Book URL includes `utm_source=travelbyvibe`, `utm_medium=beta`, `utm_camp
 | -------------------------- | ------------------------------------------ |
 | Analytics + session replay | PostHog                                    |
 | Crashes                    | Sentry                                     |
+| External uptime + incidents | Better Stack (free tier)                  |
+| Auto-restart + deploy gate | Render health check on `/api/health`       |
 | Tasks / agent queue        | Linear                                     |
 | In-app reports             | Built-in feedback → Supabase + Slack/email |
 | Beta users                 | Invites + Reddit + marketing pages         |
@@ -240,6 +243,46 @@ Find & Book URL includes `utm_source=travelbyvibe`, `utm_medium=beta`, `utm_camp
 | Migrations                | `supabase/add-beta-tables.sql`, `add-beta-feedback-context.sql` |
 | Marketing plan            | `docs/marketing-plan-beta-launch.md`                            |
 
+
+---
+
+## 9. Better Stack uptime monitoring
+
+**Provider:** [Better Stack](https://betterstack.com/) (formerly Better Uptime) — chosen for closed beta because the free tier allows **commercial use** (UptimeRobot free does not).
+
+**Stack split:**
+
+| Layer | Tool | What it catches |
+| ----- | ---- | --------------- |
+| Liveness + auto-restart | Render → `/api/health` | Process down, failed deploy; Render restarts after ~60s of failed probes |
+| External uptime | Better Stack | DNS/SSL/edge issues Render won't see; alerts you when users can't reach the site |
+| App errors | Sentry | 500s, uncaught exceptions, slow traces |
+| Deep readiness | `GET /api/health/beta` | Supabase + instrumentation flags — **Better Stack only**, not Render's probe |
+
+### Monitors to create
+
+| Name | URL | Interval | Expect | Alert |
+| ---- | --- | -------- | ------ | ----- |
+| **TravelByVibe — liveness** | `https://www.travelbyvibe.com/api/health` | 3 min (free default) | HTTP `200`, body contains `ok` | Email + Slack |
+| **TravelByVibe — readiness** (optional) | `https://www.travelbyvibe.com/api/health/beta` | 5 min | HTTP `200`, JSON `"ok": true` | Email + Slack |
+| **Render origin** (optional) | `https://roommatch-1fg5.onrender.com/api/health` | 5 min | HTTP `200`, body `ok` | Email only |
+
+Use the **canonical domain** (`www.travelbyvibe.com`) for the primary monitor so you catch DNS/TLS/custom-domain issues, not just Node uptime.
+
+### Do not
+
+- Point **Render's** health check at `/api/health/beta` — it depends on Supabase and can false-fail on DB blips.
+- Rely on Better Stack alone for crash visibility — pair with Sentry + Render deploy/unhealthy notifications (Render dashboard → Notifications).
+
+### Pre-launch verify
+
+1. Better Stack dashboard shows all monitors **Up**.
+2. Pause one monitor or use Better Stack's test alert → confirm email/Slack delivery.
+3. `GET /api/health` and `/api/health/beta` return 200 on production (see §1 verify script).
+
+### Status page (optional)
+
+Better Stack free includes one public status page — useful before phase 2 if you want a shareable “all systems operational” link for testers.
 
 ---
 

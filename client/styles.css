@@ -2461,6 +2461,22 @@
     .room-thumb:hover { opacity: 1; }
     .room-type-row.open .room-thumb { display: none; }
 
+    /* IMG-PERF-PHASE1 — placeholder while deferred thumbs await IntersectionObserver */
+    img.img-perf-defer:not([src]),
+    img.img-perf-defer[src=""] {
+      background: linear-gradient(160deg, #1a1610 0%, #0e0c09 100%);
+    }
+    .hotel-row-thumb.img-perf-defer:not([src]),
+    .hotel-row-thumb.img-perf-defer[src=""] {
+      background: rgba(255, 255, 255, 0.06);
+    }
+    .hp-mosaic-cell img.img-perf-defer:not([src]),
+    .hp-mosaic-cell img.img-perf-defer[src=""],
+    .hpage-other-room-thumb img.img-perf-defer:not([src]),
+    .hpage-other-room-thumb img.img-perf-defer[src=""] {
+      background: linear-gradient(160deg, #1a1610 0%, #0e0c09 100%);
+    }
+
     /* ── Photo strip ─────────────── */
     .photo-strip-wrap {
       overflow: hidden;
@@ -8018,6 +8034,12 @@
       gap: 6px;
       min-width: 0;
       flex-wrap: wrap;
+    }
+    .hpage-intro-address {
+      margin: -2px 0 14px;
+    }
+    .hpage-intro-address.hp-address-row {
+      margin-bottom: 14px;
     }
     .hpage-nbhd-name-link {
       appearance: none;

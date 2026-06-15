@@ -321,6 +321,7 @@ If **travelbyvibe.com** is the marketing domain:
 - Run Supabase `add-beta-tables.sql` + `add-beta-feedback-context.sql`
 - Set Render env per `BETA_LAUNCH.md` §1 (Sentry, PostHog, `POSTHOG_PROJECT_URL`, feedback email/Slack)
 - Verify `GET /api/health/beta` on production
+- Configure Better Stack uptime monitors per `BETA_LAUNCH.md` §9
 - Enable PostHog session replay; wire Sentry → Linear
 - Phase 0 dry run: 3 friends, feedback + replay end-to-end
 

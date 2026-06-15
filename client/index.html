@@ -96,6 +96,11 @@
   </script>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <!-- IMG-PERF-PHASE1: warm DNS/TLS for LiteAPI hotel photo CDNs (remove block to revert) -->
+  <link rel="dns-prefetch" href="https://static.cupid.travel" />
+  <link rel="preconnect" href="https://static.cupid.travel" crossorigin />
+  <link rel="dns-prefetch" href="https://photos.hotelbeds.com" />
+  <link rel="preconnect" href="https://photos.hotelbeds.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="/styles.css">
 </head>
@@ -923,6 +928,8 @@
 </div>
 
 <script src="/must-have-spec.js"></script>
+  <!-- IMG-PERF-PHASE1 revert: uncomment next line to restore legacy image loading (search cards + detail page) -->
+<!-- <script>window._IMG_PERF_PHASE1 = false;</script> -->
 <script src="/app.js" defer></script>
 <script src="/search-results-v2.js" defer onerror="console.error('[SearchResultsV2] FAILED to load /search-results-v2.js — check Network tab (404?)')"></script>
 

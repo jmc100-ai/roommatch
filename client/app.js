@@ -11,6 +11,146 @@
   const BRAND_PLAIN = 'TravelByVibe';
   const COMPANY_LEGAL = 'TravelBoop, LLC';
 
+  // ── IMG-PERF-PHASE1 (Jun 2026) — fewer/deferred image loads on search cards.
+  // Revert: set window._IMG_PERF_PHASE1 = false in index.html before app.js, or flip default below.
+  const IMG_PERF_PHASE1_ENABLED = typeof window._IMG_PERF_PHASE1 === 'boolean'
+    ? window._IMG_PERF_PHASE1
+    : true;
+  const IMG_PERF_HERO_MAX = IMG_PERF_PHASE1_ENABLED ? 1 : 3;
+  const IMG_PERF_FEATURED_STRIP_MAX = IMG_PERF_PHASE1_ENABLED ? 3 : 10;
+
+  function imgPerfHeroLoadingAttrs(isLcpHero) {
+    if (IMG_PERF_PHASE1_ENABLED && isLcpHero) {
+      return 'loading="eager" fetchpriority="high" decoding="async"';
+    }
+    return 'loading="lazy" decoding="async"';
+  }
+
+  function hotelHeroImgHTML(url, isLcpHero) {
+    return `<img class="hotel-hero-img" src="${escAttr(url)}" alt="" ${imgPerfHeroLoadingAttrs(isLcpHero)} onerror="this.classList.add('hotel-hero-blank');this.style.visibility='hidden'">`;
+  }
+
+  /** defer=true → data-img-src until IntersectionObserver (IMG-PERF-PHASE1 only). */
+  function imgPerfImgTag({ url, alt = '', className = '', defer = false, loading = 'lazy', onerror = '' }) {
+    const clsExtra = defer && IMG_PERF_PHASE1_ENABLED ? ' img-perf-defer' : '';
+    const cls = className ? ` class="${className}${clsExtra}"` : (clsExtra ? ` class="${clsExtra.trim()}"` : '');
+    const errAttr = onerror ? ` onerror="${onerror}"` : '';
+    if (IMG_PERF_PHASE1_ENABLED && defer) {
+      return `<img${cls} data-img-src="${escAttr(url)}" alt="${escAttr(alt)}" loading="${loading}"${errAttr}>`;
+    }
+    return `<img${cls} src="${escAttr(url)}" alt="${escAttr(alt)}" loading="${loading}"${errAttr}>`;
+  }
+
+  let _imgPerfDeferObserver = null;
+
+  function ensureImgDeferObserver() {
+    if (!IMG_PERF_PHASE1_ENABLED || _imgPerfDeferObserver) return _imgPerfDeferObserver;
+    if (typeof IntersectionObserver === 'undefined') return null;
+    _imgPerfDeferObserver = new IntersectionObserver((entries) => {
+      for (const ent of entries) {
+        if (!ent.isIntersecting) continue;
+        const img = ent.target;
+        const src = img.dataset.imgSrc;
+        if (src && !img.getAttribute('src')) {
+          img.src = src;
+          img.removeAttribute('data-img-src');
+          img.classList.remove('img-perf-defer');
+        }
+        _imgPerfDeferObserver.unobserve(img);
+      }
+    }, { rootMargin: '160px 0px', threshold: 0.01 });
+    return _imgPerfDeferObserver;
+  }
+
+  function bindDeferredCardImages(root) {
+    if (!IMG_PERF_PHASE1_ENABLED || !root) return;
+    const obs = ensureImgDeferObserver();
+    const pending = root.querySelectorAll('img.img-perf-defer[data-img-src]');
+    if (!obs) {
+      pending.forEach((img) => {
+        const src = img.dataset.imgSrc;
+        if (src) img.src = src;
+      });
+      return;
+    }
+    pending.forEach((img) => {
+      if (!img.getAttribute('src')) obs.observe(img);
+    });
+  }
+
+  /** Lazy-load extra hero collage tiles on hover (IMG-PERF-PHASE1). */
+  function imgPerfExpandHero(el) {
+    if (!IMG_PERF_PHASE1_ENABLED || !el || el.dataset.heroExpanded === '1') return;
+    let urls;
+    try { urls = JSON.parse(el.dataset.deferredHeroes || '[]'); } catch (_) { return; }
+    if (!Array.isArray(urls) || !urls.length) return;
+    el.dataset.heroExpanded = '1';
+    const heroCount = 1 + urls.length;
+    const heroClass = heroCount <= 1 ? 'hero-1' : heroCount === 2 ? 'hero-2' : '';
+    el.classList.remove('hero-1', 'hero-2');
+    if (heroClass) el.classList.add(heroClass);
+    el.insertAdjacentHTML('beforeend', urls.map((url) => hotelHeroImgHTML(url, false)).join(''));
+  }
+
+  // ── IMG-PERF-DETAIL-1 (Jun 2026) — detail page: prefetch + defer secondary heroes.
+  const _imgPerfDetailHeroPrefetched = new Set();
+
+  function imgPerfPrefetchImageUrl(url) {
+    if (!IMG_PERF_PHASE1_ENABLED || !url) return;
+    const u = String(url).trim();
+    if (!u || _imgPerfDetailHeroPrefetched.has(u)) return;
+    _imgPerfDetailHeroPrefetched.add(u);
+    const img = new Image();
+    img.decoding = 'async';
+    img.src = u;
+  }
+
+  function imgPerfLoadDeferredImg(img) {
+    if (!img) return;
+    const src = img.dataset.imgSrc;
+    if (!src || img.getAttribute('src')) return;
+    img.src = src;
+    img.removeAttribute('data-img-src');
+    img.classList.remove('img-perf-defer');
+  }
+
+  function hpDetailHeroImgAttrs(isLcpHero) {
+    if (IMG_PERF_PHASE1_ENABLED && isLcpHero) {
+      return 'loading="eager" fetchpriority="high" decoding="async"';
+    }
+    if (isLcpHero) return 'loading="eager" decoding="async"';
+    return 'loading="lazy" decoding="async"';
+  }
+
+  /** Best-effort first hero URL from search results (matches gallery order when roomTypes exist). */
+  function prefetchHotelDetailHeroFromSearch(hotelId) {
+    if (!IMG_PERF_PHASE1_ENABLED) return;
+    const id = String(hotelId);
+    const ranked = (_lastHotels.length && typeof getSortedHotelsForDisplay === 'function')
+      ? getSortedHotelsForDisplay()
+      : _lastHotels;
+    const h = ranked.find((x) => x && String(x.id) === id)
+      || _lastHotels.find((x) => x && String(x.id) === id);
+    if (!h) return;
+    for (const rt of (h.roomTypes || [])) {
+      const p = (rt.photos || [])[0];
+      if (p) { imgPerfPrefetchImageUrl(p); return; }
+    }
+    if (h.mainPhoto) { imgPerfPrefetchImageUrl(h.mainPhoto); return; }
+    for (const url of (h.hotelPhotos || [])) {
+      if (url) { imgPerfPrefetchImageUrl(url); return; }
+    }
+  }
+
+  function prefetchHotelDetailHeroFromPayload(d) {
+    if (!IMG_PERF_PHASE1_ENABLED || !d) return;
+    const searchHotel = typeof hotelDetailSearchContext === 'function'
+      ? hotelDetailSearchContext(d) : null;
+    const urls = typeof buildHotelDetailPhotoGallery === 'function'
+      ? buildHotelDetailPhotoGallery(d, searchHotel) : [];
+    if (urls[0]) imgPerfPrefetchImageUrl(urls[0]);
+  }
+
   let PUBLIC_CLIP_SEARCH_ENABLED = false;
   (function loadPublicConfig() {
     const base = BACKEND || '';
@@ -7168,6 +7308,9 @@
 
   function toggleRoom(row) {
     row.classList.toggle('open');
+    if (IMG_PERF_PHASE1_ENABLED && row.classList.contains('open')) {
+      bindDeferredCardImages(row);
+    }
   }
 
   function toggleFeatured(el) {
@@ -7223,6 +7366,7 @@
       });
       requestAnimationFrame(update);
     });
+    bindDeferredCardImages(root);
   }
 
   async function handleSearch(e) {
@@ -8327,13 +8471,18 @@
     const realImgs = heroEl.querySelectorAll('.hotel-hero-img:not(.hotel-hero-blank)');
     if (realImgs.length > 0 && !blank) return;
 
-    const heroCount = Math.min(heroUrls.length, 3);
+    const shown = heroUrls.slice(0, IMG_PERF_HERO_MAX);
+    const heroCount = shown.length;
     const heroClass = heroCount <= 1 ? 'hero-1' : heroCount === 2 ? 'hero-2' : '';
-    const heroImgs = heroUrls.slice(0, 3).map((url) =>
-      `<img class="hotel-hero-img" src="${escAttr(url)}" alt="" loading="lazy" onerror="this.classList.add('hotel-hero-blank');this.style.visibility='hidden'">`
-    ).join('');
+    const heroImgs = shown.map((url) => hotelHeroImgHTML(url, false)).join('');
     heroEl.className = `hotel-hero hotel-hero--clickable ${heroClass}`.trim();
     heroEl.innerHTML = heroImgs;
+    const deferred = IMG_PERF_PHASE1_ENABLED ? heroUrls.slice(IMG_PERF_HERO_MAX) : [];
+    if (deferred.length) {
+      heroEl.dataset.deferredHeroes = JSON.stringify(deferred);
+      heroEl.dataset.heroExpanded = '0';
+      heroEl.setAttribute('onpointerenter', 'imgPerfExpandHero(this)');
+    }
   }
 
   function hotelNeedsLiteMeta(h) {
@@ -8515,8 +8664,7 @@
           if (blank && realImgs.length === 0) {
             heroEl.classList.remove('hero-2');
             heroEl.classList.add('hero-1');
-            heroEl.innerHTML =
-              `<img class="hotel-hero-img" src="${escHtml(m.mainPhoto)}" alt="" loading="lazy" onerror="this.classList.add('hotel-hero-blank');this.style.visibility='hidden'">`;
+            heroEl.innerHTML = hotelHeroImgHTML(m.mainPhoto, false);
           }
         }
       }
@@ -9721,6 +9869,9 @@
     const item = document.getElementById(`rrow-${hotelId}-${ri}`);
     if (!item) return;
     item.classList.toggle('room-row-open');
+    if (IMG_PERF_PHASE1_ENABLED && item.classList.contains('room-row-open')) {
+      bindDeferredCardImages(item);
+    }
   }
 
   function openRowThumb(hotelId, ri, pi) {
@@ -9730,6 +9881,7 @@
     if (row && !row.classList.contains('row-open')) {
       row.classList.add('row-open');
       body.classList.add('open');
+      if (IMG_PERF_PHASE1_ENABLED) bindDeferredCardImages(row);
     }
     const item = document.getElementById(`rrow-${hotelId}-${ri}`);
     if (item && !item.classList.contains('room-row-open')) {
@@ -9740,7 +9892,7 @@
     if (regKey >= 0) openLightbox(regKey, pi);
   }
 
-  function hotelRowHTML(h) {
+  function hotelRowHTML(h, cardIndex = -1) {
     const sym   = ratesCurrencySymbol(_priceCurrency);
     const overallPct = overallMatchDisplayPct(h);
     const overallBubble = overallMatchBubbleHTML(h.id, overallPct);
@@ -9754,18 +9906,29 @@
     const topRoom = visibleRooms[0];
     const previewPhotos = topRoom ? (topRoom.photos || []).slice(0, 3) : [];
 
+    const deferRowImgs = IMG_PERF_PHASE1_ENABLED && cardIndex > 0;
     const thumbHTML = h.mainPhoto
-      ? `<img class="hotel-row-thumb" src="${h.mainPhoto}" alt="${escHtml(hotelDisplayTitle(h))}" loading="lazy" onerror="this.outerHTML='<div class=hotel-row-thumb-placeholder></div>'">`
+      ? imgPerfImgTag({
+          url: h.mainPhoto,
+          alt: hotelDisplayTitle(h),
+          className: 'hotel-row-thumb',
+          defer: deferRowImgs,
+          onerror: "this.outerHTML='<div class=hotel-row-thumb-placeholder></div>'",
+        })
       : `<div class="hotel-row-thumb-placeholder"></div>`;
 
     const stars  = h.starRating > 0 ? '★'.repeat(Math.min(Math.round(h.starRating), 5)) : '';
     const rating = h.rating > 0 ? `· ${parseFloat(h.rating).toFixed(1)} ★` : '';
 
-    const previewsHTML = previewPhotos.map((url, pi) =>
-      `<img class="row-preview-thumb" src="${url}" loading="lazy"
-           onclick="event.stopPropagation();openRowThumb('${h.id}',0,${pi})"
-           onerror="this.style.display='none'">`
-    ).join('');
+    const previewsHTML = previewPhotos.map((url, pi) => {
+      const tag = imgPerfImgTag({
+        url,
+        className: 'row-preview-thumb',
+        defer: deferRowImgs,
+        onerror: "this.style.display='none'",
+      });
+      return tag.replace('<img', `<img onclick="event.stopPropagation();openRowThumb('${h.id}',0,${pi})"`);
+    }).join('');
 
     const priceHTML = h.price != null
       ? `<div class="hotel-row-price-main">${sym}${Math.round(h.price).toLocaleString()}</div>
@@ -9781,7 +9944,7 @@
       _lbRegistry.push({ photos: rt.photos || [], name: rt.name, score: rt.score });
       const photoHTML = (rt.photos || []).slice(0, 10).map((url, pi) =>
         `<div class="row-photo-cell" onclick="openLightbox(${regKey},${pi})">
-          <img src="${url}" alt="${rt.name}" loading="lazy" onerror="this.parentElement.style.display='none'">
+          ${imgPerfImgTag({ url, alt: rt.name, defer: deferRowImgs, onerror: "this.parentElement.style.display='none'" })}
         </div>`
       ).join('');
       const scoreBadge = rt.score > 0
@@ -9790,7 +9953,12 @@
       return `
         <div class="row-room-item${ri === 0 ? ' room-row-open' : ''}" id="rrow-${h.id}-${ri}" data-regkey="${regKey}"
              onclick="toggleRowRoom('${h.id}',${ri})">
-          <img class="row-room-thumb" src="${(rt.photos||[])[0]||''}" loading="lazy" onerror="this.style.display='none'">
+          ${imgPerfImgTag({
+            url: (rt.photos || [])[0] || '',
+            className: 'row-room-thumb',
+            defer: deferRowImgs,
+            onerror: "this.style.display='none'",
+          })}
           <span class="row-room-name">${rt.name}</span>
           ${scoreBadge}
           <span class="row-room-chevron">▼</span>
@@ -10660,9 +10828,9 @@
     }
 
     _lbRegistry.length = 0;
-    let html = toShow.map(h => {
+    let html = toShow.map((h, cardIndex) => {
       if (h && String(h.id) === 'lpfc697') console.log(`[debug-h21] renderSorted: roomTypes.length=${(h.roomTypes||[]).length} showAvailOnly=${_showAvailOnly} pricesLoaded=${_pricesLoaded}`);
-      return (_viewMode === 'rows' ? hotelRowHTML : hotelHTML)(h);
+      return (_viewMode === 'rows' ? hotelRowHTML : hotelHTML)(h, cardIndex);
     }).join('');
 
     // Sentinel triggers loading more
@@ -10710,6 +10878,7 @@
       r.classList.remove('room-hidden', 'hpage-other-room--hidden');
     });
     btn.remove();
+    bindDeferredCardImages(container);
   }
 
   // ── roomsSectionHTML ──────────────────────────────────────────────────────
@@ -11341,13 +11510,22 @@
     return p;
   }
 
-  /** Fire-and-forget — warms cache before click (pointerenter / touchstart). */
+  /** Fire-and-forget — warms JSON + first hero image before click (IMG-PERF-DETAIL-1). */
   function prefetchHotelDetail(hotelId) {
     const id = String(hotelId || '').trim();
     if (!id || _detailHotelId === id) return;
-    if (_getCachedHotelDetailPayload(id) || _detailInflight.has(id) || _detailPrefetchStarted.has(id)) return;
+
+    prefetchHotelDetailHeroFromSearch(id);
+
+    const cached = _getCachedHotelDetailPayload(id);
+    if (cached) prefetchHotelDetailHeroFromPayload(cached);
+
+    if (_getCachedHotelDetailPayload(id) || _detailInflight.has(id)) return;
+    if (_detailPrefetchStarted.has(id)) return;
     _detailPrefetchStarted.add(id);
-    _fetchHotelDetailPayload(id).catch(() => {});
+    _fetchHotelDetailPayload(id)
+      .then((data) => prefetchHotelDetailHeroFromPayload(data))
+      .catch(() => {});
   }
 
   function hotelDetailPrefetchIntentAttrs(hotelId) {
@@ -11466,6 +11644,7 @@
       if (_detailHotelId !== hotelId) return; // user navigated away
       _detailHotelData = data;
       root.innerHTML = hotelDetailPageHTML(data, _detailPageOpts);
+      bindDeferredCardImages(root);
       const detailSearchHotel = hotelDetailSearchContext(data);
       const bookHotel = {
         id: data.hotel_id,
@@ -11642,13 +11821,41 @@
     return `<div class="hp-address-row"><span class="hp-address-pin" aria-hidden="true">📍</span><span class="hp-address-text">${escHtml(line)}</span>${mapLink}</div>`;
   }
 
+  /** Street address + Google Maps link (detail intro, below neighborhood). */
+  function hotelDetailAddressRowHTML(d, searchHotel) {
+    const mapData = {
+      address: (d?.address || searchHotel?.address || '').trim(),
+      city: (d?.city || searchHotel?.city || S.city || '').trim(),
+      country_code: (d?.country_code || searchHotel?.country_code || searchHotel?.country || '').trim(),
+      lat: d?.lat ?? searchHotel?.lat,
+      lng: d?.lng ?? searchHotel?.lng,
+    };
+    const addr = mapData.address;
+    if (!addr) return '';
+    const cityPart = mapData.city;
+    const line = cityPart && !addr.toLowerCase().includes(cityPart.toLowerCase())
+      ? `${addr}, ${cityPart}`
+      : addr;
+    const mapUrl = _hpGoogleMapsUrl(mapData);
+    if (!mapUrl) {
+      return `<div class="hpage-intro-address hp-address-row"><span class="hp-address-pin" aria-hidden="true">📍</span><span class="hp-address-text">${escHtml(line)}</span></div>`;
+    }
+    return `<div class="hpage-intro-address hp-address-row">
+      <span class="hp-address-pin" aria-hidden="true">📍</span>
+      <span class="hp-address-text">${escHtml(line)}</span>
+      <a class="hp-map-link" href="${escHtml(mapUrl)}" target="_blank" rel="noopener noreferrer">Open in Google Maps</a>
+    </div>`;
+  }
+
   function _hpMosaicCellHTML(url, idx, extraClass, showAllBtn, photoTotal) {
     if (!url) return `<div class="hp-mosaic-cell hp-mosaic-empty ${extraClass || ''}" aria-hidden="true"></div>`;
     const showAll = showAllBtn
       ? `<span class="hp-mosaic-show-all" onclick="event.stopPropagation();openHpLightbox(0)"><span class="hp-mosaic-show-all-icon" aria-hidden="true">📷</span> View all photos (${photoTotal || ''})</span>`
       : '';
     return `<button type="button" class="hp-mosaic-cell ${extraClass || ''}" onclick="openHpLightbox(${idx})" aria-label="View photo ${idx + 1}">
-      <img src="${escHtml(url)}" alt="" loading="${idx === 0 ? 'eager' : 'lazy'}" onerror="this.parentElement.classList.add('hp-mosaic-empty')">
+      ${idx === 0 || !IMG_PERF_PHASE1_ENABLED
+        ? `<img src="${escHtml(url)}" alt="" ${hpDetailHeroImgAttrs(idx === 0)} onerror="this.parentElement.classList.add('hp-mosaic-empty')">`
+        : imgPerfImgTag({ url, defer: true, onerror: 'this.parentElement.classList.add(\'hp-mosaic-empty\')' })}
       ${showAll}
     </button>`;
   }
@@ -11657,9 +11864,14 @@
     const photoCount = allPhotos.length;
     if (!photoCount) return `<div class="hp-hero-placeholder"></div>`;
     const visible = allPhotos.slice(0, HP_DETAIL_HERO_DOM_MAX);
-    const carouselImgs = visible.map((url, i) =>
-      `<img class="hp-carousel-img${i === 0 ? ' active' : ''}" src="${escHtml(url)}" data-idx="${i}" alt="" loading="${i === 0 ? 'eager' : 'lazy'}" onerror="this.remove();hpCarouselReindex()">`
-    ).join('');
+    const carouselImgs = visible.map((url, i) => {
+      const activeCls = i === 0 ? ' active' : '';
+      const onerr = 'onerror="this.remove();hpCarouselReindex()"';
+      if (IMG_PERF_PHASE1_ENABLED && i > 0) {
+        return `<img class="hp-carousel-img${activeCls} img-perf-defer" data-idx="${i}" data-img-src="${escAttr(url)}" alt="" loading="lazy" decoding="async" ${onerr}>`;
+      }
+      return `<img class="hp-carousel-img${activeCls}" src="${escHtml(url)}" data-idx="${i}" alt="" ${hpDetailHeroImgAttrs(i === 0)} ${onerr}>`;
+    }).join('');
     return `
       <div class="hp-carousel" id="hp-carousel">
         <div class="hp-carousel-track" id="hp-carousel-track">${carouselImgs}</div>
@@ -11904,7 +12116,7 @@
     //   ? hotelDetailMetricBadgeHTML(hotelStylePct, 'hpage-metric-badge--hotel', { title: 'Hotel style match' })
     //   : '';
     const nbhdBadge = nbhdFitPct != null
-      ? hotelDetailMetricBadgeHTML(nbhdFitPct, 'hpage-metric-badge--nbhd', { title: 'Area fit', label: 'Area match' })
+      ? hotelDetailMetricBadgeHTML(nbhdFitPct, 'hpage-metric-badge--nbhd', { title: 'Neighborhood match', label: 'neighborhood match' })
       : '';
     const pills = [];
     if (nbhdName) {
@@ -11917,9 +12129,11 @@
     const vibeOpt = BOOP_QUESTIONS.find((q) => q.id === 'stayVibe')?.options
       ?.find((o) => o.id === profile?.answers?.stayVibe);
     if (vibeOpt && !trip) pills.push(`<span class="hpage-intro-pill">${escHtml(vibeOpt.title || vibeOpt.label)}</span>`);
+    const addressHTML = hotelDetailAddressRowHTML(d, searchHotel);
     return `<div class="hpage-intro" role="group" aria-label="Hotel overview">
       <h1 class="hpage-intro-name">${escHtml(displayName)}</h1>
       ${locText ? `<p class="hpage-intro-loc"><span class="hpage-intro-loc-text"><span aria-hidden="true">📍</span> ${locText}</span>${nbhdBadge}</p>` : (nbhdBadge ? `<p class="hpage-intro-loc">${nbhdBadge}</p>` : '')}
+      ${addressHTML}
       ${pills.length ? `<div class="hpage-intro-pills">${pills.join('')}</div>` : ''}
       <p class="hp-reviews-attr hp-data-attr">Hotel photos, rates, and details provided by <a href="https://liteapi.travel" target="_blank" rel="noopener">LiteAPI</a> (Nuitée).</p>
     </div>`;
@@ -12149,7 +12363,7 @@
     const hasPrice = priceVal != null;
     const lbIdx = (url) => hpDetailPhotoIndex(url);
     const thumbHTML = hero
-      ? `<button type="button" class="hpage-other-room-thumb" onclick="event.stopPropagation();openHpLightbox(${lbIdx(hero)})"><img src="${escAttr(hero)}" alt="" loading="lazy" onerror="this.parentElement.classList.add('hpage-other-room-thumb--ph')"></button>`
+      ? `<button type="button" class="hpage-other-room-thumb" onclick="event.stopPropagation();openHpLightbox(${lbIdx(hero)})">${imgPerfImgTag({ url: hero, defer: IMG_PERF_PHASE1_ENABLED, onerror: "this.parentElement.classList.add('hpage-other-room-thumb--ph')" })}</button>`
       : '<div class="hpage-other-room-thumb hpage-other-room-thumb--ph" aria-hidden="true">🛏</div>';
     const matchPill = score > 0
       ? `<span class="hpage-other-room-match" aria-label="${score} percent room match">${score}% Room Match</span>`
@@ -12252,12 +12466,15 @@
     const thumbHTML = thumbs.map((url, i) => {
       const overlay = i === thumbs.length - 1 && extra > 0
         ? `<span class="hpage-room-thumb-more">+${extra}</span>` : '';
-      return `<button type="button" class="hpage-room-thumb" onclick="openHpLightbox(${lbIdx(url)})"><img src="${escHtml(url)}" alt="" loading="lazy">${overlay}</button>`;
+      return `<button type="button" class="hpage-room-thumb" onclick="openHpLightbox(${lbIdx(url)})">${imgPerfImgTag({ url, defer: IMG_PERF_PHASE1_ENABLED })}${overlay}</button>`;
     }).join('');
     const specsHTML = hotelDetailRoomSpecsHTML(rt);
+    const bestHeroAttrs = IMG_PERF_PHASE1_ENABLED
+      ? 'loading="eager" decoding="async"'
+      : 'loading="eager"';
     return `<div class="hpage-best-room-grid">
       <div class="hpage-best-room-photos">
-      ${hero ? `<button type="button" class="hpage-best-room-hero" onclick="openHpLightbox(${lbIdx(hero)})"><img src="${escHtml(hero)}" alt="" loading="eager"></button>` : '<div class="hpage-best-room-hero hpage-best-room-hero--ph"></div>'}
+      ${hero ? `<button type="button" class="hpage-best-room-hero" onclick="openHpLightbox(${lbIdx(hero)})"><img src="${escHtml(hero)}" alt="" ${bestHeroAttrs}></button>` : '<div class="hpage-best-room-hero hpage-best-room-hero--ph"></div>'}
       <div class="hpage-best-room-stack">${thumbHTML}</div>
       </div>
       <div class="hpage-best-room-info">
@@ -12462,6 +12679,8 @@
       if (html) other.outerHTML = html;
       else other.remove();
     }
+    const detailRoot = document.getElementById('st-hotel-detail');
+    if (detailRoot) bindDeferredCardImages(detailRoot);
   }
 
   function hotelDetailLightboxShellHTML() {
@@ -12933,6 +13152,7 @@
     if (!imgs.length) return;
     _hpCarouselIdx = ((idx % imgs.length) + imgs.length) % imgs.length;
     imgs.forEach((img, i) => img.classList.toggle('active', i === _hpCarouselIdx));
+    if (IMG_PERF_PHASE1_ENABLED) imgPerfLoadDeferredImg(imgs[_hpCarouselIdx]);
     const dots = document.querySelectorAll('#hp-carousel-dots .hp-dot');
     dots.forEach((d, i) => d.classList.toggle('active', i === _hpCarouselIdx));
   }
@@ -13230,7 +13450,7 @@
     },
   };
 
-  function hotelHTML(h) {
+  function hotelHTML(h, cardIndex = -1) {
     const stars    = '★'.repeat(Math.min(Math.max(Math.round(h.starRating || 0), 0), 5));
     const location = [h.address, h.city, h.country].filter(Boolean).join(', ');
     const rating   = h.rating > 0
@@ -13270,16 +13490,20 @@
       : '';
 
     // ── Hotel hero: LiteAPI mainPhoto first, then catalog gallery, then room photos ──
-    const heroPhotos = buildHotelHeroPhotoUrls(h, 3);
+    const allHeroUrls = buildHotelHeroPhotoUrls(h, 3);
+    const heroPhotos = IMG_PERF_PHASE1_ENABLED ? allHeroUrls.slice(0, IMG_PERF_HERO_MAX) : allHeroUrls;
+    const deferredHeroes = IMG_PERF_PHASE1_ENABLED ? allHeroUrls.slice(IMG_PERF_HERO_MAX) : [];
+    const isLcpHero = IMG_PERF_PHASE1_ENABLED && cardIndex === 0;
     const heroCount = heroPhotos.length;
     const heroClass = heroCount <= 1 ? 'hero-1' : heroCount === 2 ? 'hero-2' : '';
-    const heroImgs  = heroPhotos.map(url =>
-      `<img class="hotel-hero-img" src="${url}" alt="" loading="lazy" onerror="this.classList.add('hotel-hero-blank');this.style.visibility='hidden'">`
-    ).join('');
+    const heroImgs  = heroPhotos.map((url) => hotelHeroImgHTML(url, isLcpHero)).join('');
+    const heroExpandAttr = deferredHeroes.length
+      ? ` data-deferred-heroes="${escAttr(JSON.stringify(deferredHeroes))}" data-hero-expanded="0" onpointerenter="imgPerfExpandHero(this)"`
+      : '';
     // Hero is clickable → opens dedicated /hotel/:id page. Inner pills/badges stop propagation so they keep their own actions.
     const heroOnClick = `onclick="openHotelDetailPage('${hotelIdAttr}')" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openHotelDetailPage('${hotelIdAttr}');}"`;
     const heroInner = heroCount > 0
-      ? `<div class="hotel-hero hotel-hero--clickable ${heroClass}" ${heroOnClick}${detailPrefetch}>${heroImgs}</div>`
+      ? `<div class="hotel-hero hotel-hero--clickable ${heroClass}" ${heroOnClick}${detailPrefetch}${heroExpandAttr}>${heroImgs}</div>`
       : `<div class="hotel-hero hotel-hero--clickable hero-1" ${heroOnClick}${detailPrefetch}><div class="hotel-hero-img hotel-hero-blank"></div></div>`;
     const heroStrip = `<div class="hotel-hero-wrap">${nbhdPill}${heroInner}</div>`;
 
@@ -13370,9 +13594,9 @@
     // ── Featured variant (top match room — scrollable strip, same indices as lightbox) ──
   if (variant === 'featured') {
     const vibeOverlay = featuredRoomVibeBadgeHTML(hotel, rt);
-    const roomNameAttr = escAttr(rt.name || 'Room');
 
-      const toShow = photos.length > 0 ? photos.slice(0, 10) : [null];
+      const stripLimit = IMG_PERF_PHASE1_ENABLED ? IMG_PERF_FEATURED_STRIP_MAX : 10;
+      const toShow = photos.length > 0 ? photos.slice(0, stripLimit) : [null];
       const stripCells = toShow.map((url, pi) => {
         const heroCls = pi === 0 ? ' room-photo-cell--featured-hero' : '';
         const overlay = pi === 0 ? vibeOverlay : '';
@@ -13380,10 +13604,10 @@
         if (!url) {
           return `<div class="room-photo-cell${heroCls}">${overlay}<div class="no-photo">🛏</div></div>`;
         }
+        const deferStrip = IMG_PERF_PHASE1_ENABLED && pi > 0;
         return `<div class="room-photo-cell${heroCls}" onclick="${lbClick}">
           ${overlay}
-          <img src="${escAttr(url)}" alt="${roomNameAttr}" loading="lazy"
-               onerror="roomPhotoImgOnError(this)">
+          ${imgPerfImgTag({ url, alt: rt.name || 'Room', defer: deferStrip, onerror: 'roomPhotoImgOnError(this)' })}
           <div class="zoom-hint">⤢</div>
         </div>`;
       }).join('');
@@ -13420,8 +13644,7 @@
     const photoHTML = photos.length
       ? photos.slice(0, 10).map((url, pi) =>
           `<div class="room-photo-cell" onclick="openLightbox(${regKey}, ${pi})">
-            <img src="${escAttr(url)}" alt="${escAttr(rt.name || 'Room')}" loading="lazy"
-                 onerror="roomPhotoImgOnError(this)">
+            ${imgPerfImgTag({ url, alt: rt.name || 'Room', defer: IMG_PERF_PHASE1_ENABLED, onerror: 'roomPhotoImgOnError(this)' })}
             <div class="zoom-hint">⤢</div>
           </div>`).join('')
       : `<div class="room-photo-cell"><div class="no-photo">🛏</div></div>`;
@@ -13433,7 +13656,7 @@
     return `
       <div class="room-type-row${openClass}${unavailClass}${hiddenClass}">
         <div class="room-type-header" onclick="toggleRoom(this.parentElement)">
-          ${photos[0] ? `<img class="room-thumb" src="${photos[0]}" alt="${rt.name}" loading="lazy" onerror="this.style.display='none'">` : ''}
+          ${photos[0] ? imgPerfImgTag({ url: photos[0], alt: rt.name, className: 'room-thumb', defer: IMG_PERF_PHASE1_ENABLED, onerror: "this.style.display='none'" }) : ''}
           <div class="room-type-left">
             <span class="room-type-name">${rt.name}</span>
             ${matchBar}
@@ -14017,6 +14240,21 @@
     // City input: keyboard nav + history dropdown
     const cityInput = document.getElementById('cityInput');
     if (!cityInput) return;
+
+    // Marketing deep links: /?city=Mexico%20City → auto-start Boop wizard.
+    try {
+      const sp = new URLSearchParams(location.search);
+      const urlCity = (sp.get('city') || '').trim();
+      if (urlCity) {
+        const resolved = resolveLaunchCity(urlCity);
+        if (resolved) {
+          cityInput.value = resolved;
+          setTimeout(() => { void pickCity(resolved); }, 80);
+          return;
+        }
+      }
+    } catch (_) {}
+
     if (!cityInput.value.trim()) cityInput.value = DEFAULT_HOME_CITY;
     const launchFromInput = resolveLaunchCity(cityInput.value.trim());
     if (launchFromInput) {
