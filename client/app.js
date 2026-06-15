@@ -242,10 +242,9 @@
   function notifyBetaActivityGo(city) {
     if (!city) return;
     const ctx = _betaFeedbackContext();
-    fetch(`${BACKEND}/api/activity`, {
+    apiFetch(`${BACKEND}/api/activity`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      credentials: 'include',
       body: JSON.stringify({
         distinctId: _TB_DISTINCT_ID,
         city,
@@ -253,6 +252,19 @@
         viewport: ctx.viewport,
       }),
     }).catch(() => {});
+  }
+
+  function isHomeCityStepActive() {
+    if (document.body.classList.contains('has-results')) return false;
+    const df = document.getElementById('discovery-flow');
+    return !!(df && df.getAttribute('data-active-step') === 'city');
+  }
+
+  /** Home city submit (Go or Enter on step 1) — notify server once per browser/day. */
+  function notifyHomeGoActivity(rawName) {
+    const city = resolveLaunchCity(rawName);
+    if (!city) return;
+    notifyBetaActivityGo(city);
   }
 
   let currentMode = 'vector';
@@ -4447,7 +4459,6 @@
       rejectLaunchCityInput(name);
       return;
     }
-    if (opts && opts.fromGo) notifyBetaActivityGo(city);
     if (_returnToCmdTripSheet && isMobileCmdTripUi()) {
       const prevCity = S.city;
       S.city = city;
@@ -13962,7 +13973,10 @@
 
   function onCityGo() {
     const val = (document.getElementById('cityInput').value || '').trim();
-    if (val) selectCity({ name: val }, { fromGo: true });
+    if (val) {
+      notifyHomeGoActivity(val);
+      selectCity({ name: val });
+    }
   }
 
   function selectCity(cityData, opts) {
@@ -13985,10 +13999,14 @@
     if (e.key === 'Enter') {
       if (activeIdx >= 0 && opts[activeIdx]) {
         e.preventDefault();
-        selectCity({ name: opts[activeIdx].dataset.name });
+        const name = opts[activeIdx].dataset.name;
+        if (isHomeCityStepActive()) notifyHomeGoActivity(name);
+        selectCity({ name });
       } else if (e.target.value.trim()) {
         e.preventDefault();
-        selectCity({ name: e.target.value.trim() });
+        const name = e.target.value.trim();
+        if (isHomeCityStepActive()) notifyHomeGoActivity(name);
+        selectCity({ name });
       }
     } else if (e.key === 'ArrowDown' && opts.length) {
       e.preventDefault();
