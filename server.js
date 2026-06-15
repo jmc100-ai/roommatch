@@ -151,9 +151,15 @@ function loadSitePasswords() {
   return [...new Set(out)];
 }
 
+function betaGateMasterSwitch() {
+  const v = String(process.env.BETA_GATE_ENABLED ?? "1").trim().toLowerCase();
+  return v !== "0" && v !== "false" && v !== "no";
+}
+
 const SITE_PASSWORDS = loadSitePasswords();
 const SITE_PASSWORD_HASHES = new Set(SITE_PASSWORDS.map(hashSitePassword));
-const SITE_GATE_ACTIVE = SITE_PASSWORDS.length > 0;
+const BETA_GATE_CONFIGURED = SITE_PASSWORDS.length > 0;
+const SITE_GATE_ACTIVE = betaGateMasterSwitch() && BETA_GATE_CONFIGURED;
 
 function siteGateCookieValid(cookieVal) {
   return !!cookieVal && SITE_PASSWORD_HASHES.has(cookieVal);
@@ -504,6 +510,8 @@ app.get("/api/health/beta", async (_req, res) => {
       feedback_email: !!(process.env.BETA_FEEDBACK_EMAIL && process.env.RESEND_API_KEY && process.env.BETA_FROM),
       site_gate: SITE_GATE_ACTIVE,
       site_gate_codes: SITE_PASSWORDS.length,
+      beta_gate_enabled: betaGateMasterSwitch(),
+      beta_gate_configured: BETA_GATE_CONFIGURED,
       supabase_admin: !!supabaseAdmin,
       posthog_person_links: !!String(process.env.POSTHOG_PROJECT_URL || "").trim(),
       beta_gate: {
@@ -1628,7 +1636,7 @@ app.use((req, res, next) => {
   next();
 });
 
-// ── Password gate (active when SITE_PASSWORD / SITE_PASSWORDS / config file set) ─
+// ── Password gate (BETA_GATE_ENABLED=0 disables; otherwise active when codes/passwords set) ─
 if (SITE_GATE_ACTIVE) {
   // Handle login form submission
   app.post("/auth", express.urlencoded({ extended: false }), async (req, res) => {
