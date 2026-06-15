@@ -156,6 +156,11 @@ function betaGateMasterSwitch() {
   return v !== "0" && v !== "false" && v !== "no";
 }
 
+function betaActivityEmailSwitch() {
+  const v = String(process.env.BETA_ACTIVITY_EMAIL_ENABLED ?? "1").trim().toLowerCase();
+  return v !== "0" && v !== "false" && v !== "no";
+}
+
 const SITE_PASSWORDS = loadSitePasswords();
 const SITE_PASSWORD_HASHES = new Set(SITE_PASSWORDS.map(hashSitePassword));
 const BETA_GATE_CONFIGURED = SITE_PASSWORDS.length > 0;
@@ -508,6 +513,8 @@ app.get("/api/health/beta", async (_req, res) => {
       posthog: !!(process.env.POSTHOG_API_KEY || process.env.POSTHOG_PROJECT_KEY),
       feedback_slack: !!process.env.SLACK_FEEDBACK_WEBHOOK,
       feedback_email: !!(process.env.BETA_FEEDBACK_EMAIL && process.env.RESEND_API_KEY && process.env.BETA_FROM),
+      activity_email: betaActivityEmailSwitch() && !!(process.env.BETA_ACTIVITY_EMAIL && process.env.RESEND_API_KEY && process.env.BETA_FROM),
+      activity_email_enabled: betaActivityEmailSwitch(),
       site_gate: SITE_GATE_ACTIVE,
       site_gate_codes: SITE_PASSWORDS.length,
       beta_gate_enabled: betaGateMasterSwitch(),
@@ -5735,6 +5742,14 @@ function _clientIp(req) {
   return xff || req.ip || req.connection?.remoteAddress || "";
 }
 
+function _utcDateStr(d = new Date()) {
+  return d.toISOString().slice(0, 10);
+}
+
+function _betaHtmlEscape(s) {
+  return String(s || "").replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
+}
+
 // In-app feedback form submissions. Required: { message }. Optional: distinctId, email,
 // sentiment, currentUrl, currentSearch, currentCity, issueType, release, viewport, debugContext.
 // Writes to beta_feedback (Supabase). If SLACK_FEEDBACK_WEBHOOK is set we also
@@ -5856,6 +5871,97 @@ app.post("/api/feedback", async (req, res) => {
     res.json({ ok: true });
   } catch (e) {
     console.error("[feedback] error:", e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Home-page Go activity — at most one notification email per distinct_id per UTC day.
+// Body: { distinctId, city, release?, viewport? }.
+app.post("/api/activity", async (req, res) => {
+  try {
+    if (!betaActivityEmailSwitch()) {
+      return res.json({ ok: true, notified: false, reason: "disabled" });
+    }
+
+    const b = req.body || {};
+    const distinctId = String(b.distinctId || b.distinct_id || "").slice(0, 64);
+    if (!distinctId) return res.status(400).json({ error: "distinct_id_required" });
+    const city = String(b.city || "").trim().slice(0, 120);
+    if (!city) return res.status(400).json({ error: "city_required" });
+    const activityDay = _utcDateStr();
+    const row = {
+      distinct_id: distinctId,
+      activity_day: activityDay,
+      city,
+      release: String(b.release || "").slice(0, 80) || null,
+      viewport: String(b.viewport || "").slice(0, 32) || null,
+      user_agent: String(req.headers["user-agent"] || "").slice(0, 300) || null,
+      ip_addr: _clientIp(req).slice(0, 45) || null,
+    };
+
+    if (!supabaseAdmin) {
+      console.warn("[activity] no supabaseAdmin; skipping dedupe + email");
+      return res.json({ ok: true, notified: false });
+    }
+
+    const { error: insErr } = await supabaseAdmin.from("beta_activity_notify").insert(row);
+    if (insErr) {
+      if (insErr.code === "23505") {
+        return res.json({ ok: true, notified: false, reason: "already_notified_today" });
+      }
+      console.error("[activity] insert failed:", insErr.message);
+      return res.status(500).json({ error: "db_insert_failed" });
+    }
+
+    const posthogPersonUrl = betaPosthogPersonUrl(distinctId);
+    trackServer(distinctId, "city_go_activity_server", {
+      city,
+      activity_day: activityDay,
+    });
+
+    if (process.env.BETA_ACTIVITY_EMAIL && process.env.RESEND_API_KEY && process.env.BETA_FROM) {
+      const resend = _getResend();
+      if (resend) {
+        const escape = _betaHtmlEscape;
+        const subject = `[TravelByVibe beta] Home Go — ${city}`;
+        const html = `
+          <div style="font-family:-apple-system,Segoe UI,Roboto,sans-serif;color:#1a1a1e;max-width:560px">
+            <h2 style="font-family:Georgia,serif;color:#a8893d;margin:0 0 4px">Someone clicked Go on the home page</h2>
+            <p style="color:#666;font-size:12px;margin:0 0 16px">${escape(new Date().toUTCString())}</p>
+            <table style="font-size:12px;color:#444;border-collapse:collapse">
+              <tr><td style="padding:2px 8px 2px 0;color:#888">city</td><td>${escape(city)}</td></tr>
+              ${row.distinct_id ? `<tr><td style="padding:2px 8px 2px 0;color:#888">distinct_id</td><td><code>${escape(row.distinct_id)}</code></td></tr>` : ""}
+              ${posthogPersonUrl ? `<tr><td style="padding:2px 8px 2px 0;color:#888">PostHog</td><td><a href="${escape(posthogPersonUrl)}">session replay</a></td></tr>` : ""}
+              ${row.release ? `<tr><td style="padding:2px 8px 2px 0;color:#888">release</td><td><code>${escape(row.release)}</code></td></tr>` : ""}
+              ${row.viewport ? `<tr><td style="padding:2px 8px 2px 0;color:#888">viewport</td><td>${escape(row.viewport)}</td></tr>` : ""}
+              ${row.user_agent ? `<tr><td style="padding:2px 8px 2px 0;color:#888">user-agent</td><td style="color:#999;font-size:11px">${escape(row.user_agent)}</td></tr>` : ""}
+            </table>
+            <p style="color:#999;font-size:11px;margin:20px 0 0">At most one email per browser per UTC day. Logged in <code>beta_activity_notify</code>.</p>
+          </div>`;
+        const plain =
+          `Someone clicked Go on the home page\n\n` +
+          `city: ${city}\n` +
+          (row.distinct_id ? `distinct_id: ${row.distinct_id}\n` : "") +
+          (posthogPersonUrl ? `posthog: ${posthogPersonUrl}\n` : "") +
+          (row.release ? `release: ${row.release}\n` : "") +
+          (row.viewport ? `viewport: ${row.viewport}\n` : "");
+        resend.emails.send({
+          from: process.env.BETA_FROM,
+          to: process.env.BETA_ACTIVITY_EMAIL,
+          subject,
+          html,
+          text: plain,
+        }).then((r) => {
+          if (r?.error) console.warn("[activity] resend error:", r.error.message || r.error);
+        }).catch((e) => console.warn("[activity] resend send failed:", e.message));
+      }
+    } else {
+      console.warn("[activity] BETA_ACTIVITY_EMAIL / Resend not configured; dedupe row kept");
+    }
+
+    res.json({ ok: true, notified: true });
+  } catch (e) {
+    console.error("[activity] error:", e.message);
     res.status(500).json({ error: e.message });
   }
 });

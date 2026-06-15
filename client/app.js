@@ -238,6 +238,23 @@
   }
   window._tbTrack = track;
 
+  /** Fire-and-forget: server emails at most once per browser per UTC day on home Go. */
+  function notifyBetaActivityGo(city) {
+    if (!city) return;
+    const ctx = _betaFeedbackContext();
+    fetch(`${BACKEND}/api/activity`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({
+        distinctId: _TB_DISTINCT_ID,
+        city,
+        release: ctx.release,
+        viewport: ctx.viewport,
+      }),
+    }).catch(() => {});
+  }
+
   let currentMode = 'vector';
   let clipES = null;
   let clipDone = 0, clipTotal = 10;
@@ -4424,12 +4441,13 @@
   }
 
   // ── CITY ─────────────────────────────────────────────
-  async function pickCity(name) {
+  async function pickCity(name, opts) {
     const city = resolveLaunchCity(name);
     if (!city) {
       rejectLaunchCityInput(name);
       return;
     }
+    if (opts && opts.fromGo) notifyBetaActivityGo(city);
     if (_returnToCmdTripSheet && isMobileCmdTripUi()) {
       const prevCity = S.city;
       S.city = city;
@@ -13944,15 +13962,15 @@
 
   function onCityGo() {
     const val = (document.getElementById('cityInput').value || '').trim();
-    if (val) selectCity({ name: val });
+    if (val) selectCity({ name: val }, { fromGo: true });
   }
 
-  function selectCity(cityData) {
+  function selectCity(cityData, opts) {
     const name = typeof cityData === 'string' ? cityData : (cityData?.name || cityData);
     document.getElementById('cityDropdown').classList.remove('visible');
     hideRecentDropdown('cityHistoryDropdown');
     selectedCityData = typeof cityData === 'object' ? cityData : { name };
-    pickCity(name);
+    pickCity(name, opts);
   }
 
   function selectRecentCityNew(value) {

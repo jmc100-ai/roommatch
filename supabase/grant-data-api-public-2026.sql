@@ -39,7 +39,8 @@ DECLARE
     'beta_feedback',
     'beta_consents',
     'beta_invitees',
-    'beta_gate_admissions'
+    'beta_gate_admissions',
+    'beta_activity_notify'
   ];
 BEGIN
   FOREACH t IN ARRAY api_tables
