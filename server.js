@@ -489,7 +489,7 @@ app.head("/api/health", (_, res) => {
   res.status(200).end();
 });
 
-/** JSON readiness for beta launch (UptimeRobot should keep using /api/health). */
+/** JSON readiness for beta launch (Better Stack secondary monitor; Render probe uses /api/health). */
 app.get("/api/health/beta", async (_req, res) => {
   const stats = await getBetaGateRedemptionStats();
   res.json({
@@ -1542,6 +1542,65 @@ function _apiBetaGate(req, res, next) {
 }
 app.use(_apiBetaGate);
 
+/** Legacy LLC domain — corporate homepage only; product URLs redirect to TravelByVibe. */
+const TRAVELBOOP_HOSTS = new Set(["travelboop.com", "www.travelboop.com"]);
+const TRAVELBOOP_PUBLIC_ORIGIN = "https://www.travelboop.com";
+
+function requestHost(req) {
+  return (req.headers["x-forwarded-host"] || req.headers.host || "")
+    .split(",")[0]
+    .trim()
+    .replace(/:\d+$/, "")
+    .toLowerCase();
+}
+
+function isTravelboopHost(req) {
+  return TRAVELBOOP_HOSTS.has(requestHost(req));
+}
+
+let _travelboopCompanyHtml = null;
+function _readTravelboopCompanyHtml() {
+  if (_travelboopCompanyHtml == null || process.env.NODE_ENV !== "production") {
+    _travelboopCompanyHtml = fs.readFileSync(
+      path.join(__dirname, "client", "travelboop-company.html"),
+      "utf8"
+    );
+  }
+  return _travelboopCompanyHtml;
+}
+
+function serveTravelboopCompanyPage(res) {
+  res.setHeader("Content-Type", "text/html; charset=utf-8");
+  res.setHeader("Cache-Control", "public, max-age=600, s-maxage=3600");
+  return res.send(_readTravelboopCompanyHtml());
+}
+
+function travelboopHostMiddleware(req, res, next) {
+  if (!isTravelboopHost(req)) return next();
+  const p = req.path || "/";
+  if (p === "/favicon.svg" || p === "/favicon.ico") return next();
+  if (p === "/" || p === "/index.html") return serveTravelboopCompanyPage(res);
+  if (p === "/robots.txt") {
+    res.setHeader("Content-Type", "text/plain; charset=utf-8");
+    res.setHeader("Cache-Control", "public, max-age=600, s-maxage=3600");
+    return res.send(
+      "User-agent: *\nAllow: /\nDisallow: /api/\n\nSitemap: https://www.travelboop.com/sitemap.xml\n"
+    );
+  }
+  if (p === "/sitemap.xml") {
+    const body = `<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url><loc>${TRAVELBOOP_PUBLIC_ORIGIN}/</loc><changefreq>monthly</changefreq><priority>0.5</priority></url>
+</urlset>`;
+    res.setHeader("Content-Type", "application/xml; charset=utf-8");
+    res.setHeader("Cache-Control", "public, max-age=600, s-maxage=3600");
+    return res.send(body);
+  }
+  const q = req.url.includes("?") ? req.url.slice(req.url.indexOf("?")) : "";
+  return res.redirect(301, `${SITE_PUBLIC_ORIGIN}${p}${q}`);
+}
+app.use(travelboopHostMiddleware);
+
 /** Indexable marketing pages + crawler helpers — do not send global noindex. */
 const MARKETING_HTML = {
   "/destinations": "destinations.html",
@@ -1552,8 +1611,11 @@ const MARKETING_HTML = {
   "/paris-neighborhood-stays": "paris-neighborhood-stays.html",
   "/paris-visual-search": "paris-visual-search.html",
 };
-function isIndexablePublicPath(p) {
+function isIndexablePublicPath(p, req) {
   if (!p) return false;
+  if (req && isTravelboopHost(req) && (p === "/" || p === "/index.html" || p === "/sitemap.xml" || p === "/robots.txt")) {
+    return true;
+  }
   if (p === "/sitemap.xml" || p === "/robots.txt") return true;
   if (p === "/privacy" || p === "/terms") return true;
   if (MARKETING_HTML[p]) return true;
@@ -1561,7 +1623,7 @@ function isIndexablePublicPath(p) {
   return false;
 }
 app.use((req, res, next) => {
-  if (isIndexablePublicPath(req.path || "")) return next();
+  if (isIndexablePublicPath(req.path || "", req)) return next();
   res.setHeader("X-Robots-Tag", "noindex, nofollow");
   next();
 });

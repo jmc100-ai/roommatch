@@ -21,7 +21,7 @@ Code default when env is unset: `https://www.travelbyvibe.com` (`server.js` → 
 
 | Role | Value |
 |------|--------|
-| **Legacy app domain** | travelboop.com — keep DNS pointing at the same Render service **or** 301 redirect to `www.travelbyvibe.com` |
+| **Legacy LLC domain** | travelboop.com — same Render service; serves a **corporate homepage only** (`client/travelboop-company.html`). Product paths 301 to `www.travelbyvibe.com`. |
 | **Legal entity** | TravelBoop, LLC (footer, terms — unchanged) |
 | **LiteAPI white-label** | `travelboop.nuitee.link` — partner booking hostname; **do not** rename |
 | **GitHub / Render service** | `roommatch` repo, `roommatch-1fg5.onrender.com` — infrastructure names, not user-facing brand |
