@@ -238,16 +238,18 @@
   }
   window._tbTrack = track;
 
-  /** Fire-and-forget: server emails at most once per browser per UTC day on home Go. */
-  function notifyBetaActivityGo(city) {
-    if (!city) return;
+  /** Fire-and-forget: log city entry; server emails at most once per browser/city/UTC day. */
+  function notifyBetaCityEntry(rawCity, source) {
+    const raw = String(rawCity || '').trim();
+    if (!raw) return;
     const ctx = _betaFeedbackContext();
     apiFetch(`${BACKEND}/api/activity`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         distinctId: _TB_DISTINCT_ID,
-        city,
+        rawCity: raw,
+        source: source === 'chip' ? 'chip' : 'go',
         release: ctx.release,
         viewport: ctx.viewport,
       }),
@@ -260,11 +262,11 @@
     return !!(df && df.getAttribute('data-active-step') === 'city');
   }
 
-  /** Home city submit (Go or Enter on step 1) — notify server once per browser/day. */
+  /** Home city submit (Go or Enter on step 1) — log raw text before launch-city gate. */
   function notifyHomeGoActivity(rawName) {
-    const city = resolveLaunchCity(rawName);
-    if (!city) return;
-    notifyBetaActivityGo(city);
+    const raw = String(rawName || '').trim();
+    if (!raw) return;
+    notifyBetaCityEntry(raw, 'go');
   }
 
   let currentMode = 'vector';
@@ -4454,6 +4456,8 @@
 
   // ── CITY ─────────────────────────────────────────────
   async function pickCity(name, opts) {
+    const logChip = opts?.source === 'chip';
+    if (logChip) notifyBetaCityEntry(name, 'chip');
     const city = resolveLaunchCity(name);
     if (!city) {
       rejectLaunchCityInput(name);
@@ -13962,11 +13966,11 @@
     const recentCount = Math.min(recent.length, 2, MAX_CHIPS);
     recent.slice(0, recentCount).forEach(r => {
       shown.add(r.trim().toLowerCase());
-      html.push(`<div class="city-chip city-chip-recent" onclick="selectCity({name:'${r.replace(/'/g,"\\'")}'})" title="Recent">🕐 ${r}</div>`);
+      html.push(`<div class="city-chip city-chip-recent" onclick="selectCity({name:'${r.replace(/'/g,"\\'")}'}, {source:'chip'})" title="Recent">🕐 ${r}</div>`);
     });
     const remaining = Math.max(0, MAX_CHIPS - html.length);
     TOP_CITIES.filter(c => !shown.has(c.name.toLowerCase())).slice(0, remaining).forEach(c => {
-      html.push(`<div class="city-chip" onclick="selectCity({name:'${c.name}'})">${c.flag} ${c.name}</div>`);
+      html.push(`<div class="city-chip" onclick="selectCity({name:'${c.name}'}, {source:'chip'})">${c.flag} ${c.name}</div>`);
     });
     container.innerHTML = html.join('');
   }

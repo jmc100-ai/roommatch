@@ -1,0 +1,114 @@
+---
+description: Beta analytics SQL — run when user asks for beta stats, city demand, or activity summaries
+alwaysApply: false
+---
+
+# Beta stats queries
+
+When the user asks for **beta stats**, **city demand**, **Go activity**, or similar, run these against Supabase project `dmgxrcmdihgsffvqllms` via MCP `execute_sql` (or `apply_migration` only for DDL). Present results clearly; default window is last 30 days unless they specify otherwise.
+
+## Tables
+
+| Table | Purpose |
+|-------|---------|
+| `beta_city_entries` | Every city Go/chip attempt (raw + resolved, launch vs not) |
+| `beta_activity_notify` | Email dedupe ledger (one/browser/city/UTC day) |
+| `beta_feedback` | In-app feedback submissions |
+| `beta_consents` | Consent acceptances |
+| `beta_invitees` | Outbound email roster |
+
+## City demand (non-launch cities)
+
+```sql
+SELECT raw_city,
+       COUNT(*) AS attempts,
+       COUNT(DISTINCT distinct_id) AS users
+FROM beta_city_entries
+WHERE NOT is_launch_city
+  AND created_at > NOW() - INTERVAL '30 days'
+GROUP BY raw_city
+ORDER BY attempts DESC
+LIMIT 25;
+```
+
+## Daily Go vs rejected (launch gate)
+
+```sql
+SELECT DATE(created_at AT TIME ZONE 'UTC') AS day,
+       COUNT(*) FILTER (WHERE is_launch_city) AS launch,
+       COUNT(*) FILTER (WHERE NOT is_launch_city) AS rejected,
+       COUNT(*) AS total
+FROM beta_city_entries
+WHERE source = 'go'
+  AND created_at > NOW() - INTERVAL '30 days'
+GROUP BY 1
+ORDER BY 1 DESC;
+```
+
+## Go vs chip volume
+
+```sql
+SELECT source,
+       COUNT(*) AS entries,
+       COUNT(DISTINCT distinct_id) AS users,
+       COUNT(*) FILTER (WHERE is_launch_city) AS launch,
+       COUNT(*) FILTER (WHERE NOT is_launch_city) AS not_launch
+FROM beta_city_entries
+WHERE created_at > NOW() - INTERVAL '30 days'
+GROUP BY source
+ORDER BY entries DESC;
+```
+
+## Launch city breakdown
+
+```sql
+SELECT COALESCE(resolved_city, raw_city) AS city,
+       COUNT(*) AS entries,
+       COUNT(DISTINCT distinct_id) AS users
+FROM beta_city_entries
+WHERE is_launch_city
+  AND created_at > NOW() - INTERVAL '30 days'
+GROUP BY 1
+ORDER BY entries DESC;
+```
+
+## Recent city entries (last 20)
+
+```sql
+SELECT created_at, raw_city, resolved_city, is_launch_city, source, distinct_id
+FROM beta_city_entries
+ORDER BY created_at DESC
+LIMIT 20;
+```
+
+## Activity emails sent today (UTC)
+
+```sql
+SELECT raw_city, resolved_city, is_launch_city, source, distinct_id, notified_at
+FROM beta_activity_notify
+WHERE activity_day = (NOW() AT TIME ZONE 'UTC')::date
+ORDER BY notified_at DESC;
+```
+
+## Feedback summary (30 days)
+
+```sql
+SELECT issue_type,
+       COUNT(*) AS n,
+       ROUND(AVG(sentiment)::numeric, 1) AS avg_sentiment
+FROM beta_feedback
+WHERE created_at > NOW() - INTERVAL '30 days'
+GROUP BY issue_type
+ORDER BY n DESC;
+```
+
+## Funnel headcount (distinct browsers, 30 days)
+
+```sql
+SELECT
+  (SELECT COUNT(DISTINCT distinct_id) FROM beta_city_entries
+   WHERE created_at > NOW() - INTERVAL '30 days') AS city_entries,
+  (SELECT COUNT(DISTINCT distinct_id) FROM beta_feedback
+   WHERE created_at > NOW() - INTERVAL '30 days') AS feedback,
+  (SELECT COUNT(*) FROM beta_consents) AS consents_total;
+```

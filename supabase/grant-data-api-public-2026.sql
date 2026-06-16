@@ -40,7 +40,8 @@ DECLARE
     'beta_consents',
     'beta_invitees',
     'beta_gate_admissions',
-    'beta_activity_notify'
+    'beta_activity_notify',
+    'beta_city_entries'
   ];
 BEGIN
   FOREACH t IN ARRAY api_tables

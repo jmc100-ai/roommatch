@@ -5739,6 +5739,30 @@ function _getResend() {
   }
 }
 
+function _cityKey(name) {
+  return String(name || "").trim().toLowerCase();
+}
+
+/** Mirror client resolveLaunchCity — canonical launch city or null. */
+function resolveLaunchCityServer(name) {
+  const k = _cityKey(name)
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+  if (
+    k === "mexico city" ||
+    k === "cdmx" ||
+    k === "ciudad de mexico" ||
+    k === "mexico df" ||
+    k === "distrito federal"
+  ) return "Mexico City";
+  if (k === "paris") return "Paris";
+  return null;
+}
+
+function _cityDedupeKey(name) {
+  return _cityKey(name).slice(0, 120);
+}
+
 function _clientIp(req) {
   const xff = (req.headers["x-forwarded-for"] || "").split(",")[0].trim();
   return xff || req.ip || req.connection?.remoteAddress || "";
@@ -5877,91 +5901,154 @@ app.post("/api/feedback", async (req, res) => {
   }
 });
 
-// Home-page Go activity — at most one notification email per distinct_id per UTC day.
-// Body: { distinctId, city, release?, viewport? }.
+// City Go / chip activity — always logs beta_city_entries; emails at most once per
+// distinct_id per UTC day per city when BETA_ACTIVITY_EMAIL_ENABLED (master switch).
+// Body: { distinctId, rawCity, source?: 'go'|'chip', release?, viewport? }.
+// Legacy: `city` accepted as alias for rawCity.
 app.post("/api/activity", async (req, res) => {
   try {
-    if (!betaActivityEmailSwitch()) {
-      return res.json({ ok: true, notified: false, reason: "disabled" });
-    }
-
     const b = req.body || {};
     const distinctId = String(b.distinctId || b.distinct_id || "").slice(0, 64);
     if (!distinctId) return res.status(400).json({ error: "distinct_id_required" });
-    const city = String(b.city || "").trim().slice(0, 120);
-    if (!city) return res.status(400).json({ error: "city_required" });
+    const rawCity = String(b.rawCity || b.city || "").trim().slice(0, 120);
+    if (!rawCity) return res.status(400).json({ error: "city_required" });
+    const sourceRaw = String(b.source || "go").toLowerCase();
+    const source = sourceRaw === "chip" ? "chip" : "go";
+    const resolvedCity = resolveLaunchCityServer(rawCity);
+    const isLaunchCity = !!resolvedCity;
     const activityDay = _utcDateStr();
-    const row = {
-      distinct_id: distinctId,
-      activity_day: activityDay,
-      city,
+    const dedupeKey = _cityDedupeKey(rawCity);
+    const ctxMeta = {
       release: String(b.release || "").slice(0, 80) || null,
       viewport: String(b.viewport || "").slice(0, 32) || null,
       user_agent: String(req.headers["user-agent"] || "").slice(0, 300) || null,
       ip_addr: _clientIp(req).slice(0, 45) || null,
     };
 
-    if (!supabaseAdmin) {
-      console.warn("[activity] no supabaseAdmin; skipping dedupe + email");
-      return res.json({ ok: true, notified: false });
+    if (supabaseAdmin) {
+      const { error: logErr } = await supabaseAdmin.from("beta_city_entries").insert({
+        distinct_id: distinctId,
+        raw_city: rawCity,
+        resolved_city: resolvedCity,
+        is_launch_city: isLaunchCity,
+        source,
+        ...ctxMeta,
+      });
+      if (logErr) console.error("[activity] city entry log failed:", logErr.message);
+    } else {
+      console.warn("[activity] no supabaseAdmin; city entry not persisted");
     }
 
-    const { error: insErr } = await supabaseAdmin.from("beta_activity_notify").insert(row);
-    if (insErr) {
-      if (insErr.code === "23505") {
-        return res.json({ ok: true, notified: false, reason: "already_notified_today" });
-      }
-      console.error("[activity] insert failed:", insErr.message);
-      return res.status(500).json({ error: "db_insert_failed" });
-    }
-
-    const posthogPersonUrl = betaPosthogPersonUrl(distinctId);
-    trackServer(distinctId, "city_go_activity_server", {
-      city,
-      activity_day: activityDay,
+    trackServer(distinctId, "city_entry_logged", {
+      raw_city: rawCity,
+      resolved_city: resolvedCity,
+      is_launch_city: isLaunchCity,
+      source,
     });
 
-    if (process.env.BETA_ACTIVITY_EMAIL && process.env.RESEND_API_KEY && process.env.BETA_FROM) {
-      const resend = _getResend();
-      if (resend) {
-        const escape = _betaHtmlEscape;
-        const subject = `[TravelByVibe beta] Home Go — ${city}`;
-        const html = `
+    let notified = false;
+    let reason = null;
+
+    if (!betaActivityEmailSwitch()) {
+      reason = "disabled";
+    } else if (!supabaseAdmin) {
+      reason = "no_db";
+    } else if (!process.env.BETA_ACTIVITY_EMAIL || !process.env.RESEND_API_KEY || !process.env.BETA_FROM) {
+      reason = "email_not_configured";
+    } else {
+      const notifyRow = {
+        distinct_id: distinctId,
+        activity_day: activityDay,
+        city: dedupeKey,
+        raw_city: rawCity,
+        resolved_city: resolvedCity,
+        is_launch_city: isLaunchCity,
+        source,
+        ...ctxMeta,
+      };
+      const { error: insErr } = await supabaseAdmin.from("beta_activity_notify").insert(notifyRow);
+      if (insErr) {
+        if (insErr.code === "23505") {
+          reason = "already_notified_today_for_city";
+        } else {
+          console.error("[activity] notify insert failed:", insErr.message);
+          return res.status(500).json({ error: "db_insert_failed" });
+        }
+      } else {
+        notified = true;
+        const posthogPersonUrl = betaPosthogPersonUrl(distinctId);
+        trackServer(distinctId, "city_activity_email_server", {
+          raw_city: rawCity,
+          resolved_city: resolvedCity,
+          is_launch_city: isLaunchCity,
+          source,
+          activity_day: activityDay,
+        });
+
+        const resend = _getResend();
+        if (resend) {
+          const escape = _betaHtmlEscape;
+          const actionLabel = source === "chip" ? "picked a city chip" : "clicked Go";
+          const headline = isLaunchCity
+            ? `Someone ${actionLabel} — launch city`
+            : `City request — not a launch city yet`;
+          const subject = isLaunchCity
+            ? `[TravelByVibe beta] ${source === "chip" ? "City chip" : "Home Go"} — ${rawCity}`
+            : `[TravelByVibe beta] City request — ${rawCity}`;
+          const resolvedLine = resolvedCity && resolvedCity !== rawCity
+            ? `<tr><td style="padding:2px 8px 2px 0;color:#888">resolved to</td><td>${escape(resolvedCity)}</td></tr>`
+            : "";
+          const launchBadge = isLaunchCity
+            ? `<span style="color:#2d6a4f;font-weight:600">✓ launch city</span>`
+            : `<span style="color:#b45309;font-weight:600">⛔ not launch</span>`;
+          const html = `
           <div style="font-family:-apple-system,Segoe UI,Roboto,sans-serif;color:#1a1a1e;max-width:560px">
-            <h2 style="font-family:Georgia,serif;color:#a8893d;margin:0 0 4px">Someone clicked Go on the home page</h2>
+            <h2 style="font-family:Georgia,serif;color:#a8893d;margin:0 0 4px">${escape(headline)}</h2>
             <p style="color:#666;font-size:12px;margin:0 0 16px">${escape(new Date().toUTCString())}</p>
             <table style="font-size:12px;color:#444;border-collapse:collapse">
-              <tr><td style="padding:2px 8px 2px 0;color:#888">city</td><td>${escape(city)}</td></tr>
-              ${row.distinct_id ? `<tr><td style="padding:2px 8px 2px 0;color:#888">distinct_id</td><td><code>${escape(row.distinct_id)}</code></td></tr>` : ""}
+              <tr><td style="padding:2px 8px 2px 0;color:#888">city entered</td><td>${escape(rawCity)}</td></tr>
+              ${resolvedLine}
+              <tr><td style="padding:2px 8px 2px 0;color:#888">status</td><td>${launchBadge}</td></tr>
+              <tr><td style="padding:2px 8px 2px 0;color:#888">source</td><td>${escape(source)}</td></tr>
+              ${notifyRow.distinct_id ? `<tr><td style="padding:2px 8px 2px 0;color:#888">distinct_id</td><td><code>${escape(notifyRow.distinct_id)}</code></td></tr>` : ""}
               ${posthogPersonUrl ? `<tr><td style="padding:2px 8px 2px 0;color:#888">PostHog</td><td><a href="${escape(posthogPersonUrl)}">session replay</a></td></tr>` : ""}
-              ${row.release ? `<tr><td style="padding:2px 8px 2px 0;color:#888">release</td><td><code>${escape(row.release)}</code></td></tr>` : ""}
-              ${row.viewport ? `<tr><td style="padding:2px 8px 2px 0;color:#888">viewport</td><td>${escape(row.viewport)}</td></tr>` : ""}
-              ${row.user_agent ? `<tr><td style="padding:2px 8px 2px 0;color:#888">user-agent</td><td style="color:#999;font-size:11px">${escape(row.user_agent)}</td></tr>` : ""}
+              ${notifyRow.release ? `<tr><td style="padding:2px 8px 2px 0;color:#888">release</td><td><code>${escape(notifyRow.release)}</code></td></tr>` : ""}
+              ${notifyRow.viewport ? `<tr><td style="padding:2px 8px 2px 0;color:#888">viewport</td><td>${escape(notifyRow.viewport)}</td></tr>` : ""}
+              ${notifyRow.user_agent ? `<tr><td style="padding:2px 8px 2px 0;color:#888">user-agent</td><td style="color:#999;font-size:11px">${escape(notifyRow.user_agent)}</td></tr>` : ""}
             </table>
-            <p style="color:#999;font-size:11px;margin:20px 0 0">At most one email per browser per UTC day. Logged in <code>beta_activity_notify</code>.</p>
+            <p style="color:#999;font-size:11px;margin:20px 0 0">At most one email per browser per city per UTC day. All entries in <code>beta_city_entries</code>.</p>
           </div>`;
-        const plain =
-          `Someone clicked Go on the home page\n\n` +
-          `city: ${city}\n` +
-          (row.distinct_id ? `distinct_id: ${row.distinct_id}\n` : "") +
-          (posthogPersonUrl ? `posthog: ${posthogPersonUrl}\n` : "") +
-          (row.release ? `release: ${row.release}\n` : "") +
-          (row.viewport ? `viewport: ${row.viewport}\n` : "");
-        resend.emails.send({
-          from: process.env.BETA_FROM,
-          to: process.env.BETA_ACTIVITY_EMAIL,
-          subject,
-          html,
-          text: plain,
-        }).then((r) => {
-          if (r?.error) console.warn("[activity] resend error:", r.error.message || r.error);
-        }).catch((e) => console.warn("[activity] resend send failed:", e.message));
+          const plain =
+            `${headline}\n\n` +
+            `city entered: ${rawCity}\n` +
+            (resolvedCity && resolvedCity !== rawCity ? `resolved to: ${resolvedCity}\n` : "") +
+            `status: ${isLaunchCity ? "launch city" : "not launch"}\n` +
+            `source: ${source}\n` +
+            (notifyRow.distinct_id ? `distinct_id: ${notifyRow.distinct_id}\n` : "") +
+            (posthogPersonUrl ? `posthog: ${posthogPersonUrl}\n` : "") +
+            (notifyRow.release ? `release: ${notifyRow.release}\n` : "") +
+            (notifyRow.viewport ? `viewport: ${notifyRow.viewport}\n` : "");
+          resend.emails.send({
+            from: process.env.BETA_FROM,
+            to: process.env.BETA_ACTIVITY_EMAIL,
+            subject,
+            html,
+            text: plain,
+          }).then((r) => {
+            if (r?.error) console.warn("[activity] resend error:", r.error.message || r.error);
+          }).catch((e) => console.warn("[activity] resend send failed:", e.message));
+        }
       }
-    } else {
-      console.warn("[activity] BETA_ACTIVITY_EMAIL / Resend not configured; dedupe row kept");
     }
 
-    res.json({ ok: true, notified: true });
+    res.json({
+      ok: true,
+      logged: !!supabaseAdmin,
+      notified,
+      is_launch_city: isLaunchCity,
+      resolved_city: resolvedCity,
+      reason,
+    });
   } catch (e) {
     console.error("[activity] error:", e.message);
     res.status(500).json({ error: e.message });
