@@ -500,6 +500,22 @@ app.head("/api/health", (_, res) => {
   res.status(200).end();
 });
 
+// Static sitemap — registered early so Googlebot gets a fast, cacheable XML file
+// without waiting on cold-start middleware or dynamic origin resolution.
+const SITEMAP_FILE = path.join(__dirname, "client", "sitemap.xml");
+function serveSitemap(_req, res) {
+  res.setHeader("Content-Type", "application/xml; charset=utf-8");
+  res.setHeader("Cache-Control", "public, max-age=86400, s-maxage=604800");
+  res.sendFile(SITEMAP_FILE, (err) => {
+    if (err) {
+      console.error("[sitemap] sendFile failed:", err.message);
+      if (!res.headersSent) res.status(500).type("text/plain").send("sitemap unavailable");
+    }
+  });
+}
+app.get("/sitemap.xml", serveSitemap);
+app.head("/sitemap.xml", serveSitemap);
+
 /** JSON readiness for beta launch (Better Stack secondary monitor; Render probe uses /api/health). */
 app.get("/api/health/beta", async (_req, res) => {
   const stats = await getBetaGateRedemptionStats();
@@ -1915,24 +1931,6 @@ app.get("/terms", (_req, res) => {
   res.setHeader("Content-Type", "text/html; charset=utf-8");
   res.setHeader("Cache-Control", "public, max-age=600, s-maxage=3600");
   res.send(_legalHtml("Terms of service", body));
-});
-
-app.get("/sitemap.xml", (req, res) => {
-  const o = marketingOrigin(req);
-  const urls = [
-    ...Object.keys(MARKETING_HTML).map(
-      (p) => `  <url><loc>${o}${p}</loc><changefreq>weekly</changefreq><priority>0.85</priority></url>`
-    ),
-    `  <url><loc>${o}/privacy</loc><changefreq>monthly</changefreq><priority>0.4</priority></url>`,
-    `  <url><loc>${o}/terms</loc><changefreq>monthly</changefreq><priority>0.4</priority></url>`,
-  ];
-  const body = `<?xml version="1.0" encoding="UTF-8"?>
-<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-${urls.join("\n")}
-</urlset>`;
-  res.setHeader("Content-Type", "application/xml; charset=utf-8");
-  res.setHeader("Cache-Control", "public, max-age=600, s-maxage=3600");
-  res.send(body);
 });
 
 // ── Public client config ──────────────────────────────────────────────────────
