@@ -1,0 +1,112 @@
+{
+  "condesa": {
+    "luxury": [
+      { "id": "lp65574bcd", "fallbackName": "Andaz Condesa Mexico City", "tag": "Luxury + rooftop" },
+      { "id": "lp65588d82", "fallbackName": "Volga, Member of Preferred Hotels", "tag": "Design-forward suites" }
+    ],
+    "boutique": [
+      { "id": "lp65582fc6", "fallbackName": "Hyatt Regency Mexico City Insurgentes", "tag": "Walkable Condesa base" },
+      { "id": "lp3721c", "fallbackName": "Boutique stay in Condesa", "tag": "Leafy neighbourhood" }
+    ],
+    "value": [
+      { "id": "lp656c98ec", "fallbackName": "Condesa area hotel", "tag": "Café culture nearby" },
+      { "id": "lp656c9bfa", "fallbackName": "Condesa area hotel", "tag": "Park-side calm" }
+    ]
+  },
+  "roma-norte": {
+    "luxury": [
+      { "id": "lp53191", "fallbackName": "Roma Norte design hotel", "tag": "Food scene access" },
+      { "id": "lp656c98ec", "fallbackName": "Roma Norte hotel", "tag": "Trendy barrio" }
+    ],
+    "boutique": [
+      { "id": "lp656c9bfa", "fallbackName": "Roma Norte boutique", "tag": "Art deco streets" },
+      { "id": "lp65583932", "fallbackName": "Roma Norte stay", "tag": "Gallery district" }
+    ],
+    "value": [
+      { "id": "lp234e5", "fallbackName": "Roma Norte value pick", "tag": "Nightlife nearby" },
+      { "id": "lp292c6e", "fallbackName": "Roma Norte hotel", "tag": "Walkable cafés" }
+    ]
+  },
+  "polanco": {
+    "luxury": [
+      { "id": "lp23157", "fallbackName": "Four Seasons Hotel Mexico City", "tag": "Upscale Polanco" },
+      { "id": "lp53aa8", "fallbackName": "Las Alcobas, a Luxury Collection Hotel", "tag": "Park + dining" }
+    ],
+    "boutique": [
+      { "id": "lp2f760", "fallbackName": "Polanco boutique hotel", "tag": "Museum district" },
+      { "id": "lp3df30", "fallbackName": "Polanco design stay", "tag": "Shopping nearby" }
+    ],
+    "value": [
+      { "id": "lp78c6e", "fallbackName": "Polanco area hotel", "tag": "Business-friendly" },
+      { "id": "lp853a2", "fallbackName": "Polanco stay", "tag": "Reforma access" }
+    ]
+  },
+  "juarez": {
+    "luxury": [
+      { "id": "lp65573614", "fallbackName": "The Ritz-Carlton, Mexico City", "tag": "Reforma skyline" },
+      { "id": "lp1ce969", "fallbackName": "Sofitel Mexico City Reforma", "tag": "Central luxury" }
+    ],
+    "boutique": [
+      { "id": "lp6559106e", "fallbackName": "Juárez boutique hotel", "tag": "Creative district" },
+      { "id": "lp31a94", "fallbackName": "Juárez design stay", "tag": "Connected hub" }
+    ],
+    "value": [
+      { "id": "lp234e5", "fallbackName": "Juárez value hotel", "tag": "Metro access" },
+      { "id": "lp655bad73", "fallbackName": "Juárez area stay", "tag": "Central value" }
+    ]
+  },
+  "centro-historico": {
+    "luxury": [
+      { "id": "lp4bab4", "fallbackName": "The St. Regis Mexico City", "tag": "Palace-level luxury" },
+      { "id": "lp2d851", "fallbackName": "Gran Hotel Ciudad de México", "tag": "Historic icon" }
+    ],
+    "boutique": [
+      { "id": "lp3158b", "fallbackName": "Hilton Mexico City Reforma", "tag": "Steps from Alameda" },
+      { "id": "lp6574ebfd", "fallbackName": "Centro Histórico boutique", "tag": "Culture on foot" }
+    ],
+    "value": [
+      { "id": "lp9b54c", "fallbackName": "Centro Histórico hotel", "tag": "Sightseeing base" },
+      { "id": "lp6575e854", "fallbackName": "Zócalo area stay", "tag": "Maximum history" }
+    ]
+  },
+  "boutique": {
+    "condesa": [
+      { "id": "lp65574bcd", "fallbackName": "Andaz Condesa Mexico City", "tag": "Design-forward" },
+      { "id": "lp65582fc6", "fallbackName": "Hyatt Regency Insurgentes", "tag": "Boutique scale" }
+    ],
+    "roma-norte": [
+      { "id": "lp53191", "fallbackName": "Roma Norte boutique", "tag": "Eclectic interiors" },
+      { "id": "lp656c9bfa", "fallbackName": "Roma Norte design stay", "tag": "Foodie base" }
+    ],
+    "polanco": [
+      { "id": "lp53aa8", "fallbackName": "Las Alcobas", "tag": "Polished boutique" },
+      { "id": "lp2f760", "fallbackName": "Polanco boutique", "tag": "Gallery district" }
+    ],
+    "design": [
+      { "id": "lp65588d82", "fallbackName": "Volga", "tag": "Statement design" },
+      { "id": "lp23157", "fallbackName": "Four Seasons Mexico City", "tag": "Refined aesthetic" }
+    ],
+    "foodies": [
+      { "id": "lp53191", "fallbackName": "Roma Norte hotel", "tag": "Near top tables" },
+      { "id": "lp65574bcd", "fallbackName": "Andaz Condesa", "tag": "Café culture" }
+    ]
+  },
+  "cafe-vibe": [
+    { "id": "lp65574bcd", "fallbackName": "Andaz Condesa", "tag": "Parque España walks" },
+    { "id": "lp3721c", "fallbackName": "Condesa café hotel", "tag": "Terrace mornings" },
+    { "id": "lp53191", "fallbackName": "Roma Norte stay", "tag": "Rosetta district" },
+    { "id": "lp656c98ec", "fallbackName": "Leafy CDMX hotel", "tag": "Third-wave coffee" }
+  ],
+  "local-neighborhood": [
+    { "id": "lp234e5", "fallbackName": "Juárez local stay", "tag": "Emerging scene" },
+    { "id": "lp53191", "fallbackName": "Roma Norte hotel", "tag": "Residential rhythm" },
+    { "id": "lp3721c", "fallbackName": "Condesa local base", "tag": "Tree-lined blocks" },
+    { "id": "lp6559106e", "fallbackName": "Juárez boutique", "tag": "Creative hub" }
+  ],
+  "design": [
+    { "id": "lp65588d82", "fallbackName": "Volga", "tag": "Contemporary luxury" },
+    { "id": "lp65574bcd", "fallbackName": "Andaz Condesa", "tag": "Sleek interiors" },
+    { "id": "lp53aa8", "fallbackName": "Las Alcobas", "tag": "Art-filled lobby" },
+    { "id": "lp2f760", "fallbackName": "Polanco design hotel", "tag": "Museum mile" }
+  ]
+}

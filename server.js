@@ -1542,6 +1542,7 @@ const API_GATE_ALLOWLIST = new Set([
   "/api/config",
   "/api/public-config",
   "/api/nbhd-img",
+  "/api/public/marketing-hotels",
 ]);
 function _apiBetaGate(req, res, next) {
   if (!SITE_GATE_ACTIVE) return next();
@@ -1620,7 +1621,22 @@ app.use(travelboopHostMiddleware);
 const MARKETING_HTML = {
   "/destinations": "destinations.html",
   "/mexico-city-hotels": "mexico-city-hotels.html",
-  "/cdmx-neighborhood-stays": "cdmx-neighborhood-stays.html",
+  "/where-to-stay-in-mexico-city": "where-to-stay-in-mexico-city.html",
+  "/mexico-city-neighborhood-guide": "mexico-city-neighborhood-guide.html",
+  "/mexico-city-hotel-finder": "mexico-city-hotel-finder.html",
+  "/cdmx-neighborhood-stays": "where-to-stay-in-mexico-city.html",
+  "/hotels-in-condesa": "hotels-in-condesa.html",
+  "/hotels-in-roma-norte": "hotels-in-roma-norte.html",
+  "/hotels-in-polanco": "hotels-in-polanco.html",
+  "/hotels-in-juarez": "hotels-in-juarez.html",
+  "/hotels-in-centro-historico": "hotels-in-centro-historico.html",
+  "/condesa-vs-polanco": "condesa-vs-polanco.html",
+  "/roma-norte-vs-condesa": "roma-norte-vs-condesa.html",
+  "/juarez-vs-condesa": "juarez-vs-condesa.html",
+  "/mexico-city-boutique-hotels": "mexico-city-boutique-hotels.html",
+  "/mexico-city-cafe-vibe-hotels": "mexico-city-cafe-vibe-hotels.html",
+  "/mexico-city-local-neighborhood-hotels": "mexico-city-local-neighborhood-hotels.html",
+  "/mexico-city-design-hotels": "mexico-city-design-hotels.html",
   "/mexico-city-visual-search": "mexico-city-visual-search.html",
   "/paris-hotels": "paris-hotels.html",
   "/paris-neighborhood-stays": "paris-neighborhood-stays.html",
@@ -5282,6 +5298,35 @@ app.get("/api/street-view", async (req, res) => {
 // for hotel cards beyond the synchronous fetch limit (META_SYNC_LIMIT, default 30)
 // returned by /api/vsearch. Reads from _hotelMetaCache; missing IDs are fetched
 // from LiteAPI on demand. Returns { hotels: { [id]: { name, mainPhoto, ... } } }.
+// Public read-only hotel metadata for indexable marketing landings (no beta gate).
+app.get("/api/public/marketing-hotels", async (req, res) => {
+  const idsRaw = String(req.query.ids || "").trim();
+  if (!idsRaw) return res.status(400).json({ error: "ids required (comma-separated)" });
+  const ids = idsRaw.split(",").map((s) => s.trim()).filter(Boolean).slice(0, 24);
+  if (!ids.length) return res.status(400).json({ error: "no valid ids" });
+  try {
+    const meta = await fetchHotelMetaBatch(ids);
+    const out = {};
+    for (const id of ids) {
+      const sid = String(id);
+      const m = meta[sid];
+      if (m) {
+        out[sid] = {
+          name: m.name || null,
+          mainPhoto: m.mainPhoto || null,
+          starRating: m.starRating || 0,
+          guestRating: m.guestRating || 0,
+        };
+      }
+    }
+    res.setHeader("Cache-Control", "public, max-age=300, s-maxage=1800");
+    res.json({ hotels: out });
+  } catch (e) {
+    console.error("[public/marketing-hotels]", e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
 app.get("/api/hotels-meta", async (req, res) => {
   const idsRaw = String(req.query.ids || "").trim();
   if (!idsRaw) return res.status(400).json({ error: "ids required (comma-separated)" });
