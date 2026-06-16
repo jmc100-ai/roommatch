@@ -108,5 +108,111 @@
     { "id": "lp65574bcd", "fallbackName": "Andaz Condesa", "tag": "Sleek interiors" },
     { "id": "lp53aa8", "fallbackName": "Las Alcobas", "tag": "Art-filled lobby" },
     { "id": "lp2f760", "fallbackName": "Polanco design hotel", "tag": "Museum mile" }
+  ],
+  "paris-le-marais": {
+    "luxury": [
+      { "id": "lp656423a1", "fallbackName": "Le Marais luxury hotel", "tag": "Historic centre" },
+      { "id": "lp46727", "fallbackName": "Le Marais palace stay", "tag": "Gallery district" }
+    ],
+    "boutique": [
+      { "id": "lp65549a9f", "fallbackName": "Boutique hotel Le Marais", "tag": "Cobblestone calm" },
+      { "id": "lp6566e239", "fallbackName": "Design stay Le Marais", "tag": "Walkable buzz" }
+    ],
+    "value": [
+      { "id": "lp1f2668", "fallbackName": "Le Marais area hotel", "tag": "Central value" },
+      { "id": "lp65604389", "fallbackName": "Le Marais stay", "tag": "Museum access" }
+    ]
+  },
+  "paris-saint-germain": {
+    "luxury": [
+      { "id": "lp821b7", "fallbackName": "Saint-Germain luxury hotel", "tag": "Left Bank classic" },
+      { "id": "lp655f6f36", "fallbackName": "Saint-Germain flagship", "tag": "Literary Paris" }
+    ],
+    "boutique": [
+      { "id": "lp65641f58", "fallbackName": "Boutique Saint-Germain", "tag": "Wine bar district" },
+      { "id": "lp655f2f91", "fallbackName": "Left Bank boutique", "tag": "Café culture" }
+    ],
+    "value": [
+      { "id": "lp37f579", "fallbackName": "Saint-Germain stay", "tag": "Seine walks" },
+      { "id": "lp65670916", "fallbackName": "Left Bank hotel", "tag": "Museum mornings" }
+    ]
+  },
+  "paris-montmartre": {
+    "luxury": [
+      { "id": "lp92d32", "fallbackName": "Montmartre luxury hotel", "tag": "Village views" },
+      { "id": "lp451ee", "fallbackName": "Montmartre romantic stay", "tag": "Sunset hills" }
+    ],
+    "boutique": [
+      { "id": "lp655f4f38", "fallbackName": "Boutique Montmartre", "tag": "Artistic quarter" },
+      { "id": "lp6585caa2", "fallbackName": "Montmartre design hotel", "tag": "Cosy mood" }
+    ],
+    "value": [
+      { "id": "lp6555b49a", "fallbackName": "Montmartre area hotel", "tag": "Hilltop charm" },
+      { "id": "lp657155d1", "fallbackName": "Montmartre stay", "tag": "Romantic base" }
+    ]
+  },
+  "paris-latin-quarter": {
+    "luxury": [
+      { "id": "lp655a8db7", "fallbackName": "Latin Quarter luxury hotel", "tag": "River access" },
+      { "id": "lp65604265", "fallbackName": "Left Bank flagship", "tag": "Notre-Dame walks" }
+    ],
+    "boutique": [
+      { "id": "lp656423a1", "fallbackName": "Latin Quarter boutique", "tag": "Market streets" },
+      { "id": "lp46727", "fallbackName": "Quartier Latin stay", "tag": "Classic Paris" }
+    ],
+    "value": [
+      { "id": "lp65549a9f", "fallbackName": "Latin Quarter hotel", "tag": "Student energy" },
+      { "id": "lp6566e239", "fallbackName": "Central Left Bank", "tag": "Sightseeing base" }
+    ]
+  },
+  "paris-opera": {
+    "luxury": [
+      { "id": "lp821b7", "fallbackName": "Opéra palace hotel", "tag": "Grand boulevards" },
+      { "id": "lp655f6f36", "fallbackName": "Champs luxury stay", "tag": "Five-star Paris" }
+    ],
+    "boutique": [
+      { "id": "lp65641f58", "fallbackName": "Opéra boutique hotel", "tag": "Haussmann polish" },
+      { "id": "lp92d32", "fallbackName": "Right Bank design", "tag": "Shopping nearby" }
+    ],
+    "value": [
+      { "id": "lp37f579", "fallbackName": "Opéra area hotel", "tag": "Central access" },
+      { "id": "lp451ee", "fallbackName": "Champs area stay", "tag": "Metro links" }
+    ]
+  },
+  "paris-boutique": {
+    "marais": [
+      { "id": "lp65549a9f", "fallbackName": "Le Marais boutique", "tag": "Gallery quarter" },
+      { "id": "lp6566e239", "fallbackName": "Marais design stay", "tag": "Cobblestones" }
+    ],
+    "saint-germain": [
+      { "id": "lp65641f58", "fallbackName": "Saint-Germain boutique", "tag": "Left Bank calm" },
+      { "id": "lp655f2f91", "fallbackName": "Literary Paris hotel", "tag": "Bookshop walks" }
+    ],
+    "montmartre": [
+      { "id": "lp655f4f38", "fallbackName": "Montmartre boutique", "tag": "Romantic hills" },
+      { "id": "lp6585caa2", "fallbackName": "Village Paris stay", "tag": "Artist quarter" }
+    ],
+    "romantic": [
+      { "id": "lp92d32", "fallbackName": "Romantic Paris suite", "tag": "Moody lighting" },
+      { "id": "lp451ee", "fallbackName": "Couples hotel Paris", "tag": "Soaking tub" }
+    ]
+  },
+  "paris-luxury": [
+    { "id": "lp821b7", "fallbackName": "Paris luxury hotel", "tag": "Palace service" },
+    { "id": "lp655f6f36", "fallbackName": "Five-star Paris stay", "tag": "Grand lobby" },
+    { "id": "lp656423a1", "fallbackName": "Right Bank luxury", "tag": "Suite living" },
+    { "id": "lp46727", "fallbackName": "Paris flagship hotel", "tag": "Marble bath" }
+  ],
+  "paris-romantic": [
+    { "id": "lp92d32", "fallbackName": "Romantic Montmartre hotel", "tag": "View suites" },
+    { "id": "lp451ee", "fallbackName": "Paris couples stay", "tag": "Intimate mood" },
+    { "id": "lp655f4f38", "fallbackName": "Boutique romantic Paris", "tag": "Velvet and brass" },
+    { "id": "lp65641f58", "fallbackName": "Left Bank romantic", "tag": "Soaking tub" }
+  ],
+  "paris-classic": [
+    { "id": "lp37f579", "fallbackName": "Haussmann Paris hotel", "tag": "Tall windows" },
+    { "id": "lp65670916", "fallbackName": "Classic Left Bank", "tag": "Mouldings + light" },
+    { "id": "lp655a8db7", "fallbackName": "Traditional Paris suite", "tag": "Pale linens" },
+    { "id": "lp65604265", "fallbackName": "Quartier Latin classic", "tag": "River walks" }
   ]
 }

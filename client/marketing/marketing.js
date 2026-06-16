@@ -5,6 +5,24 @@
 (function () {
   'use strict';
 
+  function marketingCity() {
+    const body = document.body;
+    if (body && body.dataset && body.dataset.marketingCity) return body.dataset.marketingCity;
+    const el = document.querySelector('[data-city]');
+    if (el && el.getAttribute('data-city')) return el.getAttribute('data-city');
+    return 'Mexico City';
+  }
+
+  function marketingCampaign() {
+    const body = document.body;
+    if (body && body.dataset && body.dataset.marketingCampaign) return body.dataset.marketingCampaign;
+    return marketingCity() === 'Paris' ? 'paris_seo_2026' : 'cdmx_seo_2026';
+  }
+
+  function cityLabel(city) {
+    return city === 'Paris' ? 'Paris' : 'Mexico City';
+  }
+
   function stars(n) {
     const s = Math.max(0, Math.min(5, Math.round(Number(n) || 0)));
     if (!s) return '';
@@ -17,34 +35,36 @@
     return d.innerHTML;
   }
 
-  function hotelDetailUrl(id) {
+  function hotelDetailUrl(id, city) {
     const base = window.location.origin || '';
-    return base + '/hotel/' + encodeURIComponent(id) + '?city=' + encodeURIComponent('Mexico City');
+    return base + '/hotel/' + encodeURIComponent(id) + '?city=' + encodeURIComponent(city || marketingCity());
   }
 
-  function searchUrl(utmContent, extra) {
+  function searchUrl(utmContent, extra, city) {
     const base = window.location.origin || '';
+    const c = city || marketingCity();
     const q = new URLSearchParams({
-      city: 'Mexico City',
+      city: c,
       utm_source: 'travelbyvibe',
       utm_medium: 'landing',
-      utm_campaign: 'cdmx_seo_2026',
+      utm_campaign: marketingCampaign(),
       utm_content: utmContent || 'marketing-hotel-card',
     });
     if (extra) Object.keys(extra).forEach((k) => q.set(k, extra[k]));
     return base + '/?' + q.toString();
   }
 
-  function renderCard(h, meta, utmContent) {
+  function renderCard(h, meta, utmContent, city) {
     const id = h.id;
     const m = meta[id] || {};
-    const name = m.name || h.fallbackName || 'Mexico City hotel';
+    const c = city || marketingCity();
+    const name = m.name || h.fallbackName || (cityLabel(c) + ' hotel');
     const photo = m.mainPhoto || '';
     const starStr = stars(m.starRating);
     const rating = m.guestRating ? (Number(m.guestRating).toFixed(1) + '/10 guests') : '';
     const tag = h.tag || '';
-    const detail = hotelDetailUrl(id);
-    const vibe = searchUrl(utmContent, { hotel: id });
+    const detail = hotelDetailUrl(id, c);
+    const vibe = searchUrl(utmContent, { hotel: id }, c);
 
     return (
       '<article class="mhotel-card">' +
@@ -91,21 +111,23 @@
   }
 
   async function mountGrid(el) {
+    const city = el.getAttribute('data-city') || marketingCity();
     const hotels = parseHotels(el.getAttribute('data-hotels'));
     if (!hotels.length) {
-      el.innerHTML = '<p class="mhotel-empty">Hotel picks loading soon — <a href="' + esc(searchUrl(el.getAttribute('data-utm') || 'marketing-empty')) + '">browse Mexico City hotels</a>.</p>';
+      el.innerHTML = '<p class="mhotel-empty">Hotel picks loading soon — <a href="' + esc(searchUrl(el.getAttribute('data-utm') || 'marketing-empty', null, city)) + '">browse ' + esc(cityLabel(city)) + ' hotels</a>.</p>';
       return;
     }
     el.innerHTML = '<div class="mhotel-loading">Loading hotel photos…</div>';
     const ids = hotels.map((h) => h.id).filter(Boolean);
     const meta = await fetchMeta(ids);
     const utm = el.getAttribute('data-utm') || 'marketing-hotels';
-    el.innerHTML = '<div class="mhotel-grid">' + hotels.map((h) => renderCard(h, meta, utm)).join('') + '</div>';
+    el.innerHTML = '<div class="mhotel-grid">' + hotels.map((h) => renderCard(h, meta, utm, city)).join('') + '</div>';
   }
 
   async function mountPreset(el) {
     const preset = el.getAttribute('data-preset');
     const tier = el.getAttribute('data-tier');
+    const city = el.getAttribute('data-city') || marketingCity();
     if (!preset) return;
     try {
       const res = await fetch('/marketing/marketing-hotels.json');
@@ -124,7 +146,7 @@
       el.setAttribute('data-hotels', JSON.stringify(hotels));
       await mountGrid(el);
     } catch (_) {
-      el.innerHTML = '<p class="mhotel-empty">Could not load hotel picks. <a href="' + esc(searchUrl('marketing-preset-fail')) + '">Search Mexico City hotels →</a></p>';
+      el.innerHTML = '<p class="mhotel-empty">Could not load hotel picks. <a href="' + esc(searchUrl('marketing-preset-fail', null, city)) + '">Search ' + esc(cityLabel(city)) + ' hotels →</a></p>';
     }
   }
 
