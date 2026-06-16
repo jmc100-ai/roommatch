@@ -395,6 +395,7 @@ function loginHtml({ error = "", subtitle = "", notice = "", showForm = true } =
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <meta name="robots" content="index,follow,max-image-preview:large"/>
   <title>TravelByVibe</title>
   <link rel="preconnect" href="https://fonts.googleapis.com"/>
   <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300;400;600&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet"/>
@@ -1633,7 +1634,7 @@ function travelboopHostMiddleware(req, res, next) {
 }
 app.use(travelboopHostMiddleware);
 
-/** Indexable marketing pages + crawler helpers — do not send global noindex. */
+/** Indexable marketing landing pages (static HTML). */
 const MARKETING_HTML = {
   "/destinations": "destinations.html",
   "/mexico-city-hotels": "mexico-city-hotels.html",
@@ -1658,22 +1659,6 @@ const MARKETING_HTML = {
   "/paris-neighborhood-stays": "paris-neighborhood-stays.html",
   "/paris-visual-search": "paris-visual-search.html",
 };
-function isIndexablePublicPath(p, req) {
-  if (!p) return false;
-  if (req && isTravelboopHost(req) && (p === "/" || p === "/index.html" || p === "/sitemap.xml" || p === "/robots.txt")) {
-    return true;
-  }
-  if (p === "/sitemap.xml" || p === "/robots.txt") return true;
-  if (p === "/privacy" || p === "/terms") return true;
-  if (MARKETING_HTML[p]) return true;
-  if (p.endsWith("/") && MARKETING_HTML[p.slice(0, -1)]) return true;
-  return false;
-}
-app.use((req, res, next) => {
-  if (isIndexablePublicPath(req.path || "", req)) return next();
-  res.setHeader("X-Robots-Tag", "noindex, nofollow");
-  next();
-});
 
 // ── Password gate (BETA_GATE_ENABLED=0 disables; otherwise active when codes/passwords set) ─
 if (SITE_GATE_ACTIVE) {
@@ -1845,6 +1830,7 @@ function _legalHtml(title, body) {
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<meta name="robots" content="index,follow,max-image-preview:large"/>
 <title>${title} — TravelByVibe</title>
 <meta name="description" content="${title} for TravelByVibe — a friendly beta for discovering hotels by neighbourhood and real room photos."/>
 <link rel="icon" type="image/svg+xml" href="/favicon.svg"/>
