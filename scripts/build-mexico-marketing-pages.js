@@ -22,6 +22,31 @@ const COYOACAN =
 const VASCONCELOS =
   "https://upload.wikimedia.org/wikipedia/commons/thumb/d/d0/Biblioteca_Vasconcelos%2C_Ciudad_de_M%C3%A9xico%2C_M%C3%A9xico%2C_2015-07-20%2C_DD_13-15_HDR.jpg/1280px-Biblioteca_Vasconcelos%2C_Ciudad_de_M%C3%A9xico%2C_M%C3%A9xico%2C_2015-07-20%2C_DD_13-15_HDR.jpg";
 
+/** Mexico City neighbourhood card photos (from neighborhoods table / vibe index). */
+const NBHD_CONDESA =
+  "https://images.unsplash.com/photo-1545504573-edac76c6a487?auto=format&amp;fit=crop&amp;w=1280&amp;q=82";
+const NBHD_ROMA =
+  "https://images.unsplash.com/photo-1612878731576-1d9ca638b741?auto=format&amp;fit=crop&amp;w=1280&amp;q=82";
+const NBHD_POLANCO = "https://live.staticflickr.com/65535/48083283343_36ca392374_b.jpg";
+const NBHD_JUAREZ =
+  "https://images.unsplash.com/photo-1493857671505-72967e2e2760?auto=format&amp;fit=crop&amp;w=1280&amp;q=82";
+const NBHD_CENTRO =
+  "https://upload.wikimedia.org/wikipedia/commons/thumb/1/19/Templo_Mayor_50.jpg/1280px-Templo_Mayor_50.jpg";
+const NBHD_COMPARE =
+  "https://upload.wikimedia.org/wikipedia/commons/thumb/7/77/15-07-12-Ciclistas-en-Mexico-RalfR-N3S_8977.jpg/1280px-15-07-12-Ciclistas-en-Mexico-RalfR-N3S_8977.jpg";
+
+function nbhdGuideGrid() {
+  return `<div class="nbhd-grid">
+        <div class="nbhd-tile" style="background-image:url('${NBHD_CONDESA}')"><h3>Condesa</h3><p>Leafy, walkable, café culture — ideal for first-time visitors who want calm days and easy dinners.</p><a class="nbhd-row-cta" href="__ORIGIN__/hotels-in-condesa">Hotels in Condesa →</a></div>
+        <div class="nbhd-tile" style="background-image:url('${NBHD_ROMA}')"><h3>Roma Norte</h3><p>Trendy food scene, design hotels, and nightlife — when you want energy after dark.</p><a class="nbhd-row-cta" href="__ORIGIN__/hotels-in-roma-norte">Hotels in Roma Norte →</a></div>
+        <div class="nbhd-tile" style="background-image:url('${NBHD_POLANCO}')"><h3>Polanco</h3><p>Luxury shopping, museums, and upscale dining — the polished side of CDMX.</p><a class="nbhd-row-cta" href="__ORIGIN__/hotels-in-polanco">Hotels in Polanco →</a></div>
+        <div class="nbhd-tile" style="background-image:url('${NBHD_JUAREZ}')"><h3>Juárez</h3><p>Central, connected, and often better value — between Reforma and Roma.</p><a class="nbhd-row-cta" href="__ORIGIN__/hotels-in-juarez">Hotels in Juárez →</a></div>
+        <div class="nbhd-tile" style="background-image:url('${NBHD_CENTRO}')"><h3>Centro Histórico</h3><p>Maximum culture and sightseeing — accept more street energy for iconic access.</p><a class="nbhd-row-cta" href="__ORIGIN__/hotels-in-centro-historico">Hotels in Centro →</a></div>
+        <div class="nbhd-tile" style="background-image:url('${NBHD_COMPARE}')"><h3>Condesa vs Polanco</h3><p>Can&apos;t decide between leafy calm and luxury polish? Start here.</p><a class="nbhd-row-cta" href="__ORIGIN__/condesa-vs-polanco">Compare the two →</a></div>
+      </div>
+      <p class="nbhd-photo-credits">Neighbourhood photos from TravelByVibe&apos;s Mexico City vibe index — Unsplash (Daniel Lerman, Carl Campbell, Roman Bozhko), Flickr / ikarusmedia (CC BY), and Wikimedia Commons.</p>`;
+}
+
 const HUB_LINKS = `
     <nav class="hub-links" aria-label="Mexico City guides">
       <a href="__ORIGIN__/mexico-city-hotels">Mexico City hotels</a>
@@ -263,14 +288,7 @@ PAGES.push({
     </section>
     <section class="msec">
       <h2 class="msec-title">Neighbourhood deep links</h2>
-      <div class="example-grid">
-        <article class="example-card"><div class="ex-icon">🌳</div><h3><a href="__ORIGIN__/hotels-in-condesa">Condesa</a></h3><p>Leafy, walkable, café culture — ideal for first-time visitors who want calm days and easy dinners.</p></article>
-        <article class="example-card"><div class="ex-icon">🍽</div><h3><a href="__ORIGIN__/hotels-in-roma-norte">Roma Norte</a></h3><p>Trendy food scene, design hotels, and nightlife — when you want energy after dark.</p></article>
-        <article class="example-card"><div class="ex-icon">✨</div><h3><a href="__ORIGIN__/hotels-in-polanco">Polanco</a></h3><p>Luxury shopping, museums, and upscale dining — the polished side of CDMX.</p></article>
-        <article class="example-card"><div class="ex-icon">📍</div><h3><a href="__ORIGIN__/hotels-in-juarez">Juárez</a></h3><p>Central, connected, and often better value — between Reforma and Roma.</p></article>
-        <article class="example-card"><div class="ex-icon">🏛</div><h3><a href="__ORIGIN__/hotels-in-centro-historico">Centro Histórico</a></h3><p>Maximum culture and sightseeing — accept more street energy for iconic access.</p></article>
-        <article class="example-card"><div class="ex-icon">⚖</div><h3><a href="__ORIGIN__/condesa-vs-polanco">Condesa vs Polanco</a></h3><p>Can&apos;t decide between leafy calm and luxury polish? Start here.</p></article>
-      </div>
+      ${nbhdGuideGrid()}
     </section>
     ${embedSearch("nbhd-guide-search")}
   </div>`,
@@ -304,7 +322,7 @@ PAGES.push({
         <div class="nbhd-tile" style="background-image:url('${BELLAS}')"><h3>Condesa vibe</h3><p>Parque México mornings, terrace cafés, and art deco walks — relaxed but never sleepy.</p><a class="nbhd-row-cta" href="__ORIGIN__/hotels-in-condesa">Hotels in Condesa →</a></div>
         <div class="nbhd-tile" style="background-image:url('${COYOACAN}')"><h3>Roma Norte vibe</h3><p>Gallery openings, mezcal bars, and the city&apos;s best restaurant density.</p><a class="nbhd-row-cta" href="__ORIGIN__/hotels-in-roma-norte">Hotels in Roma Norte →</a></div>
         <div class="nbhd-tile" style="background-image:url('${SOUMAYA}')"><h3>Polanco vibe</h3><p>Chapultepec runs, flagship dining, and suites that feel intentionally polished.</p><a class="nbhd-row-cta" href="__ORIGIN__/hotels-in-polanco">Hotels in Polanco →</a></div>
-        <div class="nbhd-tile" style="background-image:url('${SKYLINE_OG}')"><h3>Juárez vibe</h3><p>Reforma skyline, creative studios, and a central base without Polanco prices.</p><a class="nbhd-row-cta" href="__ORIGIN__/hotels-in-juarez">Hotels in Juárez →</a></div>
+        <div class="nbhd-tile" style="background-image:url('${NBHD_JUAREZ}')"><h3>Juárez vibe</h3><p>Reforma skyline, creative studios, and a central base without Polanco prices.</p><a class="nbhd-row-cta" href="__ORIGIN__/hotels-in-juarez">Hotels in Juárez →</a></div>
         <div class="nbhd-tile" style="background-image:url('${ZOCALO}')"><h3>Centro vibe</h3><p>Zócalo drama, museum blocks, and cantina nights — maximum city in one weekend.</p><a class="nbhd-row-cta" href="__ORIGIN__/hotels-in-centro-historico">Hotels in Centro →</a></div>
       </div>
     </section>

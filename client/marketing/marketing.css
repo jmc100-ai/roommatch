@@ -659,6 +659,12 @@ li { margin-bottom: 0.35rem; }
   text-decoration: none !important;
 }
 .nbhd-row-cta:hover { color: #fff !important; }
+.nbhd-photo-credits {
+  margin: 4px 0 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: rgba(232, 213, 176, 0.55);
+}
 .example-grid {
   display: grid;
   gap: 14px;
