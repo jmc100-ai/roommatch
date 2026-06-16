@@ -8,9 +8,9 @@ const path = require("path");
 
 const OUT = path.join(__dirname, "..", "client", "marketing");
 const SKYLINE =
-  "https://upload.wikimedia.org/wikipedia/commons/thumb/4/4f/Mexico_City_Skyline_%285604867225%29.jpg/2000px-Mexico_City_Skyline_%285604867225%29.jpg";
+  "https://upload.wikimedia.org/wikipedia/commons/thumb/4/4f/Mexico_City_Skyline_%285604867225%29.jpg/1920px-Mexico_City_Skyline_%285604867225%29.jpg";
 const SKYLINE_OG =
-  "https://upload.wikimedia.org/wikipedia/commons/thumb/4/4f/Mexico_City_Skyline_%285604867225%29.jpg/1200px-Mexico_City_Skyline_%285604867225%29.jpg";
+  "https://upload.wikimedia.org/wikipedia/commons/thumb/4/4f/Mexico_City_Skyline_%285604867225%29.jpg/1280px-Mexico_City_Skyline_%285604867225%29.jpg";
 const BELLAS =
   "https://upload.wikimedia.org/wikipedia/commons/thumb/0/0a/Palacio_de_Bellas_Artes%2C_M%C3%A9xico_D.F.%2C_M%C3%A9xico%2C_2013-10-13%2C_DD_41.jpg/1280px-Palacio_de_Bellas_Artes%2C_M%C3%A9xico_D.F.%2C_M%C3%A9xico%2C_2013-10-13%2C_DD_41.jpg";
 const SOUMAYA =
@@ -117,6 +117,39 @@ function hero({ kicker, h1, lead, heroImage, ctaPrimary, ctaSecondary, utmPrimar
       <div class="hero-cta-row">
         <a class="mcta" href="${utm(utmPrimary)}">${ctaPrimary}</a>
         ${ctaSecondary ? `<a class="mcta-secondary" href="${utm(utmSecondary)}">${ctaSecondary}</a>` : ""}
+      </div>
+      <div class="social-proof" aria-label="Product scale">
+        <span>3,600+ Mexico City hotels indexed</span>
+        <span>Real room photos</span>
+        <span>Free to explore</span>
+      </div>
+    </div>
+  </section>`;
+}
+
+function compareHero({
+  kicker,
+  h1,
+  lead,
+  leftImage,
+  rightImage,
+  leftLabel,
+  rightLabel,
+  ctaPrimary,
+  utmPrimary,
+}) {
+  return `<section class="hero hero--compare">
+    <div class="hero-split" aria-hidden="true">
+      <div class="hero-split-side" style="background-image:url('${leftImage}')"></div>
+      <div class="hero-split-side" style="background-image:url('${rightImage}')"></div>
+    </div>
+    <div class="hero-split-labels" aria-hidden="true"><span>${leftLabel}</span><span>${rightLabel}</span></div>
+    <div class="hero-inner">
+      <p class="hero-kicker">${kicker}</p>
+      <h1>${h1}</h1>
+      <p class="hero-lead">${lead}</p>
+      <div class="hero-cta-row">
+        <a class="mcta" href="${utm(utmPrimary)}">${ctaPrimary}</a>
       </div>
       <div class="social-proof" aria-label="Product scale">
         <span>3,600+ Mexico City hotels indexed</span>
@@ -462,6 +495,10 @@ const comparisons = [
   {
     file: "condesa-vs-polanco.html",
     slug: "condesa-vs-polanco",
+    leftImage: NBHD_CONDESA,
+    rightImage: NBHD_POLANCO,
+    leftLabel: "Condesa",
+    rightLabel: "Polanco",
     h1: "Condesa vs Polanco: Which Mexico City Neighborhood Is Better?",
     lead: "Condesa or Polanco? One is leafy and walkable; the other is polished and luxury-forward. Here is how to choose — and how to find hotels that fit.",
     rows: [
@@ -481,6 +518,10 @@ const comparisons = [
   {
     file: "roma-norte-vs-condesa.html",
     slug: "roma-norte-vs-condesa",
+    leftImage: NBHD_ROMA,
+    rightImage: NBHD_CONDESA,
+    leftLabel: "Roma Norte",
+    rightLabel: "Condesa",
     h1: "Roma Norte vs Condesa: Where to Stay in Mexico City",
     lead: "Neighbours on the map, different energies in practice. Roma Norte trends louder and food-forward; Condesa trends leafier and calmer.",
     rows: [
@@ -503,6 +544,10 @@ const comparisons = [
   {
     file: "juarez-vs-condesa.html",
     slug: "juarez-vs-condesa",
+    leftImage: NBHD_JUAREZ,
+    rightImage: NBHD_CONDESA,
+    leftLabel: "Juárez",
+    rightLabel: "Condesa",
     h1: "Juárez vs Condesa: Which Neighborhood Should You Pick?",
     lead: "Juárez trades leafy residential charm for Reforma connectivity and central value. Condesa keeps the park-side CDMX dream intact.",
     rows: [
@@ -514,7 +559,7 @@ const comparisons = [
       ["Price", "Often better value", "Mid to upper-mid"],
     ],
     condesa: "Park mornings, terrace coffees, and the classic Condesa/Roma photo walk.",
-    polanco: "Juárez when you want Reforma skyline, metro links, and a central pin without Polanco rates.",
+    juarez: "Reforma access, creative studios, and strong value between Roma and Polanco.",
     verdict:
       "<strong>Condesa</strong> wins on vibe and walkable green space. <strong>Juárez</strong> wins on centrality and value. If you will rideshare everywhere anyway, Juárez can be the smarter spend — then use TravelByVibe to nail the room aesthetic.",
     links: '<a href="__ORIGIN__/hotels-in-juarez">Hotels in Juárez</a> · <a href="__ORIGIN__/hotels-in-condesa">Hotels in Condesa</a>',
@@ -530,13 +575,15 @@ for (const c of comparisons) {
   PAGES.push({
     file: c.file,
     html: page(
-      hero({
+      compareHero({
         kicker: "Compare neighbourhoods",
         h1: c.h1,
         lead: c.lead,
-        heroImage: SKYLINE,
+        leftImage: c.leftImage,
+        rightImage: c.rightImage,
+        leftLabel: c.leftLabel,
+        rightLabel: c.rightLabel,
         ctaPrimary: "Find matching hotels →",
-        ctaSecondary: null,
         utmPrimary: `${c.slug}-hero`,
       }) +
         `<div class="wrap-wide">
@@ -565,6 +612,7 @@ for (const c of comparisons) {
         title: `${c.h1} | TravelByVibe`,
         desc: `${c.h1} Compare atmosphere, walkability, restaurants, and price — then find hotels by vibe on TravelByVibe.`,
         canonical: c.slug,
+        ogImage: c.leftImage.replace(/&amp;/g, "&"),
       }
     ),
   });

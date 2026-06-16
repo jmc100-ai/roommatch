@@ -98,6 +98,49 @@ a:hover { color: #fff; }
   background: linear-gradient(180deg, rgba(10, 10, 12, 0.15) 0%, rgba(10, 10, 12, 0.88) 100%);
   pointer-events: none;
 }
+.hero--compare {
+  background-image: none;
+  min-height: 52vh;
+}
+.hero--compare .hero-split {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  z-index: 0;
+}
+.hero--compare .hero-split-side {
+  background: center / cover no-repeat;
+}
+.hero--compare .hero-split-side + .hero-split-side {
+  border-left: 1px solid rgba(10, 10, 12, 0.35);
+}
+.hero--compare .hero-split-labels {
+  position: absolute;
+  top: 14px;
+  left: 0;
+  right: 0;
+  z-index: 2;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  padding: 0 16px;
+  pointer-events: none;
+}
+.hero--compare .hero-split-labels span {
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.78);
+  text-align: center;
+  text-shadow: 0 1px 10px rgba(0, 0, 0, 0.65);
+}
+.hero--compare::after {
+  z-index: 1;
+  background: linear-gradient(180deg, rgba(10, 10, 12, 0.28) 0%, rgba(10, 10, 12, 0.9) 100%);
+}
+.hero--compare .hero-inner {
+  z-index: 2;
+}
 .hero-inner {
   position: relative;
   z-index: 1;
@@ -678,6 +721,20 @@ li { margin-bottom: 0.35rem; }
   border-radius: 14px;
   border: 1px solid var(--border);
   background: var(--surface);
+}
+.example-grid--visual .example-card {
+  padding: 0;
+  overflow: hidden;
+}
+.example-card .ex-thumb {
+  display: block;
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  object-fit: cover;
+  border-bottom: 1px solid var(--border);
+}
+.example-card .ex-body {
+  padding: 16px 18px 15px;
 }
 .example-card .ex-icon {
   font-size: 1.35rem;
