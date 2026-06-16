@@ -19,15 +19,34 @@ function w960(url, width) {
     .replace(/w=960/g, `w=${width}`);
 }
 
+const PICK_FALLBACKS = {
+  paris: {
+    eiffelUnsplash: ["eiffel"],
+    skyline: ["hero", "eiffel", "notreDame"],
+    museum: ["louvre", "notreDame"],
+    street: ["marais", "mouffetard"],
+    bridge: ["pont", "eiffel"],
+  },
+  mexicoCity: {
+    postal: ["zocalo", "skyline"],
+    soumaya: ["bellasArtes", "skyline"],
+  },
+};
+
 function pick(city, key, width = 960) {
-  const base = catalog[city]?.[key]?.["960"];
-  if (!base) return null;
-  if (base.includes("images.unsplash.com")) return w960(base, width);
-  if (base.includes("upload.wikimedia.org")) return w960(base, width);
-  return base;
+  const keys = [key, ...(PICK_FALLBACKS[city]?.[key] || [])];
+  for (const k of keys) {
+    const base = catalog[city]?.[k]?.["960"];
+    if (!base) continue;
+    if (base.includes("images.unsplash.com")) return w960(base, width);
+    if (base.includes("upload.wikimedia.org")) return w960(base, width);
+    return base;
+  }
+  return null;
 }
 
 function htmlAmp(url) {
+  if (!url) return "";
   return url.replace(/&/g, "&amp;");
 }
 
@@ -221,6 +240,7 @@ for (const rel of [
   "client/marketing/mexico-city-visual-search.html",
 ]) {
   const fp = path.join(root, rel);
+  if (!fs.existsSync(fp)) continue;
   let html = bannedReplace(fs.readFileSync(fp, "utf8"), "mexico");
   fs.writeFileSync(fp, html);
   console.log("ban-sweep", rel);
