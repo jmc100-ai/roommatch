@@ -10,6 +10,15 @@ function attrEsc(s) {
     .replace(/"/g, "&quot;");
 }
 
+/** Google Search often ignores SVG-only favicons — include /favicon.ico + PNG sizes. */
+const FAVICON_HEAD = `  <link rel="icon" href="/favicon.ico" sizes="48x48" />
+  <link rel="icon" type="image/png" href="/favicon-48.png" sizes="48x48" />
+  <link rel="icon" type="image/png" href="/favicon-32.png" sizes="32x32" />
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png" sizes="180x180" />
+  <link rel="manifest" href="/site.webmanifest" />
+  <meta name="theme-color" content="#0c0c0e" />`;
+
 const HUB_FAQS = {
   "where-to-stay-in-paris": [
     {
@@ -373,7 +382,7 @@ function marketingHead(m, defaultOgImage) {
   <meta name="twitter:card" content="summary_large_image" />
   <meta name="twitter:title" content="${attrEsc(title)}" />
   <meta name="twitter:description" content="${attrEsc(desc)}" />
-  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+${FAVICON_HEAD}
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,600;1,400&amp;family=DM+Sans:wght@400;500;600&amp;display=swap" rel="stylesheet" />
@@ -466,6 +475,7 @@ function breadcrumbsFor(meta) {
 }
 
 module.exports = {
+  FAVICON_HEAD,
   HUB_FAQS,
   CITY_HUB,
   hubLinks,

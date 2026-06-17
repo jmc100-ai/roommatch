@@ -68,7 +68,11 @@ const htmlSitemap = `<!DOCTYPE html>
   <title>Site Map — All TravelByVibe Destination Guides</title>
   <meta name="description" content="Complete list of TravelByVibe SEO destination guides: Paris and Mexico City hotel search, neighbourhood guides, comparisons, and visual room search." />
   <link rel="canonical" href="__ORIGIN__/sitemap" />
+  <link rel="icon" href="/favicon.ico" sizes="48x48" />
+  <link rel="icon" type="image/png" href="/favicon-48.png" sizes="48x48" />
   <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png" sizes="180x180" />
+  <link rel="manifest" href="/site.webmanifest" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;600&amp;family=DM+Sans:wght@400;500&amp;display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="/marketing/marketing.css" />

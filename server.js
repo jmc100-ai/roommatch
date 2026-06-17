@@ -1830,7 +1830,11 @@ function _legalHtml(title, body) {
 <meta name="robots" content="index,follow,max-image-preview:large"/>
 <title>${title} — TravelByVibe</title>
 <meta name="description" content="${title} for TravelByVibe — a friendly beta for discovering hotels by neighbourhood and real room photos."/>
+<link rel="icon" href="/favicon.ico" sizes="48x48"/>
+<link rel="icon" type="image/png" href="/favicon-48.png" sizes="48x48"/>
 <link rel="icon" type="image/svg+xml" href="/favicon.svg"/>
+<link rel="apple-touch-icon" href="/apple-touch-icon.png" sizes="180x180"/>
+<link rel="manifest" href="/site.webmanifest"/>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300;400;600&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet"/>
 <style>

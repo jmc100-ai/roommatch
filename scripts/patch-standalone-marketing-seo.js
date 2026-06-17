@@ -49,6 +49,11 @@ for (const p of STANDALONE) {
   }
 
   html = html.replace(
+    /(?:\s*<link rel="icon"[^>]*\/>\s*)+/,
+    `\n${seo.FAVICON_HEAD}\n`
+  );
+
+  html = html.replace(
     /(<link rel="stylesheet" href="\/marketing\/marketing\.css" \/>)\s*(?:<script type="application\/ld\+json">[\s\S]*?<\/script>\s*)+/,
     `$1\n${seo.headJsonLd(m).trim()}\n`
   );
