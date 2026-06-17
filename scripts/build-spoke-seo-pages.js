@@ -249,6 +249,74 @@ function writePage(file, html) {
   );
 }
 
+// ── CDMX: travel Mexico City hotels ─────────────────────────────────────────
+{
+  const canonical = "travel-mexico-city-hotels";
+  const h1 = seoField(canonical, "h1", "Travel Mexico City Hotels");
+  const body =
+    hero({
+      kicker: "CDMX · Travel planning",
+      h1,
+      lead:
+        "Planning <strong>travel to Mexico City</strong>? Pick a neighbourhood that fits your trip, run the vibe quiz, then search <strong>3,600+ hotels</strong> by real room and bathroom photos — before you commit on a booking site.",
+      image: SKYLINE,
+      ctaHref: cdmxUtm("cdmx-travel-hotels-hero"),
+      ctaLabel: "Take the 30-second quiz →",
+    }) +
+    `<div class="wrap-wide">
+    <section class="msec" style="padding-top:36px;margin-top:0;border-top:none">
+      <p class="msec-kicker">Start here</p>
+      <h2 class="msec-title">${seoField(canonical, "h2Featured", "How to plan travel to Mexico City hotels")}</h2>
+      <div class="how-row">
+        <article class="how-card">
+          <div class="how-txt"><span class="how-num">1</span><h3>Pick your neighbourhood</h3><p>Condesa and Roma Norte for first trips; Polanco for museums and luxury; Centro for sightseeing density. Read <a href="__ORIGIN__/where-to-stay-in-mexico-city">where to stay in Mexico City</a>.</p></div>
+        </article>
+        <article class="how-card">
+          <div class="how-txt"><span class="how-num">2</span><h3>Shape your vibe</h3><p>Our wizard captures trip pace, must-haves, and room mood — sleek, cozy, design-forward, or classic.</p></div>
+        </article>
+        <article class="how-card">
+          <div class="how-txt"><span class="how-num">3</span><h3>See real rooms</h3><p>Describe rainfall shower, bright suite, or terrace mornings. We rank hotels whose indexed photos match.</p></div>
+        </article>
+      </div>
+    </section>
+    <section class="msec">
+      <p class="msec-kicker">Who you are</p>
+      <h2 class="msec-title">Which traveller are you?</h2>
+      <div class="fgrid">
+        <div class="fcard"><h3>First Mexico City trip</h3><p><strong>Condesa</strong> or <strong>Roma Norte</strong> — walkable parks, cafés, and galleries without a car. See <a href="__ORIGIN__/safe-neighborhoods-mexico-city">safe neighborhoods for tourists</a>.</p></div>
+        <div class="fcard"><h3>Food &amp; nightlife</h3><p><strong>Roma Norte</strong> leads for restaurants and bars; Condesa is calmer after dark. Compare <a href="__ORIGIN__/roma-norte-vs-condesa">Roma Norte vs Condesa</a>.</p></div>
+        <div class="fcard"><h3>Museums &amp; parks</h3><p><strong>Polanco</strong> and <strong>Juárez</strong> near Chapultepec — browse <a href="__ORIGIN__/hotels-near-chapultepec">hotels near Chapultepec</a>.</p></div>
+        <div class="fcard"><h3>Culture sprint</h3><p><strong>Centro Histórico</strong> — Zócalo, Templo Mayor, and cantina culture outside your door.</p></div>
+      </div>
+      <p class="msec-lead" style="margin-top:20px">Full hub: <a href="__ORIGIN__/mexico-city-hotels">travel Mexico City hotels on TravelByVibe</a> · <a href="__ORIGIN__/mexico-city-visual-search">visual room search</a></p>
+    </section>
+    <section class="msec">
+      <h2 class="msec-title">${seoField(canonical, "h2Neighbourhoods", "Travel Mexico City hotels by neighbourhood")}</h2>
+      <nav class="hub-links" aria-label="CDMX hotel neighbourhoods">
+        <a href="__ORIGIN__/hotels-in-condesa">Hotels in Condesa</a>
+        <a href="__ORIGIN__/hotels-in-roma-norte">Hotels in Roma Norte</a>
+        <a href="__ORIGIN__/hotels-in-polanco">Hotels in Polanco</a>
+        <a href="__ORIGIN__/hotels-in-juarez">Hotels in Juárez</a>
+        <a href="__ORIGIN__/hotels-in-centro-historico">Hotels in Centro Histórico</a>
+      </nav>
+    </section>
+    <section class="msec">
+      <h2 class="msec-title">${seoField(canonical, "h2Hotels", "Best Mexico City hotels for travellers")}</h2>
+      ${hotelTiers("condesa", "Mexico City", "cdmx-travel-condesa")}
+    </section>
+    ${embedCdmx("cdmx-travel-hotels-search")}
+  </div>`;
+  writePage(
+    "travel-mexico-city-hotels.html",
+    seo.wrapPage(
+      body,
+      { canonical, city: "Mexico City", pageCategory: "guide", defaultOgImage: SKYLINE_OG, campaign: "cdmx_seo_2026" },
+      cdmxHeader("cdmx-travel-hotels-nav"),
+      "Mexico City"
+    )
+  );
+}
+
 // ── CDMX: safe neighborhoods ───────────────────────────────────────────────
 {
   const canonical = "safe-neighborhoods-mexico-city";
@@ -333,4 +401,4 @@ function writePage(file, html) {
   );
 }
 
-console.log("Done — 4 spoke SEO pages.");
+console.log("Done — 5 spoke SEO pages.");

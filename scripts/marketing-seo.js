@@ -128,6 +128,14 @@ const HUB_FAQS = {
       a: "TravelByVibe indexes room photography across 3,600+ CDMX hotels. Search by vibe — bathroom features, natural light, design mood — before you commit on a booking site.",
     },
     {
+      q: "What are the best hotels for traveling to Mexico City?",
+      a: "Condesa and Roma Norte suit first-time visitors; Polanco for luxury and museums; Centro Histórico for maximum sightseeing. Compare neighbourhoods on our travel guide, then match hotels by real room photos.",
+    },
+    {
+      q: "Where should tourists stay when traveling to Mexico City?",
+      a: "Most international travellers base in Condesa, Roma Norte, Polanco, or Juárez — walkable, well served, and familiar visitor districts. See our safe neighborhoods guide, then browse hotels by vibe.",
+    },
+    {
       q: "What is visual hotel search for Mexico City?",
       a: "Describe the room you want in plain language. We rank hotels whose indexed photos match, plus neighbourhood vibe from our CDMX map.",
     },
@@ -142,6 +150,28 @@ const HUB_FAQS = {
     {
       q: "Is browsing free?",
       a: "Yes. Add dates when you want live rates; booking hands off to partners when you are ready.",
+    },
+  ],
+  "travel-mexico-city-hotels": [
+    {
+      q: "How do I find hotels when traveling to Mexico City?",
+      a: "Start with neighbourhood — Condesa, Roma Norte, Polanco, Juárez, or Centro Histórico — then run TravelByVibe's vibe quiz or describe the room you want. We rank 3,600+ CDMX hotels by real photography before you book elsewhere.",
+    },
+    {
+      q: "What is the best area to stay when traveling to Mexico City?",
+      a: "First-time visitors often pick Condesa or Roma Norte for walkable cafés and parks. Polanco suits museum and luxury trips; Centro Histórico puts the Zócalo on your doorstep.",
+    },
+    {
+      q: "Is it safe to travel to Mexico City for hotels in Roma or Condesa?",
+      a: "Condesa, Roma Norte, Polanco, and Juárez are standard tourist hotel districts — use normal big-city awareness. Our safe neighborhoods guide compares visitor-friendly areas.",
+    },
+    {
+      q: "Can I see hotel rooms before booking my Mexico City trip?",
+      a: "Yes — TravelByVibe is built for that. Search rainfall shower, bright suite, or design mood and browse indexed room and bathroom photos across the city.",
+    },
+    {
+      q: "Do I need dates to browse travel Mexico City hotels?",
+      a: "No. Explore neighbourhoods and room photos for free. Add check-in and check-out when you want live rates from partners.",
     },
   ],
   "mexico-city-hotel-finder": [
@@ -262,6 +292,8 @@ const CITY_HUB = {
   "Mexico City": {
     hotels: "/mexico-city-hotels",
     hotelsLabel: "Mexico City hotels",
+    travelGuide: "/travel-mexico-city-hotels",
+    travelGuideLabel: "Travel Mexico City hotels",
     where: "/where-to-stay-in-mexico-city",
     whereLabel: "Where to stay in Mexico City",
     finder: "/mexico-city-hotel-finder",
@@ -280,7 +312,8 @@ function hubLinks(city) {
     city === "Paris"
       ? `<a href="__ORIGIN__/best-area-to-stay-in-paris-first-time">Paris first-time guide</a>
       <a href="__ORIGIN__/paris-hotels-near-eiffel-tower">Hotels near Eiffel Tower</a>`
-      : `<a href="__ORIGIN__/safe-neighborhoods-mexico-city">Safe neighborhoods CDMX</a>
+      : `<a href="__ORIGIN__/travel-mexico-city-hotels">Travel Mexico City hotels</a>
+      <a href="__ORIGIN__/safe-neighborhoods-mexico-city">Safe neighborhoods CDMX</a>
       <a href="__ORIGIN__/hotels-near-chapultepec">Hotels near Chapultepec</a>`;
   return `
     <nav class="hub-links" aria-label="${city} guides">
@@ -440,7 +473,7 @@ function footer(city, extraLinks) {
     ? ` · <a href="__ORIGIN__${c.crossCity.href}">${c.crossCity.label}</a>`
     : "";
   const cityLinks = c
-    ? `<a href="__ORIGIN__/">Home</a> · <a href="__ORIGIN__${c.hotels}">${c.hotelsLabel}</a> · <a href="__ORIGIN__${c.where}">${c.whereLabel}</a> · <a href="__ORIGIN__${c.visual}">${c.visualLabel}</a>`
+    ? `<a href="__ORIGIN__/">Home</a> · <a href="__ORIGIN__${c.hotels}">${c.hotelsLabel}</a>${c.travelGuide ? ` · <a href="__ORIGIN__${c.travelGuide}">${c.travelGuideLabel}</a>` : ""} · <a href="__ORIGIN__${c.where}">${c.whereLabel}</a> · <a href="__ORIGIN__${c.visual}">${c.visualLabel}</a>`
     : `<a href="__ORIGIN__/">Home</a> · <a href="__ORIGIN__/destinations">Destinations</a>`;
   const tag = c ? c.footerLine : "photo-first hotel discovery";
   return `<footer class="mfoot">

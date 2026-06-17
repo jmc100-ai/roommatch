@@ -187,7 +187,7 @@ PAGES.push({
       kicker: "Mexico City · Neighbourhood guide",
       h1: seoField("where-to-stay-in-mexico-city", "h1", "Where to Stay in Mexico City — Hotels by Neighbourhood"),
       lead:
-        "Condesa, Roma Norte, Polanco, Juárez, or Centro Histórico? This guide maps <strong>neighbourhood character</strong> to the hotels that actually fit — then TravelByVibe matches you using <strong>real room photos</strong>.",
+        "Planning <strong>travel to Mexico City</strong>? Condesa, Roma Norte, Polanco, Juárez, or Centro Histórico — this guide maps <strong>neighbourhood character</strong> to the hotels that actually fit. Browse the <a href=\"__ORIGIN__/mexico-city-hotels\">travel Mexico City hotels</a> hub, then match stays using <strong>real room photos</strong>.",
       heroImage: SKYLINE,
       ctaPrimary: "Take the 30-second quiz →",
       ctaSecondary: "Browse hotels by vibe",
@@ -215,7 +215,7 @@ PAGES.push({
     <section class="msec">
       <p class="msec-kicker">Hotel picks</p>
       <h2 class="msec-title">${seoField("where-to-stay-in-mexico-city", "h2Hotels", "Best Mexico City hotels by neighbourhood")}</h2>
-      <p class="msec-lead">Browse indexed CDMX hotels with real room photos in each barrio — or search all of Mexico City by vibe.</p>
+      <p class="msec-lead">Browse indexed CDMX hotels with real room photos in each barrio — start with <a href="__ORIGIN__/mexico-city-hotels">travel Mexico City hotels</a> or drill into a neighbourhood.</p>
       <p class="msec-lead"><a href="__ORIGIN__/mexico-city-hotels">All Mexico City hotels</a> · <a href="__ORIGIN__/hotels-in-condesa">Hotels in Condesa</a> · <a href="__ORIGIN__/hotels-in-roma-norte">Hotels in Roma Norte</a> · <a href="__ORIGIN__/hotels-in-polanco">Hotels in Polanco</a> · <a href="__ORIGIN__/hotels-in-juarez">Hotels in Juárez</a> · <a href="__ORIGIN__/hotels-in-centro-historico">Hotels in Centro</a></p>
     </section>
     <section class="msec">

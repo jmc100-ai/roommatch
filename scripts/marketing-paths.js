@@ -5,7 +5,8 @@
 const MARKETING_ROUTES = [
   { path: "/destinations", file: "destinations.html", title: "Paris & Mexico City Hotel Guides — Search by Room Photos", city: null, category: "hub" },
   { path: "/sitemap", file: "sitemap.html", title: "Site Map — All Destination Guides", city: null, category: "hub" },
-  { path: "/mexico-city-hotels", file: "mexico-city-hotels.html", title: "Mexico City (CDMX) Hotels — Search Real Room Photos", city: "Mexico City", category: "hub" },
+  { path: "/mexico-city-hotels", file: "mexico-city-hotels.html", title: "Travel Mexico City Hotels — Search by Real Room Photos", city: "Mexico City", category: "hub" },
+  { path: "/travel-mexico-city-hotels", file: "travel-mexico-city-hotels.html", title: "Travel Mexico City Hotels — Plan Your Stay by Vibe", city: "Mexico City", category: "guide" },
   { path: "/where-to-stay-in-mexico-city", file: "where-to-stay-in-mexico-city.html", title: "Where to Stay in Mexico City — Hotels by Neighbourhood", city: "Mexico City", category: "hub" },
   { path: "/mexico-city-neighborhood-guide", file: "mexico-city-neighborhood-guide.html", title: "Mexico City Neighborhood Guide — Hotels & Where to Stay", city: "Mexico City", category: "hub" },
   { path: "/mexico-city-hotel-finder", file: "mexico-city-hotel-finder.html", title: "Mexico City Hotel Finder", city: "Mexico City", category: "hub" },

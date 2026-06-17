@@ -113,8 +113,19 @@ const SEO_META = {
     h2Hotels: "Best Mexico City hotels by neighbourhood",
   },
   "mexico-city-hotels": {
-    title: "Mexico City (CDMX) Hotels — Search Real Room Photos",
-    desc: "Find Mexico City hotels by vibe and real room photos across 3,600+ CDMX properties. Rainfall shower, bright suite, design mood — free to browse.",
+    title: "Travel Mexico City Hotels — Search by Real Room Photos",
+    h1: "Travel Mexico City hotels that match your vibe",
+    desc: "Planning travel to Mexico City? Browse 3,600+ CDMX hotels by neighbourhood vibe and real room photos — rainfall shower, bright suite, design mood — free on TravelByVibe.",
+    h2Travel: "Travel Mexico City hotels by neighbourhood",
+  },
+  "travel-mexico-city-hotels": {
+    title: "Travel Mexico City Hotels — Plan Your Stay by Vibe",
+    h1: "Travel Mexico City Hotels",
+    desc: "Travel Mexico City hotels the smart way — pick Condesa, Roma Norte, Polanco, or Centro, run the vibe quiz, then search 3,600+ properties by real room photos before you book.",
+    breadcrumbLabel: "Travel Mexico City hotels",
+    h2Featured: "How to plan travel to Mexico City hotels",
+    h2Hotels: "Best Mexico City hotels for travellers",
+    h2Neighbourhoods: "Travel Mexico City hotels by neighbourhood",
   },
   "mexico-city-neighborhood-guide": {
     title: "Mexico City Neighborhood Guide — Hotels & Where to Stay",
@@ -248,6 +259,8 @@ function applySeoMeta(meta) {
   if (kw.h2Intro) out.h2Intro = kw.h2Intro;
   if (kw.h2Featured) out.h2Featured = kw.h2Featured;
   if (kw.h2Hotels) out.h2Hotels = kw.h2Hotels;
+  if (kw.h2Travel) out.h2Travel = kw.h2Travel;
+  if (kw.h2Neighbourhoods) out.h2Neighbourhoods = kw.h2Neighbourhoods;
   if (kw.heroAlt) out.heroAlt = kw.heroAlt;
   return out;
 }
