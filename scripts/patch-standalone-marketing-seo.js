@@ -1,10 +1,15 @@
 #!/usr/bin/env node
-/** Patch hand-maintained marketing pages with shared SEO (FAQ, footer, JSON-LD). */
+/** Patch hand-maintained marketing pages with shared SEO (FAQ, footer, JSON-LD, keyword titles). */
 const fs = require("fs");
 const path = require("path");
 const seo = require("./marketing-seo");
+const { applySeoMeta } = require("./marketing-keywords");
 
 const DIR = path.join(__dirname, "..", "client", "marketing");
+
+function attrEsc(s) {
+  return String(s).replace(/&/g, "&amp;").replace(/"/g, "&quot;");
+}
 
 const STANDALONE = [
   { file: "mexico-city-hotels.html", canonical: "mexico-city-hotels" },
@@ -14,24 +19,42 @@ const STANDALONE = [
 for (const p of STANDALONE) {
   const fp = path.join(DIR, p.file);
   let html = fs.readFileSync(fp, "utf8");
-  const title = (html.match(/<title>([^<]+)<\/title>/) || [])[1] || "";
-  const desc = (html.match(/name="description" content="([^"]+)"/) || [])[1] || "";
-  const meta = {
-    title,
-    desc,
+  const m = applySeoMeta({
     canonical: p.canonical,
     city: "Mexico City",
     pageCategory: "hub",
     faqs: seo.HUB_FAQS[p.canonical],
-  };
+    title: "",
+    desc: "",
+  });
+
+  html = html.replace(/<title>[^<]+<\/title>/, `<title>${m.title}</title>`);
+  html = html.replace(/name="description" content="[^"]*"/, `name="description" content="${attrEsc(m.desc)}"`);
+  html = html.replace(/property="og:title" content="[^"]*"/, `property="og:title" content="${attrEsc(m.title)}"`);
+  html = html.replace(/property="og:description" content="[^"]*"/, `property="og:description" content="${attrEsc(m.desc)}"`);
+  if (!html.includes('property="og:site_name"')) {
+    html = html.replace(
+      /<meta property="og:type" content="website" \/>/,
+      `<meta property="og:type" content="website" />\n  <meta property="og:site_name" content="TravelByVibe" />`
+    );
+  }
+  if (!html.includes('name="twitter:title"')) {
+    html = html.replace(
+      /<meta name="twitter:card" content="summary_large_image" \/>/,
+      `<meta name="twitter:card" content="summary_large_image" />\n  <meta name="twitter:title" content="${attrEsc(m.title)}" />\n  <meta name="twitter:description" content="${attrEsc(m.desc)}" />`
+    );
+  } else {
+    html = html.replace(/name="twitter:title" content="[^"]*"/, `name="twitter:title" content="${attrEsc(m.title)}"`);
+    html = html.replace(/name="twitter:description" content="[^"]*"/, `name="twitter:description" content="${attrEsc(m.desc)}"`);
+  }
 
   html = html.replace(
-    /<script type="application\/ld\+json">[\s\S]*?<\/script>/,
-    seo.headJsonLd(meta).trim()
+    /(<link rel="stylesheet" href="\/marketing\/marketing\.css" \/>)\s*(?:<script type="application\/ld\+json">[\s\S]*?<\/script>\s*)+/,
+    `$1\n${seo.headJsonLd(m).trim()}\n`
   );
 
-  if (meta.faqs && !html.includes("faq-sec")) {
-    html = html.replace(/(\s*)<\/main>/, `\n${seo.faqSection(meta.faqs)}\n  </main>`);
+  if (m.faqs && !html.includes("faq-sec")) {
+    html = html.replace(/(\s*)<\/main>/, `\n${seo.faqSection(m.faqs)}\n  </main>`);
   }
 
   html = html.replace(/<footer class="mfoot">[\s\S]*<\/html>/, seo.footer("Mexico City"));

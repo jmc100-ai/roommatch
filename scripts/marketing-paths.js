@@ -3,10 +3,10 @@
  * Used by build-sitemap.js, build-html-sitemap (via build-sitemap), and server.js.
  */
 const MARKETING_ROUTES = [
-  { path: "/destinations", file: "destinations.html", title: "Destinations — Photo-First Hotel Search", city: null, category: "hub" },
+  { path: "/destinations", file: "destinations.html", title: "Paris & Mexico City Hotel Guides — Search by Room Photos", city: null, category: "hub" },
   { path: "/sitemap", file: "sitemap.html", title: "Site Map — All Destination Guides", city: null, category: "hub" },
-  { path: "/mexico-city-hotels", file: "mexico-city-hotels.html", title: "Mexico City Hotels — See Real Rooms", city: "Mexico City", category: "hub" },
-  { path: "/where-to-stay-in-mexico-city", file: "where-to-stay-in-mexico-city.html", title: "Where to Stay in Mexico City", city: "Mexico City", category: "hub" },
+  { path: "/mexico-city-hotels", file: "mexico-city-hotels.html", title: "Mexico City (CDMX) Hotels — Search Real Room Photos", city: "Mexico City", category: "hub" },
+  { path: "/where-to-stay-in-mexico-city", file: "where-to-stay-in-mexico-city.html", title: "Where to Stay in Mexico City (CDMX) — Neighbourhood Guide", city: "Mexico City", category: "hub" },
   { path: "/mexico-city-neighborhood-guide", file: "mexico-city-neighborhood-guide.html", title: "Mexico City Neighborhood Guide", city: "Mexico City", category: "hub" },
   { path: "/mexico-city-hotel-finder", file: "mexico-city-hotel-finder.html", title: "Mexico City Hotel Finder", city: "Mexico City", category: "hub" },
   { path: "/cdmx-neighborhood-stays", file: "where-to-stay-in-mexico-city.html", title: "Where to Stay in Mexico City", city: "Mexico City", category: "hub", alias: true },
@@ -19,13 +19,13 @@ const MARKETING_ROUTES = [
   { path: "/roma-norte-vs-condesa", file: "roma-norte-vs-condesa.html", title: "Roma Norte vs Condesa", city: "Mexico City", category: "comparison" },
   { path: "/juarez-vs-condesa", file: "juarez-vs-condesa.html", title: "Juárez vs Condesa", city: "Mexico City", category: "comparison" },
   { path: "/mexico-city-boutique-hotels", file: "mexico-city-boutique-hotels.html", title: "Boutique Hotels in Mexico City", city: "Mexico City", category: "vibe" },
-  { path: "/mexico-city-cafe-vibe-hotels", file: "mexico-city-cafe-vibe-hotels.html", title: "Café Vibe Hotels in Mexico City", city: "Mexico City", category: "vibe" },
+  { path: "/mexico-city-cafe-vibe-hotels", file: "mexico-city-cafe-vibe-hotels.html", title: "Best Café Culture Hotels in Mexico City (Condesa & Roma)", city: "Mexico City", category: "vibe" },
   { path: "/mexico-city-local-neighborhood-hotels", file: "mexico-city-local-neighborhood-hotels.html", title: "Local Neighborhood Hotels in Mexico City", city: "Mexico City", category: "vibe" },
   { path: "/mexico-city-design-hotels", file: "mexico-city-design-hotels.html", title: "Design Hotels in Mexico City", city: "Mexico City", category: "vibe" },
-  { path: "/mexico-city-visual-search", file: "mexico-city-visual-search.html", title: "Visual Hotel Search for Mexico City", city: "Mexico City", category: "hub" },
+  { path: "/mexico-city-visual-search", file: "mexico-city-visual-search.html", title: "CDMX Hotels — Search by Rainfall Shower & Room Photos", city: "Mexico City", category: "hub" },
   { path: "/paris-hotels", file: "paris-hotels.html", title: "Paris Hotels — See Real Rooms", city: "Paris", category: "hub" },
   { path: "/where-to-stay-in-paris", file: "where-to-stay-in-paris.html", title: "Where to Stay in Paris", city: "Paris", category: "hub" },
-  { path: "/paris-neighborhood-stays", file: "paris-neighborhood-stays.html", title: "Paris Neighbourhood Stays", city: "Paris", category: "hub" },
+  { path: "/paris-neighborhood-stays", file: "paris-neighborhood-stays.html", title: "Where to Stay in Paris by Neighbourhood", city: "Paris", category: "hub" },
   { path: "/paris-neighborhood-guide", file: "paris-neighborhood-guide.html", title: "Paris Neighborhood Guide", city: "Paris", category: "hub" },
   { path: "/paris-hotel-finder", file: "paris-hotel-finder.html", title: "Paris Hotel Finder", city: "Paris", category: "hub" },
   { path: "/hotels-in-le-marais", file: "hotels-in-le-marais.html", title: "Hotels in Le Marais, Paris", city: "Paris", category: "neighbourhood" },
@@ -40,7 +40,11 @@ const MARKETING_ROUTES = [
   { path: "/paris-luxury-hotels", file: "paris-luxury-hotels.html", title: "Luxury Hotels in Paris", city: "Paris", category: "vibe" },
   { path: "/paris-romantic-hotels", file: "paris-romantic-hotels.html", title: "Romantic Hotels in Paris", city: "Paris", category: "vibe" },
   { path: "/paris-classic-hotels", file: "paris-classic-hotels.html", title: "Classic & Haussmann Hotels in Paris", city: "Paris", category: "vibe" },
-  { path: "/paris-visual-search", file: "paris-visual-search.html", title: "Visual Hotel Search for Paris", city: "Paris", category: "hub" },
+  { path: "/paris-visual-search", file: "paris-visual-search.html", title: "Paris Hotels — Search by Rainfall Shower & Room Photos", city: "Paris", category: "hub" },
+  { path: "/best-area-to-stay-in-paris-first-time", file: "best-area-to-stay-in-paris-first-time.html", title: "Best Area to Stay in Paris for First-Time Visitors", city: "Paris", category: "guide" },
+  { path: "/paris-hotels-near-eiffel-tower", file: "paris-hotels-near-eiffel-tower.html", title: "Paris Hotels Near the Eiffel Tower", city: "Paris", category: "guide" },
+  { path: "/safe-neighborhoods-mexico-city", file: "safe-neighborhoods-mexico-city.html", title: "Safe Neighborhoods in Mexico City for Tourists", city: "Mexico City", category: "guide" },
+  { path: "/hotels-near-chapultepec", file: "hotels-near-chapultepec.html", title: "Best Hotels near Chapultepec Mexico City", city: "Mexico City", category: "guide" },
 ];
 
 /** Routes for XML sitemap (unique paths, no alias duplicates). */

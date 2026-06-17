@@ -2,6 +2,13 @@
  * Shared SEO helpers for marketing page generators (FAQ, breadcrumbs, hub links).
  */
 const { escHtml } = require("./marketing-seo-utils");
+const { applySeoMeta } = require("./marketing-keywords");
+
+function attrEsc(s) {
+  return String(s || "")
+    .replace(/&/g, "&amp;")
+    .replace(/"/g, "&quot;");
+}
 
 const HUB_FAQS = {
   "where-to-stay-in-paris": [
@@ -164,6 +171,70 @@ const HUB_FAQS = {
       a: "No — browse by photos first. Add check-in and check-out when you want live rates.",
     },
   ],
+  "best-area-to-stay-in-paris-first-time": [
+    {
+      q: "What is the best area to stay in Paris for the first time?",
+      a: "Le Marais and the Latin Quarter lead for first-timers: flat, central, and walkable to major sights. Saint-Germain suits travellers who want Left Bank calm over weekend buzz.",
+    },
+    {
+      q: "Should first-time visitors stay near the Eiffel Tower?",
+      a: "You can, but many first-timers prefer Le Marais or the Latin Quarter for neighbourhood character and dinner options. Search Eiffel-view rooms on our visual search if the tower is a must.",
+    },
+    {
+      q: "Is Montmartre good for a first Paris trip?",
+      a: "Montmartre is romantic and scenic but hillier and slightly removed from the core. Great for a second half of a trip or couples; Marais/Latin Quarter are easier for sightseeing on foot.",
+    },
+    {
+      q: "How do I pick a hotel once I choose the area?",
+      a: "Use TravelByVibe to describe the room you want — rainfall shower, Haussmann light, quiet street — and we rank real Paris hotel photos in your chosen neighbourhood.",
+    },
+  ],
+  "paris-hotels-near-eiffel-tower": [
+    {
+      q: "Which Paris neighbourhood is best for Eiffel Tower views?",
+      a: "Trocadéro and parts of the 7th arrondissement face the tower; Latin Quarter and Opéra hotels often advertise partial Eiffel glimpses. Search visual keywords like Eiffel view or balcony.",
+    },
+    {
+      q: "Are hotels near the Eiffel Tower expensive?",
+      a: "The immediate Trocadéro area skews upscale. Latin Quarter and Montmartre can offer view-adjacent stays with more variety — compare on TravelByVibe by room photos, not just price.",
+    },
+    {
+      q: "Can I search for hotels with an Eiffel Tower view?",
+      a: "Yes — try Eiffel view, balcony at golden hour, or tower glimpse in visual search. We surface hotels whose indexed photos match.",
+    },
+  ],
+  "safe-neighborhoods-mexico-city": [
+    {
+      q: "What are the safest neighborhoods in Mexico City for tourists?",
+      a: "Condesa, Roma Norte, Polanco, and Juárez are the most common visitor bases — walkable, well served, and familiar to international travellers. Use normal big-city awareness at night.",
+    },
+    {
+      q: "Is Condesa safe for tourists?",
+      a: "Condesa is one of CDMX's most popular visitor districts — parks, restaurants, and galleries in a compact radius. Stay aware as you would in any major city.",
+    },
+    {
+      q: "Is Polanco safer than Roma Norte?",
+      a: "Polanco feels more residential and embassy-adjacent; Roma Norte is livelier at night. Both are standard tourist choices — pick based on vibe, not fear.",
+    },
+    {
+      q: "Should I avoid Centro Histórico?",
+      a: "Centro is vibrant and iconic but busier and louder. Many visitors stay in Condesa/Roma and day-trip to the Zócalo — others love being in the thick of it.",
+    },
+  ],
+  "hotels-near-chapultepec": [
+    {
+      q: "What is the best area to stay near Chapultepec Park?",
+      a: "Polanco is the classic Chapultepec base — Museo Soumaya, leafy avenues, and quick park access. Juárez and Condesa are slightly south with strong café culture.",
+    },
+    {
+      q: "Which hotels are walking distance to Chapultepec?",
+      a: "Browse our Polanco and Juárez hotel picks — many properties sit within a 10–15 minute walk of the park's eastern edge.",
+    },
+    {
+      q: "Is Polanco or Condesa better for Chapultepec?",
+      a: "Polanco for museum mile and upscale dining; Condesa for park-adjacent mornings with a leafier, café-led rhythm.",
+    },
+  ],
 };
 
 const CITY_HUB = {
@@ -196,10 +267,17 @@ const CITY_HUB = {
 function hubLinks(city) {
   const c = CITY_HUB[city];
   if (!c) return "";
+  const guide =
+    city === "Paris"
+      ? `<a href="__ORIGIN__/best-area-to-stay-in-paris-first-time">Paris first-time guide</a>
+      <a href="__ORIGIN__/paris-hotels-near-eiffel-tower">Hotels near Eiffel Tower</a>`
+      : `<a href="__ORIGIN__/safe-neighborhoods-mexico-city">Safe neighborhoods CDMX</a>
+      <a href="__ORIGIN__/hotels-near-chapultepec">Hotels near Chapultepec</a>`;
   return `
     <nav class="hub-links" aria-label="${city} guides">
       <a href="__ORIGIN__${c.hotels}">${c.hotelsLabel}</a>
       <a href="__ORIGIN__${c.where}">${c.whereLabel}</a>
+      ${guide}
       <a href="__ORIGIN__/hotels-in-${city === "Paris" ? "le-marais" : "condesa"}">${city === "Paris" ? "Hotels in Le Marais" : "Hotels in Condesa"}</a>
       <a href="__ORIGIN__/hotels-in-${city === "Paris" ? "saint-germain" : "polanco"}">${city === "Paris" ? "Hotels in Saint-Germain" : "Hotels in Polanco"}</a>
       <a href="__ORIGIN__/${city === "Paris" ? "marais-vs-saint-germain" : "condesa-vs-polanco"}">${city === "Paris" ? "Marais vs Saint-Germain" : "Condesa vs Polanco"}</a>
@@ -275,6 +353,52 @@ function faqSchema(faqs) {
   };
 }
 
+function marketingHead(m, defaultOgImage) {
+  const { title, desc, canonical, ogImage } = m;
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="robots" content="index,follow,max-image-preview:large" />
+  <title>${title}</title>
+  <meta name="description" content="${attrEsc(desc)}" />
+  <link rel="canonical" href="__ORIGIN__/${canonical}" />
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="TravelByVibe" />
+  <meta property="og:title" content="${attrEsc(title)}" />
+  <meta property="og:description" content="${attrEsc(desc)}" />
+  <meta property="og:url" content="__ORIGIN__/${canonical}" />
+  <meta property="og:image" content="${ogImage || defaultOgImage}" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="${attrEsc(title)}" />
+  <meta name="twitter:description" content="${attrEsc(desc)}" />
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,600;1,400&amp;family=DM+Sans:wght@400;500;600&amp;display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/marketing/marketing.css" />
+${headJsonLd(m)}
+</head>`;
+}
+
+function wrapPage(body, meta, headerHtml, city) {
+  const m = applySeoMeta(meta);
+  if (!m.faqs && HUB_FAQS[m.canonical]) m.faqs = HUB_FAQS[m.canonical];
+  if (!m.breadcrumbs) m.breadcrumbs = breadcrumbsFor(m);
+  const bc = m.breadcrumbs ? breadcrumbNav(m.breadcrumbs) : "";
+  let outBody = body;
+  if (m.faqs && !body.includes("faq-sec")) outBody = body + faqSection(m.faqs);
+  return (
+    marketingHead(m, meta.defaultOgImage) +
+    `\n<body data-marketing-city="${city || ""}" data-marketing-campaign="${meta.campaign || ""}">\n` +
+    headerHtml +
+    bc +
+    outBody +
+    footer(city, meta.footerExtra)
+  );
+}
+
 function jsonLdScripts(schemas) {
   return (schemas || [])
     .filter(Boolean)
@@ -332,7 +456,7 @@ function breadcrumbsFor(meta) {
 
   if (cat === "hub" || !cat) return null;
 
-  if (cat === "neighbourhood" || cat === "comparison") {
+  if (cat === "neighbourhood" || cat === "comparison" || cat === "guide") {
     return [...base, { path: c.where, label: c.whereLabel }, { path: `/${meta.canonical}`, label: pageLabel }];
   }
   if (cat === "vibe") {
@@ -348,6 +472,9 @@ module.exports = {
   breadcrumbNav,
   faqSection,
   headJsonLd,
+  marketingHead,
+  wrapPage,
   footer,
   breadcrumbsFor,
+  applySeoMeta,
 };

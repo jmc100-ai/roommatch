@@ -6,6 +6,7 @@
 const fs = require("fs");
 const path = require("path");
 const seo = require("./marketing-seo");
+const { seoField } = require("./marketing-keywords");
 
 const OUT = path.join(__dirname, "..", "client", "marketing");
 const IMG = JSON.parse(
@@ -35,32 +36,14 @@ function utm(content) {
   return `__ORIGIN__/?city=Paris&amp;utm_source=travelbyvibe&amp;utm_medium=landing&amp;utm_campaign=paris_seo_2026&amp;utm_content=${content}`;
 }
 
-function head(meta) {
-  const { title, desc, canonical, ogImage } = meta;
-  return `<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta name="robots" content="index,follow,max-image-preview:large" />
-  <title>${title}</title>
-  <meta name="description" content="${desc}" />
-  <link rel="canonical" href="__ORIGIN__/${canonical}" />
-  <meta property="og:type" content="website" />
-  <meta property="og:title" content="${title}" />
-  <meta property="og:description" content="${desc}" />
-  <meta property="og:url" content="__ORIGIN__/${canonical}" />
-  <meta property="og:image" content="${ogImage || EIFFEL_OG}" />
-  <meta name="twitter:card" content="summary_large_image" />
-  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,600;1,400&amp;family=DM+Sans:wght@400;500;600&amp;display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="/marketing/marketing.css" />
-${seo.headJsonLd(meta)}
-</head>`;
+function page(body, meta) {
+  return seo.wrapPage(
+    body,
+    { defaultOgImage: EIFFEL_OG, campaign: "paris_seo_2026", ...meta },
+    header(meta.utmNav || meta.canonical.replace(/-/g, "_")),
+    "Paris"
+  );
 }
-
 function header(navCta) {
   return `<header class="mhead">
     <div class="mhead-inner">
@@ -79,8 +62,9 @@ function header(navCta) {
   </header>`;
 }
 
-function hero({ kicker, h1, lead, heroImage, ctaPrimary, ctaSecondary, utmPrimary, utmSecondary }) {
-  return `<section class="hero" style="background-image:url('${heroImage || EIFFEL_HERO}')">
+function hero({ kicker, h1, lead, heroImage, heroAlt, ctaPrimary, ctaSecondary, utmPrimary, utmSecondary }) {
+  const aria = heroAlt ? ` role="img" aria-label="${heroAlt.replace(/"/g, "&quot;")}"` : "";
+  return `<section class="hero"${aria} style="background-image:url('${heroImage || EIFFEL_HERO}')">
     <div class="hero-inner">
       <p class="hero-kicker">${kicker}</p>
       <h1>${h1}</h1>
@@ -163,23 +147,6 @@ function embedSearch(utmContent) {
     </script>`;
 }
 
-function page(body, meta) {
-  meta.city = meta.city || "Paris";
-  if (!meta.faqs && seo.HUB_FAQS[meta.canonical]) meta.faqs = seo.HUB_FAQS[meta.canonical];
-  if (!meta.breadcrumbs) meta.breadcrumbs = seo.breadcrumbsFor(meta);
-  const bc = meta.breadcrumbs ? seo.breadcrumbNav(meta.breadcrumbs) : "";
-  let outBody = body;
-  if (meta.faqs && !body.includes("faq-sec")) outBody = body + seo.faqSection(meta.faqs);
-  return (
-    head(meta) +
-    `\n<body data-marketing-city="Paris" data-marketing-campaign="paris_seo_2026">\n` +
-    header(meta.utmNav || meta.canonical.replace(/-/g, "_")) +
-    bc +
-    outBody +
-    seo.footer("Paris", meta.footerExtra)
-  );
-}
-
 function nbhdGuideGrid() {
   return `<div class="nbhd-grid">
         <div class="nbhd-tile" style="background-image:url('${MARAIS}')"><h3>Le Marais</h3><p>Medieval lanes, galleries, and falafel queues — hip without needing a car.</p><a class="nbhd-row-cta" href="__ORIGIN__/hotels-in-le-marais">Hotels in Le Marais →</a></div>
@@ -212,7 +179,7 @@ PAGES.push({
       `<div class="wrap-wide">
     <section class="msec" style="padding-top:36px;margin-top:0;border-top:none">
       <p class="msec-kicker">At a glance</p>
-      <h2 class="msec-title">Best neighbourhoods at a glance</h2>
+      <h2 class="msec-title">${seoField("where-to-stay-in-paris", "h2Featured", "Best neighbourhoods at a glance")}</h2>
       ${HUB_LINKS}
       <div class="compare-wrap" style="margin-top:24px">
         <table class="compare-table">
@@ -231,9 +198,9 @@ PAGES.push({
       <p class="msec-kicker">Match your style</p>
       <h2 class="msec-title">Which arrondissement fits your trip?</h2>
       <div class="fgrid">
-        <div class="fcard"><h3>First visit + walkable icons</h3><p><strong>Le Marais</strong> or <strong>Latin Quarter</strong> — cobblestones, river access, and museum density without a car.</p></div>
+        <div class="fcard"><h3>First visit + walkable icons</h3><p><strong>Le Marais</strong> or <strong>Latin Quarter</strong> — cobblestones, river access, and museum density without a car. See our <a href="__ORIGIN__/best-area-to-stay-in-paris-first-time">first-time Paris guide</a>.</p></div>
         <div class="fcard"><h3>Left Bank literary calm</h3><p><strong>Saint-Germain</strong> — wine bars, bookshops, and classic Paris mornings.</p></div>
-        <div class="fcard"><h3>Romance + skyline views</h3><p><strong>Montmartre</strong> — steep streets, Sacré-Cœur sunsets, and cosy room moods.</p></div>
+        <div class="fcard"><h3>Romance + skyline views</h3><p><strong>Montmartre</strong> — steep streets, Sacré-Cœur sunsets, and cosy room moods. For Eiffel views, see <a href="__ORIGIN__/paris-hotels-near-eiffel-tower">hotels near the Eiffel Tower</a>.</p></div>
         <div class="fcard"><h3>Luxury + grand avenues</h3><p><strong>Opéra &amp; Champs</strong> — palace hotels and evening lights when you want the postcard.</p></div>
       </div>
       ${quizCta("<strong>Not sure?</strong> Our vibe wizard captures trip pace, must-haves, and neighbourhood feel — then ranks Paris hotels with real room photography.", "where-to-stay-paris-quiz")}
@@ -258,13 +225,11 @@ PAGES.push({
       <a class="mcta" href="${utm("where-to-stay-paris-footer")}">Start in Paris — free</a>
     </div>
   </main>`,
-      {
-        title: "Where to Stay in Paris — Neighbourhood Guide | TravelByVibe",
-        desc: "Where to stay in Paris: compare Le Marais, Saint-Germain, Montmartre, Latin Quarter, and Opéra — then find hotels by vibe and real room photos.",
-        canonical: "where-to-stay-in-paris",
-        city: "Paris",
-        pageCategory: "hub",
-      }
+    {
+      canonical: "where-to-stay-in-paris",
+      city: "Paris",
+      pageCategory: "hub",
+    }
   ),
 });
 
@@ -292,11 +257,7 @@ PAGES.push({
     </section>
     ${embedSearch("paris-nbhd-guide-search")}
   </div>`,
-    {
-      title: "Paris Neighborhood Guide — Where to Stay | TravelByVibe",
-      desc: "Paris neighborhood guide: Le Marais, Saint-Germain, Montmartre, Latin Quarter, and Opéra — with hotel picks and vibe search.",
-      canonical: "paris-neighborhood-guide",
-    }
+    { canonical: "paris-neighborhood-guide", city: "Paris", pageCategory: "hub" }
   ),
 });
 
@@ -326,11 +287,7 @@ PAGES.push({
     </section>
     ${HUB_LINKS}
   </div>`,
-    {
-      title: "Paris Hotel Finder — Where to Stay by Vibe | TravelByVibe",
-      desc: "Where should you stay in Paris? Compare Marais, Saint-Germain, Montmartre, and more — then search hotels with real room photos.",
-      canonical: "paris-hotel-finder",
-    }
+    { canonical: "paris-hotel-finder", city: "Paris", pageCategory: "hub" }
   ),
 });
 
@@ -388,11 +345,7 @@ PAGES.push({
       <a class="mcta" href="${utm("paris-hotels-footer")}">Search Paris hotels</a>
     </div>
   </main>`,
-    {
-      title: "Paris Hotels — See Real Rooms Before You Book | TravelByVibe",
-      desc: "Discover Paris hotels by vibe and real room photos. Haussmann light, rainfall shower, Left Bank mood — matched to actual hotel photography.",
-      canonical: "paris-hotels",
-    }
+    { canonical: "paris-hotels", city: "Paris", pageCategory: "hub" }
   ),
 });
 
@@ -402,7 +355,7 @@ PAGES.push({
   html: page(
     hero({
       kicker: "Paris · Neighbourhoods",
-      h1: "Where you stay shapes your Paris story",
+      h1: seoField("paris-neighborhood-stays", "h1", "Where you stay shapes your Paris story"),
       lead: "TravelByVibe connects <strong>neighbourhood energy</strong> with <strong>hotel room reality</strong>. Tell us if you want icons-and-buzz, calm-and-central, village-like streets, or grand boulevard sparkle.",
       heroImage: EIFFEL_HERO,
       ctaPrimary: "Start in Paris →",
@@ -428,11 +381,7 @@ PAGES.push({
     </section>
     ${embedSearch("paris-nbhd-stays-search")}
   </div>`,
-    {
-      title: "Paris Neighbourhood Stays — Match Your Vibe | TravelByVibe",
-      desc: "Plan Paris stays by neighbourhood vibe — Marais, Saint-Germain, Montmartre and more — with AI room search.",
-      canonical: "paris-neighborhood-stays",
-    }
+    { canonical: "paris-neighborhood-stays", city: "Paris", pageCategory: "hub" }
   ),
 });
 
@@ -442,7 +391,7 @@ PAGES.push({
   html: page(
     hero({
       kicker: "Paris · Visual search",
-      h1: "Search the room you can picture—not the brochure cliché",
+      h1: seoField("paris-visual-search", "h1", "Search the room you can picture—not the brochure cliché"),
       lead: "Type the scene: <strong>Haussmann bedroom, rainfall shower, balcony over rooftops, art-deco suite</strong>. We line up <strong>real Paris hotel room photos</strong> so you judge with your eyes.",
       heroImage: EIFFEL_HERO,
       ctaPrimary: "Search Paris hotels →",
@@ -485,11 +434,7 @@ PAGES.push({
     <p>Pair with the <a href="__ORIGIN__/where-to-stay-in-paris">neighbourhood guide</a> when location matters as much as the bathroom.</p>
     <div class="cta-band"><p>Describe your Paris room.</p><a class="mcta" href="${utm("paris-visual-search-footer")}">Search Paris hotels</a></div>
   </main>`,
-    {
-      title: "Visual Hotel Search for Paris — Describe the Room You Want | TravelByVibe",
-      desc: "Search Paris hotels by describing your ideal room — rain shower, Haussmann light, balcony, art-deco mood — matched to real photos.",
-      canonical: "paris-visual-search",
-    }
+    { canonical: "paris-visual-search", city: "Paris", pageCategory: "hub" }
   ),
 });
 
@@ -558,9 +503,10 @@ for (const n of nbhdPages) {
     html: page(
       hero({
         kicker: "Paris hotels",
-        h1: n.h1,
+        h1: seoField(n.slug, "h1", n.h1),
         lead: n.lead,
         heroImage: n.hero,
+        heroAlt: seoField(n.slug, "heroAlt", ""),
         ctaPrimary: "Find more hotels by vibe →",
         ctaSecondary: "Take the quiz",
         utmPrimary: `${n.slug}-hero`,
@@ -576,7 +522,7 @@ for (const n of nbhdPages) {
     </section>
     <section class="msec">
       <p class="msec-kicker">Top picks</p>
-      <h2 class="msec-title">Hotel recommendations</h2>
+      <h2 class="msec-title">${seoField(n.slug, "h2Featured", "Hotel recommendations")}</h2>
       <p class="msec-lead">Cards load live names and photos from our indexed Paris catalog. Open any hotel for room galleries.</p>
       ${hotelTiers(n.preset, n.slug)}
       <div class="section-cta"><a class="mcta" href="${utm(n.slug + "-more")}">Find more hotels by vibe →</a></div>
@@ -590,12 +536,10 @@ for (const n of nbhdPages) {
     <div class="cta-band"><p>Explore ${n.kw || n.h1.toLowerCase()} with real photography.</p><a class="mcta" href="${utm(n.slug + "-footer")}">Search Paris hotels</a></div>
   </main>`,
       {
-        title: `${n.h1} — See Real Rooms | TravelByVibe`,
-        desc: `Best hotels in ${nbhdName}: luxury, boutique, and value picks with real room photos on TravelByVibe.`,
         canonical: n.slug,
         city: "Paris",
         pageCategory: "neighbourhood",
-        breadcrumbLabel: n.h1.replace(/^Best Hotels in /, "Hotels in ").replace(/ Paris$/, ""),
+        breadcrumbLabel: seoField(n.slug, "h2Featured", n.h1.replace(/^Best Hotels in /, "Hotels in ").replace(/ Paris$/, "")),
       }
     ),
   });
@@ -720,8 +664,6 @@ for (const c of comparisons) {
     ${HUB_LINKS}
   </div>`,
       {
-        title: `${c.h1} | TravelByVibe`,
-        desc: `${c.h1} Compare atmosphere, walkability, restaurants, and price — then find hotels by vibe.`,
         canonical: c.slug,
         ogImage: c.leftImage,
         city: "Paris",
@@ -777,6 +719,13 @@ const vibePages = [
 ];
 
 for (const v of vibePages) {
+  const vm = seo.applySeoMeta({
+    canonical: v.slug,
+    city: "Paris",
+    pageCategory: "vibe",
+    title: `${v.h1} | TravelByVibe`,
+    breadcrumbLabel: v.h1.replace(/&amp;/g, "&"),
+  });
   let hotelBlocks = "";
   if (v.sections) {
     hotelBlocks = v.sections
@@ -793,7 +742,7 @@ for (const v of vibePages) {
     html: page(
       hero({
         kicker: "TravelByVibe picks",
-        h1: v.h1,
+        h1: vm.h1 || v.h1,
         lead: v.lead,
         heroImage: GARNIER,
         ctaPrimary: "Discover more by vibe →",
@@ -804,26 +753,19 @@ for (const v of vibePages) {
         `<div class="wrap-wide">
     <section class="msec" style="padding-top:36px;margin-top:0;border-top:none">
       <p class="msec-kicker">What makes a match</p>
-      <h2 class="msec-title">What we mean by vibe match</h2>
+      <h2 class="msec-title">${vm.h2Intro || "What we mean by vibe match"}</h2>
       <p class="msec-lead">${v.intro}</p>
       ${HUB_LINKS}
     </section>
     <section class="msec">
       <p class="msec-kicker">Featured stays</p>
-      <h2 class="msec-title">Hotels to start with</h2>
+      <h2 class="msec-title">${vm.h2Featured || "Hotels to start with"}</h2>
       ${hotelBlocks}
       <div class="section-cta"><a class="mcta" href="${utm(v.slug + "-more")}">Discover more Paris hotels →</a></div>
     </section>
     ${embedSearch(v.slug + "-search")}
   </div>`,
-      {
-        title: `${v.h1} | TravelByVibe`,
-        desc: `${v.h1}: curated picks plus AI room-photo search across Paris hotels.`,
-        canonical: v.slug,
-        city: "Paris",
-        pageCategory: "vibe",
-        breadcrumbLabel: v.h1.replace(/&amp;/g, "&"),
-      }
+      vm,
     ),
   });
 }

@@ -6,6 +6,7 @@
 const fs = require("fs");
 const path = require("path");
 const seo = require("./marketing-seo");
+const { seoField } = require("./marketing-keywords");
 
 const OUT = path.join(__dirname, "..", "client", "marketing");
 const SKYLINE =
@@ -54,30 +55,13 @@ function utm(content) {
   return `__ORIGIN__/?city=Mexico%20City&amp;utm_source=travelbyvibe&amp;utm_medium=landing&amp;utm_campaign=cdmx_seo_2026&amp;utm_content=${content}`;
 }
 
-function head(meta) {
-  const { title, desc, canonical, ogImage } = meta;
-  return `<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta name="robots" content="index,follow,max-image-preview:large" />
-  <title>${title}</title>
-  <meta name="description" content="${desc}" />
-  <link rel="canonical" href="__ORIGIN__/${canonical}" />
-  <meta property="og:type" content="website" />
-  <meta property="og:title" content="${title}" />
-  <meta property="og:description" content="${desc}" />
-  <meta property="og:url" content="__ORIGIN__/${canonical}" />
-  <meta property="og:image" content="${ogImage || SKYLINE_OG}" />
-  <meta name="twitter:card" content="summary_large_image" />
-  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,600;1,400&amp;family=DM+Sans:wght@400;500;600&amp;display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="/marketing/marketing.css" />
-${seo.headJsonLd(meta)}
-</head>`;
+function page(body, meta) {
+  return seo.wrapPage(
+    body,
+    { defaultOgImage: SKYLINE_OG, campaign: "cdmx_seo_2026", ...meta },
+    header(meta.utmNav || meta.canonical.replace(/-/g, "_")),
+    "Mexico City"
+  );
 }
 
 function header(navCta) {
@@ -98,8 +82,9 @@ function header(navCta) {
   </header>`;
 }
 
-function hero({ kicker, h1, lead, heroImage, ctaPrimary, ctaSecondary, utmPrimary, utmSecondary }) {
-  return `<section class="hero" style="background-image:url('${heroImage || SKYLINE}')">
+function hero({ kicker, h1, lead, heroImage, heroAlt, ctaPrimary, ctaSecondary, utmPrimary, utmSecondary }) {
+  const aria = heroAlt ? ` role="img" aria-label="${heroAlt.replace(/"/g, "&quot;")}"` : "";
+  return `<section class="hero"${aria} style="background-image:url('${heroImage || SKYLINE}')">
     <div class="hero-inner">
       <p class="hero-kicker">${kicker}</p>
       <h1>${h1}</h1>
@@ -192,23 +177,6 @@ function embedSearch(utmContent) {
     </script>`;
 }
 
-function page(body, meta) {
-  meta.city = meta.city || "Mexico City";
-  if (!meta.faqs && seo.HUB_FAQS[meta.canonical]) meta.faqs = seo.HUB_FAQS[meta.canonical];
-  if (!meta.breadcrumbs) meta.breadcrumbs = seo.breadcrumbsFor(meta);
-  const bc = meta.breadcrumbs ? seo.breadcrumbNav(meta.breadcrumbs) : "";
-  let outBody = body;
-  if (meta.faqs && !body.includes("faq-sec")) outBody = body + seo.faqSection(meta.faqs);
-  return (
-    head(meta) +
-    '\n<body data-marketing-city="Mexico City" data-marketing-campaign="cdmx_seo_2026">\n' +
-    header(meta.utmNav || meta.canonical.replace(/-/g, "_")) +
-    bc +
-    outBody +
-    seo.footer("Mexico City", meta.footerExtra)
-  );
-}
-
 const PAGES = [];
 
 // ── Where to stay (primary hub) ─────────────────────────────────────────────
@@ -229,7 +197,7 @@ PAGES.push({
       `<div class="wrap-wide">
     <section class="msec" style="padding-top:36px;margin-top:0;border-top:none">
       <p class="msec-kicker">At a glance</p>
-      <h2 class="msec-title">Best neighbourhoods at a glance</h2>
+      <h2 class="msec-title">${seoField("where-to-stay-in-mexico-city", "h2Featured", "Best neighbourhoods at a glance")}</h2>
       ${HUB_LINKS}
       <div class="compare-wrap" style="margin-top:24px">
         <table class="compare-table">
@@ -248,8 +216,8 @@ PAGES.push({
       <p class="msec-kicker">Match your style</p>
       <h2 class="msec-title">Which neighbourhood fits your travel style?</h2>
       <div class="fgrid">
-        <div class="fcard"><h3>First visit + walkable days</h3><p><strong>Condesa</strong> or <strong>Roma Norte</strong> — tree-lined blocks, independent cafés, and galleries without a car.</p></div>
-        <div class="fcard"><h3>Luxury + fine dining</h3><p><strong>Polanco</strong> — parks, flagship restaurants, and design museums within a short radius.</p></div>
+        <div class="fcard"><h3>First visit + walkable days</h3><p><strong>Condesa</strong> or <strong>Roma Norte</strong> — tree-lined blocks, independent cafés, and galleries without a car. See <a href="__ORIGIN__/safe-neighborhoods-mexico-city">safe neighborhoods for tourists</a>.</p></div>
+        <div class="fcard"><h3>Luxury + fine dining</h3><p><strong>Polanco</strong> — parks, flagship restaurants, and design museums within a short radius. Browse <a href="__ORIGIN__/hotels-near-chapultepec">hotels near Chapultepec</a>.</p></div>
         <div class="fcard"><h3>Maximum sightseeing</h3><p><strong>Centro Histórico</strong> — Zócalo, Templo Mayor, and cantina culture outside your door.</p></div>
         <div class="fcard"><h3>Central + connected</h3><p><strong>Juárez</strong> — Reforma access, creative energy, and strong value between Roma and Polanco.</p></div>
       </div>
@@ -275,13 +243,7 @@ PAGES.push({
       <a class="mcta" href="${utm("where-to-stay-footer")}">Start in Mexico City — free</a>
     </div>
   </main>`,
-    {
-      title: "Where to Stay in Mexico City — Neighbourhood Guide | TravelByVibe",
-      desc: "Where to stay in Mexico City: compare Condesa, Roma Norte, Polanco, Juárez, and Centro Histórico — then find hotels by vibe and real room photos on TravelByVibe.",
-      canonical: "where-to-stay-in-mexico-city",
-      city: "Mexico City",
-      pageCategory: "hub",
-    }
+    { canonical: "where-to-stay-in-mexico-city", city: "Mexico City", pageCategory: "hub" }
   ),
 });
 
@@ -311,11 +273,7 @@ PAGES.push({
     </section>
     ${embedSearch("nbhd-guide-search")}
   </div>`,
-    {
-      title: "Mexico City Neighborhood Guide — Where to Stay | TravelByVibe",
-      desc: "Mexico City neighborhood guide: Condesa, Roma Norte, Polanco, Juárez, and Centro Histórico — with links to hotel picks and vibe search.",
-      canonical: "mexico-city-neighborhood-guide",
-    }
+    { canonical: "mexico-city-neighborhood-guide", city: "Mexico City", pageCategory: "hub" }
   ),
 });
 
@@ -353,13 +311,7 @@ PAGES.push({
     </section>
     ${HUB_LINKS}
   </div>`,
-    {
-      title: "Mexico City Hotel Finder — Where to Stay by Vibe | TravelByVibe",
-      desc: "Where should you stay in Mexico City? Compare Condesa, Roma, Polanco, Juárez, and Centro vibes — then search hotels with real room photos on TravelByVibe.",
-      canonical: "mexico-city-hotel-finder",
-      city: "Mexico City",
-      pageCategory: "hub",
-    }
+    { canonical: "mexico-city-hotel-finder", city: "Mexico City", pageCategory: "hub" }
   ),
 });
 
@@ -433,9 +385,10 @@ for (const n of nbhdPages) {
     html: page(
       hero({
         kicker: "Mexico City hotels",
-        h1: n.h1,
+        h1: seoField(n.slug, "h1", n.h1),
         lead: n.lead,
         heroImage: n.hero,
+        heroAlt: seoField(n.slug, "heroAlt", ""),
         ctaPrimary: "Find more hotels by vibe →",
         ctaSecondary: "Take the quiz",
         utmPrimary: `${n.slug}-hero`,
@@ -451,7 +404,7 @@ for (const n of nbhdPages) {
     </section>
     <section class="msec">
       <p class="msec-kicker">Top picks</p>
-      <h2 class="msec-title">Hotel recommendations</h2>
+      <h2 class="msec-title">${seoField(n.slug, "h2Featured", "Hotel recommendations")}</h2>
       <p class="msec-lead">Cards below load live names and photos from our indexed catalog. Open any hotel for room galleries, then match your vibe across thousands of CDMX properties.</p>
       ${hotelTiers(n.preset, n.slug)}
       <div class="section-cta">
@@ -470,12 +423,10 @@ for (const n of nbhdPages) {
     </div>
   </main>`,
       {
-        title: `${n.h1} — See Real Rooms | TravelByVibe`,
-        desc: `Best ${n.kw}: luxury, boutique, and value picks with real room photos. Find more matches on TravelByVibe.`,
         canonical: n.slug,
         city: "Mexico City",
         pageCategory: "neighbourhood",
-        breadcrumbLabel: `Hotels in ${n.kw}`,
+        breadcrumbLabel: seoField(n.slug, "h2Featured", `Hotels in ${n.kw}`),
       }
     ),
   });
@@ -600,8 +551,6 @@ for (const c of comparisons) {
     ${HUB_LINKS}
   </div>`,
       {
-        title: `${c.h1} | TravelByVibe`,
-        desc: `${c.h1} Compare atmosphere, walkability, restaurants, and price — then find hotels by vibe on TravelByVibe.`,
         canonical: c.slug,
         ogImage: c.leftImage.replace(/&amp;/g, "&"),
         city: "Mexico City",
@@ -631,7 +580,7 @@ const vibePages = [
   {
     file: "mexico-city-cafe-vibe-hotels.html",
     slug: "mexico-city-cafe-vibe-hotels",
-    h1: "Mexico City Café-Vibe Hotels",
+    h1: seoField("mexico-city-cafe-vibe-hotels", "h1", "Mexico City Café-Vibe Hotels"),
     lead: "Morning pastry runs and third-wave espresso are part of the CDMX ritual. These stays put you within walking distance of the city's best café culture.",
     preset: "cafe-vibe",
     array: true,
@@ -640,7 +589,7 @@ const vibePages = [
   {
     file: "mexico-city-local-neighborhood-hotels.html",
     slug: "mexico-city-local-neighborhood-hotels",
-    h1: "Mexico City Local Neighborhood Hotels",
+    h1: seoField("mexico-city-local-neighborhood-hotels", "h1", "Mexico City Local Neighborhood Hotels"),
     lead: "Skip the anonymous tower lobby. These areas and hotels skew residential — local cantinas, corner mercados, and the CDMX people actually live in.",
     preset: "local-neighborhood",
     array: true,
@@ -658,6 +607,13 @@ const vibePages = [
 ];
 
 for (const v of vibePages) {
+  const vm = seo.applySeoMeta({
+    canonical: v.slug,
+    city: "Mexico City",
+    pageCategory: "vibe",
+    title: `${v.h1} | TravelByVibe`,
+    breadcrumbLabel: v.h1,
+  });
   let hotelBlocks = "";
   if (v.sections) {
     hotelBlocks = v.sections
@@ -674,7 +630,7 @@ for (const v of vibePages) {
     html: page(
       hero({
         kicker: "TravelByVibe picks",
-        h1: v.h1,
+        h1: vm.h1 || v.h1,
         lead: v.lead,
         heroImage: BELLAS,
         ctaPrimary: "Discover more by vibe →",
@@ -685,26 +641,19 @@ for (const v of vibePages) {
         `<div class="wrap-wide">
     <section class="msec" style="padding-top:36px;margin-top:0;border-top:none">
       <p class="msec-kicker">What makes a match</p>
-      <h2 class="msec-title">What we mean by vibe match</h2>
+      <h2 class="msec-title">${vm.h2Intro || "What we mean by vibe match"}</h2>
       <p class="msec-lead">${v.intro || "We index real hotel room photos and rank properties by how closely they match your description — not just stars and lobby shots."}</p>
       ${HUB_LINKS}
     </section>
     <section class="msec">
       <p class="msec-kicker">Featured stays</p>
-      <h2 class="msec-title">Hotels to start with</h2>
+      <h2 class="msec-title">${vm.h2Featured || "Hotels to start with"}</h2>
       ${hotelBlocks}
       <div class="section-cta"><a class="mcta" href="${utm(v.slug + "-more")}">Discover more boutique hotels →</a></div>
     </section>
     ${embedSearch(v.slug + "-search")}
   </div>`,
-      {
-        title: `${v.h1} | TravelByVibe`,
-        desc: `${v.h1}: curated picks plus AI room-photo search across 3,600+ Mexico City hotels.`,
-        canonical: v.slug,
-        city: "Mexico City",
-        pageCategory: "vibe",
-        breadcrumbLabel: v.h1,
-      }
+      vm,
     ),
   });
 }
