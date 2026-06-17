@@ -8,22 +8,26 @@ const SEO_META = {
     desc: "Hotel guides for Paris and Mexico City (CDMX): where to stay, neighbourhood comparisons, and visual room search using real bathroom and suite photos. Free on TravelByVibe.",
   },
   "where-to-stay-in-paris": {
-    title: "Where to Stay in Paris — Neighbourhood Guide (2026)",
+    title: "Where to Stay in Paris — Hotels by Neighbourhood (2026)",
+    h1: "Where to Stay in Paris — Hotels by Neighbourhood",
     desc: "Where to stay in Paris: compare Le Marais, Saint-Germain, Montmartre, Latin Quarter, and Opéra. Match hotels by neighbourhood vibe and real room photos.",
-    h2Featured: "Best Paris neighbourhoods at a glance",
+    h2Featured: "Best Paris neighbourhoods for hotels",
+    h2Hotels: "Best Paris hotels by neighbourhood",
   },
   "paris-hotels": {
     title: "Paris Hotels — Search by Real Room Photos",
     desc: "Find Paris hotels by vibe and actual room photography — Haussmann light, rainfall shower, Left Bank mood. Browse free before you book.",
   },
   "paris-neighborhood-stays": {
-    title: "Where to Stay in Paris by Neighbourhood",
-    h1: "Where to Stay in Paris by Neighbourhood",
+    title: "Paris Hotels by Neighbourhood — Where to Stay",
+    h1: "Paris Hotels by Neighbourhood",
     desc: "Pick a Paris arrondissement that fits your trip — Marais, Saint-Germain, Montmartre, Latin Quarter, or Opéra — then find hotels with real room photos.",
   },
   "paris-neighborhood-guide": {
-    title: "Paris Neighborhood Guide — Where to Stay",
+    title: "Paris Neighborhood Guide — Hotels & Where to Stay",
+    h1: "Paris Neighborhood Guide — Hotels by Area",
     desc: "Paris neighborhood guide: Le Marais, Saint-Germain, Montmartre, Latin Quarter, and Opéra — hotel picks and vibe search.",
+    h2Hotels: "Best Paris hotels by neighbourhood",
   },
   "paris-hotel-finder": {
     title: "Paris Hotel Finder — Where to Stay by Vibe",
@@ -102,17 +106,21 @@ const SEO_META = {
     desc: "Latin Quarter vs Saint-Germain on the Left Bank — lively markets or literary calm? Compare, then search hotel room photos.",
   },
   "where-to-stay-in-mexico-city": {
-    title: "Where to Stay in Mexico City (CDMX) — Neighbourhood Guide",
+    title: "Where to Stay in Mexico City — Hotels by Neighbourhood",
+    h1: "Where to Stay in Mexico City — Hotels by Neighbourhood",
     desc: "Where to stay in Mexico City (CDMX): Condesa, Roma Norte, Polanco, Juárez, and Centro Histórico — find hotels by vibe and real room photos.",
-    h2Featured: "Best CDMX neighbourhoods at a glance",
+    h2Featured: "Best CDMX neighbourhoods for hotels",
+    h2Hotels: "Best Mexico City hotels by neighbourhood",
   },
   "mexico-city-hotels": {
     title: "Mexico City (CDMX) Hotels — Search Real Room Photos",
     desc: "Find Mexico City hotels by vibe and real room photos across 3,600+ CDMX properties. Rainfall shower, bright suite, design mood — free to browse.",
   },
   "mexico-city-neighborhood-guide": {
-    title: "Mexico City Neighborhood Guide — Where to Stay",
+    title: "Mexico City Neighborhood Guide — Hotels & Where to Stay",
+    h1: "Mexico City Neighborhood Guide — Hotels by Area",
     desc: "Mexico City neighborhood guide: Condesa, Roma Norte, Polanco, Juárez, and Centro — hotel picks and visual search.",
+    h2Hotels: "Best Mexico City hotels by neighbourhood",
   },
   "mexico-city-hotel-finder": {
     title: "Mexico City Hotel Finder — Where to Stay in CDMX",
@@ -192,11 +200,12 @@ const SEO_META = {
   },
   // ── New spoke pages (tier-3 query targets) ─────────────────────────────────
   "best-area-to-stay-in-paris-first-time": {
-    title: "Best Area to Stay in Paris for First-Time Visitors",
+    title: "Best Area to Stay in Paris for First-Time Visitors — Hotels",
     h1: "Best Area to Stay in Paris for First-Time Visitors",
     desc: "First trip to Paris? Compare Le Marais, Latin Quarter, and Saint-Germain for walkable museums, cafés, and hotels — then see real room photos.",
     breadcrumbLabel: "Best area for first-time visitors",
     h2Featured: "Best Paris neighbourhoods for first-time visitors",
+    h2Hotels: "Best Paris hotels for first-time visitors",
   },
   "paris-hotels-near-eiffel-tower": {
     title: "Paris Hotels Near the Eiffel Tower — See Real Rooms",
@@ -206,11 +215,12 @@ const SEO_META = {
     h2Featured: "Best areas for Eiffel Tower views",
   },
   "safe-neighborhoods-mexico-city": {
-    title: "Safe Neighborhoods in Mexico City for Tourists",
+    title: "Safe Neighborhoods in Mexico City — Hotels for Tourists",
     h1: "Safe Neighborhoods in Mexico City for Tourists",
     desc: "Where to stay in CDMX: Condesa, Polanco, Roma Norte, and Juárez are popular visitor districts. Compare areas, then match hotels by real room photos.",
     breadcrumbLabel: "Safe neighborhoods for tourists",
     h2Featured: "Best CDMX neighborhoods for visitors",
+    h2Hotels: "Best hotels in safe CDMX neighbourhoods",
   },
   "hotels-near-chapultepec": {
     title: "Best Hotels near Chapultepec Mexico City",
@@ -237,6 +247,7 @@ function applySeoMeta(meta) {
   if (kw.breadcrumbLabel) out.breadcrumbLabel = kw.breadcrumbLabel;
   if (kw.h2Intro) out.h2Intro = kw.h2Intro;
   if (kw.h2Featured) out.h2Featured = kw.h2Featured;
+  if (kw.h2Hotels) out.h2Hotels = kw.h2Hotels;
   if (kw.heroAlt) out.heroAlt = kw.heroAlt;
   return out;
 }

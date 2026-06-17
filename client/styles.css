@@ -9843,7 +9843,15 @@
     .home-v2-heading {
       white-space: normal;
       font-size: clamp(36px, 3.8vw, 58px);
-      margin-bottom: 14px;
+      margin-bottom: 10px;
+    }
+    .home-v2-seo-sub {
+      margin: 0 0 12px;
+      font-size: 15px;
+      font-weight: 500;
+      letter-spacing: 0.04em;
+      color: rgba(201, 169, 110, 0.92);
+      text-align: left;
     }
     .home-v2-sub {
       margin-left: 0;

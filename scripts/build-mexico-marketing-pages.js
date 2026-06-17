@@ -185,7 +185,7 @@ PAGES.push({
   html: page(
     hero({
       kicker: "Mexico City · Neighbourhood guide",
-      h1: "Where to Stay in Mexico City",
+      h1: seoField("where-to-stay-in-mexico-city", "h1", "Where to Stay in Mexico City — Hotels by Neighbourhood"),
       lead:
         "Condesa, Roma Norte, Polanco, Juárez, or Centro Histórico? This guide maps <strong>neighbourhood character</strong> to the hotels that actually fit — then TravelByVibe matches you using <strong>real room photos</strong>.",
       heroImage: SKYLINE,
@@ -211,6 +211,12 @@ PAGES.push({
           </tbody>
         </table>
       </div>
+    </section>
+    <section class="msec">
+      <p class="msec-kicker">Hotel picks</p>
+      <h2 class="msec-title">${seoField("where-to-stay-in-mexico-city", "h2Hotels", "Best Mexico City hotels by neighbourhood")}</h2>
+      <p class="msec-lead">Browse indexed CDMX hotels with real room photos in each barrio — or search all of Mexico City by vibe.</p>
+      <p class="msec-lead"><a href="__ORIGIN__/mexico-city-hotels">All Mexico City hotels</a> · <a href="__ORIGIN__/hotels-in-condesa">Hotels in Condesa</a> · <a href="__ORIGIN__/hotels-in-roma-norte">Hotels in Roma Norte</a> · <a href="__ORIGIN__/hotels-in-polanco">Hotels in Polanco</a> · <a href="__ORIGIN__/hotels-in-juarez">Hotels in Juárez</a> · <a href="__ORIGIN__/hotels-in-centro-historico">Hotels in Centro</a></p>
     </section>
     <section class="msec">
       <p class="msec-kicker">Match your style</p>
@@ -253,7 +259,7 @@ PAGES.push({
   html: page(
     hero({
       kicker: "CDMX neighbourhoods",
-      h1: "Mexico City Neighborhood Guide",
+      h1: seoField("mexico-city-neighborhood-guide", "h1", "Mexico City Neighborhood Guide"),
       lead:
         "A practical map of Mexico City&apos;s best hotel districts — what each area feels like, who it suits, and where to search next.",
       heroImage: BELLAS,
@@ -266,6 +272,10 @@ PAGES.push({
     <section class="msec" style="padding-top:36px;margin-top:0;border-top:none">
       ${HUB_LINKS}
       <p class="msec-lead" style="margin-top:20px">Use this guide alongside <a href="__ORIGIN__/where-to-stay-in-mexico-city">Where to Stay in Mexico City</a> — the hub page with comparison tables and vibe matching.</p>
+    </section>
+    <section class="msec">
+      <h2 class="msec-title">${seoField("mexico-city-neighborhood-guide", "h2Hotels", "Best Mexico City hotels by neighbourhood")}</h2>
+      <p class="msec-lead"><a href="__ORIGIN__/mexico-city-hotels">Mexico City hotels hub</a> · <a href="__ORIGIN__/hotels-in-condesa">Condesa</a> · <a href="__ORIGIN__/hotels-in-roma-norte">Roma Norte</a> · <a href="__ORIGIN__/hotels-in-polanco">Polanco</a> · <a href="__ORIGIN__/hotels-in-juarez">Juárez</a> · <a href="__ORIGIN__/hotels-in-centro-historico">Centro Histórico</a></p>
     </section>
     <section class="msec">
       <h2 class="msec-title">Neighbourhood deep links</h2>

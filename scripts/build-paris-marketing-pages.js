@@ -167,7 +167,7 @@ PAGES.push({
   html: page(
     hero({
       kicker: "Paris · Neighbourhood guide",
-      h1: "Where to Stay in Paris",
+      h1: seoField("where-to-stay-in-paris", "h1", "Where to Stay in Paris — Hotels by Neighbourhood"),
       lead:
         "Le Marais, Saint-Germain, Montmartre, Latin Quarter, or Opéra? This guide maps <strong>arrondissement character</strong> to hotels that fit — then TravelByVibe matches you using <strong>real room photos</strong>.",
       heroImage: EIFFEL_HERO,
@@ -193,6 +193,12 @@ PAGES.push({
           </tbody>
         </table>
       </div>
+    </section>
+    <section class="msec">
+      <p class="msec-kicker">Hotel picks</p>
+      <h2 class="msec-title">${seoField("where-to-stay-in-paris", "h2Hotels", "Best Paris hotels by neighbourhood")}</h2>
+      <p class="msec-lead">Browse indexed Paris hotels with real room and bathroom photos in each arrondissement — or search all of Paris by vibe.</p>
+      <p class="msec-lead"><a href="__ORIGIN__/paris-hotels">All Paris hotels</a> · <a href="__ORIGIN__/hotels-in-le-marais">Hotels in Le Marais</a> · <a href="__ORIGIN__/hotels-in-saint-germain">Hotels in Saint-Germain</a> · <a href="__ORIGIN__/hotels-in-montmartre">Hotels in Montmartre</a> · <a href="__ORIGIN__/hotels-in-latin-quarter">Hotels in Latin Quarter</a> · <a href="__ORIGIN__/hotels-in-opera">Hotels near Opéra</a></p>
     </section>
     <section class="msec">
       <p class="msec-kicker">Match your style</p>
@@ -238,7 +244,7 @@ PAGES.push({
   html: page(
     hero({
       kicker: "Paris neighbourhoods",
-      h1: "Paris Neighborhood Guide",
+      h1: seoField("paris-neighborhood-guide", "h1", "Paris Neighborhood Guide"),
       lead: "A practical map of Paris&apos;s best hotel districts — what each area feels like, who it suits, and where to search next.",
       heroImage: NOTRE_DAME,
       ctaPrimary: "Match my neighbourhood →",
@@ -250,6 +256,10 @@ PAGES.push({
     <section class="msec" style="padding-top:36px;margin-top:0;border-top:none">
       ${HUB_LINKS}
       <p class="msec-lead" style="margin-top:20px">Use this guide alongside <a href="__ORIGIN__/where-to-stay-in-paris">Where to Stay in Paris</a> — comparison tables and vibe matching on the hub page.</p>
+    </section>
+    <section class="msec">
+      <h2 class="msec-title">${seoField("paris-neighborhood-guide", "h2Hotels", "Best Paris hotels by neighbourhood")}</h2>
+      <p class="msec-lead"><a href="__ORIGIN__/paris-hotels">Paris hotels hub</a> · <a href="__ORIGIN__/hotels-in-le-marais">Le Marais</a> · <a href="__ORIGIN__/hotels-in-saint-germain">Saint-Germain</a> · <a href="__ORIGIN__/hotels-in-montmartre">Montmartre</a> · <a href="__ORIGIN__/hotels-in-latin-quarter">Latin Quarter</a> · <a href="__ORIGIN__/hotels-in-opera">Opéra</a></p>
     </section>
     <section class="msec">
       <h2 class="msec-title">Neighbourhood deep links</h2>
@@ -355,7 +365,7 @@ PAGES.push({
   html: page(
     hero({
       kicker: "Paris · Neighbourhoods",
-      h1: seoField("paris-neighborhood-stays", "h1", "Where you stay shapes your Paris story"),
+      h1: seoField("paris-neighborhood-stays", "h1", "Paris Hotels by Neighbourhood"),
       lead: "TravelByVibe connects <strong>neighbourhood energy</strong> with <strong>hotel room reality</strong>. Tell us if you want icons-and-buzz, calm-and-central, village-like streets, or grand boulevard sparkle.",
       heroImage: EIFFEL_HERO,
       ctaPrimary: "Start in Paris →",

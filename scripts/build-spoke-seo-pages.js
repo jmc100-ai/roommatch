@@ -189,7 +189,7 @@ function writePage(file, html) {
     </section>
     <section class="msec">
       <p class="msec-kicker">Hotel picks</p>
-      <h2 class="msec-title">Best hotels in Le Marais for first-time visitors</h2>
+      <h2 class="msec-title">${seoField(canonical, "h2Hotels", "Best hotels in Le Marais for first-time visitors")}</h2>
       ${hotelTiers("paris-le-marais", "Paris", "paris-first-time-marais")}
     </section>
     ${embedParis("paris-first-time-search")}
@@ -276,7 +276,7 @@ function writePage(file, html) {
       <p class="msec-lead" style="margin-top:20px">Compare: <a href="__ORIGIN__/condesa-vs-polanco">Condesa vs Polanco</a> · <a href="__ORIGIN__/where-to-stay-in-mexico-city">Where to stay in Mexico City</a></p>
     </section>
     <section class="msec">
-      <h2 class="msec-title">Hotel picks in visitor-friendly neighborhoods</h2>
+      <h2 class="msec-title">${seoField(canonical, "h2Hotels", "Best hotels in visitor-friendly neighborhoods")}</h2>
       ${hotelTiers("condesa", "Mexico City", "cdmx-safe-condesa")}
     </section>
     ${embedCdmx("cdmx-safe-search")}
