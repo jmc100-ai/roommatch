@@ -1,0 +1,32 @@
+---
+description: Always show full travelbyvibe.com URLs when citing site pages to the user.
+alwaysApply: true
+---
+
+# Full URLs for site pages
+
+When showing the user URLs for **this product's website** (marketing pages, app routes, API paths meant to be opened in a browser), use **full absolute URLs** — never bare paths like `/where-to-stay-in-paris` or `where-to-stay-in-paris`.
+
+## Canonical origin
+
+Default to **`https://www.travelbyvibe.com`** unless the context clearly requires another host (e.g. `https://roommatch-1fg5.onrender.com` for Render debugging).
+
+## Examples
+
+| Avoid | Use |
+|-------|-----|
+| `/where-to-stay-in-paris` | `https://www.travelbyvibe.com/where-to-stay-in-paris` |
+| `paris-hotels` | `https://www.travelbyvibe.com/paris-hotels` |
+| `?city=Mexico City` | `https://www.travelbyvibe.com/?city=Mexico%20City` |
+
+## When this applies
+
+- Spot-check lists after deploy
+- SEO / indexing discussions
+- “Open this page” suggestions
+- Comparing live vs local (still show full URL for the live site)
+
+## Exceptions
+
+- **Code and config** may keep path-only form (`/api/vsearch`, Express routes, sitemap entries) when editing files.
+- **Third-party URLs** (GitHub, Supabase, LiteAPI, etc.) — use their full URLs as usual; this rule is for TravelByVibe site links shown to the user.
