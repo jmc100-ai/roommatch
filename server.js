@@ -355,8 +355,18 @@ function setSiteGateResponseHeaders(res) {
   res.setHeader("CDN-Cache-Control", "no-store");
 }
 
+/** Explicit allow-list for crawlers (HTTP header beats stale GSC reads of old global noindex). */
+function setIndexableRobotsHeaders(res) {
+  res.setHeader("X-Robots-Tag", "index, follow, max-image-preview:large");
+}
+
+function setNoindexRobotsHeaders(res) {
+  res.setHeader("X-Robots-Tag", "noindex, nofollow");
+}
+
 async function sendBetaGateLoginView(res, opts = {}) {
   setSiteGateResponseHeaders(res);
+  setNoindexRobotsHeaders(res);
   return res.send(await betaGateLoginView(opts));
 }
 
@@ -395,7 +405,7 @@ function loginHtml({ error = "", subtitle = "", notice = "", showForm = true } =
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <meta name="robots" content="index,follow,max-image-preview:large"/>
+  <meta name="robots" content="noindex, nofollow"/>
   <title>TravelByVibe</title>
   <link rel="preconnect" href="https://fonts.googleapis.com"/>
   <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300;400;600&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet"/>
@@ -1762,6 +1772,7 @@ function serveAppHtml(res) {
   res.setHeader("Expires", "0");
   res.setHeader("Vary", "Cookie");
   res.setHeader("CDN-Cache-Control", "no-store");
+  setIndexableRobotsHeaders(res);
   res.setHeader("Content-Type", "text/html; charset=utf-8");
   return res.send(html);
 }
@@ -1798,6 +1809,7 @@ function serveMarketingHtml(req, res, filename) {
     html = html.replace(/__ORIGIN__/g, origin);
     res.setHeader("Content-Type", "text/html; charset=utf-8");
     res.setHeader("Cache-Control", "public, max-age=120, s-maxage=600");
+    setIndexableRobotsHeaders(res);
     return res.send(html);
   } catch (e) {
     console.error("[marketing]", filename, e.message);
@@ -1897,6 +1909,7 @@ app.get("/privacy", (_req, res) => {
     <p>During beta we may adjust how long we keep certain data. To ask a question or request deletion, email <a href="mailto:beta@travelbyvibe.com">beta@travelbyvibe.com</a> — we are a small team and will reply as soon as we can.</p>`;
   res.setHeader("Content-Type", "text/html; charset=utf-8");
   res.setHeader("Cache-Control", "public, max-age=600, s-maxage=3600");
+  setIndexableRobotsHeaders(res);
   res.send(_legalHtml("Privacy", body));
 });
 app.get("/terms", (_req, res) => {
@@ -1917,6 +1930,7 @@ app.get("/terms", (_req, res) => {
     <p>We may update these terms as the product grows. If you keep using TravelByVibe after an update, that means you accept the new version.</p>`;
   res.setHeader("Content-Type", "text/html; charset=utf-8");
   res.setHeader("Cache-Control", "public, max-age=600, s-maxage=3600");
+  setIndexableRobotsHeaders(res);
   res.send(_legalHtml("Terms of service", body));
 });
 

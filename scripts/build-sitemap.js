@@ -22,6 +22,7 @@ function urlEntry(loc, changefreq, priority) {
 }
 
 const urls = [
+  urlEntry(`${ORIGIN}/`, "weekly", "1.0"),
   ...MARKETING_PATHS.map((p) => urlEntry(`${ORIGIN}${p}`, "weekly", p === "/sitemap" ? "0.5" : "0.85")),
   urlEntry(`${ORIGIN}/privacy`, "monthly", "0.4"),
   urlEntry(`${ORIGIN}/terms`, "monthly", "0.4"),
@@ -35,7 +36,7 @@ ${urls.join("\n")}
 
 const out = path.join(__dirname, "..", "client", "sitemap.xml");
 fs.writeFileSync(out, xml, "utf8");
-console.log(`Wrote ${out} (${MARKETING_PATHS.length + 2} URLs, origin=${ORIGIN})`);
+console.log(`Wrote ${out} (${MARKETING_PATHS.length + 3} URLs, origin=${ORIGIN})`);
 
 // HTML sitemap for humans + crawl discovery
 function routesByCity() {
