@@ -878,6 +878,75 @@ li { margin-bottom: 0.35rem; }
   border-color: var(--accent);
   color: var(--accent-soft) !important;
 }
+.breadcrumb {
+  max-width: var(--max-wide);
+  margin: 0 auto;
+  padding: 14px 24px 0;
+  font-size: 13px;
+  color: var(--muted);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+.breadcrumb a {
+  color: rgba(232, 213, 176, 0.85);
+  text-decoration: none;
+}
+.breadcrumb a:hover { color: var(--accent-soft); }
+.breadcrumb [aria-current="page"] { color: rgba(244, 240, 232, 0.95); }
+.bc-sep { opacity: 0.45; margin: 0 2px; }
+.faq-list { margin-top: 8px; }
+.faq-item {
+  border: 1px solid rgba(201, 169, 110, 0.2);
+  border-radius: var(--radius);
+  margin-bottom: 10px;
+  background: rgba(255, 255, 255, 0.03);
+}
+.faq-item summary {
+  cursor: pointer;
+  padding: 14px 18px;
+  font-weight: 500;
+  list-style: none;
+}
+.faq-item summary::-webkit-details-marker { display: none; }
+.faq-item summary::after {
+  content: "+";
+  float: right;
+  color: var(--accent);
+  font-weight: 400;
+}
+.faq-item[open] summary::after { content: "−"; }
+.faq-item p {
+  margin: 0;
+  padding: 0 18px 16px;
+  font-size: 15px;
+  color: rgba(232, 228, 220, 0.82);
+  line-height: 1.6;
+}
+.sitemap-sec { margin-top: 36px; }
+.sitemap-sec h2 {
+  font-family: "Cormorant Garamond", Georgia, serif;
+  font-size: 1.5rem;
+  font-weight: 400;
+  color: var(--accent-soft);
+  margin-bottom: 12px;
+}
+.sitemap-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  columns: 1;
+}
+@media (min-width: 640px) {
+  .sitemap-list { columns: 2; }
+}
+.sitemap-list li {
+  break-inside: avoid;
+  margin-bottom: 8px;
+  font-size: 15px;
+}
+.sitemap-list a { color: rgba(232, 213, 176, 0.9); }
 .embed-search {
   margin: 32px 0;
   padding: 28px 24px;

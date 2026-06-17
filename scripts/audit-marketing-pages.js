@@ -9,45 +9,12 @@ const path = require("path");
 const ROOT = path.join(__dirname, "..");
 const MARKETING_DIR = path.join(ROOT, "client", "marketing");
 
+const { marketingHtmlMap } = require("./marketing-paths");
+
 const MARKETING_ROUTES = new Set([
   "/",
-  "/destinations",
-  "/mexico-city-hotels",
-  "/where-to-stay-in-mexico-city",
-  "/mexico-city-neighborhood-guide",
-  "/mexico-city-hotel-finder",
-  "/cdmx-neighborhood-stays",
-  "/hotels-in-condesa",
-  "/hotels-in-roma-norte",
-  "/hotels-in-polanco",
-  "/hotels-in-juarez",
-  "/hotels-in-centro-historico",
-  "/condesa-vs-polanco",
-  "/roma-norte-vs-condesa",
-  "/juarez-vs-condesa",
-  "/mexico-city-boutique-hotels",
-  "/mexico-city-cafe-vibe-hotels",
-  "/mexico-city-local-neighborhood-hotels",
-  "/mexico-city-design-hotels",
-  "/mexico-city-visual-search",
-  "/paris-hotels",
-  "/where-to-stay-in-paris",
-  "/paris-neighborhood-stays",
-  "/paris-neighborhood-guide",
-  "/paris-hotel-finder",
-  "/hotels-in-le-marais",
-  "/hotels-in-saint-germain",
-  "/hotels-in-montmartre",
-  "/hotels-in-latin-quarter",
-  "/hotels-in-opera",
-  "/marais-vs-saint-germain",
-  "/montmartre-vs-marais",
-  "/latin-quarter-vs-saint-germain",
-  "/paris-boutique-hotels",
-  "/paris-luxury-hotels",
-  "/paris-romantic-hotels",
-  "/paris-classic-hotels",
-  "/paris-visual-search",
+  ...Object.keys(marketingHtmlMap()),
+  "/sitemap.xml",
   "/privacy",
   "/terms",
 ]);
@@ -126,15 +93,19 @@ function resolveInternalHref(href) {
   return { ok: false, pathOnly };
 }
 
-async function headOk(url, retries = 2) {
+async function headOk(url, retries = 3) {
+  const isWiki = url.includes("wikimedia.org");
   for (let i = 0; i <= retries; i++) {
     try {
       const r = await fetch(url, {
-        method: "HEAD",
+        method: "GET",
         redirect: "follow",
-        headers: { "User-Agent": "TravelByVibe-MarketingAudit/1.0" },
+        headers: {
+          "User-Agent": "TravelByVibe-MarketingAudit/1.0",
+          Range: "bytes=0-0",
+        },
       });
-      if (r.status === 200 || r.status === 301 || r.status === 302) return r.status;
+      if (r.status === 200 || r.status === 206) return 200;
       if (r.status === 405 || r.status === 403) {
         const g = await fetch(url, {
           method: "GET",
@@ -144,18 +115,31 @@ async function headOk(url, retries = 2) {
         if (g.status === 200) return 200;
       }
       if (r.status === 429 && i < retries) {
-        await new Promise((res) => setTimeout(res, 1500 * (i + 1)));
+        await new Promise((res) => setTimeout(res, 2000 * (i + 1)));
         continue;
       }
       return r.status;
     } catch (e) {
       if (i === retries) return `ERR:${e.message}`;
+      await new Promise((res) => setTimeout(res, 1000));
     }
   }
   return 0;
 }
 
-async function auditFile(rel) {
+const _imageStatusCache = new Map();
+
+async function imageStatus(url) {
+  if (_imageStatusCache.has(url)) return _imageStatusCache.get(url);
+  const status = await headOk(url);
+  _imageStatusCache.set(url, status);
+  if (url.includes("wikimedia.org")) {
+    await new Promise((res) => setTimeout(res, 350));
+  }
+  return status;
+}
+
+async function auditFile(rel, imageResults) {
   const fp = path.join(MARKETING_DIR, rel);
   const html = fs.readFileSync(fp, "utf8");
   const issues = [];
@@ -169,7 +153,7 @@ async function auditFile(rel) {
         detail: `${mismatch.fileInPath} vs ${mismatch.fileInWidth}`,
       });
     }
-    const status = await headOk(url);
+    const status = imageResults.get(url);
     if (status !== 200) {
       issues.push({ type: "image-http", url, status });
     }
@@ -208,9 +192,23 @@ async function auditFile(rel) {
 
 async function main() {
   const files = fs.readdirSync(MARKETING_DIR).filter((f) => f.endsWith(".html"));
+  const urlFiles = new Map();
+  for (const f of files) {
+    const html = fs.readFileSync(path.join(MARKETING_DIR, f), "utf8");
+    for (const url of extractImageUrls(html)) {
+      if (!urlFiles.has(url)) urlFiles.set(url, []);
+      urlFiles.get(url).push(f);
+    }
+  }
+  const imageResults = new Map();
+  for (const url of [...urlFiles.keys()].sort()) {
+    imageResults.set(url, await imageStatus(url));
+  }
+  console.log(`Preflight: ${urlFiles.size} unique image URLs checked`);
+
   const all = [];
   for (const f of files.sort()) {
-    const issues = await auditFile(f);
+    const issues = await auditFile(f, imageResults);
     if (issues.length) {
       console.log(`\n## ${f} (${issues.length} issues)`);
       for (const i of issues) console.log(JSON.stringify(i));

@@ -517,6 +517,25 @@ function serveSitemap(_req, res) {
 app.get("/sitemap.xml", serveSitemap);
 app.head("/sitemap.xml", serveSitemap);
 
+const INDEXNOW_KEY = (process.env.INDEXNOW_KEY || "travelbyvibe-indexnow").trim();
+
+function serveRobotsTxt(_req, res) {
+  res.setHeader("Content-Type", "text/plain; charset=utf-8");
+  res.setHeader("Cache-Control", "public, max-age=86400, s-maxage=604800");
+  res.send(
+    `User-agent: *\nAllow: /\nDisallow: /api/\n\nSitemap: ${SITE_PUBLIC_ORIGIN}/sitemap.xml\n`
+  );
+}
+app.get("/robots.txt", serveRobotsTxt);
+app.head("/robots.txt", serveRobotsTxt);
+
+function serveIndexNowKey(_req, res) {
+  res.setHeader("Content-Type", "text/plain; charset=utf-8");
+  res.setHeader("Cache-Control", "public, max-age=86400, s-maxage=604800");
+  res.send(INDEXNOW_KEY);
+}
+app.get(`/${INDEXNOW_KEY}.txt`, serveIndexNowKey);
+
 /** JSON readiness for beta launch (Better Stack secondary monitor; Render probe uses /api/health). */
 app.get("/api/health/beta", async (_req, res) => {
   const stats = await getBetaGateRedemptionStats();
@@ -1617,7 +1636,7 @@ function travelboopHostMiddleware(req, res, next) {
     res.setHeader("Content-Type", "text/plain; charset=utf-8");
     res.setHeader("Cache-Control", "public, max-age=600, s-maxage=3600");
     return res.send(
-      "User-agent: *\nAllow: /\nDisallow: /api/\n\nSitemap: https://www.travelboop.com/sitemap.xml\n"
+      `User-agent: *\nAllow: /\nDisallow: /api/\n\nSitemap: ${SITE_PUBLIC_ORIGIN}/sitemap.xml\n`
     );
   }
   if (p === "/sitemap.xml") {
@@ -1635,45 +1654,8 @@ function travelboopHostMiddleware(req, res, next) {
 app.use(travelboopHostMiddleware);
 
 /** Indexable marketing landing pages (static HTML). */
-const MARKETING_HTML = {
-  "/destinations": "destinations.html",
-  "/mexico-city-hotels": "mexico-city-hotels.html",
-  "/where-to-stay-in-mexico-city": "where-to-stay-in-mexico-city.html",
-  "/mexico-city-neighborhood-guide": "mexico-city-neighborhood-guide.html",
-  "/mexico-city-hotel-finder": "mexico-city-hotel-finder.html",
-  "/cdmx-neighborhood-stays": "where-to-stay-in-mexico-city.html",
-  "/hotels-in-condesa": "hotels-in-condesa.html",
-  "/hotels-in-roma-norte": "hotels-in-roma-norte.html",
-  "/hotels-in-polanco": "hotels-in-polanco.html",
-  "/hotels-in-juarez": "hotels-in-juarez.html",
-  "/hotels-in-centro-historico": "hotels-in-centro-historico.html",
-  "/condesa-vs-polanco": "condesa-vs-polanco.html",
-  "/roma-norte-vs-condesa": "roma-norte-vs-condesa.html",
-  "/juarez-vs-condesa": "juarez-vs-condesa.html",
-  "/mexico-city-boutique-hotels": "mexico-city-boutique-hotels.html",
-  "/mexico-city-cafe-vibe-hotels": "mexico-city-cafe-vibe-hotels.html",
-  "/mexico-city-local-neighborhood-hotels": "mexico-city-local-neighborhood-hotels.html",
-  "/mexico-city-design-hotels": "mexico-city-design-hotels.html",
-  "/mexico-city-visual-search": "mexico-city-visual-search.html",
-  "/paris-hotels": "paris-hotels.html",
-  "/where-to-stay-in-paris": "where-to-stay-in-paris.html",
-  "/paris-neighborhood-stays": "paris-neighborhood-stays.html",
-  "/paris-neighborhood-guide": "paris-neighborhood-guide.html",
-  "/paris-hotel-finder": "paris-hotel-finder.html",
-  "/hotels-in-le-marais": "hotels-in-le-marais.html",
-  "/hotels-in-saint-germain": "hotels-in-saint-germain.html",
-  "/hotels-in-montmartre": "hotels-in-montmartre.html",
-  "/hotels-in-latin-quarter": "hotels-in-latin-quarter.html",
-  "/hotels-in-opera": "hotels-in-opera.html",
-  "/marais-vs-saint-germain": "marais-vs-saint-germain.html",
-  "/montmartre-vs-marais": "montmartre-vs-marais.html",
-  "/latin-quarter-vs-saint-germain": "latin-quarter-vs-saint-germain.html",
-  "/paris-boutique-hotels": "paris-boutique-hotels.html",
-  "/paris-luxury-hotels": "paris-luxury-hotels.html",
-  "/paris-romantic-hotels": "paris-romantic-hotels.html",
-  "/paris-classic-hotels": "paris-classic-hotels.html",
-  "/paris-visual-search": "paris-visual-search.html",
-};
+const { marketingHtmlMap } = require("./scripts/marketing-paths");
+const MARKETING_HTML = marketingHtmlMap();
 
 // ── Password gate (BETA_GATE_ENABLED=0 disables; otherwise active when codes/passwords set) ─
 if (SITE_GATE_ACTIVE) {

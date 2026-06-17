@@ -5,6 +5,7 @@
  */
 const fs = require("fs");
 const path = require("path");
+const seo = require("./marketing-seo");
 
 const OUT = path.join(__dirname, "..", "client", "marketing");
 const SKYLINE =
@@ -47,23 +48,14 @@ function nbhdGuideGrid() {
       <p class="nbhd-photo-credits">Neighbourhood photos from TravelByVibe&apos;s Mexico City vibe index — Unsplash (Daniel Lerman, Carl Campbell, Roman Bozhko), Flickr / ikarusmedia (CC BY), and Wikimedia Commons.</p>`;
 }
 
-const HUB_LINKS = `
-    <nav class="hub-links" aria-label="Mexico City guides">
-      <a href="__ORIGIN__/mexico-city-hotels">Mexico City hotels</a>
-      <a href="__ORIGIN__/where-to-stay-in-mexico-city">Where to stay</a>
-      <a href="__ORIGIN__/hotels-in-condesa">Condesa</a>
-      <a href="__ORIGIN__/hotels-in-polanco">Polanco</a>
-      <a href="__ORIGIN__/hotels-in-roma-norte">Roma Norte</a>
-      <a href="__ORIGIN__/condesa-vs-polanco">Condesa vs Polanco</a>
-      <a href="__ORIGIN__/mexico-city-boutique-hotels">Boutique hotels</a>
-      <a href="__ORIGIN__/mexico-city-hotel-finder">Hotel finder</a>
-    </nav>`;
+const HUB_LINKS = seo.hubLinks("Mexico City");
 
 function utm(content) {
   return `__ORIGIN__/?city=Mexico%20City&amp;utm_source=travelbyvibe&amp;utm_medium=landing&amp;utm_campaign=cdmx_seo_2026&amp;utm_content=${content}`;
 }
 
-function head({ title, desc, canonical, ogImage }) {
+function head(meta) {
+  const { title, desc, canonical, ogImage } = meta;
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -84,9 +76,7 @@ function head({ title, desc, canonical, ogImage }) {
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,600;1,400&amp;family=DM+Sans:wght@400;500;600&amp;display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="/marketing/marketing.css" />
-  <script type="application/ld+json">
-  {"@context":"https://schema.org","@type":"WebPage","name":"${title.replace(/"/g, '\\"')}","description":"${desc.replace(/"/g, '\\"')}","url":"__ORIGIN__/${canonical}","isPartOf":{"@type":"WebSite","name":"TravelByVibe","url":"__ORIGIN__/"}}
-  </script>
+${seo.headJsonLd(meta)}
 </head>`;
 }
 
@@ -202,26 +192,20 @@ function embedSearch(utmContent) {
     </script>`;
 }
 
-function footer(extraLinks) {
-  return `<footer class="mfoot">
-    <p>TravelByVibe — photo-first hotel discovery for Mexico City travellers. · TravelBoop, LLC</p>
-    <p><a href="__ORIGIN__/">Home</a> · <a href="__ORIGIN__/mexico-city-hotels">Mexico City hotels</a> · <a href="__ORIGIN__/where-to-stay-in-mexico-city">Where to stay</a> · <a href="__ORIGIN__/mexico-city-visual-search">Visual search</a>${extraLinks || ""}</p>
-    <div class="credits-block">
-      City photos from <a href="https://commons.wikimedia.org/" rel="noopener">Wikimedia Commons</a>; room imagery loaded live from partner catalogs when available.
-    </div>
-  </footer>
-  <script src="/marketing/marketing.js" defer></script>
-</body>
-</html>`;
-}
-
 function page(body, meta) {
+  meta.city = meta.city || "Mexico City";
+  if (!meta.faqs && seo.HUB_FAQS[meta.canonical]) meta.faqs = seo.HUB_FAQS[meta.canonical];
+  if (!meta.breadcrumbs) meta.breadcrumbs = seo.breadcrumbsFor(meta);
+  const bc = meta.breadcrumbs ? seo.breadcrumbNav(meta.breadcrumbs) : "";
+  let outBody = body;
+  if (meta.faqs && !body.includes("faq-sec")) outBody = body + seo.faqSection(meta.faqs);
   return (
     head(meta) +
-    "\n<body>\n" +
+    '\n<body data-marketing-city="Mexico City" data-marketing-campaign="cdmx_seo_2026">\n' +
     header(meta.utmNav || meta.canonical.replace(/-/g, "_")) +
-    body +
-    footer(meta.footerExtra)
+    bc +
+    outBody +
+    seo.footer("Mexico City", meta.footerExtra)
   );
 }
 
@@ -295,6 +279,8 @@ PAGES.push({
       title: "Where to Stay in Mexico City — Neighbourhood Guide | TravelByVibe",
       desc: "Where to stay in Mexico City: compare Condesa, Roma Norte, Polanco, Juárez, and Centro Histórico — then find hotels by vibe and real room photos on TravelByVibe.",
       canonical: "where-to-stay-in-mexico-city",
+      city: "Mexico City",
+      pageCategory: "hub",
     }
   ),
 });
@@ -371,6 +357,8 @@ PAGES.push({
       title: "Mexico City Hotel Finder — Where to Stay by Vibe | TravelByVibe",
       desc: "Where should you stay in Mexico City? Compare Condesa, Roma, Polanco, Juárez, and Centro vibes — then search hotels with real room photos on TravelByVibe.",
       canonical: "mexico-city-hotel-finder",
+      city: "Mexico City",
+      pageCategory: "hub",
     }
   ),
 });
@@ -485,6 +473,9 @@ for (const n of nbhdPages) {
         title: `${n.h1} — See Real Rooms | TravelByVibe`,
         desc: `Best ${n.kw}: luxury, boutique, and value picks with real room photos. Find more matches on TravelByVibe.`,
         canonical: n.slug,
+        city: "Mexico City",
+        pageCategory: "neighbourhood",
+        breadcrumbLabel: `Hotels in ${n.kw}`,
       }
     ),
   });
@@ -613,6 +604,9 @@ for (const c of comparisons) {
         desc: `${c.h1} Compare atmosphere, walkability, restaurants, and price — then find hotels by vibe on TravelByVibe.`,
         canonical: c.slug,
         ogImage: c.leftImage.replace(/&amp;/g, "&"),
+        city: "Mexico City",
+        pageCategory: "comparison",
+        breadcrumbLabel: c.h1.split(":")[0],
       }
     ),
   });
@@ -707,6 +701,9 @@ for (const v of vibePages) {
         title: `${v.h1} | TravelByVibe`,
         desc: `${v.h1}: curated picks plus AI room-photo search across 3,600+ Mexico City hotels.`,
         canonical: v.slug,
+        city: "Mexico City",
+        pageCategory: "vibe",
+        breadcrumbLabel: v.h1,
       }
     ),
   });

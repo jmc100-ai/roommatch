@@ -5,6 +5,7 @@
  */
 const fs = require("fs");
 const path = require("path");
+const seo = require("./marketing-seo");
 
 const OUT = path.join(__dirname, "..", "client", "marketing");
 const IMG = JSON.parse(
@@ -28,22 +29,14 @@ const PONT = amp(IMG.pont["960"]);
 const METRO = amp(IMG.metro["960"]);
 const GARNIER = amp(IMG.garnier["960"]);
 
-const HUB_LINKS = `
-    <nav class="hub-links" aria-label="Paris guides">
-      <a href="__ORIGIN__/paris-hotels">Paris hotels</a>
-      <a href="__ORIGIN__/where-to-stay-in-paris">Where to stay</a>
-      <a href="__ORIGIN__/hotels-in-le-marais">Le Marais</a>
-      <a href="__ORIGIN__/hotels-in-saint-germain">Saint-Germain</a>
-      <a href="__ORIGIN__/marais-vs-saint-germain">Marais vs Saint-Germain</a>
-      <a href="__ORIGIN__/paris-boutique-hotels">Boutique hotels</a>
-      <a href="__ORIGIN__/paris-hotel-finder">Hotel finder</a>
-    </nav>`;
+const HUB_LINKS = seo.hubLinks("Paris");
 
 function utm(content) {
   return `__ORIGIN__/?city=Paris&amp;utm_source=travelbyvibe&amp;utm_medium=landing&amp;utm_campaign=paris_seo_2026&amp;utm_content=${content}`;
 }
 
-function head({ title, desc, canonical, ogImage }) {
+function head(meta) {
+  const { title, desc, canonical, ogImage } = meta;
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -64,9 +57,7 @@ function head({ title, desc, canonical, ogImage }) {
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,600;1,400&amp;family=DM+Sans:wght@400;500;600&amp;display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="/marketing/marketing.css" />
-  <script type="application/ld+json">
-  {"@context":"https://schema.org","@type":"WebPage","name":"${title.replace(/"/g, '\\"')}","description":"${desc.replace(/"/g, '\\"')}","url":"__ORIGIN__/${canonical}","isPartOf":{"@type":"WebSite","name":"TravelByVibe","url":"__ORIGIN__/"}}
-  </script>
+${seo.headJsonLd(meta)}
 </head>`;
 }
 
@@ -172,26 +163,20 @@ function embedSearch(utmContent) {
     </script>`;
 }
 
-function footer(extraLinks) {
-  return `<footer class="mfoot">
-    <p>TravelByVibe — photo-first hotel discovery for Paris travellers. · TravelBoop, LLC</p>
-    <p><a href="__ORIGIN__/">Home</a> · <a href="__ORIGIN__/paris-hotels">Paris hotels</a> · <a href="__ORIGIN__/where-to-stay-in-paris">Where to stay</a> · <a href="__ORIGIN__/paris-visual-search">Visual search</a>${extraLinks || ""}</p>
-    <div class="credits-block">
-      Paris photos from <a href="https://commons.wikimedia.org/" rel="noopener">Wikimedia Commons</a>, <a href="https://unsplash.com" rel="noopener">Unsplash</a>, and Flickr (CC BY where noted); neighbourhood images from TravelByVibe&apos;s Paris vibe index.
-    </div>
-  </footer>
-  <script src="/marketing/marketing.js" defer></script>
-</body>
-</html>`;
-}
-
 function page(body, meta) {
+  meta.city = meta.city || "Paris";
+  if (!meta.faqs && seo.HUB_FAQS[meta.canonical]) meta.faqs = seo.HUB_FAQS[meta.canonical];
+  if (!meta.breadcrumbs) meta.breadcrumbs = seo.breadcrumbsFor(meta);
+  const bc = meta.breadcrumbs ? seo.breadcrumbNav(meta.breadcrumbs) : "";
+  let outBody = body;
+  if (meta.faqs && !body.includes("faq-sec")) outBody = body + seo.faqSection(meta.faqs);
   return (
     head(meta) +
     `\n<body data-marketing-city="Paris" data-marketing-campaign="paris_seo_2026">\n` +
     header(meta.utmNav || meta.canonical.replace(/-/g, "_")) +
-    body +
-    footer(meta.footerExtra)
+    bc +
+    outBody +
+    seo.footer("Paris", meta.footerExtra)
   );
 }
 
@@ -273,11 +258,13 @@ PAGES.push({
       <a class="mcta" href="${utm("where-to-stay-paris-footer")}">Start in Paris — free</a>
     </div>
   </main>`,
-    {
-      title: "Where to Stay in Paris — Neighbourhood Guide | TravelByVibe",
-      desc: "Where to stay in Paris: compare Le Marais, Saint-Germain, Montmartre, Latin Quarter, and Opéra — then find hotels by vibe and real room photos.",
-      canonical: "where-to-stay-in-paris",
-    }
+      {
+        title: "Where to Stay in Paris — Neighbourhood Guide | TravelByVibe",
+        desc: "Where to stay in Paris: compare Le Marais, Saint-Germain, Montmartre, Latin Quarter, and Opéra — then find hotels by vibe and real room photos.",
+        canonical: "where-to-stay-in-paris",
+        city: "Paris",
+        pageCategory: "hub",
+      }
   ),
 });
 
@@ -606,6 +593,9 @@ for (const n of nbhdPages) {
         title: `${n.h1} — See Real Rooms | TravelByVibe`,
         desc: `Best hotels in ${nbhdName}: luxury, boutique, and value picks with real room photos on TravelByVibe.`,
         canonical: n.slug,
+        city: "Paris",
+        pageCategory: "neighbourhood",
+        breadcrumbLabel: n.h1.replace(/^Best Hotels in /, "Hotels in ").replace(/ Paris$/, ""),
       }
     ),
   });
@@ -734,6 +724,9 @@ for (const c of comparisons) {
         desc: `${c.h1} Compare atmosphere, walkability, restaurants, and price — then find hotels by vibe.`,
         canonical: c.slug,
         ogImage: c.leftImage,
+        city: "Paris",
+        pageCategory: "comparison",
+        breadcrumbLabel: c.h1.split(":")[0],
       }
     ),
   });
@@ -827,6 +820,9 @@ for (const v of vibePages) {
         title: `${v.h1} | TravelByVibe`,
         desc: `${v.h1}: curated picks plus AI room-photo search across Paris hotels.`,
         canonical: v.slug,
+        city: "Paris",
+        pageCategory: "vibe",
+        breadcrumbLabel: v.h1.replace(/&amp;/g, "&"),
       }
     ),
   });
