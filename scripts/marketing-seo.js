@@ -375,11 +375,13 @@ function faqSection(faqs) {
     </details>`
     )
     .join("\n");
-  return `<section class="msec faq-sec" aria-labelledby="faq-heading">
+  return `<div class="wrap-wide">
+    <section class="msec faq-sec" aria-labelledby="faq-heading">
       <p class="msec-kicker">FAQ</p>
       <h2 class="msec-title" id="faq-heading">Common questions</h2>
       <div class="faq-list">${items}</div>
-    </section>`;
+    </section>
+  </div>`;
 }
 
 function faqSchema(faqs) {
