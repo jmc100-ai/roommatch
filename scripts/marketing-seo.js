@@ -479,6 +479,28 @@ function headJsonLd(meta) {
   const schemas = [
     {
       "@context": "https://schema.org",
+      "@type": "Organization",
+      name: "TravelByVibe",
+      legalName: "TravelBoop, LLC",
+      url: "__ORIGIN__/",
+      logo: "__ORIGIN__/og-image.png",
+    },
+    {
+      "@context": "https://schema.org",
+      "@type": "WebSite",
+      name: "TravelByVibe",
+      url: "__ORIGIN__/",
+      potentialAction: {
+        "@type": "SearchAction",
+        target: {
+          "@type": "EntryPoint",
+          urlTemplate: "__ORIGIN__/?city={city}&q={search_term_string}",
+        },
+        "query-input": "required name=city required name=search_term_string",
+      },
+    },
+    {
+      "@context": "https://schema.org",
       "@type": "WebPage",
       name: meta.title,
       description: meta.desc,

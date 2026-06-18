@@ -12,7 +12,9 @@
     "test:search-all": "npm run test:search-api && npm run test:search-ui",
     "baseline:capture": "node scripts/capture-search-baseline.js",
     "baseline:compare": "node scripts/compare-search-baseline.js --capture",
-    "generate:favicons": "node scripts/generate-favicons.js"
+    "generate:favicons": "node scripts/generate-favicons.js",
+    "build:marketing-seo": "node scripts/build-marketing-seo-all.js",
+    "audit:marketing": "node scripts/audit-marketing-links.js && node scripts/audit-stays-sample.js"
   },
   "engines": {
     "node": "20"

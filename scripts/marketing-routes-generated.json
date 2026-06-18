@@ -1,0 +1,2857 @@
+{
+  "routes": [
+    {
+      "path": "/mexico-city-hotels-by-vibe",
+      "file": "mexico-city-hotels.html",
+      "title": "Mexico City Hotels by Vibe — Visual Search",
+      "city": "Mexico City",
+      "category": "hub",
+      "alias": true
+    },
+    {
+      "path": "/paris-hotels-by-vibe",
+      "file": "paris-hotels.html",
+      "title": "Paris Hotels by Vibe — Visual Search",
+      "city": "Paris",
+      "category": "hub",
+      "alias": true
+    },
+    {
+      "path": "/mexico-city-hotels-with-rainfall-shower",
+      "file": "mexico-city-hotels-with-rainfall-shower.html",
+      "title": "Best Hotels in Mexico City with Rainfall Shower",
+      "city": "Mexico City",
+      "category": "vibe"
+    },
+    {
+      "path": "/mexico-city-hotels-with-balcony",
+      "file": "mexico-city-hotels-with-balcony.html",
+      "title": "Best Hotels in Mexico City with a Balcony",
+      "city": "Mexico City",
+      "category": "vibe"
+    },
+    {
+      "path": "/mexico-city-hotels-for-couples",
+      "file": "mexico-city-hotels-for-couples.html",
+      "title": "Best Romantic Hotels in Mexico City for Couples",
+      "city": "Mexico City",
+      "category": "vibe"
+    },
+    {
+      "path": "/mexico-city-quiet-hotels",
+      "file": "mexico-city-quiet-hotels.html",
+      "title": "Best Quiet Hotels in Mexico City",
+      "city": "Mexico City",
+      "category": "vibe"
+    },
+    {
+      "path": "/mexico-city-walkable-hotels",
+      "file": "mexico-city-walkable-hotels.html",
+      "title": "Best Walkable Neighborhood Hotels in Mexico City",
+      "city": "Mexico City",
+      "category": "vibe"
+    },
+    {
+      "path": "/paris-hotels-with-rainfall-shower",
+      "file": "paris-hotels-with-rainfall-shower.html",
+      "title": "Best Paris Hotels with Rainfall Shower",
+      "city": "Paris",
+      "category": "vibe"
+    },
+    {
+      "path": "/paris-hotels-with-balcony",
+      "file": "paris-hotels-with-balcony.html",
+      "title": "Best Paris Hotels with a Balcony",
+      "city": "Paris",
+      "category": "vibe"
+    },
+    {
+      "path": "/paris-hotels-for-couples",
+      "file": "paris-hotels-for-couples.html",
+      "title": "Best Paris Hotels for Couples",
+      "city": "Paris",
+      "category": "vibe"
+    },
+    {
+      "path": "/paris-quiet-hotels",
+      "file": "paris-quiet-hotels.html",
+      "title": "Best Quiet Hotels in Paris",
+      "city": "Paris",
+      "category": "vibe"
+    },
+    {
+      "path": "/paris-design-hotels",
+      "file": "paris-design-hotels.html",
+      "title": "Best Design Hotels in Paris",
+      "city": "Paris",
+      "category": "vibe"
+    },
+    {
+      "path": "/hotels-in-paseo-de-la-reforma",
+      "file": "hotels-in-paseo-de-la-reforma.html",
+      "title": "Best Hotels in Paseo de la Reforma, Mexico City",
+      "city": "Mexico City",
+      "category": "neighborhood"
+    },
+    {
+      "path": "/hotels-in-canal-saint-martin",
+      "file": "hotels-in-canal-saint-martin.html",
+      "title": "Best Hotels in Canal Saint-Martin, Paris",
+      "city": "Paris",
+      "category": "neighborhood"
+    },
+    {
+      "path": "/hotels-in-aeropuerto",
+      "file": "hotels-in-aeropuerto.html",
+      "title": "Best Hotels in Aeropuerto, Mexico City",
+      "city": "Mexico City",
+      "category": "neighborhood"
+    },
+    {
+      "path": "/hotels-in-coyoacan",
+      "file": "hotels-in-coyoacan.html",
+      "title": "Best Hotels in Coyoacán, Mexico City",
+      "city": "Mexico City",
+      "category": "neighborhood"
+    },
+    {
+      "path": "/hotels-in-santa-fe",
+      "file": "hotels-in-santa-fe.html",
+      "title": "Best Hotels in Santa Fe, Mexico City",
+      "city": "Mexico City",
+      "category": "neighborhood"
+    },
+    {
+      "path": "/hotels-in-saint-germain-des-pres",
+      "file": "hotels-in-saint-germain-des-pres.html",
+      "title": "Best Hotels in Saint-Germain-des-Prés, Paris",
+      "city": "Paris",
+      "category": "neighborhood"
+    },
+    {
+      "path": "/hotels-in-san-rafael",
+      "file": "hotels-in-san-rafael.html",
+      "title": "Best Hotels in San Rafael, Mexico City",
+      "city": "Mexico City",
+      "category": "neighborhood"
+    },
+    {
+      "path": "/hotels-in-opera-grands-boulevards",
+      "file": "hotels-in-opera-grands-boulevards.html",
+      "title": "Best Hotels in Opéra / Grands Boulevards, Paris",
+      "city": "Paris",
+      "category": "neighborhood"
+    },
+    {
+      "path": "/hotels-in-eiffel-tower-7th-arrondissement",
+      "file": "hotels-in-eiffel-tower-7th-arrondissement.html",
+      "title": "Best Hotels in Eiffel Tower / 7th Arrondissement, Paris",
+      "city": "Paris",
+      "category": "neighborhood"
+    }
+  ],
+  "staysRoutes": [
+    {
+      "path": "/stays/sofitel-mexico-city-reforma-mexico-city",
+      "file": "stays/sofitel-mexico-city-reforma-mexico-city.html",
+      "title": "Sofitel Mexico City Reforma",
+      "city": "Mexico City",
+      "category": "stay",
+      "hotelId": "lp1ce969"
+    },
+    {
+      "path": "/stays/pug-seal-polanco-anatole-france-mexico-city",
+      "file": "stays/pug-seal-polanco-anatole-france-mexico-city.html",
+      "title": "Pug Seal Polanco Anatole France",
+      "city": "Mexico City",
+      "category": "stay",
+      "hotelId": "lp103346"
+    },
+    {
+      "path": "/stays/antigua-hotel-boutique-mexico-city",
+      "file": "stays/antigua-hotel-boutique-mexico-city.html",
+      "title": "Antigua Hotel Boutique",
+      "city": "Mexico City",
+      "category": "stay",
+      "hotelId": "lp6558bfc8"
+    },
+    {
+      "path": "/stays/gran-hotel-ciudad-de-mexico-zocalo-view-mexico-city",
+      "file": "stays/gran-hotel-ciudad-de-mexico-zocalo-view-mexico-city.html",
+      "title": "Gran Hotel Ciudad de México Zócalo View",
+      "city": "Mexico City",
+      "category": "stay",
+      "hotelId": "lp3ad7c"
+    },
+    {
+      "path": "/stays/las-alcobas-a-luxury-collection-hotel-mexico-cit-mexico-city",
+      "file": "stays/las-alcobas-a-luxury-collection-hotel-mexico-cit-mexico-city.html",
+      "title": "Las Alcobas, a Luxury Collection Hotel, Mexico City",
+      "city": "Mexico City",
+      "category": "stay",
+      "hotelId": "lp53aa8"
+    },
+    {
+      "path": "/stays/the-alest-hotel-mexico-city",
+      "file": "stays/the-alest-hotel-mexico-city.html",
+      "title": "The Alest Hotel",
+      "city": "Mexico City",
+      "category": "stay",
+      "hotelId": "lp65575e1c"
+    },
+    {
+      "path": "/stays/the-st-regis-mexico-city-mexico-city",
+      "file": "stays/the-st-regis-mexico-city-mexico-city.html",
+      "title": "The St. Regis Mexico City",
+      "city": "Mexico City",
+      "category": "stay",
+      "hotelId": "lp4bab4"
+    },
+    {
+      "path": "/stays/presidente-intercontinental-mexico-city-by-ihg-mexico-city",
+      "file": "stays/presidente-intercontinental-mexico-city-by-ihg-mexico-city.html",
+      "title": "Presidente InterContinental Mexico City by IHG",
+      "city": "Mexico City",
+      "category": "stay",
+      "hotelId": "lp31a95"
+    },
+    {
+      "path": "/stays/casa-polanco-hotel-boutique-mexico-city",
+      "file": "stays/casa-polanco-hotel-boutique-mexico-city.html",
+      "title": "Casa Polanco Hotel Boutique",
+      "city": "Mexico City",
+      "category": "stay",
+      "hotelId": "lp6557cd35"
+    },
+    {
+      "path": "/stays/jw-marriott-hotel-mexico-city-polanco-mexico-city",
+      "file": "stays/jw-marriott-hotel-mexico-city-polanco-mexico-city.html",
+      "title": "JW Marriott Hotel Mexico City Polanco",
+      "city": "Mexico City",
+      "category": "stay",
+      "hotelId": "lp2279f"
+    },
+    {
+      "path": "/stays/mondrian-mexico-city-condesa-mexico-city",
+      "file": "stays/mondrian-mexico-city-condesa-mexico-city.html",
+      "title": "Mondrian Mexico City Condesa",
+      "city": "Mexico City",
+      "category": "stay",
+      "hotelId": "lp65589b3b"
+    },
+    {
+      "path": "/stays/agata-hotel-boutique-and-spa-mexico-city",
+      "file": "stays/agata-hotel-boutique-and-spa-mexico-city.html",
+      "title": "Agata Hotel Boutique & Spa",
+      "city": "Mexico City",
+      "category": "stay",
+      "hotelId": "lp65583436"
+    },
+    {
+      "path": "/stays/the-ritz-carlton-mexico-city-mexico-city",
+      "file": "stays/the-ritz-carlton-mexico-city-mexico-city.html",
+      "title": "The Ritz-Carlton, Mexico City",
+      "city": "Mexico City",
+      "category": "stay",
+      "hotelId": "lp65573614"
+    },
+    {
+      "path": "/stays/volga-member-of-preferred-hotels-and-resorts-mexico-city",
+      "file": "stays/volga-member-of-preferred-hotels-and-resorts-mexico-city.html",
+      "title": "Volga, Member of Preferred Hotels & Resorts",
+      "city": "Mexico City",
+      "category": "stay",
+      "hotelId": "lp65588d82"
+    },
+    {
+      "path": "/stays/nana-vida-cdmx-mexico-city",
+      "file": "stays/nana-vida-cdmx-mexico-city.html",
+      "title": "NaNa Vida CDMX",
+      "city": "Mexico City",
+      "category": "stay",
+      "hotelId": "lp65585146"
+    },
+    {
+      "path": "/stays/roso-guest-house-mexico-city",
+      "file": "stays/roso-guest-house-mexico-city.html",
+      "title": "Roso Guest House",
+      "city": "Mexico City",
+      "category": "stay",
+      "hotelId": "lp6558d9d4"
+    },
+    {
+      "path": "/stays/hotel-catedral-mexico-city",
+      "file": "stays/hotel-catedral-mexico-city.html",
+      "title": "Hotel Catedral",
+      "city": "Mexico City",
+      "category": "stay",
+      "hotelId": "lp2411a6"
+    },
+    {
+      "path": "/stays/grand-fiesta-americana-chapultepec-mexico-city",
+      "file": "stays/grand-fiesta-americana-chapultepec-mexico-city.html",
+      "title": "Grand Fiesta Americana Chapultepec",
+      "city": "Mexico City",
+      "category": "stay",
+      "hotelId": "lp2f760"
+    },
+    {
+      "path": "/stays/icon-condesa-all-amenities-extremely-cozy-flat-c-mexico-city",
+      "file": "stays/icon-condesa-all-amenities-extremely-cozy-flat-c-mexico-city.html",
+      "title": "Icon Condesa · All Amenities Extremely Cozy Flat @ Condesa 5 star",
+      "city": "Mexico City",
+      "category": "stay",
+      "hotelId": "lp6555881b"
+    },
+    {
+      "path": "/stays/four-seasons-hotel-mexico-city-mexico-city",
+      "file": "stays/four-seasons-hotel-mexico-city-mexico-city.html",
+      "title": "Four Seasons Hotel Mexico City",
+      "city": "Mexico City",
+      "category": "stay",
+      "hotelId": "lp23157"
+    },
+    {
+      "path": "/stays/galeria-plaza-san-jeronimo-mexico-city",
+      "file": "stays/galeria-plaza-san-jeronimo-mexico-city.html",
+      "title": "Galeria Plaza San Jeronimo",
+      "city": "Mexico City",
+      "category": "stay",
+      "hotelId": "lp6555a98e"
+    },
+    {
+      "path": "/stays/camino-real-polanco-mexico-mexico-city",
+      "file": "stays/camino-real-polanco-mexico-mexico-city.html",
+      "title": "Camino Real Polanco Mexico",
+      "city": "Mexico City",
+      "category": "stay",
+      "hotelId": "lp231f5"
+    },
+    {
+      "path": "/stays/casa-corp-boutique-suites-in-condesa-mexico-city",
+      "file": "stays/casa-corp-boutique-suites-in-condesa-mexico-city.html",
+      "title": "Casa Corp Boutique Suites in Condesa",
+      "city": "Mexico City",
+      "category": "stay",
+      "hotelId": "lp655bb5c1"
+    },
+    {
+      "path": "/stays/casa-de-la-luz-hotel-boutique-mexico-city",
+      "file": "stays/casa-de-la-luz-hotel-boutique-mexico-city.html",
+      "title": "Casa de la Luz Hotel Boutique",
+      "city": "Mexico City",
+      "category": "stay",
+      "hotelId": "lp3873de"
+    },
+    {
+      "path": "/stays/hyatt-regency-mexico-city-mexico-city",
+      "file": "stays/hyatt-regency-mexico-city-mexico-city.html",
+      "title": "Hyatt Regency Mexico City",
+      "city": "Mexico City",
+      "category": "stay",
+      "hotelId": "lp1c8f9"
+    },
+    {
+      "path": "/stays/hs-hotsson-cdmx-condesa-sur-mexico-city",
+      "file": "stays/hs-hotsson-cdmx-condesa-sur-mexico-city.html",
+      "title": "HS HOTSSON CDMX Condesa Sur",
+      "city": "Mexico City",
+      "category": "stay",
+      "hotelId": "lp65577ecf"
+    },
+    {
+      "path": "/stays/barcelo-mexico-reforma-mexico-city",
+      "file": "stays/barcelo-mexico-reforma-mexico-city.html",
+      "title": "Barceló Mexico Reforma",
+      "city": "Mexico City",
+      "category": "stay",
+      "hotelId": "lp1d4ad"
+    },
+    {
+      "path": "/stays/hotel-luca-mexico-city",
+      "file": "stays/hotel-luca-mexico-city.html",
+      "title": "HOTEL LUCA",
+      "city": "Mexico City",
+      "category": "stay",
+      "hotelId": "lp6557c3e1"
+    },
+    {
+      "path": "/stays/mi-zona-lodging-polanco-mexico-city",
+      "file": "stays/mi-zona-lodging-polanco-mexico-city.html",
+      "title": "Mi Zona Lodging Polanco",
+      "city": "Mexico City",
+      "category": "stay",
+      "hotelId": "lp65579640"
+    },
+    {
+      "path": "/stays/capitalia-obelisk-polanco-mexico-city",
+      "file": "stays/capitalia-obelisk-polanco-mexico-city.html",
+      "title": "Capitalia Obelisk Polanco",
+      "city": "Mexico City",
+      "category": "stay",
+      "hotelId": "lp655854f9"
+    },
+    {
+      "path": "/stays/stadia-suites-mexico-city-santa-fe-mexico-city",
+      "file": "stays/stadia-suites-mexico-city-santa-fe-mexico-city.html",
+      "title": "Stadia Suites Mexico City Santa Fe",
+      "city": "Mexico City",
+      "category": "stay",
+      "hotelId": "lp4eeff"
+    },
+    {
+      "path": "/stays/the-amsterdam-boutique-stays-by-viadora-mexico-city",
+      "file": "stays/the-amsterdam-boutique-stays-by-viadora-mexico-city.html",
+      "title": "The Amsterdam Boutique Stays by Viadora",
+      "city": "Mexico City",
+      "category": "stay",
+      "hotelId": "lp65583727"
+    },
+    {
+      "path": "/stays/hyatt-regency-mexico-city-insurgentes-wtc-mexico-city",
+      "file": "stays/hyatt-regency-mexico-city-insurgentes-wtc-mexico-city.html",
+      "title": "Hyatt Regency Mexico City Insurgentes WTC",
+      "city": "Mexico City",
+      "category": "stay",
+      "hotelId": "lp65582fc6"
+    },
+    {
+      "path": "/stays/the-westin-santa-fe-mexico-city-mexico-city",
+      "file": "stays/the-westin-santa-fe-mexico-city-mexico-city.html",
+      "title": "The Westin Santa Fe, Mexico City",
+      "city": "Mexico City",
+      "category": "stay",
+      "hotelId": "lp575cf"
+    },
+    {
+      "path": "/stays/campos-polanco-mexico-city",
+      "file": "stays/campos-polanco-mexico-city.html",
+      "title": "Campos Polanco",
+      "city": "Mexico City",
+      "category": "stay",
+      "hotelId": "lp6557181a"
+    },
+    {
+      "path": "/stays/sheraton-maria-isabel-mexico-city-reforma-mexico-city",
+      "file": "stays/sheraton-maria-isabel-mexico-city-reforma-mexico-city.html",
+      "title": "Sheraton Maria Isabel Mexico City Reforma",
+      "city": "Mexico City",
+      "category": "stay",
+      "hotelId": "lp19cbe"
+    },
+    {
+      "path": "/stays/casa-emilia-b-and-b-boutique-mexico-city",
+      "file": "stays/casa-emilia-b-and-b-boutique-mexico-city.html",
+      "title": "CASA EMILIA B&B Boutique",
+      "city": "Mexico City",
+      "category": "stay",
+      "hotelId": "lp22e9b4"
+    },
+    {
+      "path": "/stays/capitalia-parque-lincoln-mexico-city",
+      "file": "stays/capitalia-parque-lincoln-mexico-city.html",
+      "title": "Capitalia Parque Lincoln",
+      "city": "Mexico City",
+      "category": "stay",
+      "hotelId": "lp65583bc5"
+    },
+    {
+      "path": "/stays/las-suites-campos-eliseos-mexico-city",
+      "file": "stays/las-suites-campos-eliseos-mexico-city.html",
+      "title": "Las Suites Campos Eliseos",
+      "city": "Mexico City",
+      "category": "stay",
+      "hotelId": "lp5c197"
+    },
+    {
+      "path": "/stays/uma-casa-mexico-city",
+      "file": "stays/uma-casa-mexico-city.html",
+      "title": "UMA Casa",
+      "city": "Mexico City",
+      "category": "stay",
+      "hotelId": "lp65576f03"
+    },
+    {
+      "path": "/stays/capitalia-santa-fe-mexico-city",
+      "file": "stays/capitalia-santa-fe-mexico-city.html",
+      "title": "Capitalia Santa Fe",
+      "city": "Mexico City",
+      "category": "stay",
+      "hotelId": "lp65585ab6"
+    },
+    {
+      "path": "/stays/jw-marriott-hotel-mexico-city-santa-fe-mexico-city",
+      "file": "stays/jw-marriott-hotel-mexico-city-santa-fe-mexico-city.html",
+      "title": "JW Marriott Hotel Mexico City Santa Fe",
+      "city": "Mexico City",
+      "category": "stay",
+      "hotelId": "lp63c46"
+    },
+    {
+      "path": "/stays/casa-luciana-condesa-mexico-city",
+      "file": "stays/casa-luciana-condesa-mexico-city.html",
+      "title": "CASA LUCIANA Condesa",
+      "city": "Mexico City",
+      "category": "stay",
+      "hotelId": "lp65583c89"
+    },
+    {
+      "path": "/stays/fiesta-americana-viaducto-aeropuerto-mexico-city",
+      "file": "stays/fiesta-americana-viaducto-aeropuerto-mexico-city.html",
+      "title": "Fiesta Americana Viaducto Aeropuerto",
+      "city": "Mexico City",
+      "category": "stay",
+      "hotelId": "lp275cef"
+    },
+    {
+      "path": "/stays/xoma-boutique-stays-by-viadora-mexico-city",
+      "file": "stays/xoma-boutique-stays-by-viadora-mexico-city.html",
+      "title": "Xoma Boutique Stays by Viadora",
+      "city": "Mexico City",
+      "category": "stay",
+      "hotelId": "lp65575ae4"
+    },
+    {
+      "path": "/stays/orchid-house-mexico-city-mexico-city",
+      "file": "stays/orchid-house-mexico-city-mexico-city.html",
+      "title": "Orchid House Mexico City",
+      "city": "Mexico City",
+      "category": "stay",
+      "hotelId": "lp154092"
+    },
+    {
+      "path": "/stays/andaz-condesa-mexico-city-by-hyatt-mexico-city",
+      "file": "stays/andaz-condesa-mexico-city-by-hyatt-mexico-city.html",
+      "title": "Andaz Condesa Mexico City, By Hyatt",
+      "city": "Mexico City",
+      "category": "stay",
+      "hotelId": "lp65574bcd"
+    },
+    {
+      "path": "/stays/hippodrome-hotel-condesa-mexico-city",
+      "file": "stays/hippodrome-hotel-condesa-mexico-city.html",
+      "title": "Hippodrome Hotel Condesa",
+      "city": "Mexico City",
+      "category": "stay",
+      "hotelId": "lp3c651"
+    },
+    {
+      "path": "/stays/alia-inn-boutique-wtc-mexico-city",
+      "file": "stays/alia-inn-boutique-wtc-mexico-city.html",
+      "title": "Alia Inn Boutique WTC",
+      "city": "Mexico City",
+      "category": "stay",
+      "hotelId": "lp6558335e"
+    },
+    {
+      "path": "/stays/leonora-boutique-stays-by-viadora-mexico-city",
+      "file": "stays/leonora-boutique-stays-by-viadora-mexico-city.html",
+      "title": "Leonora Boutique Stays by Viadora",
+      "city": "Mexico City",
+      "category": "stay",
+      "hotelId": "lp6557f39d"
+    },
+    {
+      "path": "/stays/hilton-mexico-city-reforma-mexico-city",
+      "file": "stays/hilton-mexico-city-reforma-mexico-city.html",
+      "title": "Hilton Mexico City Reforma",
+      "city": "Mexico City",
+      "category": "stay",
+      "hotelId": "lp3158b"
+    },
+    {
+      "path": "/stays/lovely-terraza-masaryk-mexico-city",
+      "file": "stays/lovely-terraza-masaryk-mexico-city.html",
+      "title": "Lovely Terraza Masaryk",
+      "city": "Mexico City",
+      "category": "stay",
+      "hotelId": "lp10037d"
+    },
+    {
+      "path": "/stays/mexico-city-marriott-reforma-hotel-mexico-city",
+      "file": "stays/mexico-city-marriott-reforma-hotel-mexico-city.html",
+      "title": "Mexico City Marriott Reforma Hotel",
+      "city": "Mexico City",
+      "category": "stay",
+      "hotelId": "lp24f0b"
+    },
+    {
+      "path": "/stays/hotel-la-moraleja-suites-and-villas-mexico-city",
+      "file": "stays/hotel-la-moraleja-suites-and-villas-mexico-city.html",
+      "title": "Hotel La Moraleja Suites & Villas",
+      "city": "Mexico City",
+      "category": "stay",
+      "hotelId": "lp655584ff"
+    },
+    {
+      "path": "/stays/coyoacan-inn-guesthouse-mexico-city",
+      "file": "stays/coyoacan-inn-guesthouse-mexico-city.html",
+      "title": "Coyoacan-inn Guesthouse",
+      "city": "Mexico City",
+      "category": "stay",
+      "hotelId": "lp2369cd"
+    },
+    {
+      "path": "/stays/the-paragon-hotel-mexico-santa-fe-by-accor-mexico-city",
+      "file": "stays/the-paragon-hotel-mexico-santa-fe-by-accor-mexico-city.html",
+      "title": "The Paragon Hotel Mexico Santa Fe By Accor",
+      "city": "Mexico City",
+      "category": "stay",
+      "hotelId": "lp63fd8"
+    },
+    {
+      "path": "/stays/circulo-mexicano-a-member-of-design-hotels-mexico-city",
+      "file": "stays/circulo-mexicano-a-member-of-design-hotels-mexico-city.html",
+      "title": "Círculo Mexicano, a Member of Design Hotels",
+      "city": "Mexico City",
+      "category": "stay",
+      "hotelId": "lp65555bb8"
+    },
+    {
+      "path": "/stays/colmena-hotel-cdmx-tonala-mexico-city",
+      "file": "stays/colmena-hotel-cdmx-tonala-mexico-city.html",
+      "title": "Colmena Hotel CDMX Tonala",
+      "city": "Mexico City",
+      "category": "stay",
+      "hotelId": "lp6557c7d1"
+    },
+    {
+      "path": "/stays/st-isidro-suites-corporate-housing-spa-and-welln-mexico-city",
+      "file": "stays/st-isidro-suites-corporate-housing-spa-and-welln-mexico-city.html",
+      "title": "St Isidro Suites Corporate Housing SPA & Wellness Center",
+      "city": "Mexico City",
+      "category": "stay",
+      "hotelId": "lp41057"
+    },
+    {
+      "path": "/stays/miyana-vip-luxury-suite-by-livemexicocity-mexico-city",
+      "file": "stays/miyana-vip-luxury-suite-by-livemexicocity-mexico-city.html",
+      "title": "Miyana VIP Luxury Suite by  LiveMexicoCity",
+      "city": "Mexico City",
+      "category": "stay",
+      "hotelId": "lp1defd9"
+    },
+    {
+      "path": "/stays/nilo-33-mexico-city",
+      "file": "stays/nilo-33-mexico-city.html",
+      "title": "Nilo 33",
+      "city": "Mexico City",
+      "category": "stay",
+      "hotelId": "lp27a08e"
+    },
+    {
+      "path": "/stays/casa-sauto-family-suite-cathedral-view-mexico-city",
+      "file": "stays/casa-sauto-family-suite-cathedral-view-mexico-city.html",
+      "title": "CASA SAUTO Family Suite CATHEDRAL VIEW",
+      "city": "Mexico City",
+      "category": "stay",
+      "hotelId": "lp6557c6ef"
+    },
+    {
+      "path": "/stays/casa-san-angel-inn-boutique-charming-house-mexico-city",
+      "file": "stays/casa-san-angel-inn-boutique-charming-house-mexico-city.html",
+      "title": "Casa San Angel Inn Boutique charming house",
+      "city": "Mexico City",
+      "category": "stay",
+      "hotelId": "lp655ce078"
+    },
+    {
+      "path": "/stays/frida-boutique-stays-by-viadora-mexico-city",
+      "file": "stays/frida-boutique-stays-by-viadora-mexico-city.html",
+      "title": "Frida Boutique Stays by Viadora",
+      "city": "Mexico City",
+      "category": "stay",
+      "hotelId": "lp1c5cb8"
+    },
+    {
+      "path": "/stays/real-de-hamburgo-by-the-local-way-mexico-city",
+      "file": "stays/real-de-hamburgo-by-the-local-way-mexico-city.html",
+      "title": "Real de Hamburgo By The Local Way",
+      "city": "Mexico City",
+      "category": "stay",
+      "hotelId": "lp65577ab1"
+    },
+    {
+      "path": "/stays/courtyard-by-marriott-mexico-city-airport-mexico-city",
+      "file": "stays/courtyard-by-marriott-mexico-city-airport-mexico-city.html",
+      "title": "Courtyard by Marriott Mexico City Airport",
+      "city": "Mexico City",
+      "category": "stay",
+      "hotelId": "lp61c77"
+    },
+    {
+      "path": "/stays/royal-pedregal-mexico-city",
+      "file": "stays/royal-pedregal-mexico-city.html",
+      "title": "Royal Pedregal",
+      "city": "Mexico City",
+      "category": "stay",
+      "hotelId": "lp23041"
+    },
+    {
+      "path": "/stays/radisson-paraiso-hotel-mexico-city-mexico-city",
+      "file": "stays/radisson-paraiso-hotel-mexico-city-mexico-city.html",
+      "title": "Radisson Paraiso Hotel Mexico City",
+      "city": "Mexico City",
+      "category": "stay",
+      "hotelId": "lp2bc7f"
+    },
+    {
+      "path": "/stays/brick-hotel-mexico-city-small-luxury-hotels-of-t-mexico-city",
+      "file": "stays/brick-hotel-mexico-city-small-luxury-hotels-of-t-mexico-city.html",
+      "title": "Brick Hotel Mexico City - Small Luxury Hotels of the World",
+      "city": "Mexico City",
+      "category": "stay",
+      "hotelId": "lp53191"
+    },
+    {
+      "path": "/stays/hotel-riazor-aeropuerto-mexico-city",
+      "file": "stays/hotel-riazor-aeropuerto-mexico-city.html",
+      "title": "Hotel Riazor Aeropuerto",
+      "city": "Mexico City",
+      "category": "stay",
+      "hotelId": "lp364c0"
+    },
+    {
+      "path": "/stays/hotel-novit-mexico-city",
+      "file": "stays/hotel-novit-mexico-city.html",
+      "title": "Hotel Novit",
+      "city": "Mexico City",
+      "category": "stay",
+      "hotelId": "lp58d3e"
+    },
+    {
+      "path": "/stays/isaaya-hotel-boutique-by-wtc-mexico-city",
+      "file": "stays/isaaya-hotel-boutique-by-wtc-mexico-city.html",
+      "title": "Isaaya Hotel Boutique by WTC",
+      "city": "Mexico City",
+      "category": "stay",
+      "hotelId": "lp3ad7b"
+    },
+    {
+      "path": "/stays/umbral-curio-collection-by-hilton-mexico-city",
+      "file": "stays/umbral-curio-collection-by-hilton-mexico-city.html",
+      "title": "Umbral, Curio Collection By Hilton",
+      "city": "Mexico City",
+      "category": "stay",
+      "hotelId": "lp1f6a78"
+    },
+    {
+      "path": "/stays/camino-real-pedregal-mexico-mexico-city",
+      "file": "stays/camino-real-pedregal-mexico-mexico-city.html",
+      "title": "Camino Real Pedregal Mexico",
+      "city": "Mexico City",
+      "category": "stay",
+      "hotelId": "lp3aaaa"
+    },
+    {
+      "path": "/stays/barcelo-mexico-santa-fe-mexico-city",
+      "file": "stays/barcelo-mexico-santa-fe-mexico-city.html",
+      "title": "Barceló México Santa Fe",
+      "city": "Mexico City",
+      "category": "stay",
+      "hotelId": "lp3ace7"
+    },
+    {
+      "path": "/stays/w-mexico-city-mexico-city",
+      "file": "stays/w-mexico-city-mexico-city.html",
+      "title": "W Mexico City",
+      "city": "Mexico City",
+      "category": "stay",
+      "hotelId": "lp3810a"
+    },
+    {
+      "path": "/stays/uliv-antara-mexico-city",
+      "file": "stays/uliv-antara-mexico-city.html",
+      "title": "ULIV Antara",
+      "city": "Mexico City",
+      "category": "stay",
+      "hotelId": "lp6557c436"
+    },
+    {
+      "path": "/stays/galeria-plaza-reforma-mexico-city",
+      "file": "stays/galeria-plaza-reforma-mexico-city.html",
+      "title": "Galeria Plaza Reforma",
+      "city": "Mexico City",
+      "category": "stay",
+      "hotelId": "lp237b1"
+    },
+    {
+      "path": "/stays/nh-collection-mexico-city-santa-fe-mexico-city",
+      "file": "stays/nh-collection-mexico-city-santa-fe-mexico-city.html",
+      "title": "NH Collection Mexico City Santa Fe",
+      "city": "Mexico City",
+      "category": "stay",
+      "hotelId": "lp3e1da"
+    },
+    {
+      "path": "/stays/v65-mexico-mexico-city",
+      "file": "stays/v65-mexico-mexico-city.html",
+      "title": "V65 Mexico",
+      "city": "Mexico City",
+      "category": "stay",
+      "hotelId": "lp2f6866"
+    },
+    {
+      "path": "/stays/casa-comtesse-mexico-city",
+      "file": "stays/casa-comtesse-mexico-city.html",
+      "title": "Casa Comtesse",
+      "city": "Mexico City",
+      "category": "stay",
+      "hotelId": "lp290b95"
+    },
+    {
+      "path": "/stays/nh-collection-mexico-city-reforma-mexico-city",
+      "file": "stays/nh-collection-mexico-city-reforma-mexico-city.html",
+      "title": "NH Collection Mexico City Reforma",
+      "city": "Mexico City",
+      "category": "stay",
+      "hotelId": "lp31a94"
+    },
+    {
+      "path": "/stays/ana-polanco-apartments-mexico-city",
+      "file": "stays/ana-polanco-apartments-mexico-city.html",
+      "title": "Ana Polanco Apartments",
+      "city": "Mexico City",
+      "category": "stay",
+      "hotelId": "lp6558a5d2"
+    },
+    {
+      "path": "/stays/hotel-mandarin-carton-mexico-city",
+      "file": "stays/hotel-mandarin-carton-mexico-city.html",
+      "title": "Hotel Mandarin Carton",
+      "city": "Mexico City",
+      "category": "stay",
+      "hotelId": "lp3e29a"
+    },
+    {
+      "path": "/stays/hotel-villa-condesa-mexico-city",
+      "file": "stays/hotel-villa-condesa-mexico-city.html",
+      "title": "Hotel Villa Condesa",
+      "city": "Mexico City",
+      "category": "stay",
+      "hotelId": "lp5f38b"
+    },
+    {
+      "path": "/stays/fiesta-americana-reforma-mexico-city",
+      "file": "stays/fiesta-americana-reforma-mexico-city.html",
+      "title": "Fiesta Americana Reforma",
+      "city": "Mexico City",
+      "category": "stay",
+      "hotelId": "lp1a7cd"
+    },
+    {
+      "path": "/stays/hotel-flamencos-centro-historico-mexico-city",
+      "file": "stays/hotel-flamencos-centro-historico-mexico-city.html",
+      "title": "Hotel Flamencos Centro Histórico",
+      "city": "Mexico City",
+      "category": "stay",
+      "hotelId": "lp65575fa9"
+    },
+    {
+      "path": "/stays/holiday-inn-mexico-city-plaza-universidad-by-ihg-mexico-city",
+      "file": "stays/holiday-inn-mexico-city-plaza-universidad-by-ihg-mexico-city.html",
+      "title": "Holiday Inn Mexico City-Plaza Universidad by IHG",
+      "city": "Mexico City",
+      "category": "stay",
+      "hotelId": "lp4c8b4"
+    },
+    {
+      "path": "/stays/flowsuites-wtc-mexico-city",
+      "file": "stays/flowsuites-wtc-mexico-city.html",
+      "title": "FlowSuites WTC",
+      "city": "Mexico City",
+      "category": "stay",
+      "hotelId": "lp4f096"
+    },
+    {
+      "path": "/stays/boutique-hotel-durango219-mexico-city",
+      "file": "stays/boutique-hotel-durango219-mexico-city.html",
+      "title": "Boutique Hotel Durango219",
+      "city": "Mexico City",
+      "category": "stay",
+      "hotelId": "lp655bad79"
+    },
+    {
+      "path": "/stays/emporio-reforma-mexico-city",
+      "file": "stays/emporio-reforma-mexico-city.html",
+      "title": "Emporio Reforma",
+      "city": "Mexico City",
+      "category": "stay",
+      "hotelId": "lp2d363"
+    },
+    {
+      "path": "/stays/holiday-inn-express-mexico-reforma-by-ihg-mexico-city",
+      "file": "stays/holiday-inn-express-mexico-reforma-by-ihg-mexico-city.html",
+      "title": "Holiday Inn Express Mexico Reforma by IHG",
+      "city": "Mexico City",
+      "category": "stay",
+      "hotelId": "lp40331"
+    },
+    {
+      "path": "/stays/uliv-edgar-allan-poe-mexico-city",
+      "file": "stays/uliv-edgar-allan-poe-mexico-city.html",
+      "title": "ULIV Edgar Allan Poe",
+      "city": "Mexico City",
+      "category": "stay",
+      "hotelId": "lp65589e47"
+    },
+    {
+      "path": "/stays/eurostars-zona-rosa-suites-mexico-city",
+      "file": "stays/eurostars-zona-rosa-suites-mexico-city.html",
+      "title": "Eurostars Zona Rosa Suites",
+      "city": "Mexico City",
+      "category": "stay",
+      "hotelId": "lp321d0"
+    },
+    {
+      "path": "/stays/departamento-angelica-rosas-ramirez-mexico-city",
+      "file": "stays/departamento-angelica-rosas-ramirez-mexico-city.html",
+      "title": "Departamento Angélica Rosas Ramirez",
+      "city": "Mexico City",
+      "category": "stay",
+      "hotelId": "lp1b668a"
+    },
+    {
+      "path": "/stays/novotel-mexico-city-world-trade-center-mexico-city",
+      "file": "stays/novotel-mexico-city-world-trade-center-mexico-city.html",
+      "title": "Novotel Mexico City World Trade Center",
+      "city": "Mexico City",
+      "category": "stay",
+      "hotelId": "lp6557b7ec"
+    },
+    {
+      "path": "/stays/hotel-el-ejecutivo-by-reforma-avenue-mexico-city",
+      "file": "stays/hotel-el-ejecutivo-by-reforma-avenue-mexico-city.html",
+      "title": "Hotel El Ejecutivo by Reforma Avenue",
+      "city": "Mexico City",
+      "category": "stay",
+      "hotelId": "lp2a73a"
+    },
+    {
+      "path": "/stays/hotel-park-nilo-reforma-mexico-city",
+      "file": "stays/hotel-park-nilo-reforma-mexico-city.html",
+      "title": "Hotel Park Nilo Reforma",
+      "city": "Mexico City",
+      "category": "stay",
+      "hotelId": "lp100aa1"
+    },
+    {
+      "path": "/stays/fiesta-inn-insurgentes-sur-mexico-city",
+      "file": "stays/fiesta-inn-insurgentes-sur-mexico-city.html",
+      "title": "Fiesta Inn Insurgentes Sur",
+      "city": "Mexico City",
+      "category": "stay",
+      "hotelId": "lp5acee"
+    },
+    {
+      "path": "/stays/antiguo-molino-de-san-jeronimo-hotel-boutique-mexico-city",
+      "file": "stays/antiguo-molino-de-san-jeronimo-hotel-boutique-mexico-city.html",
+      "title": "Antiguo Molino de San Jerónimo Hotel Boutique",
+      "city": "Mexico City",
+      "category": "stay",
+      "hotelId": "lp110b76"
+    },
+    {
+      "path": "/stays/novotel-mexico-city-toreo-mexico-city",
+      "file": "stays/novotel-mexico-city-toreo-mexico-city.html",
+      "title": "Novotel Mexico City Toreo",
+      "city": "Mexico City",
+      "category": "stay",
+      "hotelId": "lp65559d54"
+    },
+    {
+      "path": "/stays/capitalia-anzures-polanco-mexico-city",
+      "file": "stays/capitalia-anzures-polanco-mexico-city.html",
+      "title": "Capitalia Anzures Polanco",
+      "city": "Mexico City",
+      "category": "stay",
+      "hotelId": "lp65583118"
+    },
+    {
+      "path": "/stays/hotel-lepanto-reforma-mexico-city",
+      "file": "stays/hotel-lepanto-reforma-mexico-city.html",
+      "title": "Hotel Lepanto Reforma",
+      "city": "Mexico City",
+      "category": "stay",
+      "hotelId": "lp62620"
+    },
+    {
+      "path": "/stays/alojamientos-mexico-5-mexico-city",
+      "file": "stays/alojamientos-mexico-5-mexico-city.html",
+      "title": "ALOJAMIENTOS MEXICO 5",
+      "city": "Mexico City",
+      "category": "stay",
+      "hotelId": "lp65583c68"
+    },
+    {
+      "path": "/stays/suites-mine-mexico-city",
+      "file": "stays/suites-mine-mexico-city.html",
+      "title": "Suites Mine",
+      "city": "Mexico City",
+      "category": "stay",
+      "hotelId": "lp6559106e"
+    },
+    {
+      "path": "/stays/auto-hotel-legaria-mexico-city",
+      "file": "stays/auto-hotel-legaria-mexico-city.html",
+      "title": "AUTO HOTEL LEGARIA",
+      "city": "Mexico City",
+      "category": "stay",
+      "hotelId": "lp655bad77"
+    },
+    {
+      "path": "/stays/hotel-casa-blanca-mexico-city",
+      "file": "stays/hotel-casa-blanca-mexico-city.html",
+      "title": "Hotel Casa Blanca",
+      "city": "Mexico City",
+      "category": "stay",
+      "hotelId": "lp234e5"
+    },
+    {
+      "path": "/stays/flowsuites-polanco-mexico-city",
+      "file": "stays/flowsuites-polanco-mexico-city.html",
+      "title": "FlowSuites Polanco",
+      "city": "Mexico City",
+      "category": "stay",
+      "hotelId": "lp4f7f6"
+    },
+    {
+      "path": "/stays/hotel-ibiza-plaza-mexico-city",
+      "file": "stays/hotel-ibiza-plaza-mexico-city.html",
+      "title": "Hotel Ibiza Plaza",
+      "city": "Mexico City",
+      "category": "stay",
+      "hotelId": "lp6557c921"
+    },
+    {
+      "path": "/stays/hotel-ritz-ciudad-de-mexico-mexico-city",
+      "file": "stays/hotel-ritz-ciudad-de-mexico-mexico-city.html",
+      "title": "Hotel Ritz Ciudad de México",
+      "city": "Mexico City",
+      "category": "stay",
+      "hotelId": "lp2f15a"
+    },
+    {
+      "path": "/stays/fiesta-inn-tlalnepantla-mexico-city",
+      "file": "stays/fiesta-inn-tlalnepantla-mexico-city.html",
+      "title": "Fiesta Inn Tlalnepantla",
+      "city": "Mexico City",
+      "category": "stay",
+      "hotelId": "lp3278a"
+    },
+    {
+      "path": "/stays/hotel-circulo-condesa-mexico-city",
+      "file": "stays/hotel-circulo-condesa-mexico-city.html",
+      "title": "Hotel Círculo Condesa",
+      "city": "Mexico City",
+      "category": "stay",
+      "hotelId": "lp2263f9"
+    },
+    {
+      "path": "/stays/geneve-ciudad-de-mexico-mexico-city",
+      "file": "stays/geneve-ciudad-de-mexico-mexico-city.html",
+      "title": "Geneve Ciudad de México",
+      "city": "Mexico City",
+      "category": "stay",
+      "hotelId": "lp3278b"
+    },
+    {
+      "path": "/stays/exe-cities-reforma-mexico-city",
+      "file": "stays/exe-cities-reforma-mexico-city.html",
+      "title": "Exe Cities Reforma",
+      "city": "Mexico City",
+      "category": "stay",
+      "hotelId": "lp62468"
+    },
+    {
+      "path": "/stays/residencias-filadelfia-mexico-city",
+      "file": "stays/residencias-filadelfia-mexico-city.html",
+      "title": "Residencias Filadelfia",
+      "city": "Mexico City",
+      "category": "stay",
+      "hotelId": "lp59a32"
+    },
+    {
+      "path": "/stays/hotel-marlowe-centro-historico-mexico-city",
+      "file": "stays/hotel-marlowe-centro-historico-mexico-city.html",
+      "title": "Hotel Marlowe Centro Histórico",
+      "city": "Mexico City",
+      "category": "stay",
+      "hotelId": "lp43f2f"
+    },
+    {
+      "path": "/stays/exe-alameda-reforma-mexico-city",
+      "file": "stays/exe-alameda-reforma-mexico-city.html",
+      "title": "Exe Alameda Reforma",
+      "city": "Mexico City",
+      "category": "stay",
+      "hotelId": "lp4f0c6"
+    },
+    {
+      "path": "/stays/holiday-inn-mexico-city-trade-center-by-ihg-mexico-city",
+      "file": "stays/holiday-inn-mexico-city-trade-center-by-ihg-mexico-city.html",
+      "title": "Holiday Inn Mexico City - Trade Center by IHG",
+      "city": "Mexico City",
+      "category": "stay",
+      "hotelId": "lp2318d"
+    },
+    {
+      "path": "/stays/kali-centro-mexico-city-mexico-city",
+      "file": "stays/kali-centro-mexico-city-mexico-city.html",
+      "title": "KALI Centro Mexico City",
+      "city": "Mexico City",
+      "category": "stay",
+      "hotelId": "lp6556e8cf"
+    },
+    {
+      "path": "/stays/crowne-plaza-hotel-mexico-city-north-tlalnepantl-mexico-city",
+      "file": "stays/crowne-plaza-hotel-mexico-city-north-tlalnepantl-mexico-city.html",
+      "title": "Crowne Plaza Hotel Mexico City North-Tlalnepantla by IHG",
+      "city": "Mexico City",
+      "category": "stay",
+      "hotelId": "lp2318b"
+    },
+    {
+      "path": "/stays/camino-real-aeropuerto-mexico-mexico-city",
+      "file": "stays/camino-real-aeropuerto-mexico-mexico-city.html",
+      "title": "Camino Real Aeropuerto Mexico",
+      "city": "Mexico City",
+      "category": "stay",
+      "hotelId": "lp1e13e"
+    },
+    {
+      "path": "/stays/city-express-suites-by-marriott-ciudad-de-mexico-mexico-city",
+      "file": "stays/city-express-suites-by-marriott-ciudad-de-mexico-mexico-city.html",
+      "title": "City Express Suites by Marriott Ciudad de México Anzures",
+      "city": "Mexico City",
+      "category": "stay",
+      "hotelId": "lp3df30"
+    },
+    {
+      "path": "/stays/laila-hotel-cdmx-mexico-city",
+      "file": "stays/laila-hotel-cdmx-mexico-city.html",
+      "title": "LaiLa Hotel CDMX",
+      "city": "Mexico City",
+      "category": "stay",
+      "hotelId": "lp29b23"
+    },
+    {
+      "path": "/stays/sevilla-palace-mexico-city",
+      "file": "stays/sevilla-palace-mexico-city.html",
+      "title": "Sevilla Palace",
+      "city": "Mexico City",
+      "category": "stay",
+      "hotelId": "lp21414"
+    },
+    {
+      "path": "/stays/suites-coben-apartamentos-amueblados-mexico-city",
+      "file": "stays/suites-coben-apartamentos-amueblados-mexico-city.html",
+      "title": "Suites Coben Apartamentos Amueblados",
+      "city": "Mexico City",
+      "category": "stay",
+      "hotelId": "lp2783aa"
+    },
+    {
+      "path": "/stays/hotel-regente-mexico-city",
+      "file": "stays/hotel-regente-mexico-city.html",
+      "title": "Hotel Regente",
+      "city": "Mexico City",
+      "category": "stay",
+      "hotelId": "lp4316f"
+    },
+    {
+      "path": "/stays/hotel-boutique-dawat-wtc-mexico-city",
+      "file": "stays/hotel-boutique-dawat-wtc-mexico-city.html",
+      "title": "Hotel Boutique Dawat WTC",
+      "city": "Mexico City",
+      "category": "stay",
+      "hotelId": "lp22eb14"
+    },
+    {
+      "path": "/stays/uliv-apartments-polanco-mexico-city",
+      "file": "stays/uliv-apartments-polanco-mexico-city.html",
+      "title": "ULIV Apartments Polanco",
+      "city": "Mexico City",
+      "category": "stay",
+      "hotelId": "lp6557dd35"
+    },
+    {
+      "path": "/stays/exe-suites-reforma-mexico-city",
+      "file": "stays/exe-suites-reforma-mexico-city.html",
+      "title": "Exe Suites Reforma",
+      "city": "Mexico City",
+      "category": "stay",
+      "hotelId": "lp32ed8"
+    },
+    {
+      "path": "/stays/suites-obelisk-mexico-city",
+      "file": "stays/suites-obelisk-mexico-city.html",
+      "title": "Suites Obelisk",
+      "city": "Mexico City",
+      "category": "stay",
+      "hotelId": "lp3d9ed"
+    },
+    {
+      "path": "/stays/hotel-pf-mexico-city",
+      "file": "stays/hotel-pf-mexico-city.html",
+      "title": "Hotel PF",
+      "city": "Mexico City",
+      "category": "stay",
+      "hotelId": "lp3c208"
+    },
+    {
+      "path": "/stays/casa-condesa-michoacan-113-mexico-city",
+      "file": "stays/casa-condesa-michoacan-113-mexico-city.html",
+      "title": "Casa Condesa Michoacan 113",
+      "city": "Mexico City",
+      "category": "stay",
+      "hotelId": "lp1f20ba"
+    },
+    {
+      "path": "/stays/hotel-metropol-mexico-city",
+      "file": "stays/hotel-metropol-mexico-city.html",
+      "title": "Hotel Metropol",
+      "city": "Mexico City",
+      "category": "stay",
+      "hotelId": "lp50312"
+    },
+    {
+      "path": "/stays/hotel-fontan-reforma-centro-historico-mexico-city",
+      "file": "stays/hotel-fontan-reforma-centro-historico-mexico-city.html",
+      "title": "Hotel Fontan Reforma Centro Historico",
+      "city": "Mexico City",
+      "category": "stay",
+      "hotelId": "lp3c781"
+    },
+    {
+      "path": "/stays/holiday-inn-mexico-dali-airport-by-ihg-mexico-city",
+      "file": "stays/holiday-inn-mexico-dali-airport-by-ihg-mexico-city.html",
+      "title": "Holiday Inn Mexico Dali Airport by IHG",
+      "city": "Mexico City",
+      "category": "stay",
+      "hotelId": "lp246dd"
+    },
+    {
+      "path": "/stays/krystal-satelite-maria-barbara-mexico-city",
+      "file": "stays/krystal-satelite-maria-barbara-mexico-city.html",
+      "title": "Krystal Satelite Maria Barbara",
+      "city": "Mexico City",
+      "category": "stay",
+      "hotelId": "lp33625"
+    },
+    {
+      "path": "/stays/suites-del-angel-mexico-city",
+      "file": "stays/suites-del-angel-mexico-city.html",
+      "title": "Suites Del Ángel",
+      "city": "Mexico City",
+      "category": "stay",
+      "hotelId": "lp3e9a7"
+    },
+    {
+      "path": "/stays/hotel-gillow-mexico-city",
+      "file": "stays/hotel-gillow-mexico-city.html",
+      "title": "Hotel Gillow",
+      "city": "Mexico City",
+      "category": "stay",
+      "hotelId": "lp65577602"
+    },
+    {
+      "path": "/stays/hotel-century-reforma-mexico-city",
+      "file": "stays/hotel-century-reforma-mexico-city.html",
+      "title": "Hotel Century Reforma",
+      "city": "Mexico City",
+      "category": "stay",
+      "hotelId": "lp24f0a"
+    },
+    {
+      "path": "/stays/hotel-valle-del-sur-mexico-city",
+      "file": "stays/hotel-valle-del-sur-mexico-city.html",
+      "title": "HOTEL VALLE DEL SUR",
+      "city": "Mexico City",
+      "category": "stay",
+      "hotelId": "lp36225e"
+    },
+    {
+      "path": "/stays/viajero-cdmx-centro-hostel-mexico-city",
+      "file": "stays/viajero-cdmx-centro-hostel-mexico-city.html",
+      "title": "Viajero CDMX Centro Hostel",
+      "city": "Mexico City",
+      "category": "stay",
+      "hotelId": "lp6557677c"
+    },
+    {
+      "path": "/stays/fiesta-inn-centro-historico-mexico-city",
+      "file": "stays/fiesta-inn-centro-historico-mexico-city.html",
+      "title": "Fiesta Inn Centro Historico",
+      "city": "Mexico City",
+      "category": "stay",
+      "hotelId": "lp33acc"
+    },
+    {
+      "path": "/stays/fiesta-inn-periferico-sur-mexico-city",
+      "file": "stays/fiesta-inn-periferico-sur-mexico-city.html",
+      "title": "Fiesta Inn Periferico Sur",
+      "city": "Mexico City",
+      "category": "stay",
+      "hotelId": "lp2fa32"
+    },
+    {
+      "path": "/stays/corazon-de-reforma-mexico-city",
+      "file": "stays/corazon-de-reforma-mexico-city.html",
+      "title": "Corazon De Reforma",
+      "city": "Mexico City",
+      "category": "stay",
+      "hotelId": "lp1a7ad6"
+    },
+    {
+      "path": "/stays/el-diplomatico-mexico-city",
+      "file": "stays/el-diplomatico-mexico-city.html",
+      "title": "El Diplomatico",
+      "city": "Mexico City",
+      "category": "stay",
+      "hotelId": "lp3d0a9"
+    },
+    {
+      "path": "/stays/mala-vecindad-centro-historico-mexico-city",
+      "file": "stays/mala-vecindad-centro-historico-mexico-city.html",
+      "title": "Mala Vecindad Centro Historico",
+      "city": "Mexico City",
+      "category": "stay",
+      "hotelId": "lp65589ece"
+    },
+    {
+      "path": "/stays/hotel-corona-real-mexico-city",
+      "file": "stays/hotel-corona-real-mexico-city.html",
+      "title": "Hotel Corona Real",
+      "city": "Mexico City",
+      "category": "stay",
+      "hotelId": "lp655b296c"
+    },
+    {
+      "path": "/stays/hotel-black-boutique-mexico-city",
+      "file": "stays/hotel-black-boutique-mexico-city.html",
+      "title": "Hotel Black Boutique",
+      "city": "Mexico City",
+      "category": "stay",
+      "hotelId": "lp54bbd"
+    },
+    {
+      "path": "/stays/sonder-la-cima-mexico-city",
+      "file": "stays/sonder-la-cima-mexico-city.html",
+      "title": "Sonder La Cima",
+      "city": "Mexico City",
+      "category": "stay",
+      "hotelId": "lp655910e9"
+    },
+    {
+      "path": "/stays/fiesta-inn-express-perinorte-mexico-city",
+      "file": "stays/fiesta-inn-express-perinorte-mexico-city.html",
+      "title": "Fiesta Inn Express Perinorte",
+      "city": "Mexico City",
+      "category": "stay",
+      "hotelId": "lp3274f"
+    },
+    {
+      "path": "/stays/hotel-and-suites-pf-mexico-city",
+      "file": "stays/hotel-and-suites-pf-mexico-city.html",
+      "title": "Hotel & Suites PF",
+      "city": "Mexico City",
+      "category": "stay",
+      "hotelId": "lp4f097"
+    },
+    {
+      "path": "/stays/stanza-hotel-mexico-city",
+      "file": "stays/stanza-hotel-mexico-city.html",
+      "title": "Stanza Hotel",
+      "city": "Mexico City",
+      "category": "stay",
+      "hotelId": "lp3eebe"
+    },
+    {
+      "path": "/stays/holiday-inn-zona-centro-by-ihg-mexico-city",
+      "file": "stays/holiday-inn-zona-centro-by-ihg-mexico-city.html",
+      "title": "Holiday Inn Zona Centro by IHG",
+      "city": "Mexico City",
+      "category": "stay",
+      "hotelId": "lp3c8ba"
+    },
+    {
+      "path": "/stays/fiesta-inn-insurgentes-viaducto-mexico-city",
+      "file": "stays/fiesta-inn-insurgentes-viaducto-mexico-city.html",
+      "title": "Fiesta Inn Insurgentes Viaducto",
+      "city": "Mexico City",
+      "category": "stay",
+      "hotelId": "lp33d5b"
+    },
+    {
+      "path": "/stays/the-green-park-hotel-mexico-city",
+      "file": "stays/the-green-park-hotel-mexico-city.html",
+      "title": "The Green Park Hotel",
+      "city": "Mexico City",
+      "category": "stay",
+      "hotelId": "lp3dbdb"
+    },
+    {
+      "path": "/stays/city-express-by-marriott-ciudad-de-mexico-tlalpa-mexico-city",
+      "file": "stays/city-express-by-marriott-ciudad-de-mexico-tlalpa-mexico-city.html",
+      "title": "City Express by Marriott Ciudad de México Tlalpan",
+      "city": "Mexico City",
+      "category": "stay",
+      "hotelId": "lp1cab8d"
+    },
+    {
+      "path": "/stays/nh-collection-mexico-city-centro-historico-mexico-city",
+      "file": "stays/nh-collection-mexico-city-centro-historico-mexico-city.html",
+      "title": "NH Collection México City Centro Histórico",
+      "city": "Mexico City",
+      "category": "stay",
+      "hotelId": "lp39847"
+    },
+    {
+      "path": "/stays/real-inn-perinorte-mexico-city",
+      "file": "stays/real-inn-perinorte-mexico-city.html",
+      "title": "Real Inn Perinorte",
+      "city": "Mexico City",
+      "category": "stay",
+      "hotelId": "lp324d0"
+    },
+    {
+      "path": "/stays/courtyard-by-marriott-mexico-city-revolucion-mexico-city",
+      "file": "stays/courtyard-by-marriott-mexico-city-revolucion-mexico-city.html",
+      "title": "Courtyard by Marriott Mexico City Revolucion",
+      "city": "Mexico City",
+      "category": "stay",
+      "hotelId": "lp23189"
+    },
+    {
+      "path": "/stays/novotel-mexico-city-santa-fe-mexico-city",
+      "file": "stays/novotel-mexico-city-santa-fe-mexico-city.html",
+      "title": "Novotel Mexico City Santa Fe",
+      "city": "Mexico City",
+      "category": "stay",
+      "hotelId": "lp3b975"
+    },
+    {
+      "path": "/stays/niu-modern-and-centric-lofts-mexico-city",
+      "file": "stays/niu-modern-and-centric-lofts-mexico-city.html",
+      "title": "NIU Modern & Centric Lofts",
+      "city": "Mexico City",
+      "category": "stay",
+      "hotelId": "lp655621dc"
+    },
+    {
+      "path": "/stays/belair-unique-a-wyndham-hotel-mexico-city",
+      "file": "stays/belair-unique-a-wyndham-hotel-mexico-city.html",
+      "title": "BelAir Unique, a Wyndham Hotel",
+      "city": "Mexico City",
+      "category": "stay",
+      "hotelId": "lp4081d"
+    },
+    {
+      "path": "/stays/magenta-by-kukun-mexico-city",
+      "file": "stays/magenta-by-kukun-mexico-city.html",
+      "title": "Magenta by Kukun",
+      "city": "Mexico City",
+      "category": "stay",
+      "hotelId": "lp6558d65b"
+    },
+    {
+      "path": "/stays/downtown-mexico-mexico-city",
+      "file": "stays/downtown-mexico-mexico-city.html",
+      "title": "Downtown Mexico",
+      "city": "Mexico City",
+      "category": "stay",
+      "hotelId": "lp62c4b"
+    },
+    {
+      "path": "/stays/hotel-maria-cristina-mexico-city",
+      "file": "stays/hotel-maria-cristina-mexico-city.html",
+      "title": "Hotel Maria Cristina",
+      "city": "Mexico City",
+      "category": "stay",
+      "hotelId": "lp31c66f"
+    },
+    {
+      "path": "/stays/four-points-by-sheraton-mexico-city-colonia-roma-mexico-city",
+      "file": "stays/four-points-by-sheraton-mexico-city-colonia-roma-mexico-city.html",
+      "title": "Four Points by Sheraton Mexico City Colonia Roma",
+      "city": "Mexico City",
+      "category": "stay",
+      "hotelId": "lp3b0ad"
+    },
+    {
+      "path": "/stays/hotel-royal-reforma-mexico-city",
+      "file": "stays/hotel-royal-reforma-mexico-city.html",
+      "title": "Hotel Royal Reforma",
+      "city": "Mexico City",
+      "category": "stay",
+      "hotelId": "lp234e6"
+    },
+    {
+      "path": "/stays/hotel-maria-rico-mexico-city",
+      "file": "stays/hotel-maria-rico-mexico-city.html",
+      "title": "HOTEL MARIA RICO",
+      "city": "Mexico City",
+      "category": "stay",
+      "hotelId": "lp655bb5c7"
+    },
+    {
+      "path": "/stays/kali-la-raza-mexico-city-mexico-city",
+      "file": "stays/kali-la-raza-mexico-city-mexico-city.html",
+      "title": "KALI La Raza Mexico City",
+      "city": "Mexico City",
+      "category": "stay",
+      "hotelId": "lp6555a393"
+    },
+    {
+      "path": "/stays/holiday-inn-and-suites-mexico-zona-reforma-by-ih-mexico-city",
+      "file": "stays/holiday-inn-and-suites-mexico-zona-reforma-by-ih-mexico-city.html",
+      "title": "Holiday Inn & Suites Mexico Zona Reforma by IHG",
+      "city": "Mexico City",
+      "category": "stay",
+      "hotelId": "lp42a7b"
+    },
+    {
+      "path": "/stays/parral-14-boutique-hotel-mexico-city",
+      "file": "stays/parral-14-boutique-hotel-mexico-city.html",
+      "title": "Parral 14 Boutique Hotel",
+      "city": "Mexico City",
+      "category": "stay",
+      "hotelId": "lp65546a67"
+    },
+    {
+      "path": "/stays/cadillac-hotel-boutique-mexico-city",
+      "file": "stays/cadillac-hotel-boutique-mexico-city.html",
+      "title": "Cadillac Hotel Boutique",
+      "city": "Mexico City",
+      "category": "stay",
+      "hotelId": "lp65555bd7"
+    },
+    {
+      "path": "/stays/we-hotel-aeropuerto-mexico-city",
+      "file": "stays/we-hotel-aeropuerto-mexico-city.html",
+      "title": "We Hotel Aeropuerto",
+      "city": "Mexico City",
+      "category": "stay",
+      "hotelId": "lp3abe4"
+    },
+    {
+      "path": "/stays/hotel-harare-mexico-city",
+      "file": "stays/hotel-harare-mexico-city.html",
+      "title": "Hotel Harare",
+      "city": "Mexico City",
+      "category": "stay",
+      "hotelId": "lp10f642"
+    },
+    {
+      "path": "/stays/marquis-sky-suites-mexico-city",
+      "file": "stays/marquis-sky-suites-mexico-city.html",
+      "title": "Marquis Sky Suites",
+      "city": "Mexico City",
+      "category": "stay",
+      "hotelId": "lp1eb4f"
+    },
+    {
+      "path": "/stays/hotel-del-prado-mexico-city",
+      "file": "stays/hotel-del-prado-mexico-city.html",
+      "title": "Hotel del Prado",
+      "city": "Mexico City",
+      "category": "stay",
+      "hotelId": "lp1ed92"
+    },
+    {
+      "path": "/stays/grand-prix-weenjoyhotels-aeropuerto-mexico-city",
+      "file": "stays/grand-prix-weenjoyhotels-aeropuerto-mexico-city.html",
+      "title": "Grand Prix-WeEnjoyHotels-Aeropuerto",
+      "city": "Mexico City",
+      "category": "stay",
+      "hotelId": "lp56ced"
+    },
+    {
+      "path": "/stays/la-casa-azul-mexico-city",
+      "file": "stays/la-casa-azul-mexico-city.html",
+      "title": "La Casa Azul",
+      "city": "Mexico City",
+      "category": "stay",
+      "hotelId": "lp6558de87"
+    },
+    {
+      "path": "/stays/hotel-mx-garibaldi-cdmx-trademark-collection-by-mexico-city",
+      "file": "stays/hotel-mx-garibaldi-cdmx-trademark-collection-by-mexico-city.html",
+      "title": "Hotel MX garibaldi CDMX, Trademark Collection by Wyndham",
+      "city": "Mexico City",
+      "category": "stay",
+      "hotelId": "lp61209"
+    },
+    {
+      "path": "/stays/nido-at-neuchatel-polanco-mexico-city",
+      "file": "stays/nido-at-neuchatel-polanco-mexico-city.html",
+      "title": "Nido at Neuchatel Polanco",
+      "city": "Mexico City",
+      "category": "stay",
+      "hotelId": "lp65582ee9"
+    },
+    {
+      "path": "/stays/doubletree-by-hilton-mexico-city-santa-fe-mexico-city",
+      "file": "stays/doubletree-by-hilton-mexico-city-santa-fe-mexico-city.html",
+      "title": "Doubletree By Hilton Mexico City Santa Fe",
+      "city": "Mexico City",
+      "category": "stay",
+      "hotelId": "lp39c39"
+    },
+    {
+      "path": "/stays/mc-suites-mexico-city-mexico-city",
+      "file": "stays/mc-suites-mexico-city-mexico-city.html",
+      "title": "Mc Suites Mexico City",
+      "city": "Mexico City",
+      "category": "stay",
+      "hotelId": "lp1d98a1"
+    },
+    {
+      "path": "/stays/hampton-inn-and-suites-mexico-city-centro-histor-mexico-city",
+      "file": "stays/hampton-inn-and-suites-mexico-city-centro-histor-mexico-city.html",
+      "title": "Hampton Inn & Suites Mexico City - Centro Historico",
+      "city": "Mexico City",
+      "category": "stay",
+      "hotelId": "lp4221c"
+    },
+    {
+      "path": "/stays/hotel-cle-reforma-insurgentes-mexico-city",
+      "file": "stays/hotel-cle-reforma-insurgentes-mexico-city.html",
+      "title": "Hotel Clé Reforma Insurgentes",
+      "city": "Mexico City",
+      "category": "stay",
+      "hotelId": "lp231dd"
+    },
+    {
+      "path": "/stays/holiday-inn-hotel-and-suites-medica-sur-by-ihg-mexico-city",
+      "file": "stays/holiday-inn-hotel-and-suites-medica-sur-by-ihg-mexico-city.html",
+      "title": "Holiday Inn Hotel & Suites Medica Sur by IHG",
+      "city": "Mexico City",
+      "category": "stay",
+      "hotelId": "lp4bf69"
+    },
+    {
+      "path": "/stays/residence-l-heritage-hipolito-taine-by-bluebay-mexico-city",
+      "file": "stays/residence-l-heritage-hipolito-taine-by-bluebay-mexico-city.html",
+      "title": "Residence L´ Heritage Hipólito Taine by BlueBay",
+      "city": "Mexico City",
+      "category": "stay",
+      "hotelId": "lp62d96"
+    },
+    {
+      "path": "/stays/kali-vallejo-mexico-city-mexico-city",
+      "file": "stays/kali-vallejo-mexico-city-mexico-city.html",
+      "title": "KALI Vallejo Mexico City",
+      "city": "Mexico City",
+      "category": "stay",
+      "hotelId": "lp655489f5"
+    },
+    {
+      "path": "/stays/city-express-by-marriott-ciudad-de-mexico-ebc-re-mexico-city",
+      "file": "stays/city-express-by-marriott-ciudad-de-mexico-ebc-re-mexico-city.html",
+      "title": "City Express by Marriott Ciudad de México EBC Reforma",
+      "city": "Mexico City",
+      "category": "stay",
+      "hotelId": "lp3e1a2"
+    },
+    {
+      "path": "/stays/nh-collection-mexico-city-airport-t2-mexico-city",
+      "file": "stays/nh-collection-mexico-city-airport-t2-mexico-city.html",
+      "title": "NH Collection Mexico City Airport T2",
+      "city": "Mexico City",
+      "category": "stay",
+      "hotelId": "lp56d26"
+    },
+    {
+      "path": "/stays/hotel-bristol-mexico-city",
+      "file": "stays/hotel-bristol-mexico-city.html",
+      "title": "Hotel Bristol",
+      "city": "Mexico City",
+      "category": "stay",
+      "hotelId": "lp30be3"
+    },
+    {
+      "path": "/stays/villa-alfonsina-mexico-city",
+      "file": "stays/villa-alfonsina-mexico-city.html",
+      "title": "Villa Alfonsina",
+      "city": "Mexico City",
+      "category": "stay",
+      "hotelId": "lp6556c365"
+    },
+    {
+      "path": "/stays/segovia-regency-mexico-city",
+      "file": "stays/segovia-regency-mexico-city.html",
+      "title": "Segovia Regency",
+      "city": "Mexico City",
+      "category": "stay",
+      "hotelId": "lp30e9d"
+    },
+    {
+      "path": "/stays/c46-studios-at-itesm-cem-families-tourists-and-t-mexico-city",
+      "file": "stays/c46-studios-at-itesm-cem-families-tourists-and-t-mexico-city.html",
+      "title": "C46 STUDIOS at ITESM CEM Families Tourists & Travelers Choice Foreign Students Companies Executives WELCOME",
+      "city": "Mexico City",
+      "category": "stay",
+      "hotelId": "lp65622762"
+    },
+    {
+      "path": "/stays/vos-condesa-mexico-city",
+      "file": "stays/vos-condesa-mexico-city.html",
+      "title": "VOS Condesa",
+      "city": "Mexico City",
+      "category": "stay",
+      "hotelId": "lp1ded84"
+    },
+    {
+      "path": "/stays/hotel-mx-lagunilla-cdmx-trademark-collection-by-mexico-city",
+      "file": "stays/hotel-mx-lagunilla-cdmx-trademark-collection-by-mexico-city.html",
+      "title": "Hotel MX lagunilla CDMX, Trademark Collection by Wyndham",
+      "city": "Mexico City",
+      "category": "stay",
+      "hotelId": "lp655671a1"
+    },
+    {
+      "path": "/stays/krystal-urban-aeropuerto-cd-de-mexico-mexico-city",
+      "file": "stays/krystal-urban-aeropuerto-cd-de-mexico-mexico-city.html",
+      "title": "Krystal Urban Aeropuerto Cd de Mexico",
+      "city": "Mexico City",
+      "category": "stay",
+      "hotelId": "lp2980b"
+    },
+    {
+      "path": "/stays/city-express-plus-by-marriott-ciudad-de-mexico-r-mexico-city",
+      "file": "stays/city-express-plus-by-marriott-ciudad-de-mexico-r-mexico-city.html",
+      "title": "City Express Plus by Marriott Ciudad de México Reforma El Ángel",
+      "city": "Mexico City",
+      "category": "stay",
+      "hotelId": "lp50311"
+    },
+    {
+      "path": "/stays/wyndham-garden-mexico-city-polanco-mexico-city",
+      "file": "stays/wyndham-garden-mexico-city-polanco-mexico-city.html",
+      "title": "Wyndham Garden Mexico City - Polanco",
+      "city": "Mexico City",
+      "category": "stay",
+      "hotelId": "lp55391"
+    },
+    {
+      "path": "/stays/novo-coapa-mexico-city",
+      "file": "stays/novo-coapa-mexico-city.html",
+      "title": "Novo Coapa",
+      "city": "Mexico City",
+      "category": "stay",
+      "hotelId": "lp6556a291"
+    },
+    {
+      "path": "/stays/pent-house-masaryk-17-mexico-city",
+      "file": "stays/pent-house-masaryk-17-mexico-city.html",
+      "title": "Pent House Masaryk 17",
+      "city": "Mexico City",
+      "category": "stay",
+      "hotelId": "lp65580cfd"
+    },
+    {
+      "path": "/stays/le-meurice-dorchester-collection-paris",
+      "file": "stays/le-meurice-dorchester-collection-paris.html",
+      "title": "Le Meurice – Dorchester Collection",
+      "city": "Paris",
+      "category": "stay",
+      "hotelId": "lp29c41"
+    },
+    {
+      "path": "/stays/monsieur-george-hotel-and-spa-champs-elysees-paris",
+      "file": "stays/monsieur-george-hotel-and-spa-champs-elysees-paris.html",
+      "title": "Monsieur George Hotel & Spa – Champs Elysées",
+      "city": "Paris",
+      "category": "stay",
+      "hotelId": "lp396001"
+    },
+    {
+      "path": "/stays/hotel-le-royal-monceau-raffles-paris-paris",
+      "file": "stays/hotel-le-royal-monceau-raffles-paris-paris.html",
+      "title": "Hôtel Le Royal Monceau Raffles Paris",
+      "city": "Paris",
+      "category": "stay",
+      "hotelId": "lp2b5d3"
+    },
+    {
+      "path": "/stays/hotel-pulitzer-paris-paris",
+      "file": "stays/hotel-pulitzer-paris-paris.html",
+      "title": "Hotel Pulitzer Paris",
+      "city": "Paris",
+      "category": "stay",
+      "hotelId": "lp29425"
+    },
+    {
+      "path": "/stays/hotel-de-montesquieu-paris",
+      "file": "stays/hotel-de-montesquieu-paris.html",
+      "title": "Hôtel de Montesquieu",
+      "city": "Paris",
+      "category": "stay",
+      "hotelId": "lp2eb64"
+    },
+    {
+      "path": "/stays/hotel-le-ballu-paris",
+      "file": "stays/hotel-le-ballu-paris.html",
+      "title": "Hotel Le Ballu",
+      "city": "Paris",
+      "category": "stay",
+      "hotelId": "lp224224"
+    },
+    {
+      "path": "/stays/chateau-des-fleurs-hotel-and-spa-paris-paris",
+      "file": "stays/chateau-des-fleurs-hotel-and-spa-paris-paris.html",
+      "title": "Château des Fleurs Hôtel & Spa Paris",
+      "city": "Paris",
+      "category": "stay",
+      "hotelId": "lp1ee27"
+    },
+    {
+      "path": "/stays/hotel-des-grands-voyageurs-paris",
+      "file": "stays/hotel-des-grands-voyageurs-paris.html",
+      "title": "Hôtel Des Grands Voyageurs",
+      "city": "Paris",
+      "category": "stay",
+      "hotelId": "lp1beec"
+    },
+    {
+      "path": "/stays/park-hyatt-paris-vendome-paris",
+      "file": "stays/park-hyatt-paris-vendome-paris.html",
+      "title": "Park Hyatt Paris - Vendome",
+      "city": "Paris",
+      "category": "stay",
+      "hotelId": "lp33d07"
+    },
+    {
+      "path": "/stays/le-pavillon-de-la-reine-and-spa-place-des-vosges-paris",
+      "file": "stays/le-pavillon-de-la-reine-and-spa-place-des-vosges-paris.html",
+      "title": "Le Pavillon de la Reine & Spa, Place des Vosges",
+      "city": "Paris",
+      "category": "stay",
+      "hotelId": "lp1dd7e"
+    },
+    {
+      "path": "/stays/hotel-astra-opera-astotel-paris",
+      "file": "stays/hotel-astra-opera-astotel-paris.html",
+      "title": "Hotel Astra Opera - Astotel",
+      "city": "Paris",
+      "category": "stay",
+      "hotelId": "lp2f82f"
+    },
+    {
+      "path": "/stays/grand-hotel-champs-elysees-paris",
+      "file": "stays/grand-hotel-champs-elysees-paris.html",
+      "title": "Grand Hôtel Champs-Elysées",
+      "city": "Paris",
+      "category": "stay",
+      "hotelId": "lp30fb5"
+    },
+    {
+      "path": "/stays/cour-des-vosges-evok-collection-paris",
+      "file": "stays/cour-des-vosges-evok-collection-paris.html",
+      "title": "Cour des Vosges - Evok Collection",
+      "city": "Paris",
+      "category": "stay",
+      "hotelId": "lp275eea"
+    },
+    {
+      "path": "/stays/hotel-marignan-champs-elysees-paris",
+      "file": "stays/hotel-marignan-champs-elysees-paris.html",
+      "title": "Hotel Marignan Champs-Elysées",
+      "city": "Paris",
+      "category": "stay",
+      "hotelId": "lp1c508"
+    },
+    {
+      "path": "/stays/prince-de-galles-a-luxury-collection-hotel-paris-paris",
+      "file": "stays/prince-de-galles-a-luxury-collection-hotel-paris-paris.html",
+      "title": "Prince de Galles, a Luxury Collection hotel, Paris",
+      "city": "Paris",
+      "category": "stay",
+      "hotelId": "lp2278d"
+    },
+    {
+      "path": "/stays/sofitel-paris-baltimore-tour-eiffel-paris",
+      "file": "stays/sofitel-paris-baltimore-tour-eiffel-paris.html",
+      "title": "Sofitel Paris Baltimore Tour Eiffel",
+      "city": "Paris",
+      "category": "stay",
+      "hotelId": "lp1c507"
+    },
+    {
+      "path": "/stays/xo-hotel-paris-paris",
+      "file": "stays/xo-hotel-paris-paris.html",
+      "title": "XO Hotel Paris",
+      "city": "Paris",
+      "category": "stay",
+      "hotelId": "lp1faf8"
+    },
+    {
+      "path": "/stays/norman-paris-hotel-and-spa-paris",
+      "file": "stays/norman-paris-hotel-and-spa-paris.html",
+      "title": "Norman Paris Hôtel & Spa",
+      "city": "Paris",
+      "category": "stay",
+      "hotelId": "lp2a416"
+    },
+    {
+      "path": "/stays/villa-marquis-member-of-melia-collection-tour-ei-paris",
+      "file": "stays/villa-marquis-member-of-melia-collection-tour-ei-paris.html",
+      "title": "Villa Marquis member of Meliá Collection Tour Eiffel",
+      "city": "Paris",
+      "category": "stay",
+      "hotelId": "lp1f535"
+    },
+    {
+      "path": "/stays/hotel-malte-astotel-paris",
+      "file": "stays/hotel-malte-astotel-paris.html",
+      "title": "Hotel Malte - Astotel",
+      "city": "Paris",
+      "category": "stay",
+      "hotelId": "lp1f4ac"
+    },
+    {
+      "path": "/stays/le-petit-oberkampf-hotel-and-spa-paris",
+      "file": "stays/le-petit-oberkampf-hotel-and-spa-paris.html",
+      "title": "Le Petit Oberkampf Hotel & Spa",
+      "city": "Paris",
+      "category": "stay",
+      "hotelId": "lp37606"
+    },
+    {
+      "path": "/stays/hotel-napoleon-paris-paris",
+      "file": "stays/hotel-napoleon-paris-paris.html",
+      "title": "Hôtel Napoleon Paris",
+      "city": "Paris",
+      "category": "stay",
+      "hotelId": "lp1af45"
+    },
+    {
+      "path": "/stays/hotel-montalembert-paris",
+      "file": "stays/hotel-montalembert-paris.html",
+      "title": "Hotel Montalembert",
+      "city": "Paris",
+      "category": "stay",
+      "hotelId": "lp1e4c4"
+    },
+    {
+      "path": "/stays/sofitel-paris-le-faubourg-paris",
+      "file": "stays/sofitel-paris-le-faubourg-paris.html",
+      "title": "Sofitel Paris Le Faubourg",
+      "city": "Paris",
+      "category": "stay",
+      "hotelId": "lp23701"
+    },
+    {
+      "path": "/stays/intercontinental-paris-le-grand-by-ihg-paris",
+      "file": "stays/intercontinental-paris-le-grand-by-ihg-paris.html",
+      "title": "InterContinental Paris Le Grand by IHG",
+      "city": "Paris",
+      "category": "stay",
+      "hotelId": "lp19f1f"
+    },
+    {
+      "path": "/stays/hyatt-paris-madeleine-paris",
+      "file": "stays/hyatt-paris-madeleine-paris.html",
+      "title": "Hyatt Paris Madeleine",
+      "city": "Paris",
+      "category": "stay",
+      "hotelId": "lp20484"
+    },
+    {
+      "path": "/stays/hotel-raphael-paris",
+      "file": "stays/hotel-raphael-paris.html",
+      "title": "Hotel Raphael",
+      "city": "Paris",
+      "category": "stay",
+      "hotelId": "lp1b449"
+    },
+    {
+      "path": "/stays/hotel-du-louvre-in-the-unbound-collection-by-hya-paris",
+      "file": "stays/hotel-du-louvre-in-the-unbound-collection-by-hya-paris.html",
+      "title": "Hôtel du Louvre, in The Unbound Collection by Hyatt",
+      "city": "Paris",
+      "category": "stay",
+      "hotelId": "lp1c140"
+    },
+    {
+      "path": "/stays/hotel-riesner-paris",
+      "file": "stays/hotel-riesner-paris.html",
+      "title": "Hôtel Riesner",
+      "city": "Paris",
+      "category": "stay",
+      "hotelId": "lp3a10e"
+    },
+    {
+      "path": "/stays/experimental-marais-paris",
+      "file": "stays/experimental-marais-paris.html",
+      "title": "Experimental Marais",
+      "city": "Paris",
+      "category": "stay",
+      "hotelId": "lp20e3e5"
+    },
+    {
+      "path": "/stays/la-reserve-paris-hotel-and-spa-paris",
+      "file": "stays/la-reserve-paris-hotel-and-spa-paris.html",
+      "title": "La Reserve Paris Hotel and Spa",
+      "city": "Paris",
+      "category": "stay",
+      "hotelId": "lp1e3623"
+    },
+    {
+      "path": "/stays/hotel-lancaster-paris",
+      "file": "stays/hotel-lancaster-paris.html",
+      "title": "Hotel Lancaster",
+      "city": "Paris",
+      "category": "stay",
+      "hotelId": "lp1df34"
+    },
+    {
+      "path": "/stays/hotel-bel-ami-paris",
+      "file": "stays/hotel-bel-ami-paris.html",
+      "title": "Hôtel Bel Ami",
+      "city": "Paris",
+      "category": "stay",
+      "hotelId": "lp1aa1d"
+    },
+    {
+      "path": "/stays/hotel-balzac-paris-and-spa-ikoi-paris",
+      "file": "stays/hotel-balzac-paris-and-spa-ikoi-paris.html",
+      "title": "Hotel Balzac Paris & Spa Ikoï",
+      "city": "Paris",
+      "category": "stay",
+      "hotelId": "lp1f043"
+    },
+    {
+      "path": "/stays/ritz-paris-paris",
+      "file": "stays/ritz-paris-paris.html",
+      "title": "Ritz Paris",
+      "city": "Paris",
+      "category": "stay",
+      "hotelId": "lp1aaee"
+    },
+    {
+      "path": "/stays/la-maison-favart-paris",
+      "file": "stays/la-maison-favart-paris.html",
+      "title": "La Maison Favart",
+      "city": "Paris",
+      "category": "stay",
+      "hotelId": "lp29abf"
+    },
+    {
+      "path": "/stays/hotel-regent-s-garden-astotel-paris",
+      "file": "stays/hotel-regent-s-garden-astotel-paris.html",
+      "title": "Hôtel Regent's Garden - Astotel",
+      "city": "Paris",
+      "category": "stay",
+      "hotelId": "lp3326a"
+    },
+    {
+      "path": "/stays/hotel-du-cadran-paris",
+      "file": "stays/hotel-du-cadran-paris.html",
+      "title": "Hotel Du Cadran",
+      "city": "Paris",
+      "category": "stay",
+      "hotelId": "lp2dfd1"
+    },
+    {
+      "path": "/stays/hotel-madison-paris",
+      "file": "stays/hotel-madison-paris.html",
+      "title": "Hôtel Madison",
+      "city": "Paris",
+      "category": "stay",
+      "hotelId": "lp1f399"
+    },
+    {
+      "path": "/stays/hotel-keppler-paris",
+      "file": "stays/hotel-keppler-paris.html",
+      "title": "Hôtel Keppler",
+      "city": "Paris",
+      "category": "stay",
+      "hotelId": "lp3c4e0"
+    },
+    {
+      "path": "/stays/hotel-le-six-paris",
+      "file": "stays/hotel-le-six-paris.html",
+      "title": "Hotel Le Six",
+      "city": "Paris",
+      "category": "stay",
+      "hotelId": "lp2da4b"
+    },
+    {
+      "path": "/stays/la-chambre-du-marais-paris",
+      "file": "stays/la-chambre-du-marais-paris.html",
+      "title": "La Chambre du Marais",
+      "city": "Paris",
+      "category": "stay",
+      "hotelId": "lp29d50"
+    },
+    {
+      "path": "/stays/hotel-petit-lafayette-paris",
+      "file": "stays/hotel-petit-lafayette-paris.html",
+      "title": "Hotel Petit Lafayette",
+      "city": "Paris",
+      "category": "stay",
+      "hotelId": "lp310a4"
+    },
+    {
+      "path": "/stays/hotel-pont-royal-paris",
+      "file": "stays/hotel-pont-royal-paris.html",
+      "title": "Hôtel Pont Royal",
+      "city": "Paris",
+      "category": "stay",
+      "hotelId": "lp2db44"
+    },
+    {
+      "path": "/stays/maison-mere-paris",
+      "file": "stays/maison-mere-paris.html",
+      "title": "Maison Mère",
+      "city": "Paris",
+      "category": "stay",
+      "hotelId": "lp2d73f"
+    },
+    {
+      "path": "/stays/hotel-sainte-beuve-paris",
+      "file": "stays/hotel-sainte-beuve-paris.html",
+      "title": "Hôtel Sainte-Beuve",
+      "city": "Paris",
+      "category": "stay",
+      "hotelId": "lp19fec"
+    },
+    {
+      "path": "/stays/maison-colbert-member-of-melia-collection-notre-paris",
+      "file": "stays/maison-colbert-member-of-melia-collection-notre-paris.html",
+      "title": "Maison Colbert member of Meliá Collection Notre-Dame",
+      "city": "Paris",
+      "category": "stay",
+      "hotelId": "lp1fbd3"
+    },
+    {
+      "path": "/stays/castille-paris-starhotels-collezione-paris",
+      "file": "stays/castille-paris-starhotels-collezione-paris.html",
+      "title": "Castille Paris – Starhotels Collezione",
+      "city": "Paris",
+      "category": "stay",
+      "hotelId": "lp1c0f6"
+    },
+    {
+      "path": "/stays/maison-albar-le-champs-elysees-paris",
+      "file": "stays/maison-albar-le-champs-elysees-paris.html",
+      "title": "Maison Albar- Le Champs-Elysées",
+      "city": "Paris",
+      "category": "stay",
+      "hotelId": "lp30627"
+    },
+    {
+      "path": "/stays/l-echiquier-opera-hotel-paris-mgallery-collectio-paris",
+      "file": "stays/l-echiquier-opera-hotel-paris-mgallery-collectio-paris.html",
+      "title": "l'Echiquier Opéra Hotel Paris - MGallery Collection",
+      "city": "Paris",
+      "category": "stay",
+      "hotelId": "lp1ba54"
+    },
+    {
+      "path": "/stays/b-montmartre-paris",
+      "file": "stays/b-montmartre-paris.html",
+      "title": "B Montmartre",
+      "city": "Paris",
+      "category": "stay",
+      "hotelId": "lp3a1c2"
+    },
+    {
+      "path": "/stays/hotel-regina-louvre-paris",
+      "file": "stays/hotel-regina-louvre-paris.html",
+      "title": "Hôtel Regina Louvre",
+      "city": "Paris",
+      "category": "stay",
+      "hotelId": "lp1b44a"
+    },
+    {
+      "path": "/stays/hotel-atala-champs-elysees-paris",
+      "file": "stays/hotel-atala-champs-elysees-paris.html",
+      "title": "Hôtel Atala Champs Elysees",
+      "city": "Paris",
+      "category": "stay",
+      "hotelId": "lp1d5ea"
+    },
+    {
+      "path": "/stays/hotel-de-berri-champs-elysees-a-luxury-collectio-paris",
+      "file": "stays/hotel-de-berri-champs-elysees-a-luxury-collectio-paris.html",
+      "title": "Hôtel de Berri Champs-Élysées, a Luxury Collection Hotel",
+      "city": "Paris",
+      "category": "stay",
+      "hotelId": "lp33a9e"
+    },
+    {
+      "path": "/stays/hotel-monte-cristo-paris",
+      "file": "stays/hotel-monte-cristo-paris.html",
+      "title": "Hotel Monte Cristo",
+      "city": "Paris",
+      "category": "stay",
+      "hotelId": "lp3bdb6"
+    },
+    {
+      "path": "/stays/sofitel-le-scribe-paris-opera-paris",
+      "file": "stays/sofitel-le-scribe-paris-opera-paris.html",
+      "title": "Sofitel Le Scribe Paris Opera",
+      "city": "Paris",
+      "category": "stay",
+      "hotelId": "lp2aea8"
+    },
+    {
+      "path": "/stays/le-relais-montmartre-paris",
+      "file": "stays/le-relais-montmartre-paris.html",
+      "title": "Le Relais Montmartre",
+      "city": "Paris",
+      "category": "stay",
+      "hotelId": "lp39f55"
+    },
+    {
+      "path": "/stays/hotel-le-derby-alma-by-inwood-hotels-paris",
+      "file": "stays/hotel-le-derby-alma-by-inwood-hotels-paris.html",
+      "title": "Hôtel le Derby Alma by Inwood Hotels",
+      "city": "Paris",
+      "category": "stay",
+      "hotelId": "lp31b32"
+    },
+    {
+      "path": "/stays/majestic-hotel-spa-champs-elysees-paris",
+      "file": "stays/majestic-hotel-spa-champs-elysees-paris.html",
+      "title": "Majestic Hotel Spa - Champs Elysées",
+      "city": "Paris",
+      "category": "stay",
+      "hotelId": "lp1b448"
+    },
+    {
+      "path": "/stays/sofitel-paris-arc-de-triomphe-paris",
+      "file": "stays/sofitel-paris-arc-de-triomphe-paris.html",
+      "title": "Sofitel Paris Arc De Triomphe",
+      "city": "Paris",
+      "category": "stay",
+      "hotelId": "lp23743"
+    },
+    {
+      "path": "/stays/hotel-des-academies-et-des-arts-paris",
+      "file": "stays/hotel-des-academies-et-des-arts-paris.html",
+      "title": "Hotel des Académies et des Arts",
+      "city": "Paris",
+      "category": "stay",
+      "hotelId": "lp3dbfc"
+    },
+    {
+      "path": "/stays/hotel-yllen-eiffel-paris",
+      "file": "stays/hotel-yllen-eiffel-paris.html",
+      "title": "Hotel Yllen Eiffel",
+      "city": "Paris",
+      "category": "stay",
+      "hotelId": "lp2308f"
+    },
+    {
+      "path": "/stays/terrass-hotel-paris",
+      "file": "stays/terrass-hotel-paris.html",
+      "title": "Terrass\" Hotel",
+      "city": "Paris",
+      "category": "stay",
+      "hotelId": "lp20529"
+    },
+    {
+      "path": "/stays/dadou-paris-paris",
+      "file": "stays/dadou-paris-paris.html",
+      "title": "Dadou Paris",
+      "city": "Paris",
+      "category": "stay",
+      "hotelId": "lp3c005"
+    },
+    {
+      "path": "/stays/le-basile-hotel-paris",
+      "file": "stays/le-basile-hotel-paris.html",
+      "title": "Le Basile Hôtel",
+      "city": "Paris",
+      "category": "stay",
+      "hotelId": "lp340b9"
+    },
+    {
+      "path": "/stays/le-metropolitan-paris-tour-eiffel-a-tribute-port-paris",
+      "file": "stays/le-metropolitan-paris-tour-eiffel-a-tribute-port-paris.html",
+      "title": "Le Metropolitan, Paris Tour Eiffel, a Tribute Portfolio Hotel",
+      "city": "Paris",
+      "category": "stay",
+      "hotelId": "lp1f42a"
+    },
+    {
+      "path": "/stays/la-clef-champs-elysees-paris-by-the-crest-collec-paris",
+      "file": "stays/la-clef-champs-elysees-paris-by-the-crest-collec-paris.html",
+      "title": "La Clef Champs-Élysées Paris by The Crest Collection",
+      "city": "Paris",
+      "category": "stay",
+      "hotelId": "lp18df07"
+    },
+    {
+      "path": "/stays/hotel-vernet-paris",
+      "file": "stays/hotel-vernet-paris.html",
+      "title": "Hotel Vernet",
+      "city": "Paris",
+      "category": "stay",
+      "hotelId": "lp1dbc2"
+    },
+    {
+      "path": "/stays/le-dokhan-s-paris-arc-de-triomphe-a-tribute-port-paris",
+      "file": "stays/le-dokhan-s-paris-arc-de-triomphe-a-tribute-port-paris.html",
+      "title": "Le Dokhan's Paris Arc de Triomphe, a Tribute Portfolio Hotel",
+      "city": "Paris",
+      "category": "stay",
+      "hotelId": "lp1ef18"
+    },
+    {
+      "path": "/stays/hotel-de-sers-paris",
+      "file": "stays/hotel-de-sers-paris.html",
+      "title": "Hôtel de Sers",
+      "city": "Paris",
+      "category": "stay",
+      "hotelId": "lp370e8"
+    },
+    {
+      "path": "/stays/maison-albar-hotels-le-vendome-paris",
+      "file": "stays/maison-albar-hotels-le-vendome-paris.html",
+      "title": "Maison Albar Hotels Le Vendome",
+      "city": "Paris",
+      "category": "stay",
+      "hotelId": "lp3979cb"
+    },
+    {
+      "path": "/stays/l-empire-paris-louvre-paris",
+      "file": "stays/l-empire-paris-louvre-paris.html",
+      "title": "L'Empire Paris - Louvre",
+      "city": "Paris",
+      "category": "stay",
+      "hotelId": "lp3dc85"
+    },
+    {
+      "path": "/stays/edouard-7-paris-opera-paris",
+      "file": "stays/edouard-7-paris-opera-paris.html",
+      "title": "Edouard 7 Paris Opéra",
+      "city": "Paris",
+      "category": "stay",
+      "hotelId": "lp1e9cf"
+    },
+    {
+      "path": "/stays/hotel-artus-paris",
+      "file": "stays/hotel-artus-paris.html",
+      "title": "Hôtel Artus",
+      "city": "Paris",
+      "category": "stay",
+      "hotelId": "lp1d177"
+    },
+    {
+      "path": "/stays/hotel-mercedes-paris",
+      "file": "stays/hotel-mercedes-paris.html",
+      "title": "Hôtel Mercedes",
+      "city": "Paris",
+      "category": "stay",
+      "hotelId": "lp1baef"
+    },
+    {
+      "path": "/stays/hotel-residence-foch-paris",
+      "file": "stays/hotel-residence-foch-paris.html",
+      "title": "Hotel Residence Foch",
+      "city": "Paris",
+      "category": "stay",
+      "hotelId": "lp2b7ef"
+    },
+    {
+      "path": "/stays/hotel-florida-paris-paris",
+      "file": "stays/hotel-florida-paris-paris.html",
+      "title": "Hotel Florida Paris",
+      "city": "Paris",
+      "category": "stay",
+      "hotelId": "lp1e2a1"
+    },
+    {
+      "path": "/stays/hotel-odeon-saint-germain-paris",
+      "file": "stays/hotel-odeon-saint-germain-paris.html",
+      "title": "Hotel Odeon Saint-Germain",
+      "city": "Paris",
+      "category": "stay",
+      "hotelId": "lp2d1b7"
+    },
+    {
+      "path": "/stays/le-grand-quartier-paris",
+      "file": "stays/le-grand-quartier-paris.html",
+      "title": "Le Grand Quartier",
+      "city": "Paris",
+      "category": "stay",
+      "hotelId": "lp25941b"
+    },
+    {
+      "path": "/stays/hotel-indigo-paris-opera-by-ihg-paris",
+      "file": "stays/hotel-indigo-paris-opera-by-ihg-paris.html",
+      "title": "Hotel Indigo Paris - Opera by IHG",
+      "city": "Paris",
+      "category": "stay",
+      "hotelId": "lp2bdf4"
+    },
+    {
+      "path": "/stays/hotel-de-banville-paris",
+      "file": "stays/hotel-de-banville-paris.html",
+      "title": "Hôtel de Banville",
+      "city": "Paris",
+      "category": "stay",
+      "hotelId": "lp1f12b"
+    },
+    {
+      "path": "/stays/le-pigalle-a-member-of-design-hotels-paris",
+      "file": "stays/le-pigalle-a-member-of-design-hotels-paris.html",
+      "title": "Le Pigalle, a Member of Design Hotels",
+      "city": "Paris",
+      "category": "stay",
+      "hotelId": "lp1141ad"
+    },
+    {
+      "path": "/stays/hotel-belleval-paris",
+      "file": "stays/hotel-belleval-paris.html",
+      "title": "Hôtel Belleval",
+      "city": "Paris",
+      "category": "stay",
+      "hotelId": "lp29abe"
+    },
+    {
+      "path": "/stays/renaissance-paris-vendome-hotel-paris",
+      "file": "stays/renaissance-paris-vendome-hotel-paris.html",
+      "title": "Renaissance Paris Vendome Hotel",
+      "city": "Paris",
+      "category": "stay",
+      "hotelId": "lp1a350"
+    },
+    {
+      "path": "/stays/hotel-louvre-montana-paris",
+      "file": "stays/hotel-louvre-montana-paris.html",
+      "title": "Hotel Louvre Montana",
+      "city": "Paris",
+      "category": "stay",
+      "hotelId": "lp1d9c6"
+    },
+    {
+      "path": "/stays/hotel-de-buci-paris",
+      "file": "stays/hotel-de-buci-paris.html",
+      "title": "Hôtel de Buci",
+      "city": "Paris",
+      "category": "stay",
+      "hotelId": "lp2a1e7"
+    },
+    {
+      "path": "/stays/paris-marriott-champs-elysees-hotel-paris",
+      "file": "stays/paris-marriott-champs-elysees-hotel-paris.html",
+      "title": "Paris Marriott Champs Elysees Hotel",
+      "city": "Paris",
+      "category": "stay",
+      "hotelId": "lp20793"
+    },
+    {
+      "path": "/stays/hotel-west-end-paris",
+      "file": "stays/hotel-west-end-paris.html",
+      "title": "Hotel West-End",
+      "city": "Paris",
+      "category": "stay",
+      "hotelId": "lp1db78"
+    },
+    {
+      "path": "/stays/25hours-hotel-terminus-nord-paris",
+      "file": "stays/25hours-hotel-terminus-nord-paris.html",
+      "title": "25hours Hotel Terminus Nord",
+      "city": "Paris",
+      "category": "stay",
+      "hotelId": "lp1b892"
+    },
+    {
+      "path": "/stays/hotel-atmospheres-paris",
+      "file": "stays/hotel-atmospheres-paris.html",
+      "title": "Hotel Atmospheres",
+      "city": "Paris",
+      "category": "stay",
+      "hotelId": "lp1f9cb"
+    },
+    {
+      "path": "/stays/hotel-parc-saint-severin-esprit-de-france-paris",
+      "file": "stays/hotel-parc-saint-severin-esprit-de-france-paris.html",
+      "title": "Hôtel Parc Saint-Séverin - Esprit de France",
+      "city": "Paris",
+      "category": "stay",
+      "hotelId": "lp2d79c"
+    },
+    {
+      "path": "/stays/hotel-parisianer-paris",
+      "file": "stays/hotel-parisianer-paris.html",
+      "title": "Hotel Parisianer",
+      "city": "Paris",
+      "category": "stay",
+      "hotelId": "lp1db1ed"
+    },
+    {
+      "path": "/stays/hotel-le-walt-by-inwood-hotels-paris",
+      "file": "stays/hotel-le-walt-by-inwood-hotels-paris.html",
+      "title": "Hôtel Le Walt by Inwood Hotels",
+      "city": "Paris",
+      "category": "stay",
+      "hotelId": "lp30f1e"
+    },
+    {
+      "path": "/stays/hotel-litteraire-marcel-ayme-bw-premier-collecti-paris",
+      "file": "stays/hotel-litteraire-marcel-ayme-bw-premier-collecti-paris.html",
+      "title": "Hotel Litteraire Marcel Ayme, BW Premier Collection",
+      "city": "Paris",
+      "category": "stay",
+      "hotelId": "lp326c6"
+    },
+    {
+      "path": "/stays/pepper-and-paper-apartments-paris",
+      "file": "stays/pepper-and-paper-apartments-paris.html",
+      "title": "PEPPER & PAPER Apartments",
+      "city": "Paris",
+      "category": "stay",
+      "hotelId": "lp361fe"
+    },
+    {
+      "path": "/stays/pullman-paris-montparnasse-hotel-paris",
+      "file": "stays/pullman-paris-montparnasse-hotel-paris.html",
+      "title": "Pullman Paris Montparnasse Hotel",
+      "city": "Paris",
+      "category": "stay",
+      "hotelId": "lp1c042"
+    },
+    {
+      "path": "/stays/francois-1er-paris",
+      "file": "stays/francois-1er-paris.html",
+      "title": "Francois 1er",
+      "city": "Paris",
+      "category": "stay",
+      "hotelId": "lp1ee55"
+    },
+    {
+      "path": "/stays/hotel-and-spa-de-latour-maubourg-paris",
+      "file": "stays/hotel-and-spa-de-latour-maubourg-paris.html",
+      "title": "Hotel & Spa de Latour Maubourg",
+      "city": "Paris",
+      "category": "stay",
+      "hotelId": "lp3c21a"
+    },
+    {
+      "path": "/stays/hotel-park-lane-paris-paris",
+      "file": "stays/hotel-park-lane-paris-paris.html",
+      "title": "Hotel Park Lane Paris",
+      "city": "Paris",
+      "category": "stay",
+      "hotelId": "lp1baa1"
+    },
+    {
+      "path": "/stays/hotel-augustin-astotel-paris",
+      "file": "stays/hotel-augustin-astotel-paris.html",
+      "title": "Hôtel Augustin - Astotel",
+      "city": "Paris",
+      "category": "stay",
+      "hotelId": "lp1bf69"
+    }
+  ],
+  "slugByHotelId": {
+    "lp1ce969": "sofitel-mexico-city-reforma-mexico-city",
+    "lp103346": "pug-seal-polanco-anatole-france-mexico-city",
+    "lp6558bfc8": "antigua-hotel-boutique-mexico-city",
+    "lp3ad7c": "gran-hotel-ciudad-de-mexico-zocalo-view-mexico-city",
+    "lp53aa8": "las-alcobas-a-luxury-collection-hotel-mexico-cit-mexico-city",
+    "lp65575e1c": "the-alest-hotel-mexico-city",
+    "lp4bab4": "the-st-regis-mexico-city-mexico-city",
+    "lp31a95": "presidente-intercontinental-mexico-city-by-ihg-mexico-city",
+    "lp6557cd35": "casa-polanco-hotel-boutique-mexico-city",
+    "lp2279f": "jw-marriott-hotel-mexico-city-polanco-mexico-city",
+    "lp65589b3b": "mondrian-mexico-city-condesa-mexico-city",
+    "lp65583436": "agata-hotel-boutique-and-spa-mexico-city",
+    "lp65573614": "the-ritz-carlton-mexico-city-mexico-city",
+    "lp65588d82": "volga-member-of-preferred-hotels-and-resorts-mexico-city",
+    "lp65585146": "nana-vida-cdmx-mexico-city",
+    "lp6558d9d4": "roso-guest-house-mexico-city",
+    "lp2411a6": "hotel-catedral-mexico-city",
+    "lp2f760": "grand-fiesta-americana-chapultepec-mexico-city",
+    "lp6555881b": "icon-condesa-all-amenities-extremely-cozy-flat-c-mexico-city",
+    "lp23157": "four-seasons-hotel-mexico-city-mexico-city",
+    "lp6555a98e": "galeria-plaza-san-jeronimo-mexico-city",
+    "lp231f5": "camino-real-polanco-mexico-mexico-city",
+    "lp655bb5c1": "casa-corp-boutique-suites-in-condesa-mexico-city",
+    "lp3873de": "casa-de-la-luz-hotel-boutique-mexico-city",
+    "lp1c8f9": "hyatt-regency-mexico-city-mexico-city",
+    "lp65577ecf": "hs-hotsson-cdmx-condesa-sur-mexico-city",
+    "lp1d4ad": "barcelo-mexico-reforma-mexico-city",
+    "lp6557c3e1": "hotel-luca-mexico-city",
+    "lp65579640": "mi-zona-lodging-polanco-mexico-city",
+    "lp655854f9": "capitalia-obelisk-polanco-mexico-city",
+    "lp4eeff": "stadia-suites-mexico-city-santa-fe-mexico-city",
+    "lp65583727": "the-amsterdam-boutique-stays-by-viadora-mexico-city",
+    "lp65582fc6": "hyatt-regency-mexico-city-insurgentes-wtc-mexico-city",
+    "lp575cf": "the-westin-santa-fe-mexico-city-mexico-city",
+    "lp6557181a": "campos-polanco-mexico-city",
+    "lp19cbe": "sheraton-maria-isabel-mexico-city-reforma-mexico-city",
+    "lp22e9b4": "casa-emilia-b-and-b-boutique-mexico-city",
+    "lp65583bc5": "capitalia-parque-lincoln-mexico-city",
+    "lp5c197": "las-suites-campos-eliseos-mexico-city",
+    "lp65576f03": "uma-casa-mexico-city",
+    "lp65585ab6": "capitalia-santa-fe-mexico-city",
+    "lp63c46": "jw-marriott-hotel-mexico-city-santa-fe-mexico-city",
+    "lp65583c89": "casa-luciana-condesa-mexico-city",
+    "lp275cef": "fiesta-americana-viaducto-aeropuerto-mexico-city",
+    "lp65575ae4": "xoma-boutique-stays-by-viadora-mexico-city",
+    "lp154092": "orchid-house-mexico-city-mexico-city",
+    "lp65574bcd": "andaz-condesa-mexico-city-by-hyatt-mexico-city",
+    "lp3c651": "hippodrome-hotel-condesa-mexico-city",
+    "lp6558335e": "alia-inn-boutique-wtc-mexico-city",
+    "lp6557f39d": "leonora-boutique-stays-by-viadora-mexico-city",
+    "lp3158b": "hilton-mexico-city-reforma-mexico-city",
+    "lp10037d": "lovely-terraza-masaryk-mexico-city",
+    "lp24f0b": "mexico-city-marriott-reforma-hotel-mexico-city",
+    "lp655584ff": "hotel-la-moraleja-suites-and-villas-mexico-city",
+    "lp2369cd": "coyoacan-inn-guesthouse-mexico-city",
+    "lp63fd8": "the-paragon-hotel-mexico-santa-fe-by-accor-mexico-city",
+    "lp65555bb8": "circulo-mexicano-a-member-of-design-hotels-mexico-city",
+    "lp6557c7d1": "colmena-hotel-cdmx-tonala-mexico-city",
+    "lp41057": "st-isidro-suites-corporate-housing-spa-and-welln-mexico-city",
+    "lp1defd9": "miyana-vip-luxury-suite-by-livemexicocity-mexico-city",
+    "lp27a08e": "nilo-33-mexico-city",
+    "lp6557c6ef": "casa-sauto-family-suite-cathedral-view-mexico-city",
+    "lp655ce078": "casa-san-angel-inn-boutique-charming-house-mexico-city",
+    "lp1c5cb8": "frida-boutique-stays-by-viadora-mexico-city",
+    "lp65577ab1": "real-de-hamburgo-by-the-local-way-mexico-city",
+    "lp61c77": "courtyard-by-marriott-mexico-city-airport-mexico-city",
+    "lp23041": "royal-pedregal-mexico-city",
+    "lp2bc7f": "radisson-paraiso-hotel-mexico-city-mexico-city",
+    "lp53191": "brick-hotel-mexico-city-small-luxury-hotels-of-t-mexico-city",
+    "lp364c0": "hotel-riazor-aeropuerto-mexico-city",
+    "lp58d3e": "hotel-novit-mexico-city",
+    "lp3ad7b": "isaaya-hotel-boutique-by-wtc-mexico-city",
+    "lp1f6a78": "umbral-curio-collection-by-hilton-mexico-city",
+    "lp3aaaa": "camino-real-pedregal-mexico-mexico-city",
+    "lp3ace7": "barcelo-mexico-santa-fe-mexico-city",
+    "lp3810a": "w-mexico-city-mexico-city",
+    "lp6557c436": "uliv-antara-mexico-city",
+    "lp237b1": "galeria-plaza-reforma-mexico-city",
+    "lp3e1da": "nh-collection-mexico-city-santa-fe-mexico-city",
+    "lp2f6866": "v65-mexico-mexico-city",
+    "lp290b95": "casa-comtesse-mexico-city",
+    "lp31a94": "nh-collection-mexico-city-reforma-mexico-city",
+    "lp6558a5d2": "ana-polanco-apartments-mexico-city",
+    "lp3e29a": "hotel-mandarin-carton-mexico-city",
+    "lp5f38b": "hotel-villa-condesa-mexico-city",
+    "lp1a7cd": "fiesta-americana-reforma-mexico-city",
+    "lp65575fa9": "hotel-flamencos-centro-historico-mexico-city",
+    "lp4c8b4": "holiday-inn-mexico-city-plaza-universidad-by-ihg-mexico-city",
+    "lp4f096": "flowsuites-wtc-mexico-city",
+    "lp655bad79": "boutique-hotel-durango219-mexico-city",
+    "lp2d363": "emporio-reforma-mexico-city",
+    "lp40331": "holiday-inn-express-mexico-reforma-by-ihg-mexico-city",
+    "lp65589e47": "uliv-edgar-allan-poe-mexico-city",
+    "lp321d0": "eurostars-zona-rosa-suites-mexico-city",
+    "lp1b668a": "departamento-angelica-rosas-ramirez-mexico-city",
+    "lp6557b7ec": "novotel-mexico-city-world-trade-center-mexico-city",
+    "lp2a73a": "hotel-el-ejecutivo-by-reforma-avenue-mexico-city",
+    "lp100aa1": "hotel-park-nilo-reforma-mexico-city",
+    "lp5acee": "fiesta-inn-insurgentes-sur-mexico-city",
+    "lp110b76": "antiguo-molino-de-san-jeronimo-hotel-boutique-mexico-city",
+    "lp65559d54": "novotel-mexico-city-toreo-mexico-city",
+    "lp65583118": "capitalia-anzures-polanco-mexico-city",
+    "lp62620": "hotel-lepanto-reforma-mexico-city",
+    "lp65583c68": "alojamientos-mexico-5-mexico-city",
+    "lp6559106e": "suites-mine-mexico-city",
+    "lp655bad77": "auto-hotel-legaria-mexico-city",
+    "lp234e5": "hotel-casa-blanca-mexico-city",
+    "lp4f7f6": "flowsuites-polanco-mexico-city",
+    "lp6557c921": "hotel-ibiza-plaza-mexico-city",
+    "lp2f15a": "hotel-ritz-ciudad-de-mexico-mexico-city",
+    "lp3278a": "fiesta-inn-tlalnepantla-mexico-city",
+    "lp2263f9": "hotel-circulo-condesa-mexico-city",
+    "lp3278b": "geneve-ciudad-de-mexico-mexico-city",
+    "lp62468": "exe-cities-reforma-mexico-city",
+    "lp59a32": "residencias-filadelfia-mexico-city",
+    "lp43f2f": "hotel-marlowe-centro-historico-mexico-city",
+    "lp4f0c6": "exe-alameda-reforma-mexico-city",
+    "lp2318d": "holiday-inn-mexico-city-trade-center-by-ihg-mexico-city",
+    "lp6556e8cf": "kali-centro-mexico-city-mexico-city",
+    "lp2318b": "crowne-plaza-hotel-mexico-city-north-tlalnepantl-mexico-city",
+    "lp1e13e": "camino-real-aeropuerto-mexico-mexico-city",
+    "lp3df30": "city-express-suites-by-marriott-ciudad-de-mexico-mexico-city",
+    "lp29b23": "laila-hotel-cdmx-mexico-city",
+    "lp21414": "sevilla-palace-mexico-city",
+    "lp2783aa": "suites-coben-apartamentos-amueblados-mexico-city",
+    "lp4316f": "hotel-regente-mexico-city",
+    "lp22eb14": "hotel-boutique-dawat-wtc-mexico-city",
+    "lp6557dd35": "uliv-apartments-polanco-mexico-city",
+    "lp32ed8": "exe-suites-reforma-mexico-city",
+    "lp3d9ed": "suites-obelisk-mexico-city",
+    "lp3c208": "hotel-pf-mexico-city",
+    "lp1f20ba": "casa-condesa-michoacan-113-mexico-city",
+    "lp50312": "hotel-metropol-mexico-city",
+    "lp3c781": "hotel-fontan-reforma-centro-historico-mexico-city",
+    "lp246dd": "holiday-inn-mexico-dali-airport-by-ihg-mexico-city",
+    "lp33625": "krystal-satelite-maria-barbara-mexico-city",
+    "lp3e9a7": "suites-del-angel-mexico-city",
+    "lp65577602": "hotel-gillow-mexico-city",
+    "lp24f0a": "hotel-century-reforma-mexico-city",
+    "lp36225e": "hotel-valle-del-sur-mexico-city",
+    "lp6557677c": "viajero-cdmx-centro-hostel-mexico-city",
+    "lp33acc": "fiesta-inn-centro-historico-mexico-city",
+    "lp2fa32": "fiesta-inn-periferico-sur-mexico-city",
+    "lp1a7ad6": "corazon-de-reforma-mexico-city",
+    "lp3d0a9": "el-diplomatico-mexico-city",
+    "lp65589ece": "mala-vecindad-centro-historico-mexico-city",
+    "lp655b296c": "hotel-corona-real-mexico-city",
+    "lp54bbd": "hotel-black-boutique-mexico-city",
+    "lp655910e9": "sonder-la-cima-mexico-city",
+    "lp3274f": "fiesta-inn-express-perinorte-mexico-city",
+    "lp4f097": "hotel-and-suites-pf-mexico-city",
+    "lp3eebe": "stanza-hotel-mexico-city",
+    "lp3c8ba": "holiday-inn-zona-centro-by-ihg-mexico-city",
+    "lp33d5b": "fiesta-inn-insurgentes-viaducto-mexico-city",
+    "lp3dbdb": "the-green-park-hotel-mexico-city",
+    "lp1cab8d": "city-express-by-marriott-ciudad-de-mexico-tlalpa-mexico-city",
+    "lp39847": "nh-collection-mexico-city-centro-historico-mexico-city",
+    "lp324d0": "real-inn-perinorte-mexico-city",
+    "lp23189": "courtyard-by-marriott-mexico-city-revolucion-mexico-city",
+    "lp3b975": "novotel-mexico-city-santa-fe-mexico-city",
+    "lp655621dc": "niu-modern-and-centric-lofts-mexico-city",
+    "lp4081d": "belair-unique-a-wyndham-hotel-mexico-city",
+    "lp6558d65b": "magenta-by-kukun-mexico-city",
+    "lp62c4b": "downtown-mexico-mexico-city",
+    "lp31c66f": "hotel-maria-cristina-mexico-city",
+    "lp3b0ad": "four-points-by-sheraton-mexico-city-colonia-roma-mexico-city",
+    "lp234e6": "hotel-royal-reforma-mexico-city",
+    "lp655bb5c7": "hotel-maria-rico-mexico-city",
+    "lp6555a393": "kali-la-raza-mexico-city-mexico-city",
+    "lp42a7b": "holiday-inn-and-suites-mexico-zona-reforma-by-ih-mexico-city",
+    "lp65546a67": "parral-14-boutique-hotel-mexico-city",
+    "lp65555bd7": "cadillac-hotel-boutique-mexico-city",
+    "lp3abe4": "we-hotel-aeropuerto-mexico-city",
+    "lp10f642": "hotel-harare-mexico-city",
+    "lp1eb4f": "marquis-sky-suites-mexico-city",
+    "lp1ed92": "hotel-del-prado-mexico-city",
+    "lp56ced": "grand-prix-weenjoyhotels-aeropuerto-mexico-city",
+    "lp6558de87": "la-casa-azul-mexico-city",
+    "lp61209": "hotel-mx-garibaldi-cdmx-trademark-collection-by-mexico-city",
+    "lp65582ee9": "nido-at-neuchatel-polanco-mexico-city",
+    "lp39c39": "doubletree-by-hilton-mexico-city-santa-fe-mexico-city",
+    "lp1d98a1": "mc-suites-mexico-city-mexico-city",
+    "lp4221c": "hampton-inn-and-suites-mexico-city-centro-histor-mexico-city",
+    "lp231dd": "hotel-cle-reforma-insurgentes-mexico-city",
+    "lp4bf69": "holiday-inn-hotel-and-suites-medica-sur-by-ihg-mexico-city",
+    "lp62d96": "residence-l-heritage-hipolito-taine-by-bluebay-mexico-city",
+    "lp655489f5": "kali-vallejo-mexico-city-mexico-city",
+    "lp3e1a2": "city-express-by-marriott-ciudad-de-mexico-ebc-re-mexico-city",
+    "lp56d26": "nh-collection-mexico-city-airport-t2-mexico-city",
+    "lp30be3": "hotel-bristol-mexico-city",
+    "lp6556c365": "villa-alfonsina-mexico-city",
+    "lp30e9d": "segovia-regency-mexico-city",
+    "lp65622762": "c46-studios-at-itesm-cem-families-tourists-and-t-mexico-city",
+    "lp1ded84": "vos-condesa-mexico-city",
+    "lp655671a1": "hotel-mx-lagunilla-cdmx-trademark-collection-by-mexico-city",
+    "lp2980b": "krystal-urban-aeropuerto-cd-de-mexico-mexico-city",
+    "lp50311": "city-express-plus-by-marriott-ciudad-de-mexico-r-mexico-city",
+    "lp55391": "wyndham-garden-mexico-city-polanco-mexico-city",
+    "lp6556a291": "novo-coapa-mexico-city",
+    "lp65580cfd": "pent-house-masaryk-17-mexico-city",
+    "lp29c41": "le-meurice-dorchester-collection-paris",
+    "lp396001": "monsieur-george-hotel-and-spa-champs-elysees-paris",
+    "lp2b5d3": "hotel-le-royal-monceau-raffles-paris-paris",
+    "lp29425": "hotel-pulitzer-paris-paris",
+    "lp2eb64": "hotel-de-montesquieu-paris",
+    "lp224224": "hotel-le-ballu-paris",
+    "lp1ee27": "chateau-des-fleurs-hotel-and-spa-paris-paris",
+    "lp1beec": "hotel-des-grands-voyageurs-paris",
+    "lp33d07": "park-hyatt-paris-vendome-paris",
+    "lp1dd7e": "le-pavillon-de-la-reine-and-spa-place-des-vosges-paris",
+    "lp2f82f": "hotel-astra-opera-astotel-paris",
+    "lp30fb5": "grand-hotel-champs-elysees-paris",
+    "lp275eea": "cour-des-vosges-evok-collection-paris",
+    "lp1c508": "hotel-marignan-champs-elysees-paris",
+    "lp2278d": "prince-de-galles-a-luxury-collection-hotel-paris-paris",
+    "lp1c507": "sofitel-paris-baltimore-tour-eiffel-paris",
+    "lp1faf8": "xo-hotel-paris-paris",
+    "lp2a416": "norman-paris-hotel-and-spa-paris",
+    "lp1f535": "villa-marquis-member-of-melia-collection-tour-ei-paris",
+    "lp1f4ac": "hotel-malte-astotel-paris",
+    "lp37606": "le-petit-oberkampf-hotel-and-spa-paris",
+    "lp1af45": "hotel-napoleon-paris-paris",
+    "lp1e4c4": "hotel-montalembert-paris",
+    "lp23701": "sofitel-paris-le-faubourg-paris",
+    "lp19f1f": "intercontinental-paris-le-grand-by-ihg-paris",
+    "lp20484": "hyatt-paris-madeleine-paris",
+    "lp1b449": "hotel-raphael-paris",
+    "lp1c140": "hotel-du-louvre-in-the-unbound-collection-by-hya-paris",
+    "lp3a10e": "hotel-riesner-paris",
+    "lp20e3e5": "experimental-marais-paris",
+    "lp1e3623": "la-reserve-paris-hotel-and-spa-paris",
+    "lp1df34": "hotel-lancaster-paris",
+    "lp1aa1d": "hotel-bel-ami-paris",
+    "lp1f043": "hotel-balzac-paris-and-spa-ikoi-paris",
+    "lp1aaee": "ritz-paris-paris",
+    "lp29abf": "la-maison-favart-paris",
+    "lp3326a": "hotel-regent-s-garden-astotel-paris",
+    "lp2dfd1": "hotel-du-cadran-paris",
+    "lp1f399": "hotel-madison-paris",
+    "lp3c4e0": "hotel-keppler-paris",
+    "lp2da4b": "hotel-le-six-paris",
+    "lp29d50": "la-chambre-du-marais-paris",
+    "lp310a4": "hotel-petit-lafayette-paris",
+    "lp2db44": "hotel-pont-royal-paris",
+    "lp2d73f": "maison-mere-paris",
+    "lp19fec": "hotel-sainte-beuve-paris",
+    "lp1fbd3": "maison-colbert-member-of-melia-collection-notre-paris",
+    "lp1c0f6": "castille-paris-starhotels-collezione-paris",
+    "lp30627": "maison-albar-le-champs-elysees-paris",
+    "lp1ba54": "l-echiquier-opera-hotel-paris-mgallery-collectio-paris",
+    "lp3a1c2": "b-montmartre-paris",
+    "lp1b44a": "hotel-regina-louvre-paris",
+    "lp1d5ea": "hotel-atala-champs-elysees-paris",
+    "lp33a9e": "hotel-de-berri-champs-elysees-a-luxury-collectio-paris",
+    "lp3bdb6": "hotel-monte-cristo-paris",
+    "lp2aea8": "sofitel-le-scribe-paris-opera-paris",
+    "lp39f55": "le-relais-montmartre-paris",
+    "lp31b32": "hotel-le-derby-alma-by-inwood-hotels-paris",
+    "lp1b448": "majestic-hotel-spa-champs-elysees-paris",
+    "lp23743": "sofitel-paris-arc-de-triomphe-paris",
+    "lp3dbfc": "hotel-des-academies-et-des-arts-paris",
+    "lp2308f": "hotel-yllen-eiffel-paris",
+    "lp20529": "terrass-hotel-paris",
+    "lp3c005": "dadou-paris-paris",
+    "lp340b9": "le-basile-hotel-paris",
+    "lp1f42a": "le-metropolitan-paris-tour-eiffel-a-tribute-port-paris",
+    "lp18df07": "la-clef-champs-elysees-paris-by-the-crest-collec-paris",
+    "lp1dbc2": "hotel-vernet-paris",
+    "lp1ef18": "le-dokhan-s-paris-arc-de-triomphe-a-tribute-port-paris",
+    "lp370e8": "hotel-de-sers-paris",
+    "lp3979cb": "maison-albar-hotels-le-vendome-paris",
+    "lp3dc85": "l-empire-paris-louvre-paris",
+    "lp1e9cf": "edouard-7-paris-opera-paris",
+    "lp1d177": "hotel-artus-paris",
+    "lp1baef": "hotel-mercedes-paris",
+    "lp2b7ef": "hotel-residence-foch-paris",
+    "lp1e2a1": "hotel-florida-paris-paris",
+    "lp2d1b7": "hotel-odeon-saint-germain-paris",
+    "lp25941b": "le-grand-quartier-paris",
+    "lp2bdf4": "hotel-indigo-paris-opera-by-ihg-paris",
+    "lp1f12b": "hotel-de-banville-paris",
+    "lp1141ad": "le-pigalle-a-member-of-design-hotels-paris",
+    "lp29abe": "hotel-belleval-paris",
+    "lp1a350": "renaissance-paris-vendome-hotel-paris",
+    "lp1d9c6": "hotel-louvre-montana-paris",
+    "lp2a1e7": "hotel-de-buci-paris",
+    "lp20793": "paris-marriott-champs-elysees-hotel-paris",
+    "lp1db78": "hotel-west-end-paris",
+    "lp1b892": "25hours-hotel-terminus-nord-paris",
+    "lp1f9cb": "hotel-atmospheres-paris",
+    "lp2d79c": "hotel-parc-saint-severin-esprit-de-france-paris",
+    "lp1db1ed": "hotel-parisianer-paris",
+    "lp30f1e": "hotel-le-walt-by-inwood-hotels-paris",
+    "lp326c6": "hotel-litteraire-marcel-ayme-bw-premier-collecti-paris",
+    "lp361fe": "pepper-and-paper-apartments-paris",
+    "lp1c042": "pullman-paris-montparnasse-hotel-paris",
+    "lp1ee55": "francois-1er-paris",
+    "lp3c21a": "hotel-and-spa-de-latour-maubourg-paris",
+    "lp1baa1": "hotel-park-lane-paris-paris",
+    "lp1bf69": "hotel-augustin-astotel-paris"
+  }
+}

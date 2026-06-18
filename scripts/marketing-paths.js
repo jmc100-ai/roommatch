@@ -2,6 +2,21 @@
  * Single source of truth for indexable marketing routes (paths, files, titles).
  * Used by build-sitemap.js, build-html-sitemap (via build-sitemap), and server.js.
  */
+const fs = require("fs");
+const path = require("path");
+
+const GENERATED_ROUTES_PATH = path.join(__dirname, "marketing-routes-generated.json");
+
+function loadGeneratedRoutes() {
+  try {
+    return JSON.parse(fs.readFileSync(GENERATED_ROUTES_PATH, "utf8"));
+  } catch {
+    return { routes: [], staysRoutes: [], slugByHotelId: {} };
+  }
+}
+
+const GENERATED = loadGeneratedRoutes();
+
 const MARKETING_ROUTES = [
   { path: "/destinations", file: "destinations.html", title: "Paris & Mexico City Hotel Guides — Search by Room Photos", city: null, category: "hub" },
   { path: "/sitemap", file: "sitemap.html", title: "Site Map — All Destination Guides", city: null, category: "hub" },
@@ -50,23 +65,47 @@ const MARKETING_ROUTES = [
   { path: "/best-area-to-stay-in-mexico-city-first-time", file: "best-area-to-stay-in-mexico-city-first-time.html", title: "Best Area to Stay in Mexico City for First-Time Visitors", city: "Mexico City", category: "guide" },
 ];
 
+/** Hand-curated + generator output (vibe pages, neighborhoods, /stays/*). */
+function allMarketingRoutes() {
+  return [...MARKETING_ROUTES, ...(GENERATED.routes || []), ...(GENERATED.staysRoutes || [])];
+}
+
 /** Routes for XML sitemap (unique paths, no alias duplicates). */
 function sitemapPaths() {
   const seen = new Set();
-  return MARKETING_ROUTES.filter((r) => {
+  return allMarketingRoutes().filter((r) => {
     if (r.alias || seen.has(r.path)) return false;
     seen.add(r.path);
     return true;
   }).map((r) => r.path);
 }
 
+function staysSitemapPaths(city) {
+  return (GENERATED.staysRoutes || [])
+    .filter((r) => !city || r.city === city)
+    .map((r) => r.path);
+}
+
 /** Map path → HTML filename for Express routing. */
 function marketingHtmlMap() {
   const map = {};
-  for (const r of MARKETING_ROUTES) {
+  for (const r of allMarketingRoutes()) {
     if (!map[r.path]) map[r.path] = r.file;
   }
   return map;
 }
 
-module.exports = { MARKETING_ROUTES, sitemapPaths, marketingHtmlMap };
+function staySlugForHotelId(hotelId) {
+  return (GENERATED.slugByHotelId || {})[hotelId] || null;
+}
+
+module.exports = {
+  MARKETING_ROUTES,
+  GENERATED,
+  allMarketingRoutes,
+  sitemapPaths,
+  staysSitemapPaths,
+  marketingHtmlMap,
+  staySlugForHotelId,
+  loadGeneratedRoutes,
+};
