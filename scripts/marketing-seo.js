@@ -19,6 +19,8 @@ const FAVICON_HEAD = `  <link rel="icon" href="/favicon.ico" sizes="48x48" />
   <link rel="manifest" href="/site.webmanifest" />
   <meta name="theme-color" content="#0c0c0e" />`;
 
+const COPYRIGHT_LINE = "© 2026 TravelBoop, LLC. All rights reserved.";
+
 const HUB_FAQS = {
   "where-to-stay-in-paris": [
     {
@@ -506,7 +508,8 @@ function footer(city, extraLinks) {
     : `<a href="__ORIGIN__/">Home</a> · <a href="__ORIGIN__/destinations">Destinations</a>`;
   const tag = c ? c.footerLine : "photo-first hotel discovery";
   return `<footer class="mfoot">
-    <p>TravelByVibe — ${tag}. · TravelBoop, LLC</p>
+    <p>${COPYRIGHT_LINE}</p>
+    <p>TravelByVibe — ${tag}.</p>
     ${destinationsFooterRow()}
     <p>${cityLinks} · <a href="__ORIGIN__/sitemap">Site map</a>${cross}${extraLinks || ""}</p>
     <div class="credits-block">
@@ -549,6 +552,7 @@ module.exports = {
   wrapPage,
   footer,
   destinationsFooterRow,
+  COPYRIGHT_LINE,
   breadcrumbsFor,
   applySeoMeta,
 };
