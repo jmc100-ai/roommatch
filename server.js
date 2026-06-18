@@ -511,21 +511,32 @@ app.head("/api/health", (_, res) => {
   res.status(200).end();
 });
 
-// Static sitemap — registered early so Googlebot gets a fast, cacheable XML file
-// without waiting on cold-start middleware or dynamic origin resolution.
-const SITEMAP_FILE = path.join(__dirname, "client", "sitemap.xml");
-function serveSitemap(_req, res) {
-  res.setHeader("Content-Type", "application/xml; charset=utf-8");
-  res.setHeader("Cache-Control", "public, max-age=86400, s-maxage=604800");
-  res.sendFile(SITEMAP_FILE, (err) => {
-    if (err) {
-      console.error("[sitemap] sendFile failed:", err.message);
-      if (!res.headersSent) res.status(500).type("text/plain").send("sitemap unavailable");
-    }
-  });
+// Static sitemaps — registered early so Googlebot gets fast XML without SPA/cold-start.
+const SITEMAP_FILENAMES = [
+  "sitemap.xml",
+  "sitemap-index.xml",
+  "sitemap-marketing.xml",
+  "sitemap-stays-mexico-city.xml",
+  "sitemap-stays-paris.xml",
+];
+function serveSitemapFile(filename) {
+  const fp = path.join(__dirname, "client", filename);
+  return (_req, res) => {
+    res.setHeader("Content-Type", "application/xml; charset=utf-8");
+    res.setHeader("Cache-Control", "public, max-age=86400, s-maxage=604800");
+    res.sendFile(fp, (err) => {
+      if (err) {
+        console.error("[sitemap]", filename, err.message);
+        if (!res.headersSent) res.status(404).type("text/plain").send("sitemap not found");
+      }
+    });
+  };
 }
-app.get("/sitemap.xml", serveSitemap);
-app.head("/sitemap.xml", serveSitemap);
+for (const name of SITEMAP_FILENAMES) {
+  const handler = serveSitemapFile(name);
+  app.get(`/${name}`, handler);
+  app.head(`/${name}`, handler);
+}
 
 const INDEXNOW_KEY = (process.env.INDEXNOW_KEY || "travelbyvibe-indexnow").trim();
 
@@ -533,7 +544,7 @@ function serveRobotsTxt(_req, res) {
   res.setHeader("Content-Type", "text/plain; charset=utf-8");
   res.setHeader("Cache-Control", "public, max-age=86400, s-maxage=604800");
   res.send(
-    `User-agent: *\nAllow: /\nDisallow: /api/\n\nSitemap: ${SITE_PUBLIC_ORIGIN}/sitemap.xml\n`
+    `User-agent: *\nAllow: /\nDisallow: /api/\n\nSitemap: ${SITE_PUBLIC_ORIGIN}/sitemap-index.xml\nSitemap: ${SITE_PUBLIC_ORIGIN}/sitemap.xml\n`
   );
 }
 app.get("/robots.txt", serveRobotsTxt);
