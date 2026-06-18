@@ -1,0 +1,512 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Mobile polaroid collage — prototype (preview only)</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;1,400&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #0c0c0e;
+      --card: #18181c;
+      --text: #e8e4dc;
+      --muted: #9a9590;
+      --accent: #c9a96e;
+      --accent2: #e8d5b0;
+      --border: rgba(255, 255, 255, 0.12);
+      --phone-w: 390px;
+      --gutter: 20px;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: 'DM Sans', sans-serif;
+      background: #080809;
+      color: var(--text);
+      padding: 24px 16px 56px;
+    }
+
+    /* ── Page chrome ── */
+    .page-head { max-width: 960px; margin: 0 auto 28px; }
+    .page-head h1 { margin: 0 0 8px; font-size: 22px; font-weight: 600; }
+    .page-head p { margin: 0 0 10px; font-size: 14px; line-height: 1.6; color: var(--muted); max-width: 62ch; }
+    .tag {
+      display: inline-block;
+      margin-bottom: 12px;
+      padding: 4px 11px;
+      border-radius: 100px;
+      border: 1px solid rgba(201, 169, 110, 0.35);
+      color: var(--accent2);
+      font-size: 10px;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+    }
+    .spec {
+      max-width: 960px;
+      margin: 0 auto 32px;
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      overflow: hidden;
+      background: rgba(255,255,255,0.02);
+    }
+    .spec h2 {
+      margin: 0;
+      padding: 12px 16px;
+      font-size: 13px;
+      font-weight: 600;
+      background: rgba(255,255,255,0.04);
+      border-bottom: 1px solid var(--border);
+    }
+    .spec table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    .spec th, .spec td {
+      padding: 10px 16px;
+      text-align: left;
+      border-bottom: 1px solid rgba(255,255,255,0.06);
+      vertical-align: top;
+    }
+    .spec th { color: var(--muted); font-weight: 500; width: 32%; }
+    .spec tr:last-child td, .spec tr:last-child th { border-bottom: none; }
+
+    .compare {
+      max-width: 960px;
+      margin: 0 auto;
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 32px;
+    }
+    @media (min-width: 900px) {
+      .compare { grid-template-columns: 1fr 1fr; align-items: start; }
+    }
+    .compare-col h3 {
+      margin: 0 0 6px;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--accent2);
+    }
+    .compare-col .hint {
+      margin: 0 0 14px;
+      font-size: 12px;
+      color: var(--muted);
+      line-height: 1.5;
+    }
+
+    /* ── Phone frame ── */
+    .phone {
+      width: var(--phone-w);
+      max-width: 100%;
+      margin: 0 auto;
+      border-radius: 28px;
+      border: 1px solid rgba(255,255,255,0.14);
+      background: var(--bg);
+      overflow: hidden;
+      box-shadow: 0 24px 60px rgba(0,0,0,0.55);
+    }
+    .phone-status {
+      height: 28px;
+      background: rgba(0,0,0,0.35);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 10px;
+      color: var(--muted);
+      letter-spacing: 0.06em;
+    }
+    .phone-scroll {
+      max-height: 780px;
+      overflow-y: auto;
+      scrollbar-width: thin;
+    }
+
+    /* ── Desktop reference panel ── */
+    .desktop-panel {
+      border-radius: 16px;
+      border: 1px solid var(--border);
+      background: var(--bg);
+      padding: 28px 24px 32px;
+      max-width: 520px;
+      margin: 0 auto;
+    }
+    .desktop-panel .label {
+      font-size: 10px;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 16px;
+    }
+
+    /* ── Shared hero bits (mirrors home-v2 mobile stack) ── */
+    .hero {
+      padding: 20px var(--gutter) 28px;
+    }
+    .eyebrow {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      font-size: 11px;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 14px;
+    }
+    .eyebrow-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--accent);
+      box-shadow: 0 0 8px rgba(201,169,110,0.6);
+    }
+    .brand-vibe { color: var(--accent); }
+    .hero h1 {
+      font-family: 'Cormorant Garamond', serif;
+      font-size: clamp(28px, 7.5vw, 38px);
+      font-weight: 300;
+      line-height: 1.1;
+      text-align: center;
+      margin: 0 0 10px;
+      white-space: normal;
+    }
+    .hero h1 em { font-style: italic; color: var(--accent); }
+    .hero-sub {
+      margin: 0 auto 12px;
+      max-width: 340px;
+      font-size: 14px;
+      line-height: 1.55;
+      color: rgba(232,228,220,0.72);
+      text-align: center;
+    }
+    .form { display: flex; flex-direction: column; gap: 14px; }
+
+    .city-box {
+      background: var(--card);
+      border: 1px solid rgba(201,169,110,.42);
+      border-radius: 20px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 16px 18px;
+      box-shadow: 0 0 0 1px rgba(201,169,110,.1), 0 0 50px rgba(201,169,110,.08), 0 12px 32px rgba(0,0,0,.35);
+    }
+    .city-box-icon { color: var(--accent2); font-size: 18px; opacity: .75; }
+    .city-box input {
+      flex: 1;
+      background: transparent;
+      border: none;
+      outline: none;
+      font-family: inherit;
+      font-size: 17px;
+      color: var(--text);
+      font-weight: 300;
+    }
+    .city-go-btn {
+      flex-shrink: 0;
+      padding: 8px 16px;
+      border-radius: 12px;
+      background: var(--accent);
+      color: #0c0c0e;
+      border: none;
+      font-family: inherit;
+      font-size: 13px;
+      font-weight: 600;
+    }
+
+    .city-date-trigger {
+      width: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 12px 14px;
+      border-radius: 15px;
+      border: 1px solid rgba(255,255,255,0.12);
+      background: rgba(255,255,255,0.045);
+      color: var(--text);
+      font-family: inherit;
+      cursor: default;
+    }
+    .city-date-trigger-main { display: flex; align-items: center; gap: 10px; min-width: 0; }
+    .city-date-icon { color: var(--accent2); opacity: 0.75; font-size: 14px; }
+    .city-date-kicker { display: block; font-size: 11px; color: var(--muted); margin-bottom: 2px; }
+    .city-date-value { display: block; font-size: 14px; color: rgba(232,228,220,0.45); }
+    .city-date-chevron { color: var(--muted); font-size: 12px; }
+
+    .city-group-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      flex-wrap: wrap;
+      padding: 11px 14px;
+      border-radius: 15px;
+      border: 1px solid rgba(255,255,255,0.12);
+      background: rgba(255,255,255,0.045);
+    }
+    .city-group-row-main { display: flex; align-items: center; gap: 10px; }
+    .city-group-icon {
+      width: 30px;
+      height: 30px;
+      border-radius: 9px;
+      display: grid;
+      place-items: center;
+      background: rgba(201,169,110,0.12);
+      color: var(--accent2);
+    }
+    .city-group-icon svg { width: 16px; height: 16px; }
+    .city-group-title { font-size: 14px; font-weight: 500; }
+    .city-group-pills { display: flex; gap: 6px; flex-wrap: wrap; }
+    .city-group-pill {
+      padding: 6px 11px;
+      border-radius: 100px;
+      border: 1px solid rgba(255,255,255,0.14);
+      background: transparent;
+      color: var(--muted);
+      font-family: inherit;
+      font-size: 12px;
+      cursor: default;
+    }
+    .city-group-pill.active {
+      border-color: rgba(201,169,110,0.55);
+      background: rgba(201,169,110,0.14);
+      color: var(--accent2);
+    }
+
+    /* ── Polaroid collage (desktop baseline) ── */
+    .polaroid-stage {
+      position: relative;
+      width: 100%;
+      margin: 0 auto;
+    }
+    .polaroid-stage--desktop {
+      max-width: 420px;
+      aspect-ratio: 1 / 0.9;
+    }
+    .polaroid-stage--mobile {
+      width: 90%;
+      max-width: 90%;
+      aspect-ratio: 1 / 0.82;
+      margin: 22px auto 0;
+      padding: 0;
+    }
+
+    .polaroid {
+      position: absolute;
+      margin: 0;
+      background: #f4f0e8;
+      box-shadow:
+        0 4px 18px rgba(0, 0, 0, 0.45),
+        0 1px 0 rgba(255, 255, 255, 0.08) inset;
+      border-radius: 2px;
+      line-height: 0;
+    }
+    .polaroid-stage--desktop .polaroid {
+      padding: 11px 11px 32px;
+    }
+    .polaroid-stage--mobile .polaroid {
+      padding: 7px 7px 20px;
+    }
+    .polaroid img {
+      display: block;
+      width: 100%;
+      height: auto;
+      object-fit: cover;
+      aspect-ratio: 4 / 5;
+    }
+
+    /* Same layout as production desktop — percentage positions + rotations */
+    .polaroid--1 { width: 43%; left: 0; top: 6%; transform: rotate(-11deg); z-index: 2; }
+    .polaroid--2 { width: 58%; left: 20%; top: 0; transform: rotate(4deg); z-index: 5; }
+    .polaroid--2.polaroid--hero {
+      box-shadow: 0 8px 28px rgba(0, 0, 0, 0.5), 0 1px 0 rgba(255, 255, 255, 0.1) inset;
+    }
+    .polaroid--3 { width: 38%; right: 0; top: 12%; transform: rotate(9deg); z-index: 3; }
+    .polaroid--4 { width: 34%; left: 2%; bottom: 0; transform: rotate(-6deg); z-index: 4; }
+    .polaroid--5 { width: 31%; left: 36%; bottom: 4%; transform: rotate(7deg); z-index: 6; }
+    .polaroid--6 { width: 29%; right: 4%; bottom: 0; transform: rotate(-4deg); z-index: 1; }
+
+    /* Mobile: slightly tighter vertical rhythm */
+    .polaroid-stage--mobile .polaroid--1 { top: 4%; }
+    .polaroid-stage--mobile .polaroid--3 { top: 10%; }
+    .polaroid-stage--mobile .polaroid--5 { bottom: 2%; }
+
+    .collage-label {
+      margin: 18px 0 0;
+      text-align: center;
+      font-size: 10px;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: rgba(255,255,255,0.28);
+    }
+
+    .features-preview {
+      margin-top: 8px;
+      padding: 20px var(--gutter) 24px;
+      border-top: 1px solid var(--border);
+    }
+    .features-preview h4 {
+      margin: 0 0 8px;
+      font-family: 'Cormorant Garamond', serif;
+      font-size: 22px;
+      font-weight: 500;
+      color: var(--accent);
+      text-align: center;
+    }
+    .features-preview p {
+      margin: 0;
+      font-size: 13px;
+      color: var(--muted);
+      text-align: center;
+      line-height: 1.5;
+    }
+
+    .open-hint {
+      max-width: 960px;
+      margin: 28px auto 0;
+      padding: 14px 16px;
+      border-radius: 12px;
+      background: rgba(201, 169, 110, 0.08);
+      border: 1px solid rgba(201, 169, 110, 0.22);
+      font-size: 13px;
+      line-height: 1.55;
+    }
+    .open-hint strong { color: var(--accent2); }
+    .open-hint code {
+      font-size: 12px;
+      background: rgba(0,0,0,0.35);
+      padding: 2px 6px;
+      border-radius: 4px;
+    }
+  </style>
+</head>
+<body>
+  <header class="page-head">
+    <span class="tag">Prototype · not wired into app</span>
+    <h1>Mobile polaroid collage</h1>
+    <p>
+      Same scattered polaroid stack as desktop — scaled down and placed directly below the
+      <strong>Who's coming?</strong> module on mobile. Desktop polaroids stay in the right column;
+      mobile gets a duplicate collage in the form stack (hidden on ≥901px).
+    </p>
+  </header>
+
+  <section class="spec" aria-label="Design specs">
+    <h2>Proposed specs</h2>
+    <table>
+      <tr>
+        <th>Placement</th>
+        <td>Inside <code>.home-v2-form</code>, immediately after <code>#city-group-pick</code> (Who's coming). Hidden on desktop where the right-column collage already shows.</td>
+      </tr>
+      <tr>
+        <th>Breakpoint</th>
+        <td>Visible at <code>max-width: 900px</code> (matches current mobile hero stack). Desktop right column stays <code>display:none</code> on mobile as today.</td>
+      </tr>
+      <tr>
+        <th>Scale</th>
+        <td>Same 6-frame layout, positions, and rotations. Frame padding ~36% smaller (7px / 20px vs 11px / 32px). Container <code>width: 90%</code> centered, aspect ratio <code>1 / 0.82</code>.</td>
+      </tr>
+      <tr>
+        <th>Images</th>
+        <td>Reuse existing <code>#home-v2-polaroids</code> markup + <code>updateHomePolaroids()</code> — either clone images into mobile slot or move one DOM node with CSS order (TBD at implementation).</td>
+      </tr>
+      <tr>
+        <th>Spacing</th>
+        <td><code>margin-top: 22px</code> after Who's coming; <code>padding-bottom: 8px</code> before features section.</td>
+      </tr>
+    </table>
+  </section>
+
+  <div class="compare">
+    <div class="compare-col">
+      <h3>Desktop reference (current)</h3>
+      <p class="hint">Right column of split hero — same CSS you have in production today.</p>
+      <div class="desktop-panel">
+        <div class="label">Polaroid collage · desktop scale</div>
+        <div class="polaroid-stage polaroid-stage--desktop" aria-hidden="true">
+          <figure class="polaroid polaroid--1"><img src="https://images.unsplash.com/photo-1522083165195-3424ed129620?auto=format&fit=crop&w=520&q=80" alt="" width="260" height="300" loading="eager" decoding="async" /></figure>
+          <figure class="polaroid polaroid--2 polaroid--hero"><img src="https://images.unsplash.com/photo-1584669727833-88b47506defb?auto=format&fit=crop&w=600&q=80" alt="" width="300" height="360" loading="eager" decoding="async" /></figure>
+          <figure class="polaroid polaroid--3"><img src="https://images.unsplash.com/photo-1521216774850-01bc1c5fe0da?auto=format&fit=crop&w=480&q=80" alt="" width="220" height="260" loading="lazy" decoding="async" /></figure>
+          <figure class="polaroid polaroid--4"><img src="https://images.unsplash.com/photo-1514565131-fce0801e5785?auto=format&fit=crop&w=480&q=80" alt="" width="200" height="240" loading="lazy" decoding="async" /></figure>
+          <figure class="polaroid polaroid--5"><img src="/images/wizard/trendy-cafe-filled.png" alt="" width="200" height="240" loading="lazy" decoding="async" /></figure>
+          <figure class="polaroid polaroid--6"><img src="https://images.unsplash.com/photo-1619872978981-e9885a014ba3?auto=format&fit=crop&w=480&q=80" alt="" width="180" height="220" loading="lazy" decoding="async" /></figure>
+        </div>
+      </div>
+    </div>
+
+    <div class="compare-col">
+      <h3>Mobile prototype (proposed)</h3>
+      <p class="hint">Full hero stack ending with Who's coming → collage below → features.</p>
+      <div class="phone">
+        <div class="phone-status">390 × 844 · iPhone 14</div>
+        <div class="phone-scroll">
+          <div class="hero">
+            <div class="eyebrow">
+              <div class="eyebrow-dot"></div>
+              <span>TravelBy<span class="brand-vibe">Vibe</span> · Find your vibe</span>
+            </div>
+            <h1>Where are you <em>headed?</em></h1>
+            <p class="hero-sub">Choose a city and find hotels that match your vibe.</p>
+
+            <div class="form">
+              <div class="city-box">
+                <span class="city-box-icon" aria-hidden="true">⌕</span>
+                <input type="text" value="Mexico City" readonly aria-label="City" />
+                <button type="button" class="city-go-btn">Go →</button>
+              </div>
+
+              <button type="button" class="city-date-trigger">
+                <span class="city-date-trigger-main">
+                  <span class="city-date-icon">◇</span>
+                  <span>
+                    <span class="city-date-kicker">Add dates (optional)</span>
+                    <span class="city-date-value">Check-in — Check-out</span>
+                  </span>
+                </span>
+                <span class="city-date-chevron">⌄</span>
+              </button>
+
+              <div class="city-group-row" aria-label="Who is traveling">
+                <div class="city-group-row-main">
+                  <span class="city-group-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                  </span>
+                  <span class="city-group-title">Who's coming?</span>
+                </div>
+                <div class="city-group-pills">
+                  <button type="button" class="city-group-pill">1 person</button>
+                  <button type="button" class="city-group-pill active">2 people</button>
+                  <button type="button" class="city-group-pill">3+ people</button>
+                </div>
+              </div>
+
+              <!-- NEW: mobile polaroid collage -->
+              <div class="polaroid-stage polaroid-stage--mobile" aria-hidden="true">
+                <figure class="polaroid polaroid--1"><img src="https://images.unsplash.com/photo-1522083165195-3424ed129620?auto=format&fit=crop&w=520&q=80" alt="Palacio de Bellas Artes" loading="lazy" decoding="async" /></figure>
+                <figure class="polaroid polaroid--2 polaroid--hero"><img src="https://images.unsplash.com/photo-1584669727833-88b47506defb?auto=format&fit=crop&w=600&q=80" alt="Mexico City skyline" loading="lazy" decoding="async" /></figure>
+                <figure class="polaroid polaroid--3"><img src="https://images.unsplash.com/photo-1521216774850-01bc1c5fe0da?auto=format&fit=crop&w=480&q=80" alt="Historic Mexico City" loading="lazy" decoding="async" /></figure>
+                <figure class="polaroid polaroid--4"><img src="https://images.unsplash.com/photo-1514565131-fce0801e5785?auto=format&fit=crop&w=480&q=80" alt="Aerial Mexico City" loading="lazy" decoding="async" /></figure>
+                <figure class="polaroid polaroid--5"><img src="/images/wizard/trendy-cafe-filled.png" alt="Neighborhood café" loading="lazy" decoding="async" /></figure>
+                <figure class="polaroid polaroid--6"><img src="https://images.unsplash.com/photo-1619872978981-e9885a014ba3?auto=format&fit=crop&w=480&q=80" alt="Mexico City streets" loading="lazy" decoding="async" /></figure>
+              </div>
+              <p class="collage-label">Real room &amp; street photos · Mexico City</p>
+            </div>
+          </div>
+
+          <div class="features-preview">
+            <h4>AI Visual Search</h4>
+            <p>Features section continues below…</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <p class="open-hint">
+    <strong>Preview locally:</strong> open
+    <code>client/prototype-mobile-polaroids.html</code>
+    in your browser (serve via Express or any static server so
+    <code>/images/wizard/trendy-cafe-filled.png</code> resolves).
+    No changes were made to <code>index.html</code>, <code>styles.css</code>, or <code>app.js</code>.
+  </p>
+</body>
+</html>

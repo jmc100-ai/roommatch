@@ -9890,14 +9890,6 @@
       font-size: clamp(36px, 3.8vw, 58px);
       margin-bottom: 10px;
     }
-    .home-v2-seo-sub {
-      margin: 0 0 12px;
-      font-size: 15px;
-      font-weight: 500;
-      letter-spacing: 0.04em;
-      color: rgba(201, 169, 110, 0.92);
-      text-align: left;
-    }
     .home-v2-sub {
       margin-left: 0;
       margin-right: 0;
@@ -10032,6 +10024,19 @@
       transform: rotate(-4deg);
       z-index: 1;
     }
+    .home-v2-polaroids-mobile-wrap {
+      display: none;
+    }
+    .home-v2-polaroids--mobile {
+      max-width: none;
+      aspect-ratio: 1 / 0.82;
+    }
+    .home-v2-polaroids--mobile .polaroid {
+      padding: 7px 7px 20px;
+    }
+    .home-v2-polaroids--mobile .polaroid--1 { top: 4%; }
+    .home-v2-polaroids--mobile .polaroid--3 { top: 10%; }
+    .home-v2-polaroids--mobile .polaroid--5 { bottom: 2%; }
     .home-v2-features {
       padding: 8px 0 0;
       margin: 0;
@@ -10124,7 +10129,7 @@
     body.has-results .home-v2,
     body.has-hotel-detail .home-v2 { display: none !important; }
 
-    /* Mobile / tablet: stack form; hide polaroid collage until mobile design ships */
+    /* Mobile / tablet: stack form; polaroids below Who's coming */
     @media (max-width: 900px) {
       .home-v2-hero {
         grid-template-columns: 1fr;
@@ -10132,6 +10137,14 @@
         padding: 16px 0 24px;
       }
       .home-v2-visual { display: none; }
+      .home-v2-polaroids-mobile-wrap {
+        display: block;
+        width: 90%;
+        max-width: 90%;
+        margin: 20px auto 0;
+        padding: 0;
+        flex-shrink: 0;
+      }
       .home-v2-copy-inner {
         max-width: none;
         text-align: center;

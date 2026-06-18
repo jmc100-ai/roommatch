@@ -13917,35 +13917,37 @@
   }
 
   function updateHomePolaroids(cityName) {
-    const root = document.getElementById('home-v2-polaroids');
-    if (!root) return;
+    const roots = document.querySelectorAll('#home-v2-polaroids, #home-v2-polaroids-mobile');
+    if (!roots.length) return;
     const set = HOME_POLAROID_SETS[homePolaroidSetKey(cityName)] || HOME_POLAROID_SETS._default;
-    root.querySelectorAll('.polaroid img').forEach((img, i) => {
-      const entry = set[i];
-      if (!entry) return;
-      const nextSrc = entry.src;
-      if (!nextSrc || img.dataset.polaroidSrc === nextSrc) {
-        if (nextSrc && img.style.opacity !== '1') img.style.opacity = '1';
-        return;
-      }
-      img.dataset.polaroidSrc = nextSrc;
-      img.dataset.polaroidFallback = '';
-      img.alt = entry.alt || '';
-      const fadeIn = () => {
-        img.style.opacity = '1';
-      };
-      img.onerror = () => {
-        if (img.dataset.polaroidFallback === '1') {
-          fadeIn();
+    roots.forEach((root) => {
+      root.querySelectorAll('.polaroid img').forEach((img, i) => {
+        const entry = set[i];
+        if (!entry) return;
+        const nextSrc = entry.src;
+        if (!nextSrc || img.dataset.polaroidSrc === nextSrc) {
+          if (nextSrc && img.style.opacity !== '1') img.style.opacity = '1';
           return;
         }
-        img.dataset.polaroidFallback = '1';
-        img.src = POLAROID_IMG_FALLBACK;
-      };
-      img.style.opacity = '0';
-      img.onload = fadeIn;
-      img.src = nextSrc;
-      if (img.complete && img.naturalWidth > 0) fadeIn();
+        img.dataset.polaroidSrc = nextSrc;
+        img.dataset.polaroidFallback = '';
+        img.alt = entry.alt || '';
+        const fadeIn = () => {
+          img.style.opacity = '1';
+        };
+        img.onerror = () => {
+          if (img.dataset.polaroidFallback === '1') {
+            fadeIn();
+            return;
+          }
+          img.dataset.polaroidFallback = '1';
+          img.src = POLAROID_IMG_FALLBACK;
+        };
+        img.style.opacity = '0';
+        img.onload = fadeIn;
+        img.src = nextSrc;
+        if (img.complete && img.naturalWidth > 0) fadeIn();
+      });
     });
   }
 
