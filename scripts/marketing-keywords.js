@@ -113,10 +113,10 @@ const SEO_META = {
     h2Hotels: "Best Mexico City hotels by neighborhood",
   },
   "mexico-city-hotels": {
-    title: "Travel Mexico City Hotels — Search by Real Room Photos",
-    h1: "Travel Mexico City hotels that match your vibe",
-    desc: "Planning travel to Mexico City? Browse 3,600+ CDMX hotels by neighborhood vibe and real room photos — rainfall shower, bright suite, design mood — free on TravelByVibe.",
-    h2Travel: "Travel Mexico City hotels by neighborhood",
+    title: "Best Hotels in Mexico City — Search by Real Room Photos",
+    h1: "Best Hotels in Mexico City",
+    desc: "Best hotels in Mexico City (CDMX): browse 3,600+ properties by neighborhood vibe and real room photos — rainfall shower, bright suite, design mood — free on TravelByVibe.",
+    h2Travel: "Best hotels in Mexico City by neighborhood",
   },
   "travel-mexico-city-hotels": {
     title: "Travel Mexico City Hotels — Plan Your Stay by Vibe",
@@ -239,6 +239,14 @@ const SEO_META = {
     desc: "Hotels near Chapultepec in Mexico City — Polanco, Juárez, and Condesa picks for museum mornings and park runs. Real room photos.",
     breadcrumbLabel: "Hotels near Chapultepec",
     h2Featured: "Best hotels near Chapultepec Park",
+  },
+  "best-area-to-stay-in-mexico-city-first-time": {
+    title: "Best Area to Stay in Mexico City for First-Time Visitors — Hotels",
+    h1: "Best Area to Stay in Mexico City for First-Time Visitors",
+    desc: "First trip to Mexico City? Compare Condesa, Roma Norte, and Polanco for walkable cafés, parks, and hotels — then see real room photos.",
+    breadcrumbLabel: "Best area for first-time visitors",
+    h2Featured: "Best Mexico City neighborhoods for first-time visitors",
+    h2Hotels: "Best Mexico City hotels for first-time visitors",
   },
 };
 

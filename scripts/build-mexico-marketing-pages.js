@@ -222,7 +222,7 @@ PAGES.push({
       <p class="msec-kicker">Match your style</p>
       <h2 class="msec-title">Which neighborhood fits your travel style?</h2>
       <div class="fgrid">
-        <div class="fcard"><h3>First visit + walkable days</h3><p><strong>Condesa</strong> or <strong>Roma Norte</strong> — tree-lined blocks, independent cafés, and galleries without a car. See <a href="__ORIGIN__/safe-neighborhoods-mexico-city">safe neighborhoods for tourists</a>.</p></div>
+        <div class="fcard"><h3>First visit + walkable days</h3><p><strong>Condesa</strong> or <strong>Roma Norte</strong> — tree-lined blocks, independent cafés, and galleries without a car. See our <a href="__ORIGIN__/best-area-to-stay-in-mexico-city-first-time">first-time Mexico City guide</a> or <a href="__ORIGIN__/safe-neighborhoods-mexico-city">safe neighborhoods for tourists</a>.</p></div>
         <div class="fcard"><h3>Luxury + fine dining</h3><p><strong>Polanco</strong> — parks, flagship restaurants, and design museums within a short radius. Browse <a href="__ORIGIN__/hotels-near-chapultepec">hotels near Chapultepec</a>.</p></div>
         <div class="fcard"><h3>Maximum sightseeing</h3><p><strong>Centro Histórico</strong> — Zócalo, Templo Mayor, and cantina culture outside your door.</p></div>
         <div class="fcard"><h3>Central + connected</h3><p><strong>Juárez</strong> — Reforma access, creative energy, and strong value between Roma and Polanco.</p></div>

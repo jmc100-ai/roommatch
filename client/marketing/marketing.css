@@ -575,6 +575,16 @@ li { margin-bottom: 0.35rem; }
   line-height: 1.6;
 }
 .mfoot a { color: rgba(232, 213, 176, 0.9); }
+.mfoot-destinations {
+  margin: 10px 0 0;
+  font-size: 13px;
+  color: rgba(244, 240, 232, 0.82);
+}
+.mfoot-dest-label {
+  font-weight: 600;
+  color: rgba(201, 169, 110, 0.95);
+  margin-right: 4px;
+}
 .mcheck {
   margin: 20px 0 0;
   padding: 0;

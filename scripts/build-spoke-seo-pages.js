@@ -401,4 +401,47 @@ function writePage(file, html) {
   );
 }
 
-console.log("Done — 5 spoke SEO pages.");
+// ── CDMX: first-time visitors ────────────────────────────────────────────────
+{
+  const canonical = "best-area-to-stay-in-mexico-city-first-time";
+  const h1 = seoField(canonical, "h1", "Best Area to Stay in Mexico City for First-Time Visitors");
+  const body =
+    hero({
+      kicker: "CDMX · First visit",
+      h1,
+      lead:
+        "First trip to Mexico City? <strong>Condesa</strong> and <strong>Roma Norte</strong> are the easiest bases — leafy, walkable, and full of cafés. <strong>Polanco</strong> suits museums and upscale dining. Compare areas, then match hotels by real room photos.",
+      image: NBHD_CONDESA,
+      ctaHref: cdmxUtm("cdmx-first-time-hero"),
+      ctaLabel: "Take the 30-second quiz →",
+    }) +
+    `<div class="wrap-wide">
+    <section class="msec" style="padding-top:36px;margin-top:0;border-top:none">
+      <p class="msec-kicker">Quick picks</p>
+      <h2 class="msec-title">${seoField(canonical, "h2Featured", "Best Mexico City neighborhoods for first-time visitors")}</h2>
+      <div class="fgrid">
+        <div class="fcard"><h3>Condesa</h3><p>Leafy parks, terrace cafés, and a compact visitor radius — the default first-timer pick.</p><p><a href="__ORIGIN__/hotels-in-condesa">Hotels in Condesa →</a></p></div>
+        <div class="fcard"><h3>Roma Norte</h3><p>Trendy food scene, design hotels, and galleries — livelier after dark than Condesa.</p><p><a href="__ORIGIN__/hotels-in-roma-norte">Hotels in Roma Norte →</a></p></div>
+        <div class="fcard"><h3>Polanco</h3><p>Museum mile, Chapultepec access, and polished dining when luxury is the priority.</p><p><a href="__ORIGIN__/hotels-in-polanco">Hotels in Polanco →</a></p></div>
+      </div>
+      <p class="msec-lead" style="margin-top:20px">Still deciding? Read <a href="__ORIGIN__/roma-norte-vs-condesa">Roma Norte vs Condesa</a> or the full <a href="__ORIGIN__/where-to-stay-in-mexico-city">where to stay in Mexico City</a> guide.</p>
+    </section>
+    <section class="msec">
+      <p class="msec-kicker">Hotel picks</p>
+      <h2 class="msec-title">${seoField(canonical, "h2Hotels", "Best Mexico City hotels for first-time visitors")}</h2>
+      ${hotelTiers("condesa", "Mexico City", "cdmx-first-time-condesa")}
+    </section>
+    ${embedCdmx("cdmx-first-time-search")}
+  </div>`;
+  writePage(
+    "best-area-to-stay-in-mexico-city-first-time.html",
+    seo.wrapPage(
+      body,
+      { canonical, city: "Mexico City", pageCategory: "guide", defaultOgImage: SKYLINE_OG, campaign: "cdmx_seo_2026" },
+      cdmxHeader("cdmx-first-time-nav"),
+      "Mexico City"
+    )
+  );
+}
+
+console.log("Done — 6 spoke SEO pages.");

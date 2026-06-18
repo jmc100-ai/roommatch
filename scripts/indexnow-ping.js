@@ -29,6 +29,7 @@ const HUB_PATHS = [
   "/paris-visual-search",
   "/where-to-stay-in-mexico-city",
   "/mexico-city-hotels",
+  "/best-area-to-stay-in-mexico-city-first-time",
   "/travel-mexico-city-hotels",
   "/mexico-city-hotel-finder",
   "/mexico-city-visual-search",

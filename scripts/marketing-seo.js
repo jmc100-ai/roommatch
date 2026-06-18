@@ -128,8 +128,8 @@ const HUB_FAQS = {
       a: "TravelByVibe indexes room photography across 3,600+ CDMX hotels. Search by vibe — bathroom features, natural light, design mood — before you commit on a booking site.",
     },
     {
-      q: "What are the best hotels for traveling to Mexico City?",
-      a: "Condesa and Roma Norte suit first-time visitors; Polanco for luxury and museums; Centro Histórico for maximum sightseeing. Compare neighborhoods on our travel guide, then match hotels by real room photos.",
+      q: "What are the best hotels in Mexico City?",
+      a: "Condesa and Roma Norte suit first-time visitors; Polanco for luxury and museums; Centro Histórico for maximum sightseeing. Compare neighborhoods on our where-to-stay guide, then match hotels by real room photos.",
     },
     {
       q: "Where should tourists stay when traveling to Mexico City?",
@@ -274,6 +274,28 @@ const HUB_FAQS = {
       a: "Polanco for museum mile and upscale dining; Condesa for park-adjacent mornings with a leafier, café-led rhythm.",
     },
   ],
+  "best-area-to-stay-in-mexico-city-first-time": [
+    {
+      q: "What is the best area to stay in Mexico City for the first time?",
+      a: "Condesa and Roma Norte lead for first-timers: leafy, walkable, and full of cafés without needing a car. Polanco suits museum and luxury trips; Centro Histórico puts the Zócalo on your doorstep.",
+    },
+    {
+      q: "Should first-time visitors stay in Centro Histórico?",
+      a: "Centro is unbeatable for sightseeing density but busier and louder. Many first-timers prefer Condesa or Roma Norte for evening calm, then metro or Uber to the historic core.",
+    },
+    {
+      q: "Condesa or Roma Norte for a first Mexico City trip?",
+      a: "Condesa is leafier and calmer after dark; Roma Norte skews trendier for food and nightlife. Our Roma Norte vs Condesa comparison breaks down the trade-offs.",
+    },
+    {
+      q: "Is Polanco good for first-time visitors?",
+      a: "Yes if museums and upscale dining are priorities — Chapultepec and Polanco's restaurant scene reward a polished base. Condesa or Roma are easier if you want café culture on foot.",
+    },
+    {
+      q: "Can I see hotel rooms before booking my first CDMX trip?",
+      a: "Yes — TravelByVibe ranks 3,600+ Mexico City hotels by real room and bathroom photos. Describe rainfall shower, bright suite, or design mood before you commit elsewhere.",
+    },
+  ],
 };
 
 const CITY_HUB = {
@@ -312,7 +334,8 @@ function hubLinks(city) {
     city === "Paris"
       ? `<a href="__ORIGIN__/best-area-to-stay-in-paris-first-time">Paris first-time guide</a>
       <a href="__ORIGIN__/paris-hotels-near-eiffel-tower">Hotels near Eiffel Tower</a>`
-      : `<a href="__ORIGIN__/travel-mexico-city-hotels">Travel Mexico City hotels</a>
+      : `<a href="__ORIGIN__/best-area-to-stay-in-mexico-city-first-time">Mexico City first-time guide</a>
+      <a href="__ORIGIN__/travel-mexico-city-hotels">Travel Mexico City hotels</a>
       <a href="__ORIGIN__/safe-neighborhoods-mexico-city">Safe neighborhoods CDMX</a>
       <a href="__ORIGIN__/hotels-near-chapultepec">Hotels near Chapultepec</a>`;
   return `
@@ -469,6 +492,10 @@ function headJsonLd(meta) {
   return jsonLdScripts(schemas);
 }
 
+function destinationsFooterRow() {
+  return `<p class="mfoot-destinations"><span class="mfoot-dest-label">Destinations:</span> <a href="__ORIGIN__/mexico-city-hotels">Mexico City hotels</a> · <a href="__ORIGIN__/paris-hotels">Paris hotels</a> · <a href="__ORIGIN__/destinations">All guides</a></p>`;
+}
+
 function footer(city, extraLinks) {
   const c = city ? CITY_HUB[city] : null;
   const cross = c
@@ -480,6 +507,7 @@ function footer(city, extraLinks) {
   const tag = c ? c.footerLine : "photo-first hotel discovery";
   return `<footer class="mfoot">
     <p>TravelByVibe — ${tag}. · TravelBoop, LLC</p>
+    ${destinationsFooterRow()}
     <p>${cityLinks} · <a href="__ORIGIN__/sitemap">Site map</a>${cross}${extraLinks || ""}</p>
     <div class="credits-block">
       City photos from <a href="https://commons.wikimedia.org/" rel="noopener">Wikimedia Commons</a>, <a href="https://unsplash.com" rel="noopener">Unsplash</a>, and partner catalogs where noted.
@@ -520,6 +548,7 @@ module.exports = {
   marketingHead,
   wrapPage,
   footer,
+  destinationsFooterRow,
   breadcrumbsFor,
   applySeoMeta,
 };

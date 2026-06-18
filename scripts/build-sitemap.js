@@ -122,7 +122,9 @@ ${linkList(g["Mexico City"])}
     <p style="margin-top:32px"><a href="__ORIGIN__/sitemap.xml">XML sitemap</a> for search engines</p>
   </main>
   <footer class="mfoot">
-    <p>TravelByVibe · <a href="__ORIGIN__/">travelbyvibe.com</a> · <a href="__ORIGIN__/destinations">Destinations</a></p>
+    <p>TravelByVibe · <a href="__ORIGIN__/">travelbyvibe.com</a></p>
+    <p class="mfoot-destinations"><span class="mfoot-dest-label">Destinations:</span> <a href="__ORIGIN__/mexico-city-hotels">Mexico City hotels</a> · <a href="__ORIGIN__/paris-hotels">Paris hotels</a> · <a href="__ORIGIN__/destinations">All guides</a></p>
+    <p><a href="__ORIGIN__/destinations">Destinations hub</a> · <a href="__ORIGIN__/sitemap.xml">XML sitemap</a></p>
   </footer>
 </body>
 </html>

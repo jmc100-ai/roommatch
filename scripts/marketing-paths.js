@@ -5,7 +5,8 @@
 const MARKETING_ROUTES = [
   { path: "/destinations", file: "destinations.html", title: "Paris & Mexico City Hotel Guides — Search by Room Photos", city: null, category: "hub" },
   { path: "/sitemap", file: "sitemap.html", title: "Site Map — All Destination Guides", city: null, category: "hub" },
-  { path: "/mexico-city-hotels", file: "mexico-city-hotels.html", title: "Travel Mexico City Hotels — Search by Real Room Photos", city: "Mexico City", category: "hub" },
+  { path: "/mexico-city-hotels", file: "mexico-city-hotels.html", title: "Best Hotels in Mexico City — Search by Real Room Photos", city: "Mexico City", category: "hub" },
+  { path: "/hotels-in-mexico-city", file: "mexico-city-hotels.html", title: "Best Hotels in Mexico City", city: "Mexico City", category: "hub", alias: true },
   { path: "/travel-mexico-city-hotels", file: "travel-mexico-city-hotels.html", title: "Travel Mexico City Hotels — Plan Your Stay by Vibe", city: "Mexico City", category: "guide" },
   { path: "/where-to-stay-in-mexico-city", file: "where-to-stay-in-mexico-city.html", title: "Where to Stay in Mexico City — Hotels by Neighborhood", city: "Mexico City", category: "hub" },
   { path: "/mexico-city-neighborhood-guide", file: "mexico-city-neighborhood-guide.html", title: "Mexico City Neighborhood Guide — Hotels & Where to Stay", city: "Mexico City", category: "hub" },
@@ -46,6 +47,7 @@ const MARKETING_ROUTES = [
   { path: "/paris-hotels-near-eiffel-tower", file: "paris-hotels-near-eiffel-tower.html", title: "Paris Hotels Near the Eiffel Tower", city: "Paris", category: "guide" },
   { path: "/safe-neighborhoods-mexico-city", file: "safe-neighborhoods-mexico-city.html", title: "Safe Neighborhoods in Mexico City for Tourists", city: "Mexico City", category: "guide" },
   { path: "/hotels-near-chapultepec", file: "hotels-near-chapultepec.html", title: "Best Hotels near Chapultepec Mexico City", city: "Mexico City", category: "guide" },
+  { path: "/best-area-to-stay-in-mexico-city-first-time", file: "best-area-to-stay-in-mexico-city-first-time.html", title: "Best Area to Stay in Mexico City for First-Time Visitors", city: "Mexico City", category: "guide" },
 ];
 
 /** Routes for XML sitemap (unique paths, no alias duplicates). */
