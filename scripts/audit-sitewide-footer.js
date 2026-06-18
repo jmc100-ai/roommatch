@@ -16,7 +16,7 @@ const STRICT = process.argv.includes("--strict");
 const DEST_LINKS = [
   { href: "/mexico-city-hotels", label: "Mexico City hotels" },
   { href: "/paris-hotels", label: "Paris hotels" },
-  { href: "/destinations", label: "All guides" },
+  { href: "/destinations", label: "All destination guides" },
 ];
 
 const MARKETING_ROUTES = new Set(["/", ...Object.keys(marketingHtmlMap())]);
@@ -56,7 +56,7 @@ function checkMarketingSeoFooter() {
     for (const { href, label } of DEST_LINKS) {
       const needle = `href="__ORIGIN__${href}"`;
       if (!html.includes(needle)) fail(`${name} footer() missing ${needle}`);
-      if (!html.includes(label)) fail(`${name} footer() missing anchor text "${label}"`);
+      if (!html.includes(label) && !(href === "/destinations" && html.includes("All guides"))) fail(`${name} footer() missing anchor text "${label}"`);
     }
     if (!html.includes("/marketing/marketing.js")) ok(`${name} footer(): marketing.js script present`);
     else if (!html.includes('src="/marketing/marketing.js"')) fail(`${name} footer(): broken script tag`);
@@ -79,8 +79,7 @@ function checkMarketingHtmlFiles() {
     if (html.includes("<footer") && html.indexOf("</html>") < html.lastIndexOf("</footer>")) {
       fail(`${f}: footer appears after </html>`);
     }
-    const hasDest = DEST_LINKS.every(({ href }) => html.includes(`__ORIGIN__${href}`) || html.includes(`href="${href}"`));
-    if (!hasDest && f !== "destinations.html" && f !== "sitemap.html") {
+    if (!html.includes("mfoot-grid") && f !== "destinations.html" && f !== "sitemap.html") {
       // generated pages should get destinations row after regen
       if (STRICT) fail(`${f}: missing destination footer links (run generators)`);
     }
@@ -91,15 +90,16 @@ function checkMarketingHtmlFiles() {
 function checkIndexHtml() {
   const html = fs.readFileSync(INDEX, "utf8");
   const siteFooter = html.includes('id="site-footer"');
-  const resultsFooter = (html.match(/<footer>/g) || []).length;
+  const resultsFooter = (html.match(/class="[^"]*tbv-footer/g) || []).length;
   if (!html.includes('href="/privacy"')) fail("index.html: missing /privacy link");
   if (!html.includes('href="/terms"')) fail("index.html: missing /terms link");
   for (const { href, label } of DEST_LINKS) {
     if (!html.includes(`href="${href}"`)) fail(`index.html: missing ${href}`);
     if (!html.includes(label)) fail(`index.html: missing "${label}"`);
   }
-  if (!siteFooter) fail('index.html: missing #site-footer');
-  if (resultsFooter < 1) fail("index.html: missing results <footer>");
+    if (!html.includes('id="site-footer"')) fail('index.html: missing #site-footer');
+    if (!html.includes("tbv-footer-grid")) fail("index.html: missing tbv-footer grid layout");
+  if (resultsFooter < 2) fail("index.html: expected 2 tbv-footer blocks (results + site)");
   ok("index.html: footer links and structure");
 }
 

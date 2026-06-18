@@ -494,26 +494,56 @@ function headJsonLd(meta) {
   return jsonLdScripts(schemas);
 }
 
-function destinationsFooterRow() {
-  return `<p class="mfoot-destinations"><span class="mfoot-dest-label">Destinations:</span> <a href="__ORIGIN__/mexico-city-hotels">Mexico City hotels</a> · <a href="__ORIGIN__/paris-hotels">Paris hotels</a> · <a href="__ORIGIN__/destinations">All guides</a></p>`;
+function footerExploreLinks(city) {
+  const c = city ? CITY_HUB[city] : null;
+  if (!c) {
+    return `<li><a href="__ORIGIN__/destinations">All destination guides</a></li>
+            <li><a href="__ORIGIN__/sitemap">Site map</a></li>`;
+  }
+  const cross = c.crossCity
+    ? `<li><a href="__ORIGIN__${c.crossCity.href}">${c.crossCity.label}</a></li>`
+    : "";
+  return `<li><a href="__ORIGIN__${c.hotels}">${c.hotelsLabel}</a></li>
+          <li><a href="__ORIGIN__${c.where}">${c.whereLabel}</a></li>
+          ${c.travelGuide ? `<li><a href="__ORIGIN__${c.travelGuide}">${c.travelGuideLabel}</a></li>` : ""}
+          <li><a href="__ORIGIN__${c.finder}">${c.finderLabel}</a></li>
+          <li><a href="__ORIGIN__${c.visual}">${c.visualLabel}</a></li>
+          ${cross}
+          <li><a href="__ORIGIN__/sitemap">Site map</a></li>`;
 }
 
 function footer(city, extraLinks) {
   const c = city ? CITY_HUB[city] : null;
-  const cross = c
-    ? ` · <a href="__ORIGIN__${c.crossCity.href}">${c.crossCity.label}</a>`
-    : "";
-  const cityLinks = c
-    ? `<a href="__ORIGIN__/">Home</a> · <a href="__ORIGIN__${c.hotels}">${c.hotelsLabel}</a>${c.travelGuide ? ` · <a href="__ORIGIN__${c.travelGuide}">${c.travelGuideLabel}</a>` : ""} · <a href="__ORIGIN__${c.where}">${c.whereLabel}</a> · <a href="__ORIGIN__${c.visual}">${c.visualLabel}</a>`
-    : `<a href="__ORIGIN__/">Home</a> · <a href="__ORIGIN__/destinations">Destinations</a>`;
   const tag = c ? c.footerLine : "photo-first hotel discovery";
+  const exploreHeading = c ? "Explore" : "Company";
   return `<footer class="mfoot">
-    <p>${COPYRIGHT_LINE}</p>
-    <p>TravelByVibe — ${tag}.</p>
-    ${destinationsFooterRow()}
-    <p>${cityLinks} · <a href="__ORIGIN__/sitemap">Site map</a>${cross}${extraLinks || ""}</p>
-    <div class="credits-block">
-      City photos from <a href="https://commons.wikimedia.org/" rel="noopener">Wikimedia Commons</a>, <a href="https://unsplash.com" rel="noopener">Unsplash</a>, and partner catalogs where noted.
+    <div class="mfoot-inner">
+      <div class="mfoot-grid">
+        <div class="mfoot-col mfoot-brand">
+          <p class="mfoot-logo">TravelByVibe</p>
+          <p class="mfoot-tagline">${tag}.</p>
+        </div>
+        <div class="mfoot-col">
+          <p class="mfoot-heading">Destinations</p>
+          <ul class="mfoot-links">
+            <li><a href="__ORIGIN__/mexico-city-hotels">Mexico City hotels</a></li>
+            <li><a href="__ORIGIN__/paris-hotels">Paris hotels</a></li>
+            <li><a href="__ORIGIN__/destinations">All destination guides</a></li>
+          </ul>
+        </div>
+        <div class="mfoot-col">
+          <p class="mfoot-heading">${exploreHeading}</p>
+          <ul class="mfoot-links">
+            ${footerExploreLinks(city)}
+            <li><a href="__ORIGIN__/privacy">Privacy</a></li>
+            <li><a href="__ORIGIN__/terms">Terms</a></li>
+          </ul>
+        </div>
+      </div>
+      <div class="mfoot-bottom">
+        <p>${COPYRIGHT_LINE}</p>
+        <p class="mfoot-credits">City photos from <a href="https://commons.wikimedia.org/" rel="noopener">Wikimedia Commons</a>, <a href="https://unsplash.com" rel="noopener">Unsplash</a>, and partner catalogs where noted.${extraLinks || ""}</p>
+      </div>
     </div>
   </footer>
   <script src="/marketing/marketing.js" defer></script>
@@ -551,7 +581,7 @@ module.exports = {
   marketingHead,
   wrapPage,
   footer,
-  destinationsFooterRow,
+  footerExploreLinks,
   COPYRIGHT_LINE,
   breadcrumbsFor,
   applySeoMeta,
