@@ -389,7 +389,7 @@ h1 {
   color: var(--muted);
   line-height: 1.5;
 }
-/* neighbourhood tiles */
+/* neighborhood tiles */
 .nbhd-grid {
   display: grid;
   gap: 14px;

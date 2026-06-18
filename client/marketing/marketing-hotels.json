@@ -6,7 +6,7 @@
     ],
     "boutique": [
       { "id": "lp65582fc6", "fallbackName": "Hyatt Regency Mexico City Insurgentes", "tag": "Walkable Condesa base" },
-      { "id": "lp3721c", "fallbackName": "Boutique stay in Condesa", "tag": "Leafy neighbourhood" }
+      { "id": "lp3721c", "fallbackName": "Boutique stay in Condesa", "tag": "Leafy neighborhood" }
     ],
     "value": [
       { "id": "lp656c98ec", "fallbackName": "Condesa area hotel", "tag": "Café culture nearby" },

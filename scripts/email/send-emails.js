@@ -173,7 +173,7 @@ ${BETA_CALENDAR ? `\nWant to chat live? ${BETA_CALENDAR}\n` : ""}
         <ol>
           <li><strong>Say it like you mean it.</strong> “Rain shower, double vanity, lots of light” beats “nice bathroom”.</li>
           <li><strong>Run the five-tap wizard once.</strong> It captures how you travel so rankings feel personal.</li>
-          <li><strong>Open the neighbourhood map on desktop.</strong> Tap a pin to focus the hotel list on that area.</li>
+          <li><strong>Open the neighborhood map on desktop.</strong> Tap a pin to focus the hotel list on that area.</li>
           <li><strong>Send a one-line note.</strong> Purple Feedback bubble — even “this felt weird” moves the roadmap.</li>
         </ol>
         <p style="margin:24px 0;">
@@ -189,7 +189,7 @@ Glad you are here. Four tiny habits that make the beta feel great:
 
 1. Say it like you mean it — specific beats vague.
 2. Run the five-tap wizard once so rankings feel personal.
-3. On desktop, try the neighbourhood map and tap a pin to focus the list.
+3. On desktop, try the neighborhood map and tap a pin to focus the list.
 4. Hit Feedback with even one sentence — it all helps.
 
 Jump back in: ${BETA_BASE_URL}/

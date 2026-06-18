@@ -549,7 +549,7 @@
       hpageVibeBarRow('Room vibe', mb.room_pct),
       mb.hotel_pct != null ? hpageVibeBarRow(hotelBarLabel, mb.hotel_pct) : '',
       mb.nbhd_pct != null
-        ? hpageVibeBarRow('Neighbourhood', mb.nbhd_pct, { sub: nbhdSub })
+        ? hpageVibeBarRow('Neighborhood', mb.nbhd_pct, { sub: nbhdSub })
         : '',
     ];
     if (mb.must_haves_summary?.total > 0) {
@@ -569,7 +569,7 @@
     const ns = mb.nbhd_signals;
     const nbhdSignalsHTML = ns
       ? `<div class="hpage-vibe-nbhd-signals">
-          <div class="hpage-vibe-subtitle">Neighbourhood signals${nbhdSub ? ` · ${escHtml(nbhdSub)}` : ''}</div>
+          <div class="hpage-vibe-subtitle">Neighborhood signals${nbhdSub ? ` · ${escHtml(nbhdSub)}` : ''}</div>
           ${hpageVibeBarRow('Walkability', ns.walkability, { dim: true })}
           ${hpageVibeBarRow('Trendy & cafés', ns.trendy_cafes, { dim: true })}
           ${hpageVibeBarRow('Culture & landmarks', ns.culture_landmarks, { dim: true })}
@@ -595,7 +595,7 @@
       : '';
 
     const fallbackNote = mb._client_fallback
-      ? '<p class="hpage-vibe-note">Run a vibe search to see full must-have and neighbourhood signal detail.</p>'
+      ? '<p class="hpage-vibe-note">Run a vibe search to see full must-have and neighborhood signal detail.</p>'
       : '';
 
     const moreParts = [
@@ -810,7 +810,7 @@
   window._tbFireFindBookClick = fireFindBookClick;
   let selectedNeighborhood = null; // { name, bbox?, polygon? } — polygon is geo JSON for /api/vsearch
   let NEIGHBORHOOD_FLOW_ROWS = []; // indexed rows for fetchAndShowNeighborhoods → selectNeighborhoodFlow
-  /** True when neighbourhood grid was opened from hotel results (change area) — different chrome + Choose returns to results. */
+  /** True when neighborhood grid was opened from hotel results (change area) — different chrome + Choose returns to results. */
   let _nbhdBrowseFromResults = false;
   /** Mobile edit-trip sheet: subflows (city/nbhd/dates) update state then return to sheet — search waits for Update results. */
   let _returnToCmdTripSheet = false;
@@ -884,7 +884,7 @@
   }
 
   /**
-   * Maps primary_nbhd → neighbourhood vibe % using the SAME pipeline as the nbhd picker
+   * Maps primary_nbhd → neighborhood vibe % using the SAME pipeline as the nbhd picker
    * (deriveNbhdSignals from vibe_elements + computeBoopMatch + 45–95 city spread).
    * Hotel cards used to use prefs × categorical attributes only — different numbers.
    */
@@ -1053,12 +1053,12 @@
   //  DISCOVERY FLOW — 4-step state machine
   // ════════════════════════════════════════════════════════
 
-  // Hardcoded neighbourhood fallback for non-indexed cities
-  // Cities that are indexed in our DB (real neighbourhood data available)
+  // Hardcoded neighborhood fallback for non-indexed cities
+  // Cities that are indexed in our DB (real neighborhood data available)
   const DB_INDEXED_CITIES = ['Mexico City', 'Paris', 'Kuala Lumpur'];
 
-  // Returns true if a city has neighbourhood data (DB or fallback hardcoded)
-  function cityHasNeighbourhoods(name) {
+  // Returns true if a city has neighborhood data (DB or fallback hardcoded)
+  function cityHasNeighborhoods(name) {
     const n = name.trim().toLowerCase();
     if (DB_INDEXED_CITIES.some(c => c.toLowerCase() === n)) return true;
     return Object.keys(NBHDS_FALLBACK).some(c => c.toLowerCase() === n);
@@ -1075,13 +1075,13 @@
       {name:'Shinjuku',  vibe_short:'Neon, electric, never sleeps',  vibe_long:'The city within the city — Shinjuku packs more density into a square kilometre than anywhere on earth. Kabukicho neon, quiet izakayas down hidden alleys.',    tags:['nightlife','first-timers','intense'], hotel_count:80, bg:'linear-gradient(160deg,#0e0818 0%,#080610 100%)'},
       {name:'Shibuya',   vibe_short:'Youth culture, fashion, chaos',  vibe_long:'The crossroads that launched a thousand photos. Shibuya is Tokyo\'s youth and fashion epicentre — equal parts overwhelming and exhilarating.',                 tags:['shopping','nightlife','trendy'],     hotel_count:65, bg:'linear-gradient(160deg,#180808 0%,#100606 100%)'},
       {name:'Ginza',     vibe_short:'Upscale, polished, serene',      vibe_long:'Tokyo\'s answer to the Champs-Élysées, but quieter and more considered. Flagship boutiques, department store basement food halls.',                              tags:['luxury','shopping','calm'],         hotel_count:40, bg:'linear-gradient(160deg,#12100a 0%,#0c0c08 100%)'},
-      {name:'Asakusa',   vibe_short:'Old Tokyo, temples, calm',       vibe_long:'Senso-ji Temple, rickshaw rides, and the city that existed before the neon arrived. Tokyo\'s most atmospheric traditional neighbourhood.',                       tags:['culture','returning','historic'],   hotel_count:35, bg:'linear-gradient(160deg,#0c1008 0%,#080c06 100%)'},
+      {name:'Asakusa',   vibe_short:'Old Tokyo, temples, calm',       vibe_long:'Senso-ji Temple, rickshaw rides, and the city that existed before the neon arrived. Tokyo\'s most atmospheric traditional neighborhood.',                       tags:['culture','returning','historic'],   hotel_count:35, bg:'linear-gradient(160deg,#0c1008 0%,#080c06 100%)'},
     ],
     'New York': [
       {name:'Midtown Manhattan', vibe_short:'Central, iconic, always on',  vibe_long:'The New York of the movies — Times Square, Grand Central, the Empire State Building. Everything is within 20 minutes.',                             tags:['first-timers','business','central'], hotel_count:120, bg:'linear-gradient(160deg,#0e0e18 0%,#080810 100%)'},
       {name:'SoHo',              vibe_short:'Fashion, loft living, art',   vibe_long:'Cast-iron facades, designer boutiques, and the kind of loft aesthetic that inspired a thousand hotel Instagram accounts.',                           tags:['artsy','shopping','style'],         hotel_count:45,  bg:'linear-gradient(160deg,#181008 0%,#100c06 100%)'},
       {name:'Brooklyn',          vibe_short:'Local, diverse, emerging',    vibe_long:'The borough that outgrew its underdog status — Williamsburg\'s rooftops, DUMBO\'s bridges, and Park Slope\'s brownstones.',                         tags:['local-feel','foodie','returning'],   hotel_count:38,  bg:'linear-gradient(160deg,#0c1008 0%,#080c06 100%)'},
-      {name:'Lower East Side',   vibe_short:'Gritty cool, nightlife dense', vibe_long:'The best bar density in Manhattan, a legendary music scene, and prices that still make sense. Legendary immigrant neighbourhood turned nightlife hub.', tags:['nightlife','artsy','local-feel'],   hotel_count:28,  bg:'linear-gradient(160deg,#140a0e 0%,#0c0808 100%)'},
+      {name:'Lower East Side',   vibe_short:'Gritty cool, nightlife dense', vibe_long:'The best bar density in Manhattan, a legendary music scene, and prices that still make sense. Legendary immigrant neighborhood turned nightlife hub.', tags:['nightlife','artsy','local-feel'],   hotel_count:28,  bg:'linear-gradient(160deg,#140a0e 0%,#0c0808 100%)'},
     ],
   };
 
@@ -1213,7 +1213,7 @@
   // BOOP v5 wizard — 4 screens:
   //   1. Trip context       (3 cards)
   //   2. Stay vibe          (4 cards; maps to roomStyle + hotelPersonality internally)
-  //   3. Neighbourhood scene (5 cards — pace + location combined; see NBHD_SCENE_SEEDS)
+  //   3. Neighborhood scene (5 cards — pace + location combined; see NBHD_SCENE_SEEDS)
   //   4. Must-haves + free-text  (multi-select chips + "your words" inline input)
   //
   // Weights accumulate into BOOP.prefs; trip / nbhdScene / stayVibe-derived
@@ -1230,12 +1230,12 @@
       id:'trip',
       label:'Your trip',
       title:'Have you been to this city before?',
-      sub:'We use this to suggest neighbourhoods and hotels that fit a first visit, a return trip, or deep local knowledge.',
+      sub:'We use this to suggest neighborhoods and hotels that fit a first visit, a return trip, or deep local knowledge.',
       type:'cards',
       options:[
         { id:'first',  emoji:'🗺️', title:'First time',        note:'Central, iconic, easy to navigate.', image:'https://images.unsplash.com/photo-1521216774850-01bc1c5fe0da?auto=format&fit=crop&w=1200&q=80', weights:{ central:20, iconic:18, calm:8, local:-6 } },
         { id:'repeat', emoji:'🔍', title:'Been before',       note:'Something new each visit.',         image:'images/wizard/trip-been-before.png', weights:{ local:18, culture:8, central:-3 } },
-        { id:'expert', emoji:'🧭', title:'I know it well',    note:'Neighbourhood streets, cafés, trees.', image:'images/wizard/trip-know-well.png', weights:{ local:20, calm:6, central:-8, iconic:-5 } },
+        { id:'expert', emoji:'🧭', title:'I know it well',    note:'Neighborhood streets, cafés, trees.', image:'images/wizard/trip-know-well.png', weights:{ local:20, calm:6, central:-8, iconic:-5 } },
       ]
     },
     // Screen 2 — stay vibe. One UX choice writes both roomStyle + hotelPersonality
@@ -1243,7 +1243,7 @@
     //
     // NO `weights` on these options (intentional, May 2026): stayVibe describes
     // ROOM and HOTEL vibe, not NEIGHBOURHOOD vibe. The user's explicit
-    // neighbourhood preference comes from Q3 (nbhdScene). When stayVibe
+    // neighborhood preference comes from Q3 (nbhdScene). When stayVibe
     // weights bled into BOOP.prefs (the nbhd-only signal), they routinely
     // overrode the user's explicit nbhdScene answer — e.g. picking
     // "Sleek & polished" injected luxury:+14, calm:+8, central:+4 which
@@ -1268,7 +1268,7 @@
         { id:'simple_value', emoji:'💡', title:'Simple & good value', note:'Clean, functional, practical, and well-priced.', image:'https://images.pexels.com/photos/18201945/pexels-photo-18201945.jpeg?auto=compress&cs=tinysrgb&w=1200' },
       ]
     },
-    // Screen 3 — neighbourhood pace + location in one pick (maps to legacy pace + location for seeds).
+    // Screen 3 — neighborhood pace + location in one pick (maps to legacy pace + location for seeds).
     {
       id:'nbhdScene',
       label:'Area',
@@ -1362,7 +1362,7 @@
   };
   const NBHD_LOCATION_HOTEL_SNIPPETS = {
     central: 'popular central area, close to iconic sights, easy sightseeing access',
-    trendy:  'trendy local pocket, authentic neighbourhood feel away from tourist crowds',
+    trendy:  'trendy local pocket, authentic neighborhood feel away from tourist crowds',
     scenic:  'scenic open area, skyline and water views, breathing room, resort or waterfront destination feel',
   };
 
@@ -1403,7 +1403,7 @@
     }
     if (id === 'boop'  && !S.city)  return;
     if (id === 'nbhd'  && !S.city)  return;
-    if (id === 'style' && !S.nbhd)  { flashMsg('Choose a neighbourhood first'); return; }
+    if (id === 'style' && !S.nbhd)  { flashMsg('Choose a neighborhood first'); return; }
     if (id === 'dates' && !S.style) { flashMsg('Choose a room vibe first'); return; }
     if (id === 'boop') {
       void (async () => {
@@ -1512,7 +1512,7 @@
     return dt.toLocaleDateString('en-US', { month:'short', day:'numeric' });
   }
 
-  // ── BOOP INTRO (after city, before neighbourhood) ───
+  // ── BOOP INTRO (after city, before neighborhood) ───
   function cityKey(name) {
     return (name || '').trim().toLowerCase();
   }
@@ -1700,7 +1700,7 @@
     };
   }
 
-  /** Profile for nbhd %, refine strip, and neighbourhood ranking — never null when city is set. */
+  /** Profile for nbhd %, refine strip, and neighborhood ranking — never null when city is set. */
   function getEffectiveBoopProfileForScoring() {
     const activeStep = document.getElementById('discovery-flow')?.getAttribute('data-active-step');
     if (activeStep === 'boop') {
@@ -2064,7 +2064,7 @@
     BOOP_WIZARD_IMAGES[cityK] = result;
   }
 
-  // True when neighbourhood prefetch produced URLs keyed to *current* BOOP_QUESTIONS ids/options.
+  // True when neighborhood prefetch produced URLs keyed to *current* BOOP_QUESTIONS ids/options.
   // Used to avoid re-rendering the whole wizard after prefetch: that reloads every <img> and causes
   // a visible flash even when src is unchanged (legacy morning/night maps do not apply to v4 cards).
   function boopWizardCityMapTouchesActiveQuestions(cityK) {
@@ -2080,7 +2080,7 @@
     });
   }
 
-  /** Proxy external wizard photos (Unsplash / Google) like neighbourhood heroes. */
+  /** Proxy external wizard photos (Unsplash / Google) like neighborhood heroes. */
   function boopWizardImageUrl(url) {
     if (!url) return '';
     if (!/^https?:/i.test(url)) return url;
@@ -2590,7 +2590,7 @@
     renderBoopQuestion();
   }
 
-  // ── BOOP v4 — Trip ↔ neighbourhood scene weight reconciliation ───────────
+  // ── BOOP v4 — Trip ↔ neighborhood scene weight reconciliation ───────────
   // Trip (first/repeat/expert) and nbhdScene (central / trendy / scenic) both
   // touch central/local/nightlife/calm. Same dampen/amplify rules as before.
   const BOOP_RECONCILE_KEYS = ['central','local','nightlife','calm'];
@@ -2722,8 +2722,8 @@
     // Hotel seed: trip + hotelPersonality + nbhdScene (pace + location snippets).
     const tripLabel = {
       first:  'first-time visitor, iconic central location',
-      repeat: 'returning visitor, local neighbourhood feel',
-      expert: 'local expert, hidden-gem neighbourhood, non-touristy',
+      repeat: 'returning visitor, local neighborhood feel',
+      expert: 'local expert, hidden-gem neighborhood, non-touristy',
     }[ans.trip] || '';
     const personalityLabel = {
       polished: 'polished refined hotel, calm luxury, attentive service, elegant lobby, marble, soft lighting',
@@ -2751,7 +2751,7 @@
     return { roomSeed, hotelSeed, mustHaves, mustHaveSpec };
   }
 
-  // Light keyword nudges so optional free-text influences neighbourhood vibe %
+  // Light keyword nudges so optional free-text influences neighborhood vibe %
   // (merged into prefs for picker ranking + hotel nbhd % when using the picker cache).
   function mergeBoopFreetextIntoPrefs(prefs, freetext) {
     const t = (freetext || '').toLowerCase();
@@ -2766,7 +2766,7 @@
     if (/\b(lively|nightlife|bars|clubs|party|late[-\s]?night|buzzing)\b/.test(t)) add({ nightlife: 6, calm: -3 });
     if (/\b(walkable|walkability|walking distance|stroll|pedestrian)\b/.test(t)) add({ walkability: 5 });
     if (/\b(central|downtown|city centre|city center|heart of)\b/.test(t)) add({ central: 5, iconic: 3 });
-    if (/\b(local|authentic|neighbourhood|neighborhood|off the beaten)\b/.test(t)) add({ local: 6, central: -2 });
+    if (/\b(local|authentic|neighborhood|neighborhood|off the beaten)\b/.test(t)) add({ local: 6, central: -2 });
     if (/\b(luxury|luxurious|upscale|five[-\s]?star|5[-\s]?star|boutique)\b/.test(t)) add({ luxury: 5 });
     if (/\b(budget|affordable|cheap|value|economical)\b/.test(t)) add({ luxury: -5 });
     if (/\b(museum|museums|culture|cultural|art gallery|theatre|theater|historic)\b/.test(t)) add({ culture: 5, iconic: 2 });
@@ -2830,7 +2830,7 @@
     } catch (_) {}
 
     // BOOP v4 — skip nbhd + style selection; go straight to results.
-    // User can still refine neighbourhood via the results-page refine strip.
+    // User can still refine neighborhood via the results-page refine strip.
     runBoopSearch(profile);
   }
 
@@ -4130,7 +4130,7 @@
   function _emptyChipLabelFor(stepKey) {
     if (stepKey === 'trip') return '+ Trip';
     if (stepKey === 'stayVibe') return '+ Stay vibe';
-    if (stepKey === 'nbhdScene') return '+ Neighbourhood';
+    if (stepKey === 'nbhdScene') return '+ Neighborhood';
     if (stepKey === 'musthaves') return '+ Must-haves';
     return '+ Add';
   }
@@ -4275,7 +4275,7 @@
     _vibeTourVisible = false;
     _vibeTourScene = 0;
     const fakeBtn = { disabled:false, textContent:'' };
-    // Use any previously selected neighbourhood bbox (if user jumped to nbhd then back)
+    // Use any previously selected neighborhood bbox (if user jumped to nbhd then back)
     selectedNeighborhood = null; // reset to city-wide by default
     startVectorSearch(roomSeed, S.city, fakeBtn, null);
   }
@@ -5110,7 +5110,7 @@
   }
 
   /**
-   * openNbhdHeroLightbox — open the shared lightbox for the neighbourhood hero
+   * openNbhdHeroLightbox — open the shared lightbox for the neighborhood hero
    * photo(s).  Clicking the hero area (but not arrows/dots which stopPropagation)
    * opens the full-screen view starting at the currently visible photo.
    */
@@ -5176,7 +5176,7 @@
     if (!isRetry) {
       grid.innerHTML = Array.from({length:6}, () =>
         `<div class="nbhd-skel-new"></div>`).join('') +
-        `<div class="nbhd-gen-hint">✦ Mapping neighbourhood vibes…</div>`;
+        `<div class="nbhd-gen-hint">✦ Mapping neighborhood vibes…</div>`;
     }
 
     // Fetch from API (works for any city — Gemini generates on first call)
@@ -5189,7 +5189,7 @@
           if (pollCount >= NBHD_GENERATE_MAX_POLLS) {
             const allCity = 'All of ' + city;
             grid.innerHTML = `<div class="nbhd-gen-hint" style="color:var(--muted);max-width:42ch">
-              Neighbourhood data is taking longer than expected. You can search the whole city instead.
+              Neighborhood data is taking longer than expected. You can search the whole city instead.
             </div>
             <button type="button" class="boop-summary-edit" style="margin-top:12px" onclick='pickNbhd(${JSON.stringify(allCity)}, null)'>Search all of ${escHtml(city)} →</button>`;
             _nbhdPendingScrollName = null;
@@ -5197,7 +5197,7 @@
           }
           grid.innerHTML = Array.from({length:6}, () =>
             `<div class="nbhd-skel-new"></div>`).join('') +
-            `<div class="nbhd-gen-hint">✦ Finding your ${escHtml(city)} neighbourhood vibes with AI… (${pollCount + 1}/${NBHD_GENERATE_MAX_POLLS})</div>`;
+            `<div class="nbhd-gen-hint">✦ Finding your ${escHtml(city)} neighborhood vibes with AI… (${pollCount + 1}/${NBHD_GENERATE_MAX_POLLS})</div>`;
           setTimeout(() => fetchAndShowNeighborhoodsNew(city, true, pollCount + 1), 3000);
           return;
         }
@@ -5233,7 +5233,7 @@
       scheduleNbhdMapRender(city, fallbackEntries);
       _flushNbhdPendingScroll();
     } else {
-      // No neighbourhood data at all — skip step gracefully
+      // No neighborhood data at all — skip step gracefully
       _nbhdPendingScrollName = null;
       pickNbhd('All of ' + city, null);
     }
@@ -5318,7 +5318,7 @@
   }
   window.openNeighborhoodExplorerFromDetail = openNeighborhoodExplorerFromDetail;
 
-  /** Link a neighbourhood name on hotel detail → nbhd explorer (scrolls to that card). */
+  /** Link a neighborhood name on hotel detail → nbhd explorer (scrolls to that card). */
   function hotelDetailNbhdNameLinkHTML(nbhdName, className) {
     const name = String(nbhdName || '').trim();
     if (!name) return '';
@@ -5410,9 +5410,9 @@
     pickNbhd(h.name, bbox, h.polygon || null);
   }
 
-  // ── Neighbourhood map module (MapLibre GL + Maptiler tiles) ────────────────
+  // ── Neighborhood map module (MapLibre GL + Maptiler tiles) ────────────────
   // Lazy-loaded on first render. Renders polygons (when available) + circular
-  // vibe-% markers for each neighbourhood. Click a marker → scroll to the
+  // vibe-% markers for each neighborhood. Click a marker → scroll to the
   // matching card in the grid below + flash highlight. Hover (desktop) →
   // bidirectional highlight between marker and card.
   const NBHD_MAP_LIB_URL = 'https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js';
@@ -5615,7 +5615,7 @@
     _annotateCardsForMap(entries);
     _bindNbhdCardHoverListeners();
 
-    // Filter to neighbourhoods that have at least a bbox.
+    // Filter to neighborhoods that have at least a bbox.
     const plottable = entries.filter(({ h }) => _bboxCentroid(h.bbox));
     if (plottable.length === 0) {
       _setNbhdMapStatus('No map data for this city yet', true);
@@ -5650,9 +5650,9 @@
     const bounds = new maplibregl.LngLatBounds([minLng, minLat], [maxLng, maxLat]);
     _nbhdMapBounds = bounds;
 
-    // Pick the top-match neighbourhood (highest BOOP vibe %) and use ITS bbox
+    // Pick the top-match neighborhood (highest BOOP vibe %) and use ITS bbox
     // as the initial camera target. Falls back to the full city bounds when
-    // no neighbourhood has a meaningful score (e.g. profile not yet loaded).
+    // no neighborhood has a meaningful score (e.g. profile not yet loaded).
     let topEntry = null;
     let topPct   = -1;
     for (const entry of plottable) {
@@ -5695,7 +5695,7 @@
         style: initialStyle,
         bounds: initialBounds,
         // Padding leaves room for the marker label below each centroid and the
-        // badge above it. maxZoom 14 is a good "neighbourhood + a couple of
+        // badge above it. maxZoom 14 is a good "neighborhood + a couple of
         // surrounding blocks" zoom level — tight enough to feel focused on the
         // top match but loose enough to show context. The "Show all" button
         // re-fits to the full city bounds (`_nbhdMapBounds`).
@@ -5742,7 +5742,7 @@
       // And once more after a short delay in case the parent flow was still
       // animating in (e.g. step transition).
       setTimeout(() => { try { map.resize(); } catch (_) {} }, 250);
-      // Polygon overlay layer (one source with all neighbourhood features).
+      // Polygon overlay layer (one source with all neighborhood features).
       const features = [];
       for (const { cardId, h } of plottable) {
         const ring = h.polygon && Array.isArray(h.polygon.ring) ? h.polygon.ring : null;
@@ -5787,7 +5787,7 @@
         map.on('mouseleave', 'nbhd-poly-fill', () => map.getCanvas().style.cursor = '');
       }
 
-      // Custom HTML markers (one per neighbourhood).
+      // Custom HTML markers (one per neighborhood).
       _nbhdMapMarkers = [];
       for (const { cardId, h } of plottable) {
         const c = _bboxCentroid(h.bbox);
@@ -5836,7 +5836,7 @@
   }
   // expose for inline onclick on the Reset button
   window.resetNbhdMap = resetNbhdMap;
-  // ── End neighbourhood map module ───────────────────────────────────────────
+  // ── End neighborhood map module ───────────────────────────────────────────
 
   function pickNbhd(name, bbox, polygon) {
     S.nbhd    = name;
@@ -6881,7 +6881,7 @@
   // The long search-text input was replaced by the vibe-chip row + the wizard's
   // Q5 "Search keywords (advanced)" textarea (May 2026). The Search button
   // here is now a refresh affordance — it re-runs the existing query for the
-  // current city / neighbourhood / dates state.
+  // current city / neighborhood / dates state.
   function cmdSearch() {
     if (!S.q) {
       // No query yet — funnel back into the wizard via Advanced search so the
@@ -7088,7 +7088,7 @@
         title: `About ${BRAND_PLAIN}`,
         html: `
           <p><strong>${BRAND_HTML}</strong> is a visual hotel search built for travellers who care how a stay <em>feels</em>, not just the star rating on a listing.</p>
-          <p>Most sites show one hero image and a wall of text. We rank stays using real room photos and neighbourhood context so you can picture the bathroom, the light, and the street energy before you commit.</p>
+          <p>Most sites show one hero image and a wall of text. We rank stays using real room photos and neighborhood context so you can picture the bathroom, the light, and the street energy before you commit.</p>
           <p>Tell us your vibe in plain language — sleek and polished, leafy and quiet, must-have rain shower — and we surface hotels and areas that line up. Hotel photos and live rates come from <strong>Nuitée (LiteAPI)</strong>, our booking partner — when you add dates, you can compare and book in one flow.</p>
           <p>We are ${BRAND_HTML} in name; ${COMPANY_LEGAL} is the company behind the product.</p>
           <h2>Currently in beta</h2>
@@ -7109,10 +7109,10 @@
           <h2>Partners &amp; data sources</h2>
           <ul>
             <li><strong>Nuitée Travel Limited (LiteAPI)</strong> — hotel names, photos, rates, availability, descriptions, amenities, and guest reviews; booking checkout.</li>
-            <li><strong>Google (Gemini)</strong> — neighbourhood descriptions, photo analysis, and search matching.</li>
+            <li><strong>Google (Gemini)</strong> — neighborhood descriptions, photo analysis, and search matching.</li>
             <li><strong>Geoapify</strong> — city search and geocoding.</li>
-            <li><strong>MapTiler &amp; OpenStreetMap</strong> — neighbourhood maps.</li>
-            <li><strong>Unsplash &amp; Google Maps</strong> — neighbourhood card photos (credited on each card).</li>
+            <li><strong>MapTiler &amp; OpenStreetMap</strong> — neighborhood maps.</li>
+            <li><strong>Unsplash &amp; Google Maps</strong> — neighborhood card photos (credited on each card).</li>
           </ul>
           <h2>Who helps us run the site</h2>
           <p>We also use trusted vendors for hosting, email, anonymous usage analytics, and error reporting — each has its own privacy policy.</p>
@@ -7125,7 +7125,7 @@
         html: `
           <p>By using ${BRAND_PLAIN} during beta you agree to these terms. If you do not agree, please stop using the site. The full text lives at <a href="/terms" target="_blank" rel="noopener">/terms</a>.</p>
           <h2>Discovery tool, not professional advice</h2>
-          <p>${BRAND_PLAIN} helps you explore hotels and neighbourhoods. We are not your travel agent, lawyer, or accountant. Match scores and area descriptions are for inspiration and can be incomplete or wrong.</p>
+          <p>${BRAND_PLAIN} helps you explore hotels and neighborhoods. We are not your travel agent, lawyer, or accountant. Match scores and area descriptions are for inspiration and can be incomplete or wrong.</p>
           <h2>No guarantees</h2>
           <p>The service is provided “as is.” We do not promise availability, accurate prices, or that any hotel is right for your trip.</p>
           <h2>Bookings</h2>
@@ -10427,8 +10427,8 @@
       // hotels so a 0%-room-match cheap hotel can't leapfrog a 60%-match
       // hotel via price alone. Tier uses BOTH blended score AND raw room
       // score: hotels with essentially no room match (effectiveScore<5)
-      // are capped at tier 2 regardless of neighbourhood score, preventing
-      // pure neighbourhood+price wins over genuine room matches.
+      // are capped at tier 2 regardless of neighborhood score, preventing
+      // pure neighborhood+price wins over genuine room matches.
       const tier = (blendedScore, effectiveScore) => {
         if (effectiveScore < 5) return 2;
         return blendedScore >= 40 ? 0 : blendedScore >= 15 ? 1 : 2;
@@ -10488,7 +10488,7 @@
       };
       const MATCH_W = 0.25 + gamma * 0.53;
       const PRICE_W = 1 - MATCH_W;
-      // Neighbourhood blend — mirrors Best Match (see "match" branch). Without
+      // Neighborhood blend — mirrors Best Match (see "match" branch). Without
       // this, the Match+Price formula treats a 63%-nbhd Condesa vacation_home
       // identically to a 95%-nbhd Paseo de la Reforma hotel, and the user's
       // nbhdScene preference is silently dropped. wNbhd=0.55 by default
@@ -10730,7 +10730,7 @@
       const labels = { hotel: 'Hotels only', apartment: 'Apartments only', vacation_home: 'Vacation homes', villa: 'Villas', hostel: 'Hostels only' };
       parts.push(labels[_propTypeFilter] || _propTypeFilter);
     }
-    if (_nbhdFilter) parts.push(`Neighbourhood: ${_nbhdFilter}`);
+    if (_nbhdFilter) parts.push(`Neighborhood: ${_nbhdFilter}`);
     return parts;
   }
 
@@ -10849,7 +10849,7 @@
     const resultsEl = document.getElementById('results');
     resultsEl.classList.toggle('results-rows', _viewMode === 'rows');
 
-    // BOOP v4 — populate the top-neighbourhood refine strip (lives above #results)
+    // BOOP v4 — populate the top-neighborhood refine strip (lives above #results)
     renderNbhdRefineStrip(hotels);
 
     if (total === 0 && _lastHotels.length > 0) {
@@ -11235,7 +11235,7 @@
       </div>`;
   }
 
-  // ── BOOP v4 — Top-neighbourhood refine strip ─────────────────────────────
+  // ── BOOP v4 — Top-neighborhood refine strip ─────────────────────────────
   // Tallies hotels by primary_nbhd, takes top 10 (min 2 hotels). On desktop the
   // first 5 (after "All") render inline; the rest live behind a "More ▾" button
   // that toggles a dropdown panel. On mobile (≤640px) the dropdown is hidden
@@ -11355,7 +11355,7 @@
     strip.innerHTML = `
       <div class="nbhd-refine-inner">
         <div class="nbhd-refine-toprow">
-          <button type="button" class="nbhd-refine-label nbhd-refine-label--link" onclick="goToStep('nbhd')" title="Browse neighbourhood vibes">Top neighbourhoods</button>
+          <button type="button" class="nbhd-refine-label nbhd-refine-label--link" onclick="goToStep('nbhd')" title="Browse neighborhood vibes">Top neighborhoods</button>
           <div class="nbhd-refine-avail-slot" id="nbhd-refine-avail-slot"></div>
         </div>
         <div class="nbhd-refine-main">
@@ -11378,7 +11378,7 @@
   }
 
   // ── BOOP v4 — Nbhd vibe score (client-side) ──────────────────────────────
-  // Dot-product of the user's saved prefs × the neighbourhood's attribute
+  // Dot-product of the user's saved prefs × the neighborhood's attribute
   // vector, normalised to 0-100. Falls back gracefully when either side is
   // missing (returns 0 → pill hidden).
 
@@ -11461,7 +11461,7 @@
   }
 
   const OVERALL_MATCH_BUBBLE_TITLE =
-    'Overall match — room photo match blended with neighbourhood fit when your area preference is active';
+    'Overall match — room photo match blended with neighborhood fit when your area preference is active';
 
   function overallMatchBubbleHTML(hotelId, pct) {
     const id = escHtml(String(hotelId));
@@ -11995,7 +11995,7 @@
     if (mb.room_pct != null) add('🛏', 'Room vibe match', mb.room_pct);
     if (mb.hotel_pct != null) add('✦', 'Hotel character match', mb.hotel_pct);
     if (mb.nbhd_pct != null) {
-      add('📍', mb.primary_nbhd_name ? `Near ${mb.primary_nbhd_name}` : 'Neighbourhood fit', mb.nbhd_pct);
+      add('📍', mb.primary_nbhd_name ? `Near ${mb.primary_nbhd_name}` : 'Neighborhood fit', mb.nbhd_pct);
     }
     const ns = mb.nbhd_signals;
     if (ns?.walkability >= 50) add('🚶', 'Walkable area', ns.walkability);
@@ -12046,7 +12046,7 @@
     const topFeat = (mb.query_features || []).filter((f) => f.pct > 0).sort((a, b) => b.pct - a.pct)[0];
     if (topFeat) rows.push({ icon: '☀', label: 'Natural light', sub: topFeat.label, pct: topFeat.pct });
     if (mb.nbhd_pct != null) {
-      rows.push({ icon: '📍', label: 'Neighbourhood', sub: nbhdSub || 'Area fit', pct: mb.nbhd_pct });
+      rows.push({ icon: '📍', label: 'Neighborhood', sub: nbhdSub || 'Area fit', pct: mb.nbhd_pct });
     }
     if (mb.hotel_pct != null) {
       rows.push({ icon: '💼', label: 'Hotel style', sub: 'Property character', pct: mb.hotel_pct });
@@ -12625,7 +12625,7 @@
       ? NEIGHBORHOODS[S.city] : [];
     const full = cityHoods.find((h) => h.name === nbhd.name);
     const text = full?.vibe_long || desc;
-    const exploreLabel = nbhdName ? `Explore ${nbhdName} →` : 'Explore neighbourhoods →';
+    const exploreLabel = nbhdName ? `Explore ${nbhdName} →` : 'Explore neighborhoods →';
     const exploreBtn = nbhdName
       ? `<button type="button" class="hpage-link-btn hpage-link-btn--explore" data-nbhd-explore="${escAttr(nbhdName)}" onclick="openNeighborhoodExplorerFromDetail(this.getAttribute('data-nbhd-explore'))">${escHtml(exploreLabel)}</button>`
       : `<button type="button" class="hpage-link-btn hpage-link-btn--explore" onclick="closeHotelDetailPage();goToStep('nbhd')">${escHtml(exploreLabel)}</button>`;
@@ -12642,7 +12642,7 @@
         <span class="hpage-nbhd-poi-place">${escHtml(p.place)}</span>
       </div>`).join('');
     return `<section class="hp-section hpage-nbhd-block" aria-labelledby="hpage-nbhd-title">
-      <h2 id="hpage-nbhd-title" class="hpage-section-label">About the neighbourhood</h2>
+      <h2 id="hpage-nbhd-title" class="hpage-section-label">About the neighborhood</h2>
       ${nbhdName ? `<p class="hpage-nbhd-place-name">${hotelDetailNbhdNameLinkHTML(nbhdName, 'hpage-nbhd-name-link--title')}</p>` : ''}
       <div class="hpage-nbhd-grid">
         <div class="hpage-nbhd-copy">
@@ -13495,7 +13495,7 @@
 
     const overallBubble = overallMatchBubbleHTML(h.id, overallMatchDisplayPct(h));
 
-    // Neighbourhood pill — top-left of hero, click refocuses the results by nbhd.
+    // Neighborhood pill — top-left of hero, click refocuses the results by nbhd.
     const nbhd     = h.primary_nbhd;
     const nbhdVibe  = h.nbhd_fit_pct != null ? Math.round(h.nbhd_fit_pct) : computeNbhdVibe(h);
     const nbhdPill = nbhd?.name
@@ -13839,7 +13839,7 @@
       MX_HERO,
       { src: _U('1521216774850-01bc1c5fe0da'), alt: 'Historic Mexico City' },
       { src: _U('1514565131-fce0801e5785'), alt: 'Aerial view of Mexico City' },
-      { src: '/images/wizard/trendy-cafe-filled.png', alt: 'Neighbourhood café' },
+      { src: '/images/wizard/trendy-cafe-filled.png', alt: 'Neighborhood café' },
       { src: _U('1619872978981-e9885a014ba3'), alt: 'Mexico City streets' },
     ],
     paris: [
@@ -13871,7 +13871,7 @@
       { src: _U('1518998053901-5348d3961a04'), alt: 'Neon street scene' },
       { src: _U('1559339352-11d035aa65de'), alt: 'Restaurant interior' },
       { src: _U('1477959858617-67f85cf4f1df'), alt: 'City lights at night' },
-      { src: '/images/wizard/vibrant-busy.png', alt: 'Busy neighbourhood street' },
+      { src: '/images/wizard/vibrant-busy.png', alt: 'Busy neighborhood street' },
       { src: _U('1555396273-367ea4eb4db5'), alt: 'Lively dining scene' },
     ],
     dubai: [

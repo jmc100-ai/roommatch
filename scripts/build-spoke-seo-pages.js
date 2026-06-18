@@ -92,7 +92,7 @@ function hero({ kicker, h1, lead, image, ctaHref, ctaLabel }) {
       </div>
       <div class="social-proof" aria-label="Product scale">
         <span>Real room photos</span>
-        <span>Neighbourhood vibe matching</span>
+        <span>Neighborhood vibe matching</span>
         <span>Free to explore</span>
       </div>
     </div>
@@ -179,7 +179,7 @@ function writePage(file, html) {
     `<div class="wrap-wide">
     <section class="msec" style="padding-top:36px;margin-top:0;border-top:none">
       <p class="msec-kicker">Quick picks</p>
-      <h2 class="msec-title">${seoField(canonical, "h2Featured", "Best Paris neighbourhoods for first-time visitors")}</h2>
+      <h2 class="msec-title">${seoField(canonical, "h2Featured", "Best Paris neighborhoods for first-time visitors")}</h2>
       <div class="fgrid">
         <div class="fcard"><h3>Le Marais</h3><p>Walkable, gallery-dense, and lively without a car — the default first-timer pick.</p><p><a href="__ORIGIN__/hotels-in-le-marais">Hotels in Le Marais →</a></p></div>
         <div class="fcard"><h3>Latin Quarter</h3><p>River walks, bistros, and museum density near Notre-Dame.</p><p><a href="__ORIGIN__/hotels-in-latin-quarter">Hotels in Latin Quarter →</a></p></div>
@@ -258,7 +258,7 @@ function writePage(file, html) {
       kicker: "CDMX · Travel planning",
       h1,
       lead:
-        "Planning <strong>travel to Mexico City</strong>? Pick a neighbourhood that fits your trip, run the vibe quiz, then search <strong>3,600+ hotels</strong> by real room and bathroom photos — before you commit on a booking site.",
+        "Planning <strong>travel to Mexico City</strong>? Pick a neighborhood that fits your trip, run the vibe quiz, then search <strong>3,600+ hotels</strong> by real room and bathroom photos — before you commit on a booking site.",
       image: SKYLINE,
       ctaHref: cdmxUtm("cdmx-travel-hotels-hero"),
       ctaLabel: "Take the 30-second quiz →",
@@ -269,7 +269,7 @@ function writePage(file, html) {
       <h2 class="msec-title">${seoField(canonical, "h2Featured", "How to plan travel to Mexico City hotels")}</h2>
       <div class="how-row">
         <article class="how-card">
-          <div class="how-txt"><span class="how-num">1</span><h3>Pick your neighbourhood</h3><p>Condesa and Roma Norte for first trips; Polanco for museums and luxury; Centro for sightseeing density. Read <a href="__ORIGIN__/where-to-stay-in-mexico-city">where to stay in Mexico City</a>.</p></div>
+          <div class="how-txt"><span class="how-num">1</span><h3>Pick your neighborhood</h3><p>Condesa and Roma Norte for first trips; Polanco for museums and luxury; Centro for sightseeing density. Read <a href="__ORIGIN__/where-to-stay-in-mexico-city">where to stay in Mexico City</a>.</p></div>
         </article>
         <article class="how-card">
           <div class="how-txt"><span class="how-num">2</span><h3>Shape your vibe</h3><p>Our wizard captures trip pace, must-haves, and room mood — sleek, cozy, design-forward, or classic.</p></div>
@@ -291,8 +291,8 @@ function writePage(file, html) {
       <p class="msec-lead" style="margin-top:20px">Full hub: <a href="__ORIGIN__/mexico-city-hotels">travel Mexico City hotels on TravelByVibe</a> · <a href="__ORIGIN__/mexico-city-visual-search">visual room search</a></p>
     </section>
     <section class="msec">
-      <h2 class="msec-title">${seoField(canonical, "h2Neighbourhoods", "Travel Mexico City hotels by neighbourhood")}</h2>
-      <nav class="hub-links" aria-label="CDMX hotel neighbourhoods">
+      <h2 class="msec-title">${seoField(canonical, "h2Neighborhoods", "Travel Mexico City hotels by neighborhood")}</h2>
+      <nav class="hub-links" aria-label="CDMX hotel neighborhoods">
         <a href="__ORIGIN__/hotels-in-condesa">Hotels in Condesa</a>
         <a href="__ORIGIN__/hotels-in-roma-norte">Hotels in Roma Norte</a>
         <a href="__ORIGIN__/hotels-in-polanco">Hotels in Polanco</a>

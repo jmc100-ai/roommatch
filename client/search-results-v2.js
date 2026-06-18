@@ -101,7 +101,7 @@
     {
       id: 'trendy',
       title: 'Trendy Boutique',
-      desc: 'Distinct style, cafés, creative neighbourhoods',
+      desc: 'Distinct style, cafés, creative neighborhoods',
       iconClass: 'lens-icon--trendy',
       icon: '◆',
     },

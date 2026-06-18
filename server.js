@@ -798,7 +798,7 @@ function boopPriceRoomGapGuard(pm) {
 const BOOP_PRICE_NBHD_GAP_GUARD = 16;
 /** Room lead required before a weak-nbhd hotel may override the nbhd guard. */
 const BOOP_PRICE_NBHD_ROOM_YIELD_GAP = 22;
-/** At |pm|=100, multiply nbhd blend weight by (1 + this) — neighbourhood stays decisive. */
+/** At |pm|=100, multiply nbhd blend weight by (1 + this) — neighborhood stays decisive. */
 const BOOP_PRICE_NBHD_WEIGHT_BOOST = 0.30;
 const BOOP_VALUE_LUXURY_PREF_BLOCK = 15;
 
@@ -1841,7 +1841,7 @@ function _legalHtml(title, body) {
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <meta name="robots" content="index,follow,max-image-preview:large"/>
 <title>${title} — TravelByVibe</title>
-<meta name="description" content="${title} for TravelByVibe — a friendly beta for discovering hotels by neighbourhood and real room photos."/>
+<meta name="description" content="${title} for TravelByVibe — a friendly beta for discovering hotels by neighborhood and real room photos."/>
 <link rel="icon" href="/favicon.ico" sizes="48x48"/>
 <link rel="icon" type="image/png" href="/favicon-48.png" sizes="48x48"/>
 <link rel="icon" type="image/svg+xml" href="/favicon.svg"/>
@@ -1888,7 +1888,7 @@ app.get("/privacy", (_req, res) => {
     <p>We keep this short: here is what we collect, why, and who helps us run the site.</p>
     <h2>What we collect</h2>
     <ul>
-      <li><strong>What you type in the app</strong> — city, searches, wizard choices, and feedback you send us. We use this to run your search and tune neighbourhood suggestions.</li>
+      <li><strong>What you type in the app</strong> — city, searches, wizard choices, and feedback you send us. We use this to run your search and tune neighborhood suggestions.</li>
       <li><strong>Basic connection info</strong> — like IP address and browser type, to keep the service secure and reliable.</li>
       <li><strong>A simple “you’re signed in” cookie</strong> — only when we use a beta code on the site. It just remembers that you entered the code; it is not used to track you around the web.</li>
       <li><strong>Anonymous product stats</strong> — for example that a search ran or a page opened. We never attach your exact search words to those stats.</li>
@@ -1898,10 +1898,10 @@ app.get("/privacy", (_req, res) => {
     <h2>Partners &amp; data sources</h2>
     <ul>
       <li><strong>Nuitée Travel Limited (LiteAPI)</strong> — hotel names, photos, rates, availability, descriptions, amenities, and guest reviews; booking checkout.</li>
-      <li><strong>Google (Gemini)</strong> — neighbourhood descriptions, photo analysis, and search matching.</li>
+      <li><strong>Google (Gemini)</strong> — neighborhood descriptions, photo analysis, and search matching.</li>
       <li><strong>Geoapify</strong> — city search and geocoding.</li>
-      <li><strong>MapTiler &amp; OpenStreetMap</strong> — neighbourhood maps.</li>
-      <li><strong>Unsplash &amp; Google Maps</strong> — neighbourhood card photos (credited on each card).</li>
+      <li><strong>MapTiler &amp; OpenStreetMap</strong> — neighborhood maps.</li>
+      <li><strong>Unsplash &amp; Google Maps</strong> — neighborhood card photos (credited on each card).</li>
     </ul>
     <h2>Who helps us run the site</h2>
     <p>We also use trusted vendors for hosting, email, anonymous usage analytics, and error reporting — each has its own privacy policy.</p>
@@ -1916,7 +1916,7 @@ app.get("/terms", (_req, res) => {
   const body = `
     <p>By using TravelByVibe while we are in beta, you agree to these terms. If you do not agree, please stop using the site.</p>
     <h2>Not professional advice</h2>
-    <p>TravelByVibe is a trip-planning helper, not a lawyer, accountant, or travel agent. Neighbourhood blurbs and match scores are for inspiration — always double-check anything important before you book.</p>
+    <p>TravelByVibe is a trip-planning helper, not a lawyer, accountant, or travel agent. Neighborhood blurbs and match scores are for inspiration — always double-check anything important before you book.</p>
     <h2>No guarantees</h2>
     <p>The service is provided “as is.” We do not promise that prices, availability, or any hotel will be right for your trip.</p>
     <h2>Bookings</h2>
@@ -3346,7 +3346,7 @@ app.get("/api/vsearch", async (req, res) => {
         boopProfileForNbhd = null;
       }
     }
-    // When the user explicitly picked a neighbourhood scene, give neighbourhood fit more pull.
+    // When the user explicitly picked a neighborhood scene, give neighborhood fit more pull.
     if (nbhdRankWeight > 0 && boopProfileForNbhd?.answers?.nbhdScene) {
       nbhdRankWeight = Math.min(0.62, nbhdRankWeight * 1.28);
     }
@@ -3372,7 +3372,7 @@ app.get("/api/vsearch", async (req, res) => {
     // room_types_index scores already computed in Phase A.
     // score_hotels scores the SAME top-N hotels against hotel_profile_index using
     // the hotel_query embedding (BOOP v4). get_primary_nbhds_for_hotels tags each
-    // with the smallest-bbox neighbourhood its lat/lng falls inside.
+    // with the smallest-bbox neighborhood its lat/lng falls inside.
     const topHotelIds = rankedHotels.slice(0, GALLERY_LIMIT).map(h => h.hotel_id);
 
     // Ensure hotel_query embedding is ready before score_hotels runs.
@@ -3663,7 +3663,7 @@ app.get("/api/vsearch", async (req, res) => {
       search_version_used: "v1",
       search_version_requested: requestedVersionRaw,
     };
-    // Neighbourhood blend diagnostics (weight ≠ neighbourhood % on cards; weight is room vs nbhd for *sort*).
+    // Neighborhood blend diagnostics (weight ≠ neighborhood % on cards; weight is room vs nbhd for *sort*).
     if (Number.isFinite(rawNbhdW)) stats.nbhd_rank_weight_config = rawNbhdW;
     stats.nbhd_rank_weight_active = nbhdRankWeight;
     stats.nbhd_blend_applied = !!(nbhdFitByHotelId && nbhdFitByHotelId.size > 0);
@@ -4870,7 +4870,7 @@ app.post("/api/v2/reindex-city", async (req, res) => {
     .catch((e) => console.error(`[v2-index] failed ${city}:`, e.message));
 });
 
-// ── V2 full city rollout (reindex → verify → neighbourhoods → V1 cleanup) ─────
+// ── V2 full city rollout (reindex → verify → neighborhoods → V1 cleanup) ─────
 const _v2RolloutActive = new Set();
 function loadV2RolloutCore() {
   return require("./scripts/v2-city-rollout-core");
@@ -5444,7 +5444,7 @@ app.get("/api/hotel-rooms", async (req, res) => {
 });
 
 // ── GET /api/hotel/:hotelId — hotel details panel data ──────────────────────
-// Returns hotel metadata, room type photos, facts, and primary neighbourhood.
+// Returns hotel metadata, room type photos, facts, and primary neighborhood.
 // In-flight deduplication prevents thundering herd on cold cache.
 const _hotelDetailInflight = new Map();
 app.get("/api/hotel/:hotelId", async (req, res) => {
@@ -5500,7 +5500,7 @@ app.get("/api/hotel/:hotelId", async (req, res) => {
       }
     }
 
-    // 5. Primary neighbourhood (bbox check)
+    // 5. Primary neighborhood (bbox check)
     let primaryNbhd = null;
     if (city && cacheRow.lat && cacheRow.lng) {
       const { data: nbhds } = await db.from("neighborhoods")

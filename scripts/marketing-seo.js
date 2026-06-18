@@ -22,15 +22,15 @@ const FAVICON_HEAD = `  <link rel="icon" href="/favicon.ico" sizes="48x48" />
 const HUB_FAQS = {
   "where-to-stay-in-paris": [
     {
-      q: "What is the best neighbourhood to stay in Paris for first-time visitors?",
-      a: "Le Marais and the Latin Quarter are the most popular first-timer picks: walkable, central, and full of cafés and museums. Saint-Germain suits travellers who want Left Bank calm. Use our neighbourhood guide, then match hotels by real room photos.",
+      q: "What is the best neighborhood to stay in Paris for first-time visitors?",
+      a: "Le Marais and the Latin Quarter are the most popular first-timer picks: walkable, central, and full of cafés and museums. Saint-Germain suits travellers who want Left Bank calm. Use our neighborhood guide, then match hotels by real room photos.",
     },
     {
       q: "Is Le Marais a good area to stay in Paris?",
       a: "Yes — Le Marais is one of Paris's best-loved districts for hotels: flat, gallery-dense, and lively without needing a car. Compare it with Saint-Germain if you prefer quieter evenings.",
     },
     {
-      q: "Which Paris neighbourhood is best for couples?",
+      q: "Which Paris neighborhood is best for couples?",
       a: "Montmartre and Saint-Germain lead for romance — village stairs and views versus literary café culture. Search for moody lighting, soaking tubs, or Haussmann light on TravelByVibe.",
     },
     {
@@ -39,7 +39,7 @@ const HUB_FAQS = {
     },
     {
       q: "How does TravelByVibe differ from Booking or Expedia?",
-      a: "We rank hotels by neighbourhood vibe and actual room photos — not just star ratings and lobby shots. Describe the room you want, then browse matches before you add dates.",
+      a: "We rank hotels by neighborhood vibe and actual room photos — not just star ratings and lobby shots. Describe the room you want, then browse matches before you add dates.",
     },
   ],
   "paris-hotels": [
@@ -53,7 +53,7 @@ const HUB_FAQS = {
     },
     {
       q: "Are Paris hotel reviews used in search?",
-      a: "Guest reviews are shown on hotel detail pages when available. Search ranking uses room photos and neighbourhood vibe, not review text.",
+      a: "Guest reviews are shown on hotel detail pages when available. Search ranking uses room photos and neighborhood vibe, not review text.",
     },
     {
       q: "Which Paris arrondissement has the best boutique hotels?",
@@ -67,7 +67,7 @@ const HUB_FAQS = {
   "paris-hotel-finder": [
     {
       q: "Where should I stay in Paris for 3 days?",
-      a: "For a short trip, stay central: Le Marais, Latin Quarter, or Saint-Germain keep museums and dinner within walking distance. Our vibe quiz narrows neighbourhood and room style in under a minute.",
+      a: "For a short trip, stay central: Le Marais, Latin Quarter, or Saint-Germain keep museums and dinner within walking distance. Our vibe quiz narrows neighborhood and room style in under a minute.",
     },
     {
       q: "Le Marais or Saint-Germain — which is better?",
@@ -79,7 +79,7 @@ const HUB_FAQS = {
     },
     {
       q: "What is the vibe wizard?",
-      a: "A short quiz that captures trip pace, neighbourhood feel, and room must-haves — then opens TravelByVibe with your city and context pre-loaded.",
+      a: "A short quiz that captures trip pace, neighborhood feel, and room must-haves — then opens TravelByVibe with your city and context pre-loaded.",
     },
   ],
   "paris-visual-search": [
@@ -102,7 +102,7 @@ const HUB_FAQS = {
   ],
   "where-to-stay-in-mexico-city": [
     {
-      q: "What is the best neighbourhood to stay in Mexico City for first-time visitors?",
+      q: "What is the best neighborhood to stay in Mexico City for first-time visitors?",
       a: "Condesa and Roma Norte are the default first-timer picks: leafy, walkable, and full of cafés. Polanco suits luxury and museums; Centro Histórico suits maximum sightseeing.",
     },
     {
@@ -129,7 +129,7 @@ const HUB_FAQS = {
     },
     {
       q: "What are the best hotels for traveling to Mexico City?",
-      a: "Condesa and Roma Norte suit first-time visitors; Polanco for luxury and museums; Centro Histórico for maximum sightseeing. Compare neighbourhoods on our travel guide, then match hotels by real room photos.",
+      a: "Condesa and Roma Norte suit first-time visitors; Polanco for luxury and museums; Centro Histórico for maximum sightseeing. Compare neighborhoods on our travel guide, then match hotels by real room photos.",
     },
     {
       q: "Where should tourists stay when traveling to Mexico City?",
@@ -137,15 +137,15 @@ const HUB_FAQS = {
     },
     {
       q: "What is visual hotel search for Mexico City?",
-      a: "Describe the room you want in plain language. We rank hotels whose indexed photos match, plus neighbourhood vibe from our CDMX map.",
+      a: "Describe the room you want in plain language. We rank hotels whose indexed photos match, plus neighborhood vibe from our CDMX map.",
     },
     {
-      q: "Which CDMX neighbourhood has the best boutique hotels?",
+      q: "Which CDMX neighborhood has the best boutique hotels?",
       a: "Roma Norte and Condesa lead for design boutiques; Polanco for polished luxury. Browse our boutique hotels page or run the vibe wizard.",
     },
     {
       q: "Is TravelByVibe the launch city for Mexico?",
-      a: "Yes — Mexico City has our deepest visual index and neighbourhood tooling. Paris guides are expanding on the same platform.",
+      a: "Yes — Mexico City has our deepest visual index and neighborhood tooling. Paris guides are expanding on the same platform.",
     },
     {
       q: "Is browsing free?",
@@ -155,7 +155,7 @@ const HUB_FAQS = {
   "travel-mexico-city-hotels": [
     {
       q: "How do I find hotels when traveling to Mexico City?",
-      a: "Start with neighbourhood — Condesa, Roma Norte, Polanco, Juárez, or Centro Histórico — then run TravelByVibe's vibe quiz or describe the room you want. We rank 3,600+ CDMX hotels by real photography before you book elsewhere.",
+      a: "Start with neighborhood — Condesa, Roma Norte, Polanco, Juárez, or Centro Histórico — then run TravelByVibe's vibe quiz or describe the room you want. We rank 3,600+ CDMX hotels by real photography before you book elsewhere.",
     },
     {
       q: "What is the best area to stay when traveling to Mexico City?",
@@ -171,7 +171,7 @@ const HUB_FAQS = {
     },
     {
       q: "Do I need dates to browse travel Mexico City hotels?",
-      a: "No. Explore neighbourhoods and room photos for free. Add check-in and check-out when you want live rates from partners.",
+      a: "No. Explore neighborhoods and room photos for free. Add check-in and check-out when you want live rates from partners.",
     },
   ],
   "mexico-city-hotel-finder": [
@@ -189,7 +189,7 @@ const HUB_FAQS = {
     },
     {
       q: "What is the vibe wizard?",
-      a: "A quick quiz for trip pace, neighbourhood feel, and room must-haves — then opens CDMX search with your context.",
+      a: "A quick quiz for trip pace, neighborhood feel, and room must-haves — then opens CDMX search with your context.",
     },
   ],
   "mexico-city-visual-search": [
@@ -202,8 +202,8 @@ const HUB_FAQS = {
       a: "Try bright suite, floor-to-ceiling windows, minimalist room, or polished concrete. Visual search surfaces design-forward matches.",
     },
     {
-      q: "Does visual search include neighbourhood fit?",
-      a: "Yes — neighbourhood vibe blends into ranking when you use the vibe wizard or boop flow. Room match stays the primary signal.",
+      q: "Does visual search include neighborhood fit?",
+      a: "Yes — neighborhood vibe blends into ranking when you use the vibe wizard or boop flow. Room match stays the primary signal.",
     },
     {
       q: "Do I need dates to search?",
@@ -217,7 +217,7 @@ const HUB_FAQS = {
     },
     {
       q: "Should first-time visitors stay near the Eiffel Tower?",
-      a: "You can, but many first-timers prefer Le Marais or the Latin Quarter for neighbourhood character and dinner options. Search Eiffel-view rooms on our visual search if the tower is a must.",
+      a: "You can, but many first-timers prefer Le Marais or the Latin Quarter for neighborhood character and dinner options. Search Eiffel-view rooms on our visual search if the tower is a must.",
     },
     {
       q: "Is Montmartre good for a first Paris trip?",
@@ -225,12 +225,12 @@ const HUB_FAQS = {
     },
     {
       q: "How do I pick a hotel once I choose the area?",
-      a: "Use TravelByVibe to describe the room you want — rainfall shower, Haussmann light, quiet street — and we rank real Paris hotel photos in your chosen neighbourhood.",
+      a: "Use TravelByVibe to describe the room you want — rainfall shower, Haussmann light, quiet street — and we rank real Paris hotel photos in your chosen neighborhood.",
     },
   ],
   "paris-hotels-near-eiffel-tower": [
     {
-      q: "Which Paris neighbourhood is best for Eiffel Tower views?",
+      q: "Which Paris neighborhood is best for Eiffel Tower views?",
       a: "Trocadéro and parts of the 7th arrondissement face the tower; Latin Quarter and Opéra hotels often advertise partial Eiffel glimpses. Search visual keywords like Eiffel view or balcony.",
     },
     {
@@ -500,7 +500,7 @@ function breadcrumbsFor(meta) {
 
   if (cat === "hub" || !cat) return null;
 
-  if (cat === "neighbourhood" || cat === "comparison" || cat === "guide") {
+  if (cat === "neighborhood" || cat === "comparison" || cat === "guide") {
     return [...base, { path: c.where, label: c.whereLabel }, { path: `/${meta.canonical}`, label: pageLabel }];
   }
   if (cat === "vibe") {

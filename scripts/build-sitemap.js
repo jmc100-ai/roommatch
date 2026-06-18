@@ -67,7 +67,7 @@ const htmlSitemap = `<!DOCTYPE html>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="robots" content="index,follow" />
   <title>Site Map — All TravelByVibe Destination Guides</title>
-  <meta name="description" content="Complete list of TravelByVibe SEO destination guides: Paris and Mexico City hotel search, neighbourhood guides, comparisons, and visual room search." />
+  <meta name="description" content="Complete list of TravelByVibe SEO destination guides: Paris and Mexico City hotel search, neighborhood guides, comparisons, and visual room search." />
   <link rel="canonical" href="__ORIGIN__/sitemap" />
   <link rel="icon" href="/favicon.ico" sizes="48x48" />
   <link rel="icon" type="image/png" href="/favicon-48.png" sizes="48x48" />
@@ -93,7 +93,7 @@ const htmlSitemap = `<!DOCTYPE html>
   </header>
   <main class="wrap" style="max-width:var(--max-wide);padding-top:48px">
     <h1>Site map</h1>
-    <p class="msec-lead">All indexable destination guides — neighbourhood hubs, hotel picks, comparisons, and visual search landing pages.</p>
+    <p class="msec-lead">All indexable destination guides — neighborhood hubs, hotel picks, comparisons, and visual search landing pages.</p>
     <section class="sitemap-sec">
       <h2>Hub pages</h2>
       <ul class="sitemap-list">

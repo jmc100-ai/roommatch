@@ -24,7 +24,7 @@ const COYOACAN =
 const VASCONCELOS =
   "https://upload.wikimedia.org/wikipedia/commons/thumb/d/d0/Biblioteca_Vasconcelos%2C_Ciudad_de_M%C3%A9xico%2C_M%C3%A9xico%2C_2015-07-20%2C_DD_13-15_HDR.jpg/1280px-Biblioteca_Vasconcelos%2C_Ciudad_de_M%C3%A9xico%2C_M%C3%A9xico%2C_2015-07-20%2C_DD_13-15_HDR.jpg";
 
-/** Mexico City neighbourhood card photos (from neighborhoods table / vibe index). */
+/** Mexico City neighborhood card photos (from neighborhoods table / vibe index). */
 const NBHD_CONDESA =
   "https://images.unsplash.com/photo-1545504573-edac76c6a487?auto=format&amp;fit=crop&amp;w=1280&amp;q=82";
 const NBHD_ROMA =
@@ -46,7 +46,7 @@ function nbhdGuideGrid() {
         <div class="nbhd-tile" style="background-image:url('${NBHD_CENTRO}')"><h3>Centro Histórico</h3><p>Maximum culture and sightseeing — accept more street energy for iconic access.</p><a class="nbhd-row-cta" href="__ORIGIN__/hotels-in-centro-historico">Hotels in Centro →</a></div>
         <div class="nbhd-tile" style="background-image:url('${NBHD_COMPARE}')"><h3>Condesa vs Polanco</h3><p>Can&apos;t decide between leafy calm and luxury polish? Start here.</p><a class="nbhd-row-cta" href="__ORIGIN__/condesa-vs-polanco">Compare the two →</a></div>
       </div>
-      <p class="nbhd-photo-credits">Neighbourhood photos from TravelByVibe&apos;s Mexico City vibe index — Unsplash (Daniel Lerman, Carl Campbell, Roman Bozhko), Flickr / ikarusmedia (CC BY), and Wikimedia Commons.</p>`;
+      <p class="nbhd-photo-credits">Neighborhood photos from TravelByVibe&apos;s Mexico City vibe index — Unsplash (Daniel Lerman, Carl Campbell, Roman Bozhko), Flickr / ikarusmedia (CC BY), and Wikimedia Commons.</p>`;
 }
 
 const HUB_LINKS = seo.hubLinks("Mexico City");
@@ -155,7 +155,7 @@ function quizCta(text, utmContent) {
 function embedSearch(utmContent) {
   return `<div class="embed-search">
       <h3>Find your Mexico City hotel match</h3>
-      <p>Describe the room you want — soaking tub, bright suite, walkable neighbourhood — and we rank real hotel photos for you.</p>
+      <p>Describe the room you want — soaking tub, bright suite, walkable neighborhood — and we rank real hotel photos for you.</p>
       <form class="embed-search-row" action="__ORIGIN__/" method="get" data-marketing-search>
         <input type="hidden" name="city" value="Mexico City" />
         <input type="hidden" name="utm_source" value="travelbyvibe" />
@@ -184,10 +184,10 @@ PAGES.push({
   file: "where-to-stay-in-mexico-city.html",
   html: page(
     hero({
-      kicker: "Mexico City · Neighbourhood guide",
-      h1: seoField("where-to-stay-in-mexico-city", "h1", "Where to Stay in Mexico City — Hotels by Neighbourhood"),
+      kicker: "Mexico City · Neighborhood guide",
+      h1: seoField("where-to-stay-in-mexico-city", "h1", "Where to Stay in Mexico City — Hotels by Neighborhood"),
       lead:
-        "Planning <strong>travel to Mexico City</strong>? Condesa, Roma Norte, Polanco, Juárez, or Centro Histórico — this guide maps <strong>neighbourhood character</strong> to the hotels that actually fit. Browse the <a href=\"__ORIGIN__/mexico-city-hotels\">travel Mexico City hotels</a> hub, then match stays using <strong>real room photos</strong>.",
+        "Planning <strong>travel to Mexico City</strong>? Condesa, Roma Norte, Polanco, Juárez, or Centro Histórico — this guide maps <strong>neighborhood character</strong> to the hotels that actually fit. Browse the <a href=\"__ORIGIN__/mexico-city-hotels\">travel Mexico City hotels</a> hub, then match stays using <strong>real room photos</strong>.",
       heroImage: SKYLINE,
       ctaPrimary: "Take the 30-second quiz →",
       ctaSecondary: "Browse hotels by vibe",
@@ -197,11 +197,11 @@ PAGES.push({
       `<div class="wrap-wide">
     <section class="msec" style="padding-top:36px;margin-top:0;border-top:none">
       <p class="msec-kicker">At a glance</p>
-      <h2 class="msec-title">${seoField("where-to-stay-in-mexico-city", "h2Featured", "Best neighbourhoods at a glance")}</h2>
+      <h2 class="msec-title">${seoField("where-to-stay-in-mexico-city", "h2Featured", "Best neighborhoods at a glance")}</h2>
       ${HUB_LINKS}
       <div class="compare-wrap" style="margin-top:24px">
         <table class="compare-table">
-          <thead><tr><th scope="col">Neighbourhood</th><th scope="col">Best for</th><th scope="col">Vibe</th></tr></thead>
+          <thead><tr><th scope="col">Neighborhood</th><th scope="col">Best for</th><th scope="col">Vibe</th></tr></thead>
           <tbody>
             <tr><td><a href="__ORIGIN__/hotels-in-condesa">Condesa</a></td><td>First-time visitors, cafés, parks</td><td>Leafy, walkable, relaxed</td></tr>
             <tr><td><a href="__ORIGIN__/hotels-in-roma-norte">Roma Norte</a></td><td>Foodies, design, nightlife</td><td>Trendy, energetic</td></tr>
@@ -214,20 +214,20 @@ PAGES.push({
     </section>
     <section class="msec">
       <p class="msec-kicker">Hotel picks</p>
-      <h2 class="msec-title">${seoField("where-to-stay-in-mexico-city", "h2Hotels", "Best Mexico City hotels by neighbourhood")}</h2>
-      <p class="msec-lead">Browse indexed CDMX hotels with real room photos in each barrio — start with <a href="__ORIGIN__/mexico-city-hotels">travel Mexico City hotels</a> or drill into a neighbourhood.</p>
+      <h2 class="msec-title">${seoField("where-to-stay-in-mexico-city", "h2Hotels", "Best Mexico City hotels by neighborhood")}</h2>
+      <p class="msec-lead">Browse indexed CDMX hotels with real room photos in each barrio — start with <a href="__ORIGIN__/mexico-city-hotels">travel Mexico City hotels</a> or drill into a neighborhood.</p>
       <p class="msec-lead"><a href="__ORIGIN__/mexico-city-hotels">All Mexico City hotels</a> · <a href="__ORIGIN__/hotels-in-condesa">Hotels in Condesa</a> · <a href="__ORIGIN__/hotels-in-roma-norte">Hotels in Roma Norte</a> · <a href="__ORIGIN__/hotels-in-polanco">Hotels in Polanco</a> · <a href="__ORIGIN__/hotels-in-juarez">Hotels in Juárez</a> · <a href="__ORIGIN__/hotels-in-centro-historico">Hotels in Centro</a></p>
     </section>
     <section class="msec">
       <p class="msec-kicker">Match your style</p>
-      <h2 class="msec-title">Which neighbourhood fits your travel style?</h2>
+      <h2 class="msec-title">Which neighborhood fits your travel style?</h2>
       <div class="fgrid">
         <div class="fcard"><h3>First visit + walkable days</h3><p><strong>Condesa</strong> or <strong>Roma Norte</strong> — tree-lined blocks, independent cafés, and galleries without a car. See <a href="__ORIGIN__/safe-neighborhoods-mexico-city">safe neighborhoods for tourists</a>.</p></div>
         <div class="fcard"><h3>Luxury + fine dining</h3><p><strong>Polanco</strong> — parks, flagship restaurants, and design museums within a short radius. Browse <a href="__ORIGIN__/hotels-near-chapultepec">hotels near Chapultepec</a>.</p></div>
         <div class="fcard"><h3>Maximum sightseeing</h3><p><strong>Centro Histórico</strong> — Zócalo, Templo Mayor, and cantina culture outside your door.</p></div>
         <div class="fcard"><h3>Central + connected</h3><p><strong>Juárez</strong> — Reforma access, creative energy, and strong value between Roma and Polanco.</p></div>
       </div>
-      ${quizCta("<strong>Not sure?</strong> Our vibe wizard captures trip pace, must-haves, and neighbourhood feel — then ranks Mexico City hotels with real room photography.", "where-to-stay-quiz")}
+      ${quizCta("<strong>Not sure?</strong> Our vibe wizard captures trip pace, must-haves, and neighborhood feel — then ranks Mexico City hotels with real room photography.", "where-to-stay-quiz")}
     </section>
     <section class="msec">
       <p class="msec-kicker">See the city</p>
@@ -245,7 +245,7 @@ PAGES.push({
     <p>Area fit is half the decision. TravelByVibe also ranks suites by how closely their <strong>real room photos</strong> match what you describe — bathrooms, light, layout, and design.</p>
     <p>Explore deeper guides: <a href="__ORIGIN__/hotels-in-condesa">hotels in Condesa</a>, <a href="__ORIGIN__/hotels-in-polanco">hotels in Polanco</a>, <a href="__ORIGIN__/condesa-vs-polanco">Condesa vs Polanco</a>, and our <a href="__ORIGIN__/mexico-city-hotel-finder">interactive hotel finder</a>.</p>
     <div class="cta-band">
-      <p>Ready to match neighbourhood + room?</p>
+      <p>Ready to match neighborhood + room?</p>
       <a class="mcta" href="${utm("where-to-stay-footer")}">Start in Mexico City — free</a>
     </div>
   </main>`,
@@ -258,12 +258,12 @@ PAGES.push({
   file: "mexico-city-neighborhood-guide.html",
   html: page(
     hero({
-      kicker: "CDMX neighbourhoods",
+      kicker: "CDMX neighborhoods",
       h1: seoField("mexico-city-neighborhood-guide", "h1", "Mexico City Neighborhood Guide"),
       lead:
         "A practical map of Mexico City&apos;s best hotel districts — what each area feels like, who it suits, and where to search next.",
       heroImage: BELLAS,
-      ctaPrimary: "Match my neighbourhood →",
+      ctaPrimary: "Match my neighborhood →",
       ctaSecondary: "Hotel finder",
       utmPrimary: "nbhd-guide-hero",
       utmSecondary: "nbhd-guide-finder",
@@ -274,11 +274,11 @@ PAGES.push({
       <p class="msec-lead" style="margin-top:20px">Use this guide alongside <a href="__ORIGIN__/where-to-stay-in-mexico-city">Where to Stay in Mexico City</a> — the hub page with comparison tables and vibe matching.</p>
     </section>
     <section class="msec">
-      <h2 class="msec-title">${seoField("mexico-city-neighborhood-guide", "h2Hotels", "Best Mexico City hotels by neighbourhood")}</h2>
+      <h2 class="msec-title">${seoField("mexico-city-neighborhood-guide", "h2Hotels", "Best Mexico City hotels by neighborhood")}</h2>
       <p class="msec-lead"><a href="__ORIGIN__/mexico-city-hotels">Mexico City hotels hub</a> · <a href="__ORIGIN__/hotels-in-condesa">Condesa</a> · <a href="__ORIGIN__/hotels-in-roma-norte">Roma Norte</a> · <a href="__ORIGIN__/hotels-in-polanco">Polanco</a> · <a href="__ORIGIN__/hotels-in-juarez">Juárez</a> · <a href="__ORIGIN__/hotels-in-centro-historico">Centro Histórico</a></p>
     </section>
     <section class="msec">
-      <h2 class="msec-title">Neighbourhood deep links</h2>
+      <h2 class="msec-title">Neighborhood deep links</h2>
       ${nbhdGuideGrid()}
     </section>
     ${embedSearch("nbhd-guide-search")}
@@ -304,7 +304,7 @@ PAGES.push({
       `<div class="wrap-wide">
     <section class="msec" style="padding-top:36px;margin-top:0;border-top:none">
       <p class="msec-kicker">Five vibes</p>
-      <h2 class="msec-title">Pick the neighbourhood energy that fits your trip</h2>
+      <h2 class="msec-title">Pick the neighborhood energy that fits your trip</h2>
       <div class="nbhd-grid">
         <div class="nbhd-tile" style="background-image:url('${BELLAS}')"><h3>Condesa vibe</h3><p>Parque México mornings, terrace cafés, and art deco walks — relaxed but never sleepy.</p><a class="nbhd-row-cta" href="__ORIGIN__/hotels-in-condesa">Hotels in Condesa →</a></div>
         <div class="nbhd-tile" style="background-image:url('${COYOACAN}')"><h3>Roma Norte vibe</h3><p>Gallery openings, mezcal bars, and the city&apos;s best restaurant density.</p><a class="nbhd-row-cta" href="__ORIGIN__/hotels-in-roma-norte">Hotels in Roma Norte →</a></div>
@@ -317,7 +317,7 @@ PAGES.push({
       <p class="msec-kicker">Your turn</p>
       <h2 class="msec-title">Search Mexico City hotels by vibe</h2>
       ${embedSearch("hotel-finder-embed")}
-      ${quizCta("<strong>Prefer a guided flow?</strong> The 30-second vibe wizard captures neighbourhood pace and room must-haves before you search.", "hotel-finder-quiz")}
+      ${quizCta("<strong>Prefer a guided flow?</strong> The 30-second vibe wizard captures neighborhood pace and room must-haves before you search.", "hotel-finder-quiz")}
     </section>
     ${HUB_LINKS}
   </div>`,
@@ -333,7 +333,7 @@ const nbhdPages = [
     preset: "condesa",
     kw: "hotels in Condesa Mexico City",
     h1: "Best Hotels in Condesa Mexico City",
-    lead: "Condesa is leafy, walkable, and café-dense — one of the best neighbourhoods in Mexico City for first-time visitors. These hotels pair <strong>park-side calm</strong> with easy access to Roma Norte.",
+    lead: "Condesa is leafy, walkable, and café-dense — one of the best neighborhoods in Mexico City for first-time visitors. These hotels pair <strong>park-side calm</strong> with easy access to Roma Norte.",
     hero: BELLAS,
     why: "Parque México and Parque España anchor the barrio. Mornings feel residential; evenings spill onto terraces. It is the CDMX sweet spot when you want beauty without Polanco formality.",
     who: "Couples, first-time visitors, remote workers who want walkable coffee runs, and anyone who pictures jacaranda streets over skyline towers.",
@@ -385,7 +385,7 @@ const nbhdPages = [
     hero: ZOCALO,
     why: "This is postcard CDMX. Mornings at the cathedral, afternoons in museums, evenings in century-old cantinas. You trade leafy calm for iconic access.",
     who: "First-time visitors on a culture sprint, history buffs, and travellers who want to walk to everything and hear the city at night.",
-    compare: '<a href="__ORIGIN__/where-to-stay-in-mexico-city">Compare all neighbourhoods</a> · <a href="__ORIGIN__/mexico-city-hotel-finder">Hotel finder</a>',
+    compare: '<a href="__ORIGIN__/where-to-stay-in-mexico-city">Compare all neighborhoods</a> · <a href="__ORIGIN__/mexico-city-hotel-finder">Hotel finder</a>',
   },
 ];
 
@@ -435,7 +435,7 @@ for (const n of nbhdPages) {
       {
         canonical: n.slug,
         city: "Mexico City",
-        pageCategory: "neighbourhood",
+        pageCategory: "neighborhood",
         breadcrumbLabel: seoField(n.slug, "h2Featured", `Hotels in ${n.kw}`),
       }
     ),
@@ -456,7 +456,7 @@ const comparisons = [
     rows: [
       ["Atmosphere", "Relaxed, residential, café-led", "Upscale, embassy-quiet, polished"],
       ["Walkability", "Excellent — parks and corners on foot", "Good on Masaryk; wider avenues"],
-      ["Restaurants", "Terrace bistros, neighbourhood gems", "Flagship dining, reservations"],
+      ["Restaurants", "Terrace bistros, neighborhood gems", "Flagship dining, reservations"],
       ["Nightlife", "Wine bars, low-key mezcal", "Hotel bars, refined cocktails"],
       ["Luxury", "Boutique design hotels", "Five-star flagship properties"],
       ["Price", "Mid to upper-mid", "Upper-mid to luxury"],
@@ -464,7 +464,7 @@ const comparisons = [
     condesa: "First-time visitors, café culture lovers, and anyone who wants jacaranda streets without a car.",
     polanco: "Luxury travellers, business guests, museum mornings, and shoppers who want Chapultepec nearby.",
     verdict:
-      "Choose <strong>Condesa</strong> for walkable, leafy days and a younger creative rhythm. Choose <strong>Polanco</strong> when luxury service, parks, and flagship dining matter more than neighbourhood buzz. Either way, match the <em>room</em> on TravelByVibe — a perfect barrio still fails if the suite feels wrong.",
+      "Choose <strong>Condesa</strong> for walkable, leafy days and a younger creative rhythm. Choose <strong>Polanco</strong> when luxury service, parks, and flagship dining matter more than neighborhood buzz. Either way, match the <em>room</em> on TravelByVibe — a perfect barrio still fails if the suite feels wrong.",
     links: '<a href="__ORIGIN__/hotels-in-condesa">Hotels in Condesa</a> · <a href="__ORIGIN__/hotels-in-polanco">Hotels in Polanco</a>',
   },
   {
@@ -505,7 +505,7 @@ const comparisons = [
     rows: [
       ["Atmosphere", "Urban, central, creative", "Leafy, residential, café-led"],
       ["Walkability", "Good; Reforma crossings", "Excellent within the barrio"],
-      ["Restaurants", "Mixed — Roma access nearby", "Neighbourhood terraces"],
+      ["Restaurants", "Mixed — Roma access nearby", "Neighborhood terraces"],
       ["Nightlife", "Roma spillover", "Wine bars, local cantinas"],
       ["Luxury", "Reforma towers", "Boutique design"],
       ["Price", "Often better value", "Mid to upper-mid"],
@@ -528,7 +528,7 @@ for (const c of comparisons) {
     file: c.file,
     html: page(
       compareHero({
-        kicker: "Compare neighbourhoods",
+        kicker: "Compare neighborhoods",
         h1: c.h1,
         lead: c.lead,
         leftImage: c.leftImage,
@@ -556,7 +556,7 @@ for (const c of comparisons) {
       <p class="msec-lead">${whoBText}</p>
       <div class="verdict-box"><p><strong>Our verdict:</strong> ${c.verdict}</p></div>
       <p style="font-size:14px">${c.links}</p>
-      ${quizCta("Let TravelByVibe rank hotels for your neighbourhood vibe and room description.", c.slug + "-quiz")}
+      ${quizCta("Let TravelByVibe rank hotels for your neighborhood vibe and room description.", c.slug + "-quiz")}
     </section>
     ${HUB_LINKS}
   </div>`,
@@ -603,7 +603,7 @@ const vibePages = [
     lead: "Skip the anonymous tower lobby. These areas and hotels skew residential — local cantinas, corner mercados, and the CDMX people actually live in.",
     preset: "local-neighborhood",
     array: true,
-    intro: "Juárez, Roma Norte, and Condesa balance visitor infrastructure with everyday neighbourhood life.",
+    intro: "Juárez, Roma Norte, and Condesa balance visitor infrastructure with everyday neighborhood life.",
   },
   {
     file: "mexico-city-design-hotels.html",

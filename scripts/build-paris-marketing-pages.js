@@ -156,7 +156,7 @@ function nbhdGuideGrid() {
         <div class="nbhd-tile" style="background-image:url('${OPERA}')"><h3>Opéra &amp; Champs</h3><p>Grand boulevards, palace hotels, and evening sparkle.</p><a class="nbhd-row-cta" href="__ORIGIN__/hotels-in-opera">Hotels near Opéra →</a></div>
         <div class="nbhd-tile" style="background-image:url('${PONT}')"><h3>Marais vs Saint-Germain</h3><p>Historic buzz or Left Bank calm? Compare the two.</p><a class="nbhd-row-cta" href="__ORIGIN__/marais-vs-saint-germain">Compare →</a></div>
       </div>
-      <p class="nbhd-photo-credits">Neighbourhood photos from TravelByVibe&apos;s Paris vibe index — Wikimedia Commons, Unsplash, and Flickr.</p>`;
+      <p class="nbhd-photo-credits">Neighborhood photos from TravelByVibe&apos;s Paris vibe index — Wikimedia Commons, Unsplash, and Flickr.</p>`;
 }
 
 const PAGES = [];
@@ -166,8 +166,8 @@ PAGES.push({
   file: "where-to-stay-in-paris.html",
   html: page(
     hero({
-      kicker: "Paris · Neighbourhood guide",
-      h1: seoField("where-to-stay-in-paris", "h1", "Where to Stay in Paris — Hotels by Neighbourhood"),
+      kicker: "Paris · Neighborhood guide",
+      h1: seoField("where-to-stay-in-paris", "h1", "Where to Stay in Paris — Hotels by Neighborhood"),
       lead:
         "Le Marais, Saint-Germain, Montmartre, Latin Quarter, or Opéra? This guide maps <strong>arrondissement character</strong> to hotels that fit — then TravelByVibe matches you using <strong>real room photos</strong>.",
       heroImage: EIFFEL_HERO,
@@ -179,11 +179,11 @@ PAGES.push({
       `<div class="wrap-wide">
     <section class="msec" style="padding-top:36px;margin-top:0;border-top:none">
       <p class="msec-kicker">At a glance</p>
-      <h2 class="msec-title">${seoField("where-to-stay-in-paris", "h2Featured", "Best neighbourhoods at a glance")}</h2>
+      <h2 class="msec-title">${seoField("where-to-stay-in-paris", "h2Featured", "Best neighborhoods at a glance")}</h2>
       ${HUB_LINKS}
       <div class="compare-wrap" style="margin-top:24px">
         <table class="compare-table">
-          <thead><tr><th scope="col">Neighbourhood</th><th scope="col">Best for</th><th scope="col">Vibe</th></tr></thead>
+          <thead><tr><th scope="col">Neighborhood</th><th scope="col">Best for</th><th scope="col">Vibe</th></tr></thead>
           <tbody>
             <tr><td><a href="__ORIGIN__/hotels-in-le-marais">Le Marais</a></td><td>First-timers, galleries, walkable buzz</td><td>Historic, artsy, café-led</td></tr>
             <tr><td><a href="__ORIGIN__/hotels-in-saint-germain">Saint-Germain</a></td><td>Left Bank calm, bookshops, museums</td><td>Literary, polished, relaxed</td></tr>
@@ -196,7 +196,7 @@ PAGES.push({
     </section>
     <section class="msec">
       <p class="msec-kicker">Hotel picks</p>
-      <h2 class="msec-title">${seoField("where-to-stay-in-paris", "h2Hotels", "Best Paris hotels by neighbourhood")}</h2>
+      <h2 class="msec-title">${seoField("where-to-stay-in-paris", "h2Hotels", "Best Paris hotels by neighborhood")}</h2>
       <p class="msec-lead">Browse indexed Paris hotels with real room and bathroom photos in each arrondissement — or search all of Paris by vibe.</p>
       <p class="msec-lead"><a href="__ORIGIN__/paris-hotels">All Paris hotels</a> · <a href="__ORIGIN__/hotels-in-le-marais">Hotels in Le Marais</a> · <a href="__ORIGIN__/hotels-in-saint-germain">Hotels in Saint-Germain</a> · <a href="__ORIGIN__/hotels-in-montmartre">Hotels in Montmartre</a> · <a href="__ORIGIN__/hotels-in-latin-quarter">Hotels in Latin Quarter</a> · <a href="__ORIGIN__/hotels-in-opera">Hotels near Opéra</a></p>
     </section>
@@ -209,7 +209,7 @@ PAGES.push({
         <div class="fcard"><h3>Romance + skyline views</h3><p><strong>Montmartre</strong> — steep streets, Sacré-Cœur sunsets, and cosy room moods. For Eiffel views, see <a href="__ORIGIN__/paris-hotels-near-eiffel-tower">hotels near the Eiffel Tower</a>.</p></div>
         <div class="fcard"><h3>Luxury + grand avenues</h3><p><strong>Opéra &amp; Champs</strong> — palace hotels and evening lights when you want the postcard.</p></div>
       </div>
-      ${quizCta("<strong>Not sure?</strong> Our vibe wizard captures trip pace, must-haves, and neighbourhood feel — then ranks Paris hotels with real room photography.", "where-to-stay-paris-quiz")}
+      ${quizCta("<strong>Not sure?</strong> Our vibe wizard captures trip pace, must-haves, and neighborhood feel — then ranks Paris hotels with real room photography.", "where-to-stay-paris-quiz")}
     </section>
     <section class="msec">
       <p class="msec-kicker">See the city</p>
@@ -227,7 +227,7 @@ PAGES.push({
     <p>Area fit is half the decision. TravelByVibe also ranks suites by how closely their <strong>real room photos</strong> match what you describe — bathrooms, Haussmann light, layout, and design.</p>
     <p>Explore: <a href="__ORIGIN__/hotels-in-le-marais">hotels in Le Marais</a>, <a href="__ORIGIN__/marais-vs-saint-germain">Marais vs Saint-Germain</a>, and our <a href="__ORIGIN__/paris-hotel-finder">Paris hotel finder</a>.</p>
     <div class="cta-band">
-      <p>Ready to match neighbourhood + room?</p>
+      <p>Ready to match neighborhood + room?</p>
       <a class="mcta" href="${utm("where-to-stay-paris-footer")}">Start in Paris — free</a>
     </div>
   </main>`,
@@ -243,11 +243,11 @@ PAGES.push({
   file: "paris-neighborhood-guide.html",
   html: page(
     hero({
-      kicker: "Paris neighbourhoods",
+      kicker: "Paris neighborhoods",
       h1: seoField("paris-neighborhood-guide", "h1", "Paris Neighborhood Guide"),
       lead: "A practical map of Paris&apos;s best hotel districts — what each area feels like, who it suits, and where to search next.",
       heroImage: NOTRE_DAME,
-      ctaPrimary: "Match my neighbourhood →",
+      ctaPrimary: "Match my neighborhood →",
       ctaSecondary: "Hotel finder",
       utmPrimary: "paris-nbhd-guide-hero",
       utmSecondary: "paris-nbhd-guide-finder",
@@ -258,11 +258,11 @@ PAGES.push({
       <p class="msec-lead" style="margin-top:20px">Use this guide alongside <a href="__ORIGIN__/where-to-stay-in-paris">Where to Stay in Paris</a> — comparison tables and vibe matching on the hub page.</p>
     </section>
     <section class="msec">
-      <h2 class="msec-title">${seoField("paris-neighborhood-guide", "h2Hotels", "Best Paris hotels by neighbourhood")}</h2>
+      <h2 class="msec-title">${seoField("paris-neighborhood-guide", "h2Hotels", "Best Paris hotels by neighborhood")}</h2>
       <p class="msec-lead"><a href="__ORIGIN__/paris-hotels">Paris hotels hub</a> · <a href="__ORIGIN__/hotels-in-le-marais">Le Marais</a> · <a href="__ORIGIN__/hotels-in-saint-germain">Saint-Germain</a> · <a href="__ORIGIN__/hotels-in-montmartre">Montmartre</a> · <a href="__ORIGIN__/hotels-in-latin-quarter">Latin Quarter</a> · <a href="__ORIGIN__/hotels-in-opera">Opéra</a></p>
     </section>
     <section class="msec">
-      <h2 class="msec-title">Neighbourhood deep links</h2>
+      <h2 class="msec-title">Neighborhood deep links</h2>
       ${nbhdGuideGrid()}
     </section>
     ${embedSearch("paris-nbhd-guide-search")}
@@ -293,7 +293,7 @@ PAGES.push({
       <p class="msec-kicker">Your turn</p>
       <h2 class="msec-title">Search Paris hotels by vibe</h2>
       ${embedSearch("paris-hotel-finder-embed")}
-      ${quizCta("<strong>Prefer a guided flow?</strong> The vibe wizard captures neighbourhood pace and room must-haves before you search.", "paris-hotel-finder-quiz")}
+      ${quizCta("<strong>Prefer a guided flow?</strong> The vibe wizard captures neighborhood pace and room must-haves before you search.", "paris-hotel-finder-quiz")}
     </section>
     ${HUB_LINKS}
   </div>`,
@@ -332,7 +332,7 @@ PAGES.push({
         </figure>
         <figure class="vibe-card">
           <img src="${EIFFEL}" width="960" height="640" alt="Eiffel Tower, Paris" loading="lazy" />
-          <figcaption><strong>View energy</strong>Eiffel glimpses — pair neighbourhood choice with the right room.</figcaption>
+          <figcaption><strong>View energy</strong>Eiffel glimpses — pair neighborhood choice with the right room.</figcaption>
         </figure>
       </div>
     </section>
@@ -349,7 +349,7 @@ PAGES.push({
   </div>
   <main class="wrap">
     <h2>Plan Paris with both eyes open</h2>
-    <p>Guides: <a href="__ORIGIN__/where-to-stay-in-paris">Where to stay in Paris</a> · <a href="__ORIGIN__/paris-visual-search">Visual room search</a> · <a href="__ORIGIN__/paris-neighborhood-stays">Neighbourhood stays</a></p>
+    <p>Guides: <a href="__ORIGIN__/where-to-stay-in-paris">Where to stay in Paris</a> · <a href="__ORIGIN__/paris-visual-search">Visual room search</a> · <a href="__ORIGIN__/paris-neighborhood-stays">Neighborhood stays</a></p>
     <div class="cta-band">
       <p>Describe your Paris room—see matches in seconds.</p>
       <a class="mcta" href="${utm("paris-hotels-footer")}">Search Paris hotels</a>
@@ -359,17 +359,17 @@ PAGES.push({
   ),
 });
 
-// Neighbourhood stays (vibe-focused spoke)
+// Neighborhood stays (vibe-focused spoke)
 PAGES.push({
   file: "paris-neighborhood-stays.html",
   html: page(
     hero({
-      kicker: "Paris · Neighbourhoods",
-      h1: seoField("paris-neighborhood-stays", "h1", "Paris Hotels by Neighbourhood"),
-      lead: "TravelByVibe connects <strong>neighbourhood energy</strong> with <strong>hotel room reality</strong>. Tell us if you want icons-and-buzz, calm-and-central, village-like streets, or grand boulevard sparkle.",
+      kicker: "Paris · Neighborhoods",
+      h1: seoField("paris-neighborhood-stays", "h1", "Paris Hotels by Neighborhood"),
+      lead: "TravelByVibe connects <strong>neighborhood energy</strong> with <strong>hotel room reality</strong>. Tell us if you want icons-and-buzz, calm-and-central, village-like streets, or grand boulevard sparkle.",
       heroImage: EIFFEL_HERO,
       ctaPrimary: "Start in Paris →",
-      ctaSecondary: "Neighbourhood guide",
+      ctaSecondary: "Neighborhood guide",
       utmPrimary: "paris-nbhd-stays-hero",
       utmSecondary: "paris-nbhd-stays-guide",
     }) +
@@ -377,7 +377,7 @@ PAGES.push({
     <section class="msec" style="padding-top:36px;margin-top:0;border-top:none">
       <p class="msec-kicker">Feel the city first</p>
       <h2 class="msec-title">Paris is twenty villages in one coat</h2>
-      <div class="vibe-strip" aria-label="Paris neighbourhoods">
+      <div class="vibe-strip" aria-label="Paris neighborhoods">
         <figure class="vibe-card"><img src="${METRO}" width="960" height="640" alt="Paris Métro sign" loading="lazy" /><figcaption><strong>Métro rhythm</strong>Every arrondissement has a different pulse.</figcaption></figure>
         <figure class="vibe-card"><img src="${LATIN}" width="960" height="640" alt="Rue Mouffetard, Paris" loading="lazy" /><figcaption><strong>Market streets</strong>Latin Quarter energy — bistros and river walks.</figcaption></figure>
         <figure class="vibe-card"><img src="${SAINT_GERMAIN}" width="960" height="640" alt="Saint-Germain-des-Prés" loading="lazy" /><figcaption><strong>Museum mornings</strong>Left Bank culture within easy reach.</figcaption></figure>
@@ -386,7 +386,7 @@ PAGES.push({
       </div>
     </section>
     <section class="msec">
-      <h2 class="msec-title">Which Paris neighbourhood sounds like you?</h2>
+      <h2 class="msec-title">Which Paris neighborhood sounds like you?</h2>
       ${nbhdGuideGrid()}
     </section>
     ${embedSearch("paris-nbhd-stays-search")}
@@ -428,7 +428,7 @@ PAGES.push({
         <figure class="vibe-card"><img src="${GARNIER}" width="960" height="640" alt="Palais Garnier, Paris" loading="lazy" /><figcaption><strong>Opéra grandeur</strong>Palace-hotel drama in your room search.</figcaption></figure>
         <figure class="vibe-card"><img src="${MARAIS}" width="960" height="640" alt="Le Marais, Paris" loading="lazy" /><figcaption><strong>Marais cobbles</strong>Village-in-the-city boutique moods.</figcaption></figure>
         <figure class="vibe-card"><img src="https://images.unsplash.com/photo-1600566753190-17f0baa2a6c3?auto=format&amp;fit=crop&amp;w=640&amp;h=480&amp;q=82" width="640" height="480" alt="Luxury hotel bathroom" loading="lazy" /><figcaption><strong>Marble bath</strong>Search rain shower and see real tile.</figcaption></figure>
-        <figure class="vibe-card"><img src="${EIFFEL}" width="960" height="640" alt="Eiffel Tower" loading="lazy" /><figcaption><strong>View requests</strong>Eiffel glimpses with neighbourhood fit.</figcaption></figure>
+        <figure class="vibe-card"><img src="${EIFFEL}" width="960" height="640" alt="Eiffel Tower" loading="lazy" /><figcaption><strong>View requests</strong>Eiffel glimpses with neighborhood fit.</figcaption></figure>
       </div>
     </section>
     ${embedSearch("paris-visual-search-embed")}
@@ -441,7 +441,7 @@ PAGES.push({
       <li>Romantic Paris suite, moody lighting, soaking tub</li>
       <li>Art-deco hotel interior, polished brass details</li>
     </ul>
-    <p>Pair with the <a href="__ORIGIN__/where-to-stay-in-paris">neighbourhood guide</a> when location matters as much as the bathroom.</p>
+    <p>Pair with the <a href="__ORIGIN__/where-to-stay-in-paris">neighborhood guide</a> when location matters as much as the bathroom.</p>
     <div class="cta-band"><p>Describe your Paris room.</p><a class="mcta" href="${utm("paris-visual-search-footer")}">Search Paris hotels</a></div>
   </main>`,
     { canonical: "paris-visual-search", city: "Paris", pageCategory: "hub" }
@@ -454,9 +454,9 @@ const nbhdPages = [
     slug: "hotels-in-le-marais",
     preset: "paris-le-marais",
     h1: "Best Hotels in Le Marais Paris",
-    lead: "Le Marais is historic, walkable, and gallery-dense — one of the best neighbourhoods for first-time Paris visitors who want cobblestones without a car.",
+    lead: "Le Marais is historic, walkable, and gallery-dense — one of the best neighborhoods for first-time Paris visitors who want cobblestones without a car.",
     hero: MARAIS,
-    why: "Medieval lanes meet contemporary galleries. Mornings feel local; evenings spill onto terrace tables. Ideal when you want the Louvre within reach but prefer neighbourhood buzz to grand boulevards.",
+    why: "Medieval lanes meet contemporary galleries. Mornings feel local; evenings spill onto terrace tables. Ideal when you want the Louvre within reach but prefer neighborhood buzz to grand boulevards.",
     who: "First-timers, gallery lovers, foodies, and travellers who picture falafel queues and hidden courtyards over skyline towers.",
     compare: '<a href="__ORIGIN__/marais-vs-saint-germain">Marais vs Saint-Germain</a> · <a href="__ORIGIN__/montmartre-vs-marais">Montmartre vs Marais</a>',
   },
@@ -480,7 +480,7 @@ const nbhdPages = [
     hero: MONTMARTRE,
     why: "Steep streets, painters, and Sacré-Cœur at golden hour. Quieter nights than Marais; more character than Opéra tower blocks.",
     who: "Romantic trips, photographers, travellers who want a cosy room mood and do not mind métro hops to the centre.",
-    compare: '<a href="__ORIGIN__/montmartre-vs-marais">Montmartre vs Marais</a> · <a href="__ORIGIN__/where-to-stay-in-paris">All neighbourhoods</a>',
+    compare: '<a href="__ORIGIN__/montmartre-vs-marais">Montmartre vs Marais</a> · <a href="__ORIGIN__/where-to-stay-in-paris">All neighborhoods</a>',
   },
   {
     file: "hotels-in-latin-quarter.html",
@@ -548,7 +548,7 @@ for (const n of nbhdPages) {
       {
         canonical: n.slug,
         city: "Paris",
-        pageCategory: "neighbourhood",
+        pageCategory: "neighborhood",
         breadcrumbLabel: seoField(n.slug, "h2Featured", n.h1.replace(/^Best Hotels in /, "Hotels in ").replace(/ Paris$/, "")),
       }
     ),
@@ -641,7 +641,7 @@ for (const c of comparisons) {
     file: c.file,
     html: page(
       compareHero({
-        kicker: "Compare neighbourhoods",
+        kicker: "Compare neighborhoods",
         h1: c.h1,
         lead: c.lead,
         leftImage: c.leftImage,
@@ -669,7 +669,7 @@ for (const c of comparisons) {
       <p class="msec-lead">${c[c.whoBKey]}</p>
       <div class="verdict-box"><p><strong>Our verdict:</strong> ${c.verdict}</p></div>
       <p style="font-size:14px">${c.links}</p>
-      ${quizCta("Let TravelByVibe rank hotels for your neighbourhood vibe and room description.", c.slug + "-quiz")}
+      ${quizCta("Let TravelByVibe rank hotels for your neighborhood vibe and room description.", c.slug + "-quiz")}
     </section>
     ${HUB_LINKS}
   </div>`,
