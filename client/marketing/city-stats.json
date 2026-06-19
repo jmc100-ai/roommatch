@@ -1,0 +1,21 @@
+{
+  "generatedAt": "2026-06-19T15:35:48.541Z",
+  "cities": {
+    "Paris": {
+      "status": "complete",
+      "catalogHotels": 4979,
+      "photoCount": 114078,
+      "searchableHotels": 4930,
+      "searchableLabel": "4,900+",
+      "catalogLabel": "4,900+"
+    },
+    "Mexico City": {
+      "status": "complete",
+      "catalogHotels": 3497,
+      "photoCount": 73973,
+      "searchableHotels": 3465,
+      "searchableLabel": "3,400+",
+      "catalogLabel": "3,400+"
+    }
+  }
+}

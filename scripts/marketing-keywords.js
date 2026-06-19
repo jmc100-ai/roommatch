@@ -1,3 +1,8 @@
+const { searchableLabel } = require("./marketing-city-stats");
+
+const PARIS_COUNT = searchableLabel("Paris");
+const CDMX_COUNT = searchableLabel("Mexico City");
+
 /**
  * Per-page SEO copy: titles, descriptions, H1/H2 overrides.
  * Title values are WITHOUT the "| TravelByVibe" suffix (added by applySeoMeta).
@@ -16,7 +21,40 @@ const SEO_META = {
   },
   "paris-hotels": {
     title: "Paris Hotels — Search by Real Room Photos",
-    desc: "Find Paris hotels by vibe and actual room photography — Haussmann light, rainfall shower, Left Bank mood. Browse free before you book.",
+    h1: "Best Hotels in Paris",
+    desc: `Best hotels in Paris: browse ${PARIS_COUNT} properties with real room and bathroom photos — Haussmann light, rainfall shower, Left Bank mood — free on TravelByVibe.`,
+    h2Travel: "Best Paris hotels by neighborhood",
+  },
+  "travel-paris-hotels": {
+    title: "Travel Paris Hotels — Plan Your Stay by Vibe",
+    h1: "Travel Paris Hotels",
+    desc: `Travel Paris hotels the smart way — pick Le Marais, Saint-Germain, or Montmartre, run the vibe quiz, then search ${PARIS_COUNT} Paris hotels by real room photos before you book.`,
+    breadcrumbLabel: "Travel Paris hotels",
+    h2Featured: "How to plan travel to Paris hotels",
+    h2Hotels: "Best Paris hotels for travellers",
+    h2Neighborhoods: "Travel Paris hotels by neighborhood",
+  },
+  "safe-neighborhoods-paris": {
+    title: "Best Areas to Stay in Paris for Tourists — Hotels by Neighborhood",
+    h1: "Best Areas to Stay in Paris for Tourists",
+    desc: "Where to stay in Paris: Le Marais, Latin Quarter, Saint-Germain, and Montmartre are popular visitor districts. Compare areas, then match hotels by real room photos.",
+    breadcrumbLabel: "Best areas for tourists",
+    h2Featured: "Best Paris neighborhoods for visitors",
+    h2Hotels: "Best hotels in visitor-friendly Paris neighborhoods",
+  },
+  "paris-walkable-hotels": {
+    title: "Best Walkable Hotels in Paris — Le Marais, Latin Quarter & Left Bank",
+    h1: "Best Walkable Hotels in Paris",
+    desc: "Walkable Paris hotels in Le Marais, Latin Quarter, and Saint-Germain — flat, central districts where museums and bistros are on foot. Search real room photos.",
+    h2Intro: "Best walkable Paris hotel neighborhoods",
+    h2Featured: "Walkable Paris hotel picks",
+  },
+  "paris-cafe-vibe-hotels": {
+    title: "Best Café Culture Hotels in Paris (Saint-Germain & Le Marais)",
+    h1: "Best Café Culture Hotels in Paris",
+    desc: "Hotels near Paris café culture — Saint-Germain wine bars, Le Marais terrace mornings, and Left Bank literary calm. Search real room photos by vibe.",
+    h2Intro: "Best café-culture hotels in Paris",
+    h2Featured: "Paris hotels near great cafés",
   },
   "paris-neighborhood-stays": {
     title: "Paris Hotels by Neighborhood — Where to Stay",
@@ -41,11 +79,13 @@ const SEO_META = {
   },
   "paris-boutique-hotels": {
     title: "Best Boutique Hotels in Paris",
+    desc: "Best boutique hotels in Paris — restored mansions and design-forward small hotels in Le Marais, Saint-Germain, and Montmartre. Search real room photos on TravelByVibe.",
     h2Intro: "Best boutique hotels in Paris by neighborhood",
     h2Featured: "Boutique hotel picks in Le Marais, Saint-Germain & Montmartre",
   },
   "paris-luxury-hotels": {
     title: "Best Luxury Hotels in Paris",
+    desc: "Best luxury hotels in Paris — Opéra palace hotels, Left Bank flagships, and suites with real marble baths. Browse indexed room photography before you book.",
     h2Intro: "Best luxury hotels in Paris — Opéra, Saint-Germain & Champs",
     h2Featured: "Luxury Paris hotels to start with",
   },
@@ -115,13 +155,13 @@ const SEO_META = {
   "mexico-city-hotels": {
     title: "Best Hotels in Mexico City — Search by Real Room Photos",
     h1: "Best Hotels in Mexico City",
-    desc: "Best hotels in Mexico City (CDMX): browse 3,600+ properties by neighborhood vibe and real room photos — rainfall shower, bright suite, design mood — free on TravelByVibe.",
+    desc: `Best hotels in Mexico City (CDMX): browse ${CDMX_COUNT} properties by neighborhood vibe and real room photos — rainfall shower, bright suite, design mood — free on TravelByVibe.`,
     h2Travel: "Best hotels in Mexico City by neighborhood",
   },
   "travel-mexico-city-hotels": {
     title: "Travel Mexico City Hotels — Plan Your Stay by Vibe",
     h1: "Travel Mexico City Hotels",
-    desc: "Travel Mexico City hotels the smart way — pick Condesa, Roma Norte, Polanco, or Centro, run the vibe quiz, then search 3,600+ properties by real room photos before you book.",
+    desc: `Travel Mexico City hotels the smart way — pick Condesa, Roma Norte, Polanco, or Centro, run the vibe quiz, then search ${CDMX_COUNT} properties by real room photos before you book.`,
     breadcrumbLabel: "Travel Mexico City hotels",
     h2Featured: "How to plan travel to Mexico City hotels",
     h2Hotels: "Best Mexico City hotels for travellers",
@@ -145,6 +185,7 @@ const SEO_META = {
   },
   "mexico-city-boutique-hotels": {
     title: "Best Boutique Hotels in Mexico City",
+    desc: "Best boutique hotels in Mexico City — restored mansions and design stays in Condesa, Roma Norte, and Polanco. Search real room photos on TravelByVibe.",
     h2Intro: "Best boutique hotels in Mexico City by neighborhood",
     h2Featured: "Boutique hotel picks in Condesa, Roma Norte & Polanco",
   },
@@ -164,6 +205,7 @@ const SEO_META = {
   },
   "mexico-city-design-hotels": {
     title: "Best Design Hotels in Mexico City",
+    desc: "Best design hotels in Mexico City — mid-century restoration, contemporary glass, and art-filled lobbies in Polanco and Condesa. Search by real room photos.",
     h2Intro: "Best design hotels in Mexico City",
     h2Featured: "Design-forward CDMX hotel stays",
   },

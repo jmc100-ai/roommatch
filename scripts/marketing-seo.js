@@ -3,6 +3,10 @@
  */
 const { escHtml } = require("./marketing-seo-utils");
 const { applySeoMeta } = require("./marketing-keywords");
+const { searchableLabel } = require("./marketing-city-stats");
+
+const PARIS_COUNT = searchableLabel("Paris");
+const CDMX_COUNT = searchableLabel("Mexico City");
 
 function attrEsc(s) {
   return String(s || "")
@@ -47,7 +51,7 @@ const HUB_FAQS = {
   "paris-hotels": [
     {
       q: "How do I find Paris hotels with real room photos?",
-      a: "TravelByVibe indexes hotel room photography and matches it to plain-language searches — bathrooms, light, layout, and design mood — so you see suites before you book elsewhere.",
+      a: `TravelByVibe indexes room photography across ${PARIS_COUNT} Paris hotels with searchable room photos. Search by vibe — bathroom features, Haussmann light, design mood — before you commit on a booking site.`,
     },
     {
       q: "What is visual hotel search for Paris?",
@@ -64,6 +68,10 @@ const HUB_FAQS = {
     {
       q: "Is TravelByVibe free to use?",
       a: "Yes — browsing and visual search are free. Add travel dates when you are ready to see live rates, then book through our partner links.",
+    },
+    {
+      q: "How many Paris hotels does TravelByVibe cover?",
+      a: `We index ${PARIS_COUNT} Paris hotels with enough room photography for visual search. Mexico City (${CDMX_COUNT}) remains comparably deep on the same platform.`,
     },
   ],
   "paris-hotel-finder": [
@@ -127,7 +135,7 @@ const HUB_FAQS = {
   "mexico-city-hotels": [
     {
       q: "How do I find Mexico City hotels with real room photos?",
-      a: "TravelByVibe indexes room photography across 3,600+ CDMX hotels. Search by vibe — bathroom features, natural light, design mood — before you commit on a booking site.",
+      a: `TravelByVibe indexes room photography across ${CDMX_COUNT} CDMX hotels. Search by vibe — bathroom features, natural light, design mood — before you commit on a booking site.`,
     },
     {
       q: "What are the best hotels in Mexico City?",
@@ -157,7 +165,7 @@ const HUB_FAQS = {
   "travel-mexico-city-hotels": [
     {
       q: "How do I find hotels when traveling to Mexico City?",
-      a: "Start with neighborhood — Condesa, Roma Norte, Polanco, Juárez, or Centro Histórico — then run TravelByVibe's vibe quiz or describe the room you want. We rank 3,600+ CDMX hotels by real photography before you book elsewhere.",
+      a: `Start with neighborhood — Condesa, Roma Norte, Polanco, Juárez, or Centro Histórico — then run TravelByVibe's vibe quiz or describe the room you want. We rank ${CDMX_COUNT} CDMX hotels by real photography before you book elsewhere.`,
     },
     {
       q: "What is the best area to stay when traveling to Mexico City?",
@@ -262,6 +270,110 @@ const HUB_FAQS = {
       a: "Centro is vibrant and iconic but busier and louder. Many visitors stay in Condesa/Roma and day-trip to the Zócalo — others love being in the thick of it.",
     },
   ],
+  "travel-paris-hotels": [
+    {
+      q: "How do I find hotels when traveling to Paris?",
+      a: `Start with neighborhood — Le Marais, Latin Quarter, Saint-Germain, or Montmartre — then run TravelByVibe's vibe quiz or describe the room you want. We rank ${PARIS_COUNT} Paris hotels by real photography before you book elsewhere.`,
+    },
+    {
+      q: "What is the best area to stay when traveling to Paris?",
+      a: "First-time visitors often pick Le Marais or the Latin Quarter for walkable museums and cafés. Saint-Germain suits Left Bank calm; Montmartre suits romance and views.",
+    },
+    {
+      q: "Can I see hotel rooms before booking my Paris trip?",
+      a: "Yes — TravelByVibe is built for that. Search rainfall shower, Haussmann light, or moody boutique mood and browse indexed room and bathroom photos across Paris.",
+    },
+    {
+      q: "Do I need dates to browse travel Paris hotels?",
+      a: "No. Explore neighborhoods and room photos for free. Add check-in and check-out when you want live rates from partners.",
+    },
+  ],
+  "safe-neighborhoods-paris": [
+    {
+      q: "What are the best areas to stay in Paris for tourists?",
+      a: "Le Marais, Latin Quarter, Saint-Germain-des-Prés, and Montmartre are the most common visitor hotel districts — walkable, well served by métro, and familiar to international travellers. Use normal big-city awareness at night.",
+    },
+    {
+      q: "Is Le Marais a good area for tourists?",
+      a: "Le Marais is one of Paris's most popular visitor districts — flat, central, and full of galleries and restaurants. It is a standard first-timer base.",
+    },
+    {
+      q: "Is Montmartre safe for tourists?",
+      a: "Montmartre is a well-trodden visitor area with village charm and skyline views. It is hillier and slightly north of the core — plan on métro hops for some sights.",
+    },
+    {
+      q: "Should I avoid any Paris arrondissement entirely?",
+      a: "Most visitors choose among central Left Bank and Marais districts rather than avoiding whole areas. Pick based on trip vibe — then match the room on TravelByVibe.",
+    },
+  ],
+  "paris-walkable-hotels": [
+    {
+      q: "What is the most walkable neighborhood in Paris for hotels?",
+      a: "Le Marais and the Latin Quarter lead for flat, central walks — museums, bistros, and river access without a car. Saint-Germain adds Left Bank polish on foot.",
+    },
+    {
+      q: "Can I walk everywhere in Paris from one hotel?",
+      a: "Central districts reward walkers, but Paris is large — métro fills gaps. Stay in Marais or Latin Quarter if maximizing on-foot sightseeing is the priority.",
+    },
+    {
+      q: "Are walkable Paris hotels more expensive?",
+      a: "Central arrondissements span boutique to palace price points. Compare room photos on TravelByVibe — a perfect location still fails if the suite feels wrong.",
+    },
+  ],
+  "paris-cafe-vibe-hotels": [
+    {
+      q: "Which Paris neighborhood has the best café culture for hotels?",
+      a: "Saint-Germain-des-Prés and Le Marais lead — literary Left Bank cafés versus Marais terrace mornings. Both are walkable and full of independent tables.",
+    },
+    {
+      q: "Can I search Paris hotels near café culture?",
+      a: "Yes — browse our café-culture picks, then describe terrace mornings or wine-bar evenings in visual search to match room photos.",
+    },
+  ],
+  "paris-boutique-hotels": [
+    {
+      q: "What are the best boutique hotels in Paris?",
+      a: "Le Marais, Saint-Germain, and Montmartre have the deepest boutique stock — restored mansions and design-forward small hotels. Browse our picks or search by room photos.",
+    },
+    {
+      q: "How is a Paris boutique hotel different from a palace hotel?",
+      a: "Boutiques skew intimate and design-led; palace hotels on Opéra and the Champs skew grand lobby and formal service. TravelByVibe helps you judge the actual room in either case.",
+    },
+  ],
+  "paris-luxury-hotels": [
+    {
+      q: "What are the best luxury hotels in Paris?",
+      a: "Opéra, Saint-Germain, and the Champs lead for five-star stays. Search palace bath, marble shower, or Haussmann suite on TravelByVibe before you book elsewhere.",
+    },
+    {
+      q: "Can I search luxury Paris hotels by bathroom photos?",
+      a: "Yes — rainfall shower, soaking tub, and double vanity are common searches. We surface hotels whose indexed bathroom photos match.",
+    },
+  ],
+  "paris-romantic-hotels": [
+    {
+      q: "What are the best romantic hotels in Paris?",
+      a: "Montmartre and Saint-Germain lead for couples — village views or Left Bank intimacy. Search moody lighting, soaking tub, or cosy boutique mood in visual search.",
+    },
+  ],
+  "paris-classic-hotels": [
+    {
+      q: "What is a Haussmann-style hotel room in Paris?",
+      a: "Tall windows, plaster mouldings, and pale Paris light — the classic apartment feel. Search Haussmann or classic Paris apartment hotel on TravelByVibe.",
+    },
+  ],
+  "mexico-city-boutique-hotels": [
+    {
+      q: "What are the best boutique hotels in Mexico City?",
+      a: "Roma Norte and Condesa lead for design boutiques; Polanco for polished luxury. Browse our boutique page or search by real room photos.",
+    },
+  ],
+  "mexico-city-design-hotels": [
+    {
+      q: "What are the best design hotels in Mexico City?",
+      a: "Polanco and Condesa lead for architecture-forward stays — mid-century restoration and contemporary glass. Search sleek, eclectic, or minimalist room moods.",
+    },
+  ],
   "hotels-near-chapultepec": [
     {
       q: "What is the best area to stay near Chapultepec Park?",
@@ -295,7 +407,7 @@ const HUB_FAQS = {
     },
     {
       q: "Can I see hotel rooms before booking my first CDMX trip?",
-      a: "Yes — TravelByVibe ranks 3,600+ Mexico City hotels by real room and bathroom photos. Describe rainfall shower, bright suite, or design mood before you commit elsewhere.",
+      a: `Yes — TravelByVibe ranks ${CDMX_COUNT} Mexico City hotels by real room and bathroom photos. Describe rainfall shower, bright suite, or design mood before you commit elsewhere.`,
     },
   ],
 };
@@ -304,6 +416,8 @@ const CITY_HUB = {
   Paris: {
     hotels: "/paris-hotels",
     hotelsLabel: "Paris hotels",
+    travelGuide: "/travel-paris-hotels",
+    travelGuideLabel: "Travel Paris hotels",
     where: "/where-to-stay-in-paris",
     whereLabel: "Where to stay in Paris",
     finder: "/paris-hotel-finder",
@@ -335,7 +449,11 @@ function hubLinks(city) {
   const guide =
     city === "Paris"
       ? `<a href="__ORIGIN__/best-area-to-stay-in-paris-first-time">Paris first-time guide</a>
-      <a href="__ORIGIN__/paris-hotels-near-eiffel-tower">Hotels near Eiffel Tower</a>`
+      <a href="__ORIGIN__/travel-paris-hotels">Travel Paris hotels</a>
+      <a href="__ORIGIN__/safe-neighborhoods-paris">Best areas for tourists</a>
+      <a href="__ORIGIN__/paris-walkable-hotels">Walkable Paris hotels</a>
+      <a href="__ORIGIN__/paris-hotels-near-eiffel-tower">Hotels near Eiffel Tower</a>
+      <a href="__ORIGIN__/paris-cafe-vibe-hotels">Café culture hotels</a>`
       : `<a href="__ORIGIN__/best-area-to-stay-in-mexico-city-first-time">Mexico City first-time guide</a>
       <a href="__ORIGIN__/travel-mexico-city-hotels">Travel Mexico City hotels</a>
       <a href="__ORIGIN__/safe-neighborhoods-mexico-city">Safe neighborhoods CDMX</a>

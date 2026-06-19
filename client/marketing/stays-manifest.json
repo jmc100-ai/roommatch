@@ -201,12 +201,14 @@
     "lp6556a291": "novo-coapa-mexico-city",
     "lp65580cfd": "pent-house-masaryk-17-mexico-city",
     "lp29c41": "le-meurice-dorchester-collection-paris",
+    "lp2051f": "hotel-la-villa-saint-germain-des-pres-paris",
     "lp396001": "monsieur-george-hotel-and-spa-champs-elysees-paris",
     "lp2b5d3": "hotel-le-royal-monceau-raffles-paris-paris",
     "lp29425": "hotel-pulitzer-paris-paris",
     "lp2eb64": "hotel-de-montesquieu-paris",
     "lp224224": "hotel-le-ballu-paris",
     "lp1ee27": "chateau-des-fleurs-hotel-and-spa-paris-paris",
+    "lp200c75": "j-k-place-paris-paris",
     "lp1beec": "hotel-des-grands-voyageurs-paris",
     "lp33d07": "park-hyatt-paris-vendome-paris",
     "lp1dd7e": "le-pavillon-de-la-reine-and-spa-place-des-vosges-paris",
@@ -218,9 +220,11 @@
     "lp1c507": "sofitel-paris-baltimore-tour-eiffel-paris",
     "lp1faf8": "xo-hotel-paris-paris",
     "lp2a416": "norman-paris-hotel-and-spa-paris",
+    "lp3ba49": "hotel-fouquet-s-paris-paris",
     "lp1f535": "villa-marquis-member-of-melia-collection-tour-ei-paris",
     "lp1f4ac": "hotel-malte-astotel-paris",
     "lp37606": "le-petit-oberkampf-hotel-and-spa-paris",
+    "lp2093b9": "paris-j-adore-hotel-and-spa-paris",
     "lp1af45": "hotel-napoleon-paris-paris",
     "lp1e4c4": "hotel-montalembert-paris",
     "lp23701": "sofitel-paris-le-faubourg-paris",
@@ -244,7 +248,10 @@
     "lp29d50": "la-chambre-du-marais-paris",
     "lp310a4": "hotel-petit-lafayette-paris",
     "lp2db44": "hotel-pont-royal-paris",
+    "lp32bc7": "hotel-des-arts-montmartre-paris",
     "lp2d73f": "maison-mere-paris",
+    "lp2066a": "maison-elle-paris-paris",
+    "lp2da51": "hotel-l-ormaie-and-spa-paris",
     "lp19fec": "hotel-sainte-beuve-paris",
     "lp1fbd3": "maison-colbert-member-of-melia-collection-notre-paris",
     "lp1c0f6": "castille-paris-starhotels-collezione-paris",
@@ -255,11 +262,14 @@
     "lp1d5ea": "hotel-atala-champs-elysees-paris",
     "lp33a9e": "hotel-de-berri-champs-elysees-a-luxury-collectio-paris",
     "lp3bdb6": "hotel-monte-cristo-paris",
+    "lp31a85": "hotel-ducs-de-bourgogne-paris",
     "lp2aea8": "sofitel-le-scribe-paris-opera-paris",
     "lp39f55": "le-relais-montmartre-paris",
     "lp31b32": "hotel-le-derby-alma-by-inwood-hotels-paris",
     "lp1b448": "majestic-hotel-spa-champs-elysees-paris",
+    "lp325f0": "la-clef-louvre-paris-by-the-crest-collection-paris",
     "lp23743": "sofitel-paris-arc-de-triomphe-paris",
+    "lp1b8e5d": "les-jardins-du-faubourg-hotel-and-spa-by-shiseid-paris",
     "lp3dbfc": "hotel-des-academies-et-des-arts-paris",
     "lp2308f": "hotel-yllen-eiffel-paris",
     "lp20529": "terrass-hotel-paris",
@@ -267,6 +277,10 @@
     "lp340b9": "le-basile-hotel-paris",
     "lp1f42a": "le-metropolitan-paris-tour-eiffel-a-tribute-port-paris",
     "lp18df07": "la-clef-champs-elysees-paris-by-the-crest-collec-paris",
+    "lp1c67a": "hotel-le-marquis-by-inwood-hotels-paris",
+    "lp3ce4c": "hotel-de-lille-paris",
+    "lp2d032": "hotel-opera-richepanse-paris",
+    "lp2d7a0": "hotel-d-orsay-paris",
     "lp1dbc2": "hotel-vernet-paris",
     "lp1ef18": "le-dokhan-s-paris-arc-de-triomphe-a-tribute-port-paris",
     "lp370e8": "hotel-de-sers-paris",
@@ -288,6 +302,7 @@
     "lp2a1e7": "hotel-de-buci-paris",
     "lp20793": "paris-marriott-champs-elysees-hotel-paris",
     "lp1db78": "hotel-west-end-paris",
+    "lp2abad": "hotel-saint-martin-bastille-paris",
     "lp1b892": "25hours-hotel-terminus-nord-paris",
     "lp1f9cb": "hotel-atmospheres-paris",
     "lp2d79c": "hotel-parc-saint-severin-esprit-de-france-paris",
@@ -295,11 +310,96 @@
     "lp30f1e": "hotel-le-walt-by-inwood-hotels-paris",
     "lp326c6": "hotel-litteraire-marcel-ayme-bw-premier-collecti-paris",
     "lp361fe": "pepper-and-paper-apartments-paris",
+    "lp3d61b": "hotel-whistler-paris",
+    "lp1fe8d": "hotel-observatoire-luxembourg-paris",
+    "lp1b751": "maison-nabis-by-happyculture-paris",
+    "lp1f986": "villa-saxe-eiffel-paris",
     "lp1c042": "pullman-paris-montparnasse-hotel-paris",
     "lp1ee55": "francois-1er-paris",
     "lp3c21a": "hotel-and-spa-de-latour-maubourg-paris",
+    "lp20127": "hotel-bourgogne-and-montana-paris",
     "lp1baa1": "hotel-park-lane-paris-paris",
-    "lp1bf69": "hotel-augustin-astotel-paris"
+    "lp1bf69": "hotel-augustin-astotel-paris",
+    "lp1ce11": "hotel-etoile-maillot-paris",
+    "lp20b2c": "la-clef-tour-eiffel-paris-by-the-crest-collectio-paris",
+    "lp39abb": "hotel-george-astotel-paris",
+    "lp20c5b": "hotel-aiglon-paris",
+    "lp39f56": "hotel-veryste-and-spa-paris-paris",
+    "lp1a355": "hotel-brighton-paris",
+    "lp2a21e": "pullman-paris-centre-bercy-paris",
+    "lp1e471": "golden-tulip-opera-de-noailles-paris",
+    "lp31604": "grand-hotel-saint-michel-paris",
+    "lp2fb83": "hotel-casimir-paris",
+    "lp2d75c": "hotel-mansart-paris",
+    "lp2f524": "maison-axel-opera-paris-paris",
+    "lp223c3": "hotel-la-comtesse-paris",
+    "lp1bbc1": "maison-astor-paris-curio-collection-by-hilton-paris",
+    "lp31a8c": "hotel-le-tourville-by-inwood-hotels-paris",
+    "lp2f832": "hotel-bradford-elysees-astotel-paris",
+    "lp2b869": "le-grey-hotel-paris",
+    "lp1e2cd": "hotel-garden-elysees-paris",
+    "lp1dd78": "hotel-mademoiselle-paris",
+    "lp2cc17": "le-stendhal-vendome-paris",
+    "lp3607c": "hotel-des-saints-peres-paris",
+    "lp28e20d": "hotel-college-de-france-paris",
+    "lp1e426": "solly-hotel-paris-paris",
+    "lp31690": "legend-saint-germain-paris",
+    "lp2954c": "hotel-le-monna-lisa-by-inwood-hotels-paris",
+    "lp35d83": "grand-hotel-chicago-paris",
+    "lp1ee8e": "hotel-la-bourdonnais-by-inwood-hotels-paris",
+    "lp2e4d3": "hotel-maxim-opera-paris",
+    "lp38ccd": "hotel-royal-saint-honore-paris-louvre-paris",
+    "lp31024": "hotel-galileo-paris",
+    "lp1f36e": "hotel-faubourg-galant-paris-handwritten-collecti-paris",
+    "lp333f0": "hotel-toujours-and-spa-paris",
+    "lp1ee5e": "hotel-du-continent-paris",
+    "lp2eb0b": "ampere-paris",
+    "lp1efed": "hotel-touraine-opera-paris",
+    "lp21ac8": "hotel-maison-malesherbes-paris",
+    "lp27e2f": "pullman-paris-tour-eiffel-paris",
+    "lp1fbf7": "le-pergolese-paris-champs-elysees-paris",
+    "lp1d0fc": "fraser-suites-le-claridge-champs-elysees-paris",
+    "lp2e5f1": "le-relais-madeleine-paris",
+    "lp3519f": "hotel-le-pradey-paris",
+    "lp20306": "hotel-le-bellechasse-saint-germain-paris",
+    "lp24b45": "m-social-hotel-paris-paris",
+    "lp36086": "hotel-duret-paris-champs-elysees-paris",
+    "lp1f6b9": "le-belmont-paris-paris",
+    "lp273ba8": "deskopolitan-house-paris",
+    "lp1d98e": "hotel-saint-petersbourg-opera-and-spa-paris",
+    "lp2f82e": "hotel-astoria-astotel-paris",
+    "lp27336c": "novotel-paris-porte-de-versailles-paris",
+    "lp1fa86": "le-littre-paris",
+    "lp2b679": "grand-hotel-francais-paris",
+    "lp200b92": "oh-la-la-hotel-bar-paris-bastille-paris",
+    "lp1f7f8": "hotel-serotel-lutece-paris",
+    "lp203c1": "vendome-opera-hotel-paris",
+    "lp2f831": "hotel-34b-astotel-paris",
+    "lp1f398": "hotel-mayfair-paris",
+    "lp36698": "hotel-le-mathurin-paris",
+    "lp1d8a0": "citadines-les-halles-paris-paris",
+    "lp1edfc": "hotel-westminster-paris",
+    "lp2b678": "novotel-paris-centre-bercy-paris",
+    "lp224a90": "rayz-eiffel-paris",
+    "lp36e78": "monsieur-cadet-hotel-and-spa-paris",
+    "lp1cb51": "new-hotel-roblin-paris",
+    "lp1ba53": "hotel-horset-opera-bw-premier-collection-paris",
+    "lp3006e": "ze-hotel-paris",
+    "lp32945": "hotel-la-villa-d-estrees-saint-germain-paris",
+    "lp23431": "la-maison-champs-elysees-paris",
+    "lp2f7bc": "hotel-le-friedland-paris",
+    "lp2f0b6": "hotel-duette-paris-paris",
+    "lp1c491": "normandy-le-chantier-paris",
+    "lp1f814": "hotel-relais-saint-jacques-paris-paris",
+    "lp21248": "hotel-brittany-paris",
+    "lp2bc54": "mercure-paris-bercy-bibliotheque-paris",
+    "lp1c58d9": "villa-eiffel-mademoiselle-paris",
+    "lp2b87d": "who-windsor-hotel-opera-paris",
+    "lp2ac79": "the-chess-hotel-paris",
+    "lp2d774": "hotel-de-la-place-du-louvre-paris",
+    "lp33a96": "grand-hotel-lafayette-paris",
+    "lp1aa77": "renaissance-paris-nobel-tour-eiffel-hotel-paris",
+    "lp3c54c": "mercure-paris-alesia-paris"
   },
   "hotels": [
     {
@@ -1710,6 +1810,13 @@
       "path": "/stays/le-meurice-dorchester-collection-paris"
     },
     {
+      "hotelId": "lp2051f",
+      "slug": "hotel-la-villa-saint-germain-des-pres-paris",
+      "city": "Paris",
+      "name": "Hotel La Villa Saint Germain Des Prés",
+      "path": "/stays/hotel-la-villa-saint-germain-des-pres-paris"
+    },
+    {
       "hotelId": "lp396001",
       "slug": "monsieur-george-hotel-and-spa-champs-elysees-paris",
       "city": "Paris",
@@ -1750,6 +1857,13 @@
       "city": "Paris",
       "name": "Château des Fleurs Hôtel & Spa Paris",
       "path": "/stays/chateau-des-fleurs-hotel-and-spa-paris-paris"
+    },
+    {
+      "hotelId": "lp200c75",
+      "slug": "j-k-place-paris-paris",
+      "city": "Paris",
+      "name": "J.K. Place Paris",
+      "path": "/stays/j-k-place-paris-paris"
     },
     {
       "hotelId": "lp1beec",
@@ -1829,6 +1943,13 @@
       "path": "/stays/norman-paris-hotel-and-spa-paris"
     },
     {
+      "hotelId": "lp3ba49",
+      "slug": "hotel-fouquet-s-paris-paris",
+      "city": "Paris",
+      "name": "Hôtel Fouquet's Paris",
+      "path": "/stays/hotel-fouquet-s-paris-paris"
+    },
+    {
       "hotelId": "lp1f535",
       "slug": "villa-marquis-member-of-melia-collection-tour-ei-paris",
       "city": "Paris",
@@ -1848,6 +1969,13 @@
       "city": "Paris",
       "name": "Le Petit Oberkampf Hotel & Spa",
       "path": "/stays/le-petit-oberkampf-hotel-and-spa-paris"
+    },
+    {
+      "hotelId": "lp2093b9",
+      "slug": "paris-j-adore-hotel-and-spa-paris",
+      "city": "Paris",
+      "name": "Paris j'Adore Hotel & Spa",
+      "path": "/stays/paris-j-adore-hotel-and-spa-paris"
     },
     {
       "hotelId": "lp1af45",
@@ -2011,11 +2139,32 @@
       "path": "/stays/hotel-pont-royal-paris"
     },
     {
+      "hotelId": "lp32bc7",
+      "slug": "hotel-des-arts-montmartre-paris",
+      "city": "Paris",
+      "name": "Hôtel des Arts Montmartre",
+      "path": "/stays/hotel-des-arts-montmartre-paris"
+    },
+    {
       "hotelId": "lp2d73f",
       "slug": "maison-mere-paris",
       "city": "Paris",
       "name": "Maison Mère",
       "path": "/stays/maison-mere-paris"
+    },
+    {
+      "hotelId": "lp2066a",
+      "slug": "maison-elle-paris-paris",
+      "city": "Paris",
+      "name": "Maison ELLE Paris",
+      "path": "/stays/maison-elle-paris-paris"
+    },
+    {
+      "hotelId": "lp2da51",
+      "slug": "hotel-l-ormaie-and-spa-paris",
+      "city": "Paris",
+      "name": "Hôtel L'Ormaie & Spa",
+      "path": "/stays/hotel-l-ormaie-and-spa-paris"
     },
     {
       "hotelId": "lp19fec",
@@ -2088,6 +2237,13 @@
       "path": "/stays/hotel-monte-cristo-paris"
     },
     {
+      "hotelId": "lp31a85",
+      "slug": "hotel-ducs-de-bourgogne-paris",
+      "city": "Paris",
+      "name": "Hotel Ducs de Bourgogne",
+      "path": "/stays/hotel-ducs-de-bourgogne-paris"
+    },
+    {
       "hotelId": "lp2aea8",
       "slug": "sofitel-le-scribe-paris-opera-paris",
       "city": "Paris",
@@ -2116,11 +2272,25 @@
       "path": "/stays/majestic-hotel-spa-champs-elysees-paris"
     },
     {
+      "hotelId": "lp325f0",
+      "slug": "la-clef-louvre-paris-by-the-crest-collection-paris",
+      "city": "Paris",
+      "name": "La Clef Louvre Paris by The Crest Collection",
+      "path": "/stays/la-clef-louvre-paris-by-the-crest-collection-paris"
+    },
+    {
       "hotelId": "lp23743",
       "slug": "sofitel-paris-arc-de-triomphe-paris",
       "city": "Paris",
       "name": "Sofitel Paris Arc De Triomphe",
       "path": "/stays/sofitel-paris-arc-de-triomphe-paris"
+    },
+    {
+      "hotelId": "lp1b8e5d",
+      "slug": "les-jardins-du-faubourg-hotel-and-spa-by-shiseid-paris",
+      "city": "Paris",
+      "name": "Les Jardins Du Faubourg Hotel & Spa by Shiseido",
+      "path": "/stays/les-jardins-du-faubourg-hotel-and-spa-by-shiseid-paris"
     },
     {
       "hotelId": "lp3dbfc",
@@ -2170,6 +2340,34 @@
       "city": "Paris",
       "name": "La Clef Champs-Élysées Paris by The Crest Collection",
       "path": "/stays/la-clef-champs-elysees-paris-by-the-crest-collec-paris"
+    },
+    {
+      "hotelId": "lp1c67a",
+      "slug": "hotel-le-marquis-by-inwood-hotels-paris",
+      "city": "Paris",
+      "name": "Hôtel Le Marquis by Inwood Hotels",
+      "path": "/stays/hotel-le-marquis-by-inwood-hotels-paris"
+    },
+    {
+      "hotelId": "lp3ce4c",
+      "slug": "hotel-de-lille-paris",
+      "city": "Paris",
+      "name": "Hotel de Lille",
+      "path": "/stays/hotel-de-lille-paris"
+    },
+    {
+      "hotelId": "lp2d032",
+      "slug": "hotel-opera-richepanse-paris",
+      "city": "Paris",
+      "name": "Hotel Opéra Richepanse",
+      "path": "/stays/hotel-opera-richepanse-paris"
+    },
+    {
+      "hotelId": "lp2d7a0",
+      "slug": "hotel-d-orsay-paris",
+      "city": "Paris",
+      "name": "Hôtel d'Orsay",
+      "path": "/stays/hotel-d-orsay-paris"
     },
     {
       "hotelId": "lp1dbc2",
@@ -2319,6 +2517,13 @@
       "path": "/stays/hotel-west-end-paris"
     },
     {
+      "hotelId": "lp2abad",
+      "slug": "hotel-saint-martin-bastille-paris",
+      "city": "Paris",
+      "name": "Hôtel Saint Martin Bastille",
+      "path": "/stays/hotel-saint-martin-bastille-paris"
+    },
+    {
       "hotelId": "lp1b892",
       "slug": "25hours-hotel-terminus-nord-paris",
       "city": "Paris",
@@ -2368,6 +2573,34 @@
       "path": "/stays/pepper-and-paper-apartments-paris"
     },
     {
+      "hotelId": "lp3d61b",
+      "slug": "hotel-whistler-paris",
+      "city": "Paris",
+      "name": "Hotel Whistler",
+      "path": "/stays/hotel-whistler-paris"
+    },
+    {
+      "hotelId": "lp1fe8d",
+      "slug": "hotel-observatoire-luxembourg-paris",
+      "city": "Paris",
+      "name": "Hotel Observatoire Luxembourg",
+      "path": "/stays/hotel-observatoire-luxembourg-paris"
+    },
+    {
+      "hotelId": "lp1b751",
+      "slug": "maison-nabis-by-happyculture-paris",
+      "city": "Paris",
+      "name": "Maison Nabis by HappyCulture",
+      "path": "/stays/maison-nabis-by-happyculture-paris"
+    },
+    {
+      "hotelId": "lp1f986",
+      "slug": "villa-saxe-eiffel-paris",
+      "city": "Paris",
+      "name": "Villa Saxe Eiffel",
+      "path": "/stays/villa-saxe-eiffel-paris"
+    },
+    {
       "hotelId": "lp1c042",
       "slug": "pullman-paris-montparnasse-hotel-paris",
       "city": "Paris",
@@ -2389,6 +2622,13 @@
       "path": "/stays/hotel-and-spa-de-latour-maubourg-paris"
     },
     {
+      "hotelId": "lp20127",
+      "slug": "hotel-bourgogne-and-montana-paris",
+      "city": "Paris",
+      "name": "Hôtel Bourgogne & Montana",
+      "path": "/stays/hotel-bourgogne-and-montana-paris"
+    },
+    {
       "hotelId": "lp1baa1",
       "slug": "hotel-park-lane-paris-paris",
       "city": "Paris",
@@ -2401,6 +2641,566 @@
       "city": "Paris",
       "name": "Hôtel Augustin - Astotel",
       "path": "/stays/hotel-augustin-astotel-paris"
+    },
+    {
+      "hotelId": "lp1ce11",
+      "slug": "hotel-etoile-maillot-paris",
+      "city": "Paris",
+      "name": "Hôtel Etoile Maillot",
+      "path": "/stays/hotel-etoile-maillot-paris"
+    },
+    {
+      "hotelId": "lp20b2c",
+      "slug": "la-clef-tour-eiffel-paris-by-the-crest-collectio-paris",
+      "city": "Paris",
+      "name": "La Clef Tour Eiffel Paris by The Crest Collection",
+      "path": "/stays/la-clef-tour-eiffel-paris-by-the-crest-collectio-paris"
+    },
+    {
+      "hotelId": "lp39abb",
+      "slug": "hotel-george-astotel-paris",
+      "city": "Paris",
+      "name": "Hotel George - Astotel",
+      "path": "/stays/hotel-george-astotel-paris"
+    },
+    {
+      "hotelId": "lp20c5b",
+      "slug": "hotel-aiglon-paris",
+      "city": "Paris",
+      "name": "Hôtel Aiglon",
+      "path": "/stays/hotel-aiglon-paris"
+    },
+    {
+      "hotelId": "lp39f56",
+      "slug": "hotel-veryste-and-spa-paris-paris",
+      "city": "Paris",
+      "name": "Hôtel Veryste & Spa Paris",
+      "path": "/stays/hotel-veryste-and-spa-paris-paris"
+    },
+    {
+      "hotelId": "lp1a355",
+      "slug": "hotel-brighton-paris",
+      "city": "Paris",
+      "name": "Hotel Brighton",
+      "path": "/stays/hotel-brighton-paris"
+    },
+    {
+      "hotelId": "lp2a21e",
+      "slug": "pullman-paris-centre-bercy-paris",
+      "city": "Paris",
+      "name": "Pullman Paris Centre - Bercy",
+      "path": "/stays/pullman-paris-centre-bercy-paris"
+    },
+    {
+      "hotelId": "lp1e471",
+      "slug": "golden-tulip-opera-de-noailles-paris",
+      "city": "Paris",
+      "name": "Golden Tulip Opera de Noailles",
+      "path": "/stays/golden-tulip-opera-de-noailles-paris"
+    },
+    {
+      "hotelId": "lp31604",
+      "slug": "grand-hotel-saint-michel-paris",
+      "city": "Paris",
+      "name": "Grand Hotel Saint Michel",
+      "path": "/stays/grand-hotel-saint-michel-paris"
+    },
+    {
+      "hotelId": "lp2fb83",
+      "slug": "hotel-casimir-paris",
+      "city": "Paris",
+      "name": "Hôtel Casimir",
+      "path": "/stays/hotel-casimir-paris"
+    },
+    {
+      "hotelId": "lp2d75c",
+      "slug": "hotel-mansart-paris",
+      "city": "Paris",
+      "name": "Hôtel Mansart",
+      "path": "/stays/hotel-mansart-paris"
+    },
+    {
+      "hotelId": "lp2f524",
+      "slug": "maison-axel-opera-paris-paris",
+      "city": "Paris",
+      "name": "Maison Axel Opéra Paris",
+      "path": "/stays/maison-axel-opera-paris-paris"
+    },
+    {
+      "hotelId": "lp223c3",
+      "slug": "hotel-la-comtesse-paris",
+      "city": "Paris",
+      "name": "Hôtel La Comtesse",
+      "path": "/stays/hotel-la-comtesse-paris"
+    },
+    {
+      "hotelId": "lp1bbc1",
+      "slug": "maison-astor-paris-curio-collection-by-hilton-paris",
+      "city": "Paris",
+      "name": "Maison Astor Paris, Curio Collection by Hilton",
+      "path": "/stays/maison-astor-paris-curio-collection-by-hilton-paris"
+    },
+    {
+      "hotelId": "lp31a8c",
+      "slug": "hotel-le-tourville-by-inwood-hotels-paris",
+      "city": "Paris",
+      "name": "Hôtel Le Tourville by Inwood Hotels",
+      "path": "/stays/hotel-le-tourville-by-inwood-hotels-paris"
+    },
+    {
+      "hotelId": "lp2f832",
+      "slug": "hotel-bradford-elysees-astotel-paris",
+      "city": "Paris",
+      "name": "Hôtel Bradford Elysées – Astotel",
+      "path": "/stays/hotel-bradford-elysees-astotel-paris"
+    },
+    {
+      "hotelId": "lp2b869",
+      "slug": "le-grey-hotel-paris",
+      "city": "Paris",
+      "name": "Le Grey Hotel",
+      "path": "/stays/le-grey-hotel-paris"
+    },
+    {
+      "hotelId": "lp1e2cd",
+      "slug": "hotel-garden-elysees-paris",
+      "city": "Paris",
+      "name": "Hôtel Garden Elysées",
+      "path": "/stays/hotel-garden-elysees-paris"
+    },
+    {
+      "hotelId": "lp1dd78",
+      "slug": "hotel-mademoiselle-paris",
+      "city": "Paris",
+      "name": "Hotel Mademoiselle",
+      "path": "/stays/hotel-mademoiselle-paris"
+    },
+    {
+      "hotelId": "lp2cc17",
+      "slug": "le-stendhal-vendome-paris",
+      "city": "Paris",
+      "name": "Le Stendhal - Vendôme",
+      "path": "/stays/le-stendhal-vendome-paris"
+    },
+    {
+      "hotelId": "lp3607c",
+      "slug": "hotel-des-saints-peres-paris",
+      "city": "Paris",
+      "name": "Hôtel des Saints-Pères",
+      "path": "/stays/hotel-des-saints-peres-paris"
+    },
+    {
+      "hotelId": "lp28e20d",
+      "slug": "hotel-college-de-france-paris",
+      "city": "Paris",
+      "name": "Hotel College De France",
+      "path": "/stays/hotel-college-de-france-paris"
+    },
+    {
+      "hotelId": "lp1e426",
+      "slug": "solly-hotel-paris-paris",
+      "city": "Paris",
+      "name": "Solly Hôtel Paris",
+      "path": "/stays/solly-hotel-paris-paris"
+    },
+    {
+      "hotelId": "lp31690",
+      "slug": "legend-saint-germain-paris",
+      "city": "Paris",
+      "name": "Legend Saint Germain",
+      "path": "/stays/legend-saint-germain-paris"
+    },
+    {
+      "hotelId": "lp2954c",
+      "slug": "hotel-le-monna-lisa-by-inwood-hotels-paris",
+      "city": "Paris",
+      "name": "Hôtel Le Monna Lisa by Inwood Hotels",
+      "path": "/stays/hotel-le-monna-lisa-by-inwood-hotels-paris"
+    },
+    {
+      "hotelId": "lp35d83",
+      "slug": "grand-hotel-chicago-paris",
+      "city": "Paris",
+      "name": "Grand Hôtel Chicago",
+      "path": "/stays/grand-hotel-chicago-paris"
+    },
+    {
+      "hotelId": "lp1ee8e",
+      "slug": "hotel-la-bourdonnais-by-inwood-hotels-paris",
+      "city": "Paris",
+      "name": "Hôtel La Bourdonnais by Inwood Hotels",
+      "path": "/stays/hotel-la-bourdonnais-by-inwood-hotels-paris"
+    },
+    {
+      "hotelId": "lp2e4d3",
+      "slug": "hotel-maxim-opera-paris",
+      "city": "Paris",
+      "name": "Hôtel Maxim Opéra",
+      "path": "/stays/hotel-maxim-opera-paris"
+    },
+    {
+      "hotelId": "lp38ccd",
+      "slug": "hotel-royal-saint-honore-paris-louvre-paris",
+      "city": "Paris",
+      "name": "Hotel Royal Saint Honore Paris Louvre",
+      "path": "/stays/hotel-royal-saint-honore-paris-louvre-paris"
+    },
+    {
+      "hotelId": "lp31024",
+      "slug": "hotel-galileo-paris",
+      "city": "Paris",
+      "name": "Hotel Galileo",
+      "path": "/stays/hotel-galileo-paris"
+    },
+    {
+      "hotelId": "lp1f36e",
+      "slug": "hotel-faubourg-galant-paris-handwritten-collecti-paris",
+      "city": "Paris",
+      "name": "Hotel Faubourg Galant Paris - Handwritten Collection",
+      "path": "/stays/hotel-faubourg-galant-paris-handwritten-collecti-paris"
+    },
+    {
+      "hotelId": "lp333f0",
+      "slug": "hotel-toujours-and-spa-paris",
+      "city": "Paris",
+      "name": "Hôtel Toujours & Spa",
+      "path": "/stays/hotel-toujours-and-spa-paris"
+    },
+    {
+      "hotelId": "lp1ee5e",
+      "slug": "hotel-du-continent-paris",
+      "city": "Paris",
+      "name": "Hôtel du Continent",
+      "path": "/stays/hotel-du-continent-paris"
+    },
+    {
+      "hotelId": "lp2eb0b",
+      "slug": "ampere-paris",
+      "city": "Paris",
+      "name": "Ampère",
+      "path": "/stays/ampere-paris"
+    },
+    {
+      "hotelId": "lp1efed",
+      "slug": "hotel-touraine-opera-paris",
+      "city": "Paris",
+      "name": "Hotel Touraine Opera",
+      "path": "/stays/hotel-touraine-opera-paris"
+    },
+    {
+      "hotelId": "lp21ac8",
+      "slug": "hotel-maison-malesherbes-paris",
+      "city": "Paris",
+      "name": "Hôtel Maison Malesherbes",
+      "path": "/stays/hotel-maison-malesherbes-paris"
+    },
+    {
+      "hotelId": "lp27e2f",
+      "slug": "pullman-paris-tour-eiffel-paris",
+      "city": "Paris",
+      "name": "Pullman Paris Tour Eiffel",
+      "path": "/stays/pullman-paris-tour-eiffel-paris"
+    },
+    {
+      "hotelId": "lp1fbf7",
+      "slug": "le-pergolese-paris-champs-elysees-paris",
+      "city": "Paris",
+      "name": "Le Pergolèse Paris Champs Elysées",
+      "path": "/stays/le-pergolese-paris-champs-elysees-paris"
+    },
+    {
+      "hotelId": "lp1d0fc",
+      "slug": "fraser-suites-le-claridge-champs-elysees-paris",
+      "city": "Paris",
+      "name": "Fraser Suites Le Claridge Champs-Elysées",
+      "path": "/stays/fraser-suites-le-claridge-champs-elysees-paris"
+    },
+    {
+      "hotelId": "lp2e5f1",
+      "slug": "le-relais-madeleine-paris",
+      "city": "Paris",
+      "name": "Le Relais Madeleine",
+      "path": "/stays/le-relais-madeleine-paris"
+    },
+    {
+      "hotelId": "lp3519f",
+      "slug": "hotel-le-pradey-paris",
+      "city": "Paris",
+      "name": "Hôtel Le Pradey",
+      "path": "/stays/hotel-le-pradey-paris"
+    },
+    {
+      "hotelId": "lp20306",
+      "slug": "hotel-le-bellechasse-saint-germain-paris",
+      "city": "Paris",
+      "name": "Hôtel Le Bellechasse Saint-Germain",
+      "path": "/stays/hotel-le-bellechasse-saint-germain-paris"
+    },
+    {
+      "hotelId": "lp24b45",
+      "slug": "m-social-hotel-paris-paris",
+      "city": "Paris",
+      "name": "M Social Hotel Paris",
+      "path": "/stays/m-social-hotel-paris-paris"
+    },
+    {
+      "hotelId": "lp36086",
+      "slug": "hotel-duret-paris-champs-elysees-paris",
+      "city": "Paris",
+      "name": "Hotel Duret Paris Champs Elysées",
+      "path": "/stays/hotel-duret-paris-champs-elysees-paris"
+    },
+    {
+      "hotelId": "lp1f6b9",
+      "slug": "le-belmont-paris-paris",
+      "city": "Paris",
+      "name": "Le Belmont Paris",
+      "path": "/stays/le-belmont-paris-paris"
+    },
+    {
+      "hotelId": "lp273ba8",
+      "slug": "deskopolitan-house-paris",
+      "city": "Paris",
+      "name": "Deskopolitan House",
+      "path": "/stays/deskopolitan-house-paris"
+    },
+    {
+      "hotelId": "lp1d98e",
+      "slug": "hotel-saint-petersbourg-opera-and-spa-paris",
+      "city": "Paris",
+      "name": "Hôtel Saint-Pétersbourg Opéra & Spa",
+      "path": "/stays/hotel-saint-petersbourg-opera-and-spa-paris"
+    },
+    {
+      "hotelId": "lp2f82e",
+      "slug": "hotel-astoria-astotel-paris",
+      "city": "Paris",
+      "name": "Hotel Astoria - Astotel",
+      "path": "/stays/hotel-astoria-astotel-paris"
+    },
+    {
+      "hotelId": "lp27336c",
+      "slug": "novotel-paris-porte-de-versailles-paris",
+      "city": "Paris",
+      "name": "Novotel Paris Porte De Versailles",
+      "path": "/stays/novotel-paris-porte-de-versailles-paris"
+    },
+    {
+      "hotelId": "lp1fa86",
+      "slug": "le-littre-paris",
+      "city": "Paris",
+      "name": "Le Littré",
+      "path": "/stays/le-littre-paris"
+    },
+    {
+      "hotelId": "lp2b679",
+      "slug": "grand-hotel-francais-paris",
+      "city": "Paris",
+      "name": "Grand Hotel Francais",
+      "path": "/stays/grand-hotel-francais-paris"
+    },
+    {
+      "hotelId": "lp200b92",
+      "slug": "oh-la-la-hotel-bar-paris-bastille-paris",
+      "city": "Paris",
+      "name": "Oh La La! Hotel bar - Paris Bastille",
+      "path": "/stays/oh-la-la-hotel-bar-paris-bastille-paris"
+    },
+    {
+      "hotelId": "lp1f7f8",
+      "slug": "hotel-serotel-lutece-paris",
+      "city": "Paris",
+      "name": "Hôtel Serotel Lutèce",
+      "path": "/stays/hotel-serotel-lutece-paris"
+    },
+    {
+      "hotelId": "lp203c1",
+      "slug": "vendome-opera-hotel-paris",
+      "city": "Paris",
+      "name": "Vendôme Opera Hotel",
+      "path": "/stays/vendome-opera-hotel-paris"
+    },
+    {
+      "hotelId": "lp2f831",
+      "slug": "hotel-34b-astotel-paris",
+      "city": "Paris",
+      "name": "Hôtel 34B - Astotel",
+      "path": "/stays/hotel-34b-astotel-paris"
+    },
+    {
+      "hotelId": "lp1f398",
+      "slug": "hotel-mayfair-paris",
+      "city": "Paris",
+      "name": "Hotel Mayfair",
+      "path": "/stays/hotel-mayfair-paris"
+    },
+    {
+      "hotelId": "lp36698",
+      "slug": "hotel-le-mathurin-paris",
+      "city": "Paris",
+      "name": "Hotel Le Mathurin",
+      "path": "/stays/hotel-le-mathurin-paris"
+    },
+    {
+      "hotelId": "lp1d8a0",
+      "slug": "citadines-les-halles-paris-paris",
+      "city": "Paris",
+      "name": "Citadines Les Halles Paris",
+      "path": "/stays/citadines-les-halles-paris-paris"
+    },
+    {
+      "hotelId": "lp1edfc",
+      "slug": "hotel-westminster-paris",
+      "city": "Paris",
+      "name": "Hotel Westminster",
+      "path": "/stays/hotel-westminster-paris"
+    },
+    {
+      "hotelId": "lp2b678",
+      "slug": "novotel-paris-centre-bercy-paris",
+      "city": "Paris",
+      "name": "Novotel Paris Centre Bercy",
+      "path": "/stays/novotel-paris-centre-bercy-paris"
+    },
+    {
+      "hotelId": "lp224a90",
+      "slug": "rayz-eiffel-paris",
+      "city": "Paris",
+      "name": "Rayz Eiffel",
+      "path": "/stays/rayz-eiffel-paris"
+    },
+    {
+      "hotelId": "lp36e78",
+      "slug": "monsieur-cadet-hotel-and-spa-paris",
+      "city": "Paris",
+      "name": "Monsieur Cadet Hôtel & Spa",
+      "path": "/stays/monsieur-cadet-hotel-and-spa-paris"
+    },
+    {
+      "hotelId": "lp1cb51",
+      "slug": "new-hotel-roblin-paris",
+      "city": "Paris",
+      "name": "New Hotel Roblin",
+      "path": "/stays/new-hotel-roblin-paris"
+    },
+    {
+      "hotelId": "lp1ba53",
+      "slug": "hotel-horset-opera-bw-premier-collection-paris",
+      "city": "Paris",
+      "name": "Hôtel Horset Opéra, BW Premier Collection",
+      "path": "/stays/hotel-horset-opera-bw-premier-collection-paris"
+    },
+    {
+      "hotelId": "lp3006e",
+      "slug": "ze-hotel-paris",
+      "city": "Paris",
+      "name": "ZE Hotel",
+      "path": "/stays/ze-hotel-paris"
+    },
+    {
+      "hotelId": "lp32945",
+      "slug": "hotel-la-villa-d-estrees-saint-germain-paris",
+      "city": "Paris",
+      "name": "Hotel La Villa d'Estrées - Saint-Germain",
+      "path": "/stays/hotel-la-villa-d-estrees-saint-germain-paris"
+    },
+    {
+      "hotelId": "lp23431",
+      "slug": "la-maison-champs-elysees-paris",
+      "city": "Paris",
+      "name": "La Maison Champs Elysées",
+      "path": "/stays/la-maison-champs-elysees-paris"
+    },
+    {
+      "hotelId": "lp2f7bc",
+      "slug": "hotel-le-friedland-paris",
+      "city": "Paris",
+      "name": "Hotel Le Friedland",
+      "path": "/stays/hotel-le-friedland-paris"
+    },
+    {
+      "hotelId": "lp2f0b6",
+      "slug": "hotel-duette-paris-paris",
+      "city": "Paris",
+      "name": "Hotel Duette Paris",
+      "path": "/stays/hotel-duette-paris-paris"
+    },
+    {
+      "hotelId": "lp1c491",
+      "slug": "normandy-le-chantier-paris",
+      "city": "Paris",
+      "name": "Normandy Le Chantier",
+      "path": "/stays/normandy-le-chantier-paris"
+    },
+    {
+      "hotelId": "lp1f814",
+      "slug": "hotel-relais-saint-jacques-paris-paris",
+      "city": "Paris",
+      "name": "Hôtel Relais Saint Jacques Paris",
+      "path": "/stays/hotel-relais-saint-jacques-paris-paris"
+    },
+    {
+      "hotelId": "lp21248",
+      "slug": "hotel-brittany-paris",
+      "city": "Paris",
+      "name": "Hôtel Brittany",
+      "path": "/stays/hotel-brittany-paris"
+    },
+    {
+      "hotelId": "lp2bc54",
+      "slug": "mercure-paris-bercy-bibliotheque-paris",
+      "city": "Paris",
+      "name": "Mercure Paris Bercy Bibliothèque",
+      "path": "/stays/mercure-paris-bercy-bibliotheque-paris"
+    },
+    {
+      "hotelId": "lp1c58d9",
+      "slug": "villa-eiffel-mademoiselle-paris",
+      "city": "Paris",
+      "name": "Villa Eiffel Mademoiselle",
+      "path": "/stays/villa-eiffel-mademoiselle-paris"
+    },
+    {
+      "hotelId": "lp2b87d",
+      "slug": "who-windsor-hotel-opera-paris",
+      "city": "Paris",
+      "name": "WHO - Windsor Hotel Opera",
+      "path": "/stays/who-windsor-hotel-opera-paris"
+    },
+    {
+      "hotelId": "lp2ac79",
+      "slug": "the-chess-hotel-paris",
+      "city": "Paris",
+      "name": "The Chess Hotel",
+      "path": "/stays/the-chess-hotel-paris"
+    },
+    {
+      "hotelId": "lp2d774",
+      "slug": "hotel-de-la-place-du-louvre-paris",
+      "city": "Paris",
+      "name": "Hôtel de la Place du Louvre",
+      "path": "/stays/hotel-de-la-place-du-louvre-paris"
+    },
+    {
+      "hotelId": "lp33a96",
+      "slug": "grand-hotel-lafayette-paris",
+      "city": "Paris",
+      "name": "Grand Hotel Lafayette",
+      "path": "/stays/grand-hotel-lafayette-paris"
+    },
+    {
+      "hotelId": "lp1aa77",
+      "slug": "renaissance-paris-nobel-tour-eiffel-hotel-paris",
+      "city": "Paris",
+      "name": "Renaissance Paris Nobel Tour Eiffel Hotel",
+      "path": "/stays/renaissance-paris-nobel-tour-eiffel-hotel-paris"
+    },
+    {
+      "hotelId": "lp3c54c",
+      "slug": "mercure-paris-alesia-paris",
+      "city": "Paris",
+      "name": "Mercure Paris Alesia",
+      "path": "/stays/mercure-paris-alesia-paris"
     }
   ]
 }

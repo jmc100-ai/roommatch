@@ -31,7 +31,7 @@ function arg(name, def) {
 
 const LIMITS = {
   "Mexico City": Number(arg("mxLimit", arg("limit", "200"))) || 200,
-  Paris: Number(arg("parisLimit", "100")) || 100,
+  Paris: Number(arg("parisLimit", "200")) || 200,
 };
 const ONLY_CITY = arg("city", "");
 

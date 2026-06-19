@@ -7,6 +7,10 @@ const fs = require("fs");
 const path = require("path");
 const seo = require("./marketing-seo");
 const { seoField } = require("./marketing-keywords");
+const { searchableLabel } = require("./marketing-city-stats");
+
+const PARIS_COUNT = searchableLabel("Paris");
+const CDMX_COUNT = searchableLabel("Mexico City");
 
 const OUT = path.join(__dirname, "..", "client", "marketing");
 
@@ -258,7 +262,7 @@ function writePage(file, html) {
       kicker: "CDMX · Travel planning",
       h1,
       lead:
-        "Planning <strong>travel to Mexico City</strong>? Pick a neighborhood that fits your trip, run the vibe quiz, then search <strong>3,600+ hotels</strong> by real room and bathroom photos — before you commit on a booking site.",
+        `Planning <strong>travel to Mexico City</strong>? Pick a neighborhood that fits your trip, run the vibe quiz, then search <strong>${CDMX_COUNT} hotels</strong> by real room and bathroom photos — before you commit on a booking site.`,
       image: SKYLINE,
       ctaHref: cdmxUtm("cdmx-travel-hotels-hero"),
       ctaLabel: "Take the 30-second quiz →",
@@ -444,4 +448,115 @@ function writePage(file, html) {
   );
 }
 
-console.log("Done — 6 spoke SEO pages.");
+// ── Paris: travel Paris hotels ───────────────────────────────────────────────
+{
+  const canonical = "travel-paris-hotels";
+  const h1 = seoField(canonical, "h1", "Travel Paris Hotels");
+  const body =
+    hero({
+      kicker: "Paris · Travel planning",
+      h1,
+      lead:
+        `Planning <strong>travel to Paris</strong>? Pick an arrondissement that fits your trip, run the vibe quiz, then search <strong>${PARIS_COUNT} Paris hotels</strong> by real room and bathroom photos — before you commit on a booking site.`,
+      image: EIFFEL_HERO,
+      ctaHref: parisUtm("paris-travel-hotels-hero"),
+      ctaLabel: "Take the 30-second quiz →",
+    }) +
+    `<div class="wrap-wide">
+    <section class="msec" style="padding-top:36px;margin-top:0;border-top:none">
+      <p class="msec-kicker">Start here</p>
+      <h2 class="msec-title">${seoField(canonical, "h2Featured", "How to plan travel to Paris hotels")}</h2>
+      <div class="how-row">
+        <article class="how-card">
+          <div class="how-txt"><span class="how-num">1</span><h3>Pick your arrondissement</h3><p>Le Marais and Latin Quarter for first trips; Saint-Germain for Left Bank calm; Montmartre for romance. Read <a href="__ORIGIN__/where-to-stay-in-paris">where to stay in Paris</a>.</p></div>
+        </article>
+        <article class="how-card">
+          <div class="how-txt"><span class="how-num">2</span><h3>Shape your vibe</h3><p>Our wizard captures trip pace, must-haves, and room mood — Haussmann, moody boutique, or palace bath.</p></div>
+        </article>
+        <article class="how-card">
+          <div class="how-txt"><span class="how-num">3</span><h3>See real rooms</h3><p>Describe rainfall shower, Haussmann light, or Eiffel view. We rank hotels whose indexed photos match.</p></div>
+        </article>
+      </div>
+    </section>
+    <section class="msec">
+      <p class="msec-kicker">Who you are</p>
+      <h2 class="msec-title">Which traveller are you?</h2>
+      <div class="fgrid">
+        <div class="fcard"><h3>First Paris trip</h3><p><strong>Le Marais</strong> or <strong>Latin Quarter</strong> — walkable museums and cafés without a car. See <a href="__ORIGIN__/safe-neighborhoods-paris">best areas for tourists</a>.</p></div>
+        <div class="fcard"><h3>Left Bank calm</h3><p><strong>Saint-Germain</strong> — wine bars, bookshops, and literary mornings. Compare <a href="__ORIGIN__/marais-vs-saint-germain">Marais vs Saint-Germain</a>.</p></div>
+        <div class="fcard"><h3>Romance + views</h3><p><strong>Montmartre</strong> or <a href="__ORIGIN__/paris-hotels-near-eiffel-tower">Eiffel Tower area</a> — village mood or skyline glimpses.</p></div>
+        <div class="fcard"><h3>Luxury + grand avenues</h3><p><strong>Opéra &amp; Champs</strong> — palace hotels when formal service matters. Browse <a href="__ORIGIN__/paris-luxury-hotels">Paris luxury hotels</a>.</p></div>
+      </div>
+      <p class="msec-lead" style="margin-top:20px">Full hub: <a href="__ORIGIN__/paris-hotels">Paris hotels on TravelByVibe</a> · <a href="__ORIGIN__/paris-visual-search">visual room search</a></p>
+    </section>
+    <section class="msec">
+      <h2 class="msec-title">${seoField(canonical, "h2Neighborhoods", "Travel Paris hotels by neighborhood")}</h2>
+      <nav class="hub-links" aria-label="Paris hotel neighborhoods">
+        <a href="__ORIGIN__/hotels-in-le-marais">Hotels in Le Marais</a>
+        <a href="__ORIGIN__/hotels-in-saint-germain">Hotels in Saint-Germain</a>
+        <a href="__ORIGIN__/hotels-in-montmartre">Hotels in Montmartre</a>
+        <a href="__ORIGIN__/hotels-in-latin-quarter">Hotels in Latin Quarter</a>
+        <a href="__ORIGIN__/hotels-in-opera">Hotels near Opéra</a>
+      </nav>
+    </section>
+    <section class="msec">
+      <h2 class="msec-title">${seoField(canonical, "h2Hotels", "Best Paris hotels for travellers")}</h2>
+      ${hotelTiers("paris-le-marais", "Paris", "paris-travel-marais")}
+    </section>
+    ${embedParis("paris-travel-hotels-search")}
+  </div>`;
+  writePage(
+    "travel-paris-hotels.html",
+    seo.wrapPage(
+      body,
+      { canonical, city: "Paris", pageCategory: "guide", defaultOgImage: EIFFEL_OG, campaign: "paris_seo_2026" },
+      parisHeader("paris-travel-hotels-nav"),
+      "Paris"
+    )
+  );
+}
+
+// ── Paris: best areas for tourists ───────────────────────────────────────────
+{
+  const canonical = "safe-neighborhoods-paris";
+  const h1 = seoField(canonical, "h1", "Best Areas to Stay in Paris for Tourists");
+  const body =
+    hero({
+      kicker: "Paris · Visitor areas",
+      h1,
+      lead:
+        "<strong>Le Marais</strong>, <strong>Latin Quarter</strong>, <strong>Saint-Germain</strong>, and <strong>Montmartre</strong> are the most common tourist hotel districts in Paris — walkable, well served by métro, and familiar to international visitors. Pick your vibe, then see real room photos.",
+      image: MARAIS,
+      ctaHref: parisUtm("paris-safe-hero"),
+      ctaLabel: "Find hotels by vibe →",
+    }) +
+    `<div class="wrap-wide">
+    <section class="msec" style="padding-top:36px;margin-top:0;border-top:none">
+      <p class="msec-kicker">Visitor districts</p>
+      <h2 class="msec-title">${seoField(canonical, "h2Featured", "Best Paris neighborhoods for visitors")}</h2>
+      <div class="fgrid">
+        <div class="fcard"><h3>Le Marais</h3><p>Flat, central, gallery-dense — popular first-timer base with weekend buzz.</p><p><a href="__ORIGIN__/hotels-in-le-marais">Hotels in Le Marais →</a></p></div>
+        <div class="fcard"><h3>Latin Quarter</h3><p>River walks, market streets, and museum access near Notre-Dame.</p><p><a href="__ORIGIN__/hotels-in-latin-quarter">Hotels in Latin Quarter →</a></p></div>
+        <div class="fcard"><h3>Saint-Germain</h3><p>Left Bank literary calm — wine bars and polished bistros.</p><p><a href="__ORIGIN__/hotels-in-saint-germain">Hotels in Saint-Germain →</a></p></div>
+        <div class="fcard"><h3>Montmartre</h3><p>Village stairs and skyline views — romantic, slightly north of the core.</p><p><a href="__ORIGIN__/hotels-in-montmartre">Hotels in Montmartre →</a></p></div>
+      </div>
+      <p class="msec-lead" style="margin-top:20px">Also see: <a href="__ORIGIN__/paris-walkable-hotels">walkable Paris hotels</a> · <a href="__ORIGIN__/where-to-stay-in-paris">Where to stay in Paris</a></p>
+    </section>
+    <section class="msec">
+      <h2 class="msec-title">${seoField(canonical, "h2Hotels", "Best hotels in visitor-friendly neighborhoods")}</h2>
+      ${hotelTiers("paris-le-marais", "Paris", "paris-safe-marais")}
+    </section>
+    ${embedParis("paris-safe-search")}
+  </div>`;
+  writePage(
+    "safe-neighborhoods-paris.html",
+    seo.wrapPage(
+      body,
+      { canonical, city: "Paris", pageCategory: "guide", defaultOgImage: EIFFEL_OG, campaign: "paris_seo_2026" },
+      parisHeader("paris-safe-nav"),
+      "Paris"
+    )
+  );
+}
+
+console.log("Done — 8 spoke SEO pages.");

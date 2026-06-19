@@ -7,6 +7,10 @@ const fs = require("fs");
 const path = require("path");
 const seo = require("./marketing-seo");
 const { seoField } = require("./marketing-keywords");
+const { searchableLabel, socialProofSpan } = require("./marketing-city-stats");
+
+const CDMX_COUNT = searchableLabel("Mexico City");
+const CDMX_SOCIAL = socialProofSpan("Mexico City");
 
 const OUT = path.join(__dirname, "..", "client", "marketing");
 const SKYLINE =
@@ -94,7 +98,7 @@ function hero({ kicker, h1, lead, heroImage, heroAlt, ctaPrimary, ctaSecondary, 
         ${ctaSecondary ? `<a class="mcta-secondary" href="${utm(utmSecondary)}">${ctaSecondary}</a>` : ""}
       </div>
       <div class="social-proof" aria-label="Product scale">
-        <span>3,600+ Mexico City hotels indexed</span>
+        <span>${CDMX_SOCIAL}</span>
         <span>Real room photos</span>
         <span>Free to explore</span>
       </div>
@@ -127,7 +131,7 @@ function compareHero({
         <a class="mcta" href="${utm(utmPrimary)}">${ctaPrimary}</a>
       </div>
       <div class="social-proof" aria-label="Product scale">
-        <span>3,600+ Mexico City hotels indexed</span>
+        <span>${CDMX_SOCIAL}</span>
         <span>Real room photos</span>
         <span>Free to explore</span>
       </div>

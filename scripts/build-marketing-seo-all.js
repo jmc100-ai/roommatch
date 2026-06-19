@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * Build all SEO marketing pages (Phases 1–2) + sitemaps.
- * Order: vibe → neighborhoods → stays → sitemap
+ * Order: stats → Paris/CDMX hand pages → spokes → stays → vibe → neighborhoods → sitemap
  */
 const { execSync } = require("child_process");
 const path = require("path");
@@ -12,6 +12,11 @@ function run(cmd) {
   execSync(cmd, { cwd: ROOT, stdio: "inherit", env: process.env });
 }
 
+run("node scripts/marketing-city-stats.js");
+run("node scripts/refresh-paris-marketing-hotels.js");
+run("node scripts/build-paris-marketing-pages.js");
+run("node scripts/build-mexico-marketing-pages.js");
+run("node scripts/build-spoke-seo-pages.js");
 run("node scripts/build-hotel-seo-pages.js");
 run("node scripts/build-vibe-marketing-pages.js");
 run("node scripts/build-neighborhood-marketing-pages.js");
