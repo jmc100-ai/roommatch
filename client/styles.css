@@ -3394,7 +3394,8 @@
       flex:1; background:transparent; border:none; outline:none;
       font-family:'DM Sans',sans-serif; font-size:18px; color:var(--text); font-weight:300;
     }
-    .city-box input::placeholder { color:rgba(232,228,220,.35); font-style:italic; }
+    .city-box input::placeholder { color:rgba(232,228,220,.42); font-style:italic; font-weight:300; }
+    .city-combobox #cityInput::placeholder { color:rgba(232,228,220,.42); }
     .city-go-btn {
       flex-shrink:0; padding:9px 20px; border-radius:12px;
       background:var(--accent); color:#0c0c0e; border:none; cursor:pointer;
@@ -3408,6 +3409,181 @@
     .city-box .recent-dropdown {
       position:absolute; top:calc(100% + 6px); left:0; right:0; z-index:100;
     }
+
+    /* Curated city combobox (home hero) */
+    .city-combobox { position:relative; width:100%; }
+    .city-combobox-field { position:relative; width:100%; }
+    .city-combobox.is-open .city-box {
+      border-color:rgba(201,169,110,.8);
+      box-shadow:0 0 0 2px rgba(201,169,110,.15), 0 0 80px rgba(201,169,110,.16), 0 16px 40px rgba(0,0,0,.5);
+    }
+    .city-combobox .city-box-icon {
+      display:grid;
+      place-items:center;
+      opacity:.8;
+    }
+    .city-combobox #cityInput {
+      touch-action:manipulation;
+    }
+    .city-popular {
+      display:flex;
+      flex-wrap:wrap;
+      align-items:center;
+      gap:8px;
+      margin-top:12px;
+      font-size:13px;
+      color:var(--muted);
+    }
+    .city-popular-label { white-space:nowrap; }
+    .city-popular-chip {
+      appearance:none;
+      border:1px solid rgba(255,255,255,.12);
+      background:rgba(255,255,255,.04);
+      color:var(--text);
+      font-family:'DM Sans',sans-serif;
+      font-size:13px;
+      padding:6px 14px;
+      border-radius:100px;
+      cursor:pointer;
+      transition:border-color .15s, background .15s, color .15s;
+    }
+    .city-popular-chip:hover {
+      border-color:rgba(201,169,110,.5);
+      color:var(--accent);
+      background:rgba(201,169,110,.06);
+    }
+    .city-panel {
+      position:absolute;
+      top:calc(100% + 8px);
+      left:0;
+      right:0;
+      z-index:180;
+      background:#1a1a1f;
+      border:1px solid rgba(201,169,110,.28);
+      border-radius:16px;
+      overflow:hidden;
+      box-shadow:0 20px 60px rgba(0,0,0,.55);
+      display:none;
+      flex-direction:column;
+    }
+    .city-combobox.is-open .city-panel { display:flex; }
+    /* CITY_PANEL_SEARCH — hidden while list is small; uncomment in index.html, change display to flex */
+    .city-panel-search {
+      display:none;
+      align-items:center;
+      gap:10px;
+      padding:12px 14px;
+      border-bottom:1px solid var(--border);
+      background:rgba(255,255,255,.02);
+    }
+    .city-panel-search svg {
+      flex-shrink:0;
+      color:var(--muted);
+    }
+    .city-panel-search input {
+      flex:1;
+      min-width:0;
+      background:transparent;
+      border:none;
+      outline:none;
+      font-family:'DM Sans',sans-serif;
+      font-size:14px;
+      color:var(--text);
+    }
+    .city-panel-search input::placeholder { color:rgba(154,149,144,.7); }
+    .city-panel-head {
+      padding:10px 16px 6px;
+      font-size:10px;
+      letter-spacing:.14em;
+      text-transform:uppercase;
+      color:var(--muted);
+      font-weight:500;
+    }
+    .city-panel-list {
+      max-height:280px;
+      overflow-y:auto;
+      overscroll-behavior:contain;
+      -webkit-overflow-scrolling:touch;
+    }
+    .city-panel-list::-webkit-scrollbar { width:6px; }
+    .city-panel-list::-webkit-scrollbar-thumb {
+      background:rgba(255,255,255,.12);
+      border-radius:3px;
+    }
+    .city-row {
+      display:flex;
+      align-items:center;
+      gap:12px;
+      width:100%;
+      padding:10px 16px;
+      border:none;
+      background:transparent;
+      cursor:pointer;
+      text-align:left;
+      font-family:inherit;
+      color:inherit;
+      transition:background .1s;
+    }
+    .city-row:hover,
+    .city-row.active {
+      background:rgba(201,169,110,.08);
+    }
+    .city-row-thumb {
+      width:40px;
+      height:40px;
+      border-radius:8px;
+      object-fit:cover;
+      flex-shrink:0;
+      background:rgba(255,255,255,.06);
+    }
+    .city-row-text { min-width:0; flex:1; }
+    .city-row-name {
+      display:block;
+      font-size:14px;
+      font-weight:500;
+      color:var(--text);
+      line-height:1.25;
+    }
+    .city-row-country {
+      display:block;
+      font-size:12px;
+      color:var(--muted);
+      margin-top:2px;
+    }
+    .city-row-badge {
+      flex-shrink:0;
+      font-size:10px;
+      letter-spacing:.06em;
+      text-transform:uppercase;
+      padding:3px 8px;
+      border-radius:100px;
+      border:1px solid rgba(201,169,110,.35);
+      color:var(--accent2);
+    }
+    .city-row-badge--soon {
+      border-color:rgba(255,255,255,.12);
+      color:var(--muted);
+    }
+    .city-panel-empty {
+      padding:20px 16px;
+      font-size:13px;
+      color:var(--muted);
+      font-style:italic;
+      text-align:center;
+    }
+    .city-panel-footer {
+      padding:12px 16px;
+      border-top:1px solid var(--border);
+      font-size:13px;
+      color:var(--accent);
+      text-align:center;
+      background:rgba(201,169,110,.04);
+    }
+    @media (max-width:900px) {
+      .city-panel-list { max-height:min(240px, 42dvh); }
+      .home-v2 .city-popular { justify-content:center; }
+    }
+
     .city-chips { display:flex; flex-wrap:nowrap; gap:8px; justify-content:center; margin-top:14px; overflow:hidden; max-width:100%; }
     @media(max-width:760px){ .city-chips { overflow-x:auto; flex-wrap:nowrap; -webkit-overflow-scrolling:touch; justify-content:flex-start; padding:0 4px; } }
     .city-chip-recent {

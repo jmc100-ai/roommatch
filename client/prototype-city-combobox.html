@@ -1,0 +1,779 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>City combobox — home prototype (preview only)</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;1,400&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #0c0c0e;
+      --card: #18181c;
+      --text: #e8e4dc;
+      --muted: #9a9590;
+      --accent: #c9a96e;
+      --accent2: #e8d5b0;
+      --border: rgba(255, 255, 255, 0.12);
+      --max: 1180px;
+      --gutter: clamp(20px, 4vw, 56px);
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: 'DM Sans', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+    }
+
+    /* ── Prototype chrome ── */
+    .proto-banner {
+      position: sticky;
+      top: 0;
+      z-index: 1000;
+      padding: 10px var(--gutter);
+      background: rgba(12, 12, 14, 0.92);
+      border-bottom: 1px solid rgba(201, 169, 110, 0.25);
+      backdrop-filter: blur(10px);
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 10px 16px;
+      font-size: 13px;
+    }
+    .proto-tag {
+      padding: 4px 11px;
+      border-radius: 100px;
+      border: 1px solid rgba(201, 169, 110, 0.35);
+      color: var(--accent2);
+      font-size: 10px;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+    }
+    .proto-banner p { margin: 0; color: var(--muted); flex: 1; min-width: 200px; }
+    .proto-banner a { color: var(--accent); }
+
+    /* ── Fake topnav ── */
+    .mock-nav {
+      max-width: var(--max);
+      margin: 0 auto;
+      padding: 18px var(--gutter);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+    }
+    .mock-logo {
+      font-family: 'Cormorant Garamond', serif;
+      font-size: 22px;
+      font-weight: 400;
+      color: var(--text);
+    }
+    .mock-logo span { color: var(--accent); font-style: italic; }
+    .mock-nav-links {
+      display: none;
+      gap: 22px;
+      font-size: 12px;
+      color: var(--muted);
+    }
+    @media (min-width: 760px) { .mock-nav-links { display: flex; } }
+    .mock-nav-util {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 12px;
+      color: var(--muted);
+    }
+    .mock-beta {
+      padding: 4px 10px;
+      border-radius: 100px;
+      border: 1px solid rgba(201, 169, 110, 0.45);
+      color: var(--accent2);
+      font-size: 10px;
+      letter-spacing: 0.1em;
+    }
+
+    /* ── Hero (mirrors home-v2) ── */
+    .home-v2 {
+      max-width: var(--max);
+      margin: 0 auto;
+      padding: 0 var(--gutter) 48px;
+    }
+    .home-v2-hero {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(320px, 46%);
+      gap: clamp(24px, 4vw, 56px);
+      align-items: center;
+      min-height: calc(100vh - 160px);
+      min-height: calc(100dvh - 160px);
+      padding: 24px 0 32px;
+    }
+    .eyebrow {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 11px;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 14px;
+    }
+    .eyebrow-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--accent);
+    }
+    .city-heading {
+      font-family: 'Cormorant Garamond', serif;
+      font-size: clamp(36px, 3.8vw, 58px);
+      font-weight: 300;
+      line-height: 1.08;
+      margin: 0 0 12px;
+    }
+    .city-heading em { font-style: italic; color: var(--accent); }
+    .chapter-sub {
+      margin: 0 0 28px;
+      max-width: 520px;
+      font-size: 15px;
+      line-height: 1.65;
+      color: rgba(232, 228, 220, 0.78);
+      font-weight: 300;
+    }
+
+    /* ── Combobox wrapper ── */
+    .city-combobox {
+      position: relative;
+      max-width: 520px;
+    }
+    .city-box {
+      background: var(--card);
+      border: 1px solid rgba(201, 169, 110, 0.42);
+      border-radius: 20px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 16px 18px;
+      box-shadow: 0 0 0 1px rgba(201, 169, 110, 0.1), 0 0 70px rgba(201, 169, 110, 0.1), 0 16px 40px rgba(0, 0, 0, 0.4);
+      transition: box-shadow 0.2s, border-color 0.2s;
+    }
+    .city-combobox.is-open .city-box,
+    .city-box:focus-within {
+      border-color: rgba(201, 169, 110, 0.8);
+      box-shadow: 0 0 0 2px rgba(201, 169, 110, 0.15), 0 0 80px rgba(201, 169, 110, 0.16), 0 16px 40px rgba(0, 0, 0, 0.5);
+    }
+    .city-box-icon {
+      color: var(--accent2);
+      flex-shrink: 0;
+      opacity: 0.8;
+      display: grid;
+      place-items: center;
+    }
+    .city-box-icon svg { width: 20px; height: 20px; }
+    .city-box input {
+      flex: 1;
+      min-width: 0;
+      background: transparent;
+      border: none;
+      outline: none;
+      font-family: 'DM Sans', sans-serif;
+      font-size: 17px;
+      color: var(--text);
+      font-weight: 300;
+    }
+    .city-box input::placeholder { color: rgba(232, 228, 220, 0.35); font-style: italic; }
+    .city-go-btn {
+      flex-shrink: 0;
+      padding: 9px 20px;
+      border-radius: 12px;
+      background: var(--accent);
+      color: #0c0c0e;
+      border: none;
+      cursor: pointer;
+      font-family: 'DM Sans', sans-serif;
+      font-size: 14px;
+      font-weight: 600;
+      transition: opacity 0.15s, transform 0.1s;
+      white-space: nowrap;
+    }
+    .city-go-btn:hover { opacity: 0.85; transform: scale(1.02); }
+    .city-go-btn:active { transform: scale(0.97); }
+
+    /* Popular chips */
+    .city-popular {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px;
+      margin-top: 12px;
+      font-size: 13px;
+      color: var(--muted);
+    }
+    .city-popular-label { white-space: nowrap; }
+    .city-popular-chip {
+      appearance: none;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      background: rgba(255, 255, 255, 0.04);
+      color: var(--text);
+      font-family: 'DM Sans', sans-serif;
+      font-size: 13px;
+      padding: 6px 14px;
+      border-radius: 100px;
+      cursor: pointer;
+      transition: border-color 0.15s, background 0.15s, color 0.15s;
+    }
+    .city-popular-chip:hover {
+      border-color: rgba(201, 169, 110, 0.5);
+      color: var(--accent);
+      background: rgba(201, 169, 110, 0.06);
+    }
+
+    /* Dropdown panel */
+    .city-panel {
+      position: absolute;
+      top: calc(100% + 8px);
+      left: 0;
+      right: 0;
+      z-index: 200;
+      background: #1a1a1f;
+      border: 1px solid rgba(201, 169, 110, 0.28);
+      border-radius: 16px;
+      overflow: hidden;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.55);
+      display: none;
+    }
+    .city-combobox.is-open .city-panel { display: flex; flex-direction: column; }
+
+    .city-panel-search {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 12px 14px;
+      border-bottom: 1px solid var(--border);
+      background: rgba(255, 255, 255, 0.02);
+    }
+    .city-panel-search svg {
+      width: 16px;
+      height: 16px;
+      color: var(--muted);
+      flex-shrink: 0;
+    }
+    .city-panel-search input {
+      flex: 1;
+      min-width: 0;
+      background: transparent;
+      border: none;
+      outline: none;
+      font-family: 'DM Sans', sans-serif;
+      font-size: 14px;
+      color: var(--text);
+    }
+    .city-panel-search input::placeholder { color: rgba(154, 149, 144, 0.7); }
+
+    .city-panel-head {
+      padding: 10px 16px 6px;
+      font-size: 10px;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--muted);
+      font-weight: 500;
+    }
+
+    .city-panel-list {
+      max-height: 280px;
+      overflow-y: auto;
+      overscroll-behavior: contain;
+    }
+    .city-panel-list::-webkit-scrollbar { width: 6px; }
+    .city-panel-list::-webkit-scrollbar-thumb {
+      background: rgba(255, 255, 255, 0.12);
+      border-radius: 3px;
+    }
+
+    .city-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      width: 100%;
+      padding: 10px 16px;
+      border: none;
+      background: transparent;
+      cursor: pointer;
+      text-align: left;
+      font-family: inherit;
+      color: inherit;
+      transition: background 0.1s;
+    }
+    .city-row:hover,
+    .city-row.is-active {
+      background: rgba(201, 169, 110, 0.08);
+    }
+    .city-row-thumb {
+      width: 40px;
+      height: 40px;
+      border-radius: 8px;
+      object-fit: cover;
+      flex-shrink: 0;
+      background: rgba(255, 255, 255, 0.06);
+    }
+    .city-row-text { min-width: 0; flex: 1; }
+    .city-row-name {
+      display: block;
+      font-size: 14px;
+      font-weight: 500;
+      color: var(--text);
+      line-height: 1.25;
+    }
+    .city-row-country {
+      display: block;
+      font-size: 12px;
+      color: var(--muted);
+      margin-top: 2px;
+    }
+    .city-row-badge {
+      flex-shrink: 0;
+      font-size: 10px;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      padding: 3px 8px;
+      border-radius: 100px;
+      border: 1px solid rgba(201, 169, 110, 0.35);
+      color: var(--accent2);
+    }
+    .city-row-badge--soon {
+      border-color: rgba(255, 255, 255, 0.12);
+      color: var(--muted);
+    }
+
+    .city-panel-empty {
+      padding: 20px 16px;
+      font-size: 13px;
+      color: var(--muted);
+      font-style: italic;
+      text-align: center;
+    }
+
+    .city-panel-footer {
+      padding: 12px 16px;
+      border-top: 1px solid var(--border);
+      font-size: 13px;
+      color: var(--accent);
+      text-align: center;
+      background: rgba(201, 169, 110, 0.04);
+    }
+
+    /* Demo toast */
+    .demo-toast {
+      position: fixed;
+      bottom: 24px;
+      left: 50%;
+      transform: translateX(-50%) translateY(80px);
+      padding: 12px 20px;
+      border-radius: 12px;
+      background: rgba(24, 24, 28, 0.96);
+      border: 1px solid rgba(201, 169, 110, 0.35);
+      color: var(--text);
+      font-size: 14px;
+      box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
+      opacity: 0;
+      transition: transform 0.25s, opacity 0.25s;
+      pointer-events: none;
+      z-index: 2000;
+      max-width: min(90vw, 420px);
+      text-align: center;
+    }
+    .demo-toast.visible {
+      transform: translateX(-50%) translateY(0);
+      opacity: 1;
+    }
+    .demo-toast strong { color: var(--accent2); }
+
+    /* Polaroids */
+    .home-v2-visual {
+      position: relative;
+      min-height: 420px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .home-v2-polaroids {
+      position: relative;
+      width: min(100%, 420px);
+      height: 420px;
+    }
+    .polaroid {
+      position: absolute;
+      margin: 0;
+      padding: 8px 8px 28px;
+      background: #f5f0e8;
+      box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45);
+      border-radius: 2px;
+    }
+    .polaroid img {
+      display: block;
+      width: 100%;
+      height: auto;
+      object-fit: cover;
+    }
+    .polaroid--1 { width: 180px; top: 8%; left: 0; transform: rotate(-8deg); z-index: 2; }
+    .polaroid--2 { width: 220px; top: 18%; left: 28%; transform: rotate(3deg); z-index: 4; }
+    .polaroid--3 { width: 160px; top: 4%; right: 0; transform: rotate(6deg); z-index: 1; }
+    .polaroid--4 { width: 150px; bottom: 12%; left: 6%; transform: rotate(-4deg); z-index: 3; }
+    .polaroid--5 { width: 140px; bottom: 8%; right: 8%; transform: rotate(10deg); z-index: 2; }
+
+    /* Features strip */
+    .home-v2-features {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 0;
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      overflow: hidden;
+      margin-top: 8px;
+    }
+    .home-v2-feature {
+      padding: 24px 20px;
+      text-align: center;
+      border-right: 1px solid var(--border);
+    }
+    .home-v2-feature:last-child { border-right: none; }
+    .home-v2-feature-title {
+      font-size: 13px;
+      font-weight: 600;
+      letter-spacing: 0.04em;
+      margin: 10px 0 6px;
+      color: var(--accent2);
+    }
+    .home-v2-feature-desc {
+      margin: 0;
+      font-size: 12px;
+      line-height: 1.5;
+      color: var(--muted);
+    }
+    .home-v2-feature-icon {
+      width: 28px;
+      height: 28px;
+      margin: 0 auto;
+      color: var(--accent);
+    }
+    .home-v2-feature-icon svg { width: 100%; height: 100%; }
+
+    /* Spec table */
+    .spec-wrap {
+      max-width: var(--max);
+      margin: 0 auto;
+      padding: 0 var(--gutter) 56px;
+    }
+    .spec {
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      overflow: hidden;
+      background: rgba(255, 255, 255, 0.02);
+    }
+    .spec h2 {
+      margin: 0;
+      padding: 12px 16px;
+      font-size: 13px;
+      font-weight: 600;
+      background: rgba(255, 255, 255, 0.04);
+      border-bottom: 1px solid var(--border);
+    }
+    .spec table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    .spec th, .spec td {
+      padding: 10px 16px;
+      text-align: left;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+      vertical-align: top;
+    }
+    .spec th { color: var(--muted); font-weight: 500; width: 28%; }
+    .spec tr:last-child td, .spec tr:last-child th { border-bottom: none; }
+
+    @media (max-width: 900px) {
+      .home-v2-hero {
+        grid-template-columns: 1fr;
+        min-height: auto;
+      }
+      .home-v2-visual { display: none; }
+      .home-v2-features { grid-template-columns: 1fr; }
+      .home-v2-feature { border-right: none; border-bottom: 1px solid var(--border); }
+      .home-v2-feature:last-child { border-bottom: none; }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="proto-banner">
+    <span class="proto-tag">Prototype — preview only</span>
+    <p>Searchable city combobox for the home page. Not wired to production — open this file directly or via <code>/prototype-city-combobox.html</code>.</p>
+    <a href="/">← Live site</a>
+  </div>
+
+  <header class="mock-nav" aria-hidden="true">
+    <div class="mock-logo">TravelBy<span>Vibe</span></div>
+    <nav class="mock-nav-links">
+      <span>Search</span><span>How it works</span><span>About</span><span>Privacy</span><span>Terms</span><span>Contact</span>
+    </nav>
+    <div class="mock-nav-util"><span>USD</span><span class="mock-beta">BETA</span></div>
+  </header>
+
+  <main class="home-v2">
+    <div class="home-v2-hero">
+      <div class="home-v2-copy">
+        <div class="eyebrow"><div class="eyebrow-dot"></div>TravelBy<span style="color:var(--accent);font-style:italic">Vibe</span> · Find your vibe</div>
+        <h1 class="city-heading">Where are you <em>headed?</em></h1>
+        <p class="chapter-sub">Choose a city and find hotels that match your vibe. We use AI on real hotel-room and street photos — then match neighborhoods and stays that fit the trip you have in mind.</p>
+
+        <div class="city-combobox" id="cityCombobox">
+          <div class="city-box">
+            <span class="city-box-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s-7-4.5-7-10a7 7 0 0 1 14 0c0 5.5-7 10-7 10z"/><circle cx="12" cy="11" r="2.5"/></svg>
+            </span>
+            <input type="text" id="cityInput" placeholder="Where are you headed?" autocomplete="off" aria-expanded="false" aria-controls="cityPanel" aria-autocomplete="list" role="combobox" />
+            <button type="button" class="city-go-btn" id="cityGoBtn">Go →</button>
+          </div>
+
+          <div class="city-popular" aria-label="Popular cities">
+            <span class="city-popular-label">Popular:</span>
+            <button type="button" class="city-popular-chip" data-city="Mexico City">Mexico City</button>
+            <button type="button" class="city-popular-chip" data-city="Paris">Paris</button>
+          </div>
+
+          <div class="city-panel" id="cityPanel" role="listbox" aria-label="Available cities">
+            <div class="city-panel-search">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3-3"/></svg>
+              <input type="text" id="panelFilter" placeholder="Search cities" autocomplete="off" aria-label="Filter cities" />
+            </div>
+            <div class="city-panel-head">Available cities</div>
+            <div class="city-panel-list" id="cityList"></div>
+            <div class="city-panel-footer">✨ More cities coming soon</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="home-v2-visual" aria-hidden="true">
+        <div class="home-v2-polaroids">
+          <figure class="polaroid polaroid--1"><img src="https://images.unsplash.com/photo-1522083165195-3424ed129620?auto=format&fit=crop&w=360&q=80" alt="" width="180" height="200" /></figure>
+          <figure class="polaroid polaroid--2"><img src="https://images.unsplash.com/photo-1584669727833-88b47506defb?auto=format&fit=crop&w=440&q=80" alt="" width="220" height="260" /></figure>
+          <figure class="polaroid polaroid--3"><img src="https://images.unsplash.com/photo-1521216774850-01bc1c5fe0da?auto=format&fit=crop&w=320&q=80" alt="" width="160" height="180" /></figure>
+          <figure class="polaroid polaroid--4"><img src="https://images.unsplash.com/photo-1514565131-fce0801e5785?auto=format&fit=crop&w=300&q=80" alt="" width="150" height="170" /></figure>
+          <figure class="polaroid polaroid--5"><img src="https://images.unsplash.com/photo-1619872978981-e9885a014ba3?auto=format&fit=crop&w=280&q=80" alt="" width="140" height="160" /></figure>
+        </div>
+      </div>
+    </div>
+
+    <section class="home-v2-features" aria-label="Why TravelByVibe">
+      <article class="home-v2-feature">
+        <div class="home-v2-feature-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3-3"/></svg></div>
+        <h2 class="home-v2-feature-title">AI-Powered Matching</h2>
+        <p class="home-v2-feature-desc">Real hotel &amp; street photos</p>
+      </article>
+      <article class="home-v2-feature">
+        <div class="home-v2-feature-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 21s-6-4.35-6-10a6 6 0 0 1 12 0c0 5.65-6 10-6 10z"/><circle cx="12" cy="11" r="2.5"/></svg></div>
+        <h2 class="home-v2-feature-title">Neighborhood First</h2>
+        <p class="home-v2-feature-desc">Find the right vibe</p>
+      </article>
+      <article class="home-v2-feature">
+        <div class="home-v2-feature-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 3l7 4v5c0 4.5-3.2 8.2-7 9-3.8-.8-7-4.5-7-9V7l7-4z"/></svg></div>
+        <h2 class="home-v2-feature-title">Curated Stays</h2>
+        <p class="home-v2-feature-desc">Handpicked for you</p>
+      </article>
+    </section>
+  </main>
+
+  <div class="spec-wrap">
+    <div class="spec">
+      <h2>Interaction spec (this prototype)</h2>
+      <table>
+        <tr><th>Combobox</th><td>Click or focus the main field → panel opens with <strong>all</strong> cities listed (no typing required). Filter narrows the list client-side.</td></tr>
+        <tr><th>Popular chips</th><td>One tap sets the field value and closes the panel. Mexico City &amp; Paris are live in prod today.</td></tr>
+        <tr><th>Go →</th><td>Live cities show a success toast; others show a “coming soon” toast (prod would gate with the launch-city modal).</td></tr>
+        <tr><th>Keyboard</th><td>↑↓ moves highlight, Enter selects, Escape closes. Typing in the main field also filters.</td></tr>
+        <tr><th>Footer</th><td>Static “✨ More cities coming soon” — signals the curated list will grow.</td></tr>
+      </table>
+    </div>
+  </div>
+
+  <div class="demo-toast" id="demoToast" role="status" aria-live="polite"></div>
+
+  <script>
+    const CITIES = [
+      { name: 'Mexico City', country: 'Mexico', live: true, thumb: 'https://images.unsplash.com/photo-1584669727833-88b47506defb?auto=format&fit=crop&w=80&q=80' },
+      { name: 'Paris', country: 'France', live: true, thumb: 'https://images.unsplash.com/photo-1502602898657-3e91760cbb34?auto=format&fit=crop&w=80&q=80' },
+      { name: 'Tokyo', country: 'Japan', live: false, thumb: 'https://images.unsplash.com/photo-1518998053901-5348d3961a04?auto=format&fit=crop&w=80&q=80' },
+      { name: 'Barcelona', country: 'Spain', live: false, thumb: 'https://images.unsplash.com/photo-1558642452-9d2a7deb7f62?auto=format&fit=crop&w=80&q=80' },
+      { name: 'Lisbon', country: 'Portugal', live: false, thumb: 'https://images.unsplash.com/photo-1555881400-632d53d4a4a8?auto=format&fit=crop&w=80&q=80' },
+      { name: 'New York City', country: 'United States', live: false, thumb: 'https://images.unsplash.com/photo-1496442226666-8d4d0e62e6e9?auto=format&fit=crop&w=80&q=80' },
+      { name: 'London', country: 'United Kingdom', live: false, thumb: 'https://images.unsplash.com/photo-1513635269975-59663e0ac1ad?auto=format&fit=crop&w=80&q=80' },
+    ];
+
+    const combobox = document.getElementById('cityCombobox');
+    const cityInput = document.getElementById('cityInput');
+    const panelFilter = document.getElementById('panelFilter');
+    const cityList = document.getElementById('cityList');
+    const goBtn = document.getElementById('cityGoBtn');
+    const toast = document.getElementById('demoToast');
+
+    let activeIdx = -1;
+    let filtered = [...CITIES];
+    let toastTimer = null;
+
+    function filterQuery(q) {
+      const n = q.trim().toLowerCase();
+      if (!n) return [...CITIES];
+      return CITIES.filter(c =>
+        c.name.toLowerCase().includes(n) ||
+        c.country.toLowerCase().includes(n)
+      );
+    }
+
+    function renderList() {
+      activeIdx = filtered.length ? Math.min(activeIdx, filtered.length - 1) : -1;
+      if (!filtered.length) {
+        cityList.innerHTML = '<div class="city-panel-empty">No cities match your search</div>';
+        return;
+      }
+      cityList.innerHTML = filtered.map((c, i) => `
+        <button type="button" class="city-row${i === activeIdx ? ' is-active' : ''}" role="option" aria-selected="${i === activeIdx}" data-idx="${i}">
+          <img class="city-row-thumb" src="${c.thumb}" alt="" width="40" height="40" loading="lazy" />
+          <span class="city-row-text">
+            <span class="city-row-name">${c.name}</span>
+            <span class="city-row-country">${c.country}</span>
+          </span>
+          ${c.live
+            ? '<span class="city-row-badge">Live</span>'
+            : '<span class="city-row-badge city-row-badge--soon">Soon</span>'}
+        </button>
+      `).join('');
+
+      cityList.querySelectorAll('.city-row').forEach(btn => {
+        btn.addEventListener('mousedown', e => {
+          e.preventDefault();
+          selectCity(filtered[+btn.dataset.idx]);
+        });
+      });
+    }
+
+    function openPanel(focusFilter) {
+      combobox.classList.add('is-open');
+      cityInput.setAttribute('aria-expanded', 'true');
+      filtered = filterQuery(cityInput.value);
+      activeIdx = filtered.length ? 0 : -1;
+      renderList();
+      if (focusFilter) {
+        panelFilter.value = '';
+        setTimeout(() => panelFilter.focus(), 0);
+      }
+    }
+
+    function closePanel() {
+      combobox.classList.remove('is-open');
+      cityInput.setAttribute('aria-expanded', 'false');
+      panelFilter.value = '';
+      activeIdx = -1;
+    }
+
+    function selectCity(city) {
+      if (!city) return;
+      cityInput.value = city.name;
+      closePanel();
+      showToast(`Selected <strong>${city.name}</strong>`);
+    }
+
+    function onGo() {
+      const name = cityInput.value.trim();
+      const hit = CITIES.find(c => c.name.toLowerCase() === name.toLowerCase());
+      if (!hit) {
+        showToast('Pick a city from the list');
+        openPanel(true);
+        return;
+      }
+      if (hit.live) {
+        showToast(`Starting vibe wizard for <strong>${hit.name}</strong> →`);
+      } else {
+        showToast(`<strong>${hit.name}</strong> is coming soon — try Mexico City or Paris`);
+      }
+      closePanel();
+    }
+
+    function showToast(html) {
+      toast.innerHTML = html;
+      toast.classList.add('visible');
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => toast.classList.remove('visible'), 3200);
+    }
+
+    function applyFilter(fromPanel) {
+      const q = fromPanel ? panelFilter.value : cityInput.value;
+      filtered = filterQuery(q);
+      activeIdx = filtered.length ? 0 : -1;
+      renderList();
+      if (!combobox.classList.contains('is-open')) openPanel(false);
+    }
+
+    cityInput.addEventListener('focus', () => openPanel(false));
+    cityInput.addEventListener('input', () => applyFilter(false));
+    panelFilter.addEventListener('input', () => applyFilter(true));
+
+    cityInput.addEventListener('keydown', e => {
+      if (!combobox.classList.contains('is-open') && (e.key === 'ArrowDown' || e.key === 'Enter')) {
+        openPanel(e.key === 'ArrowDown');
+        e.preventDefault();
+        return;
+      }
+      if (e.key === 'ArrowDown' && filtered.length) {
+        e.preventDefault();
+        activeIdx = Math.min(activeIdx + 1, filtered.length - 1);
+        renderList();
+        cityList.querySelector('.city-row.is-active')?.scrollIntoView({ block: 'nearest' });
+      } else if (e.key === 'ArrowUp' && filtered.length) {
+        e.preventDefault();
+        activeIdx = Math.max(activeIdx - 1, 0);
+        renderList();
+        cityList.querySelector('.city-row.is-active')?.scrollIntoView({ block: 'nearest' });
+      } else if (e.key === 'Enter') {
+        e.preventDefault();
+        if (activeIdx >= 0 && filtered[activeIdx]) selectCity(filtered[activeIdx]);
+        else onGo();
+      } else if (e.key === 'Escape') {
+        closePanel();
+      }
+    });
+
+    panelFilter.addEventListener('keydown', e => {
+      if (e.key === 'ArrowDown' && filtered.length) {
+        e.preventDefault();
+        activeIdx = Math.min(activeIdx + 1, filtered.length - 1);
+        renderList();
+      } else if (e.key === 'ArrowUp' && filtered.length) {
+        e.preventDefault();
+        activeIdx = Math.max(activeIdx - 1, 0);
+        renderList();
+      } else if (e.key === 'Enter' && activeIdx >= 0) {
+        e.preventDefault();
+        selectCity(filtered[activeIdx]);
+      } else if (e.key === 'Escape') {
+        closePanel();
+        cityInput.focus();
+      }
+    });
+
+    document.addEventListener('mousedown', e => {
+      if (!combobox.contains(e.target)) closePanel();
+    });
+
+    goBtn.addEventListener('click', onGo);
+
+    document.querySelectorAll('.city-popular-chip').forEach(chip => {
+      chip.addEventListener('click', () => {
+        const name = chip.dataset.city;
+        const city = CITIES.find(c => c.name === name);
+        if (city) selectCity(city);
+      });
+    });
+
+    // Start with panel open so reviewers see the full list immediately (like the mock)
+    openPanel(false);
+  </script>
+</body>
+</html>

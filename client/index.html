@@ -311,14 +311,35 @@
             <p class="chapter-sub home-v2-sub">Choose a city and find hotels that match your vibe. We use AI on real hotel-room and street photos — then match neighborhoods and stays that fit the trip you have in mind.</p>
 
             <div class="home-v2-form">
-              <div class="home-v2-field home-v2-field--city city-box">
-                <span class="city-box-icon" aria-hidden="true">⌕</span>
-                <input type="text" id="cityInput" value="Mexico City" placeholder="Where are you going?"
-                       autocomplete="off"
-                       onkeydown="onCityKeydown(event)"/>
-                <button class="city-go-btn" id="cityGoBtn" type="button" onclick="onCityGo()" aria-label="Go">Go →</button>
-                <div class="recent-dropdown" id="cityHistoryDropdown"></div>
-                <div class="city-dropdown" id="cityDropdown"></div>
+              <div class="city-combobox home-v2-field" id="cityCombobox">
+                <div class="city-combobox-field">
+                  <div class="home-v2-field--city city-box">
+                    <span class="city-box-icon" aria-hidden="true">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" width="20" height="20"><path d="M12 21s-7-4.5-7-10a7 7 0 0 1 14 0c0 5.5-7 10-7 10z"/><circle cx="12" cy="11" r="2.5"/></svg>
+                    </span>
+                    <input type="text" id="cityInput" value="" placeholder="Where are you headed?"
+                           autocomplete="off" role="combobox" aria-expanded="false"
+                           aria-controls="cityPanelList" aria-autocomplete="list"
+                           onkeydown="onCityKeydown(event)"/>
+                    <button class="city-go-btn" id="cityGoBtn" type="button" onclick="onCityGo()" aria-label="Go">Go →</button>
+                  </div>
+                  <div class="city-panel" id="cityPanel" role="presentation">
+                    <!-- CITY_PANEL_SEARCH — restore when the curated list grows beyond ~6 cities
+                    <div class="city-panel-search">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true" width="16" height="16"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3-3"/></svg>
+                      <input type="text" id="cityPanelFilter" placeholder="Search cities" autocomplete="off" aria-label="Filter cities" onkeydown="onCityPanelFilterKeydown(event)"/>
+                    </div>
+                    -->
+                    <div class="city-panel-head">Available cities</div>
+                    <div class="city-panel-list" id="cityPanelList" role="listbox" aria-label="Available cities"></div>
+                    <div class="city-panel-footer">✨ More cities coming soon</div>
+                  </div>
+                </div>
+                <div class="city-popular" aria-label="Available cities">
+                  <span class="city-popular-label">Available now:</span>
+                  <button type="button" class="city-popular-chip" onclick="selectPopularCity('Mexico City')">Mexico City</button>
+                  <button type="button" class="city-popular-chip" onclick="selectPopularCity('Paris')">Paris</button>
+                </div>
               </div>
 
               <div class="city-dates home-v2-field" id="city-dates">

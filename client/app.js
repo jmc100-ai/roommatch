@@ -1566,9 +1566,8 @@
     document.body.style.overflow = '';
     const el = document.getElementById('cityInput');
     if (el) {
-      el.value = DEFAULT_HOME_CITY;
+      el.value = '';
       el.focus();
-      el.select();
     }
   }
 
@@ -13753,65 +13752,182 @@
       </div>`;
   }
 
-  // ── City autocomplete ──────────────────────────────────────────────────────
-  let cityTimer = null;
-  let activeIdx = -1;
+  // ── City combobox (curated list; Mexico City + Paris live) ─────────────────
+  let cityPanelActiveIdx = -1;
+  let cityPanelFiltered = [];
+  let _cityComboboxInit = true;
+  let _cityComboboxOutsideBound = false;
+  /** @type {{name:string,country:string,thumb:string}[]} */
+  let SUPPORTED_CITIES = [];
 
-  async function onCityInput(val) {
-    /* GEO_AUTOCOMPLETE PAUSED — homepage chip conflict; remove this line + closing comment to restore */
-    return;
-    /*
-    clearTimeout(cityTimer);
-    const dd = document.getElementById('cityDropdown');
-    if (val.length < 2) {
-      dd.classList.remove('visible');
-      dd.innerHTML = '';
-      showRecentDropdown({
-        inputId: 'cityInput',
-        dropdownId: 'cityHistoryDropdown',
-        storageKey: CITY_HISTORY_KEY,
-        selectFn: 'selectRecentCity',
-        emptyText: 'Recent cities will appear here',
-        icon: '🕘',
-        label: 'Recent'
-      });
+  function isCityComboboxOpen() {
+    return document.getElementById('cityCombobox')?.classList.contains('is-open');
+  }
+
+  function filterSupportedCities(q) {
+    const n = String(q || '').trim().toLowerCase();
+    if (!n) return [...SUPPORTED_CITIES];
+    return SUPPORTED_CITIES.filter(c =>
+      c.name.toLowerCase().includes(n) ||
+      c.country.toLowerCase().includes(n)
+    );
+  }
+
+  function renderCityPanelList() {
+    const list = document.getElementById('cityPanelList');
+    if (!list) return;
+    cityPanelActiveIdx = cityPanelFiltered.length
+      ? Math.min(cityPanelActiveIdx, cityPanelFiltered.length - 1)
+      : -1;
+    if (!cityPanelFiltered.length) {
+      list.innerHTML = '<div class="city-panel-empty">No cities match your search</div>';
       return;
     }
+    list.innerHTML = cityPanelFiltered.map((c, i) => `
+        <button type="button" class="city-row${i === cityPanelActiveIdx ? ' active' : ''}"
+                role="option" aria-selected="${i === cityPanelActiveIdx}"
+                data-name="${escAttr(c.name)}" data-idx="${i}">
+          <img class="city-row-thumb" src="${escAttr(c.thumb)}" alt="" width="40" height="40" loading="lazy" decoding="async" />
+          <span class="city-row-text">
+            <span class="city-row-name">${escHtml(c.name)}</span>
+            <span class="city-row-country">${escHtml(c.country)}</span>
+          </span>
+        </button>`).join('');
+    list.querySelectorAll('.city-row').forEach(btn => {
+      btn.addEventListener('mousedown', e => {
+        e.preventDefault();
+        pickCityFromPanel(cityPanelFiltered[+btn.dataset.idx]);
+      });
+    });
+  }
 
-    hideRecentDropdown('cityHistoryDropdown');
-
-    dd.innerHTML = '<div class="city-loading">Searching…</div>';
-    dd.classList.add('visible');
-    activeIdx = -1;
-
-    cityTimer = setTimeout(async () => {
-      try {
-        const resp = await fetch(`${BACKEND}/api/places?q=${encodeURIComponent(val)}`);
-        if (!resp.ok) return;
-        const data = await resp.json();
-        const places = data.places || [];
-        if (!places.length) {
-          dd.innerHTML = '<div class="city-loading">No cities found</div>';
-          return;
-        }
-        dd.innerHTML = places.map((p, i) => {
-          const label    = p.name;
-          const subParts = [p.state, p.country].filter(Boolean);
-          const sub      = subParts.join(', ');
-          const safe = JSON.stringify(p).replace(/'/g, "&#39;");
-          return `
-            <div class="city-option" data-name="${label}" data-idx="${i}"
-                 onmousedown="selectCity(${safe})">
-              <span class="city-option-icon">📍</span>
-              <span>${label}</span>
-              ${sub ? `<span class="city-option-sub">${sub}</span>` : ''}
-            </div>`;
-        }).join('');
-      } catch {
-        dd.classList.remove('visible');
+  function openCityPanel(focusFilter) {
+    if (_cityComboboxInit) return;
+    const combobox = document.getElementById('cityCombobox');
+    const cityInput = document.getElementById('cityInput');
+    if (!combobox || !cityInput) return;
+    // Always show the full list on open — filter only after the user types (input event).
+    cityPanelFiltered = [...SUPPORTED_CITIES];
+    if (focusFilter) {
+      const filterEl = document.getElementById('cityPanelFilter');
+      if (filterEl) {
+        filterEl.value = '';
+        setTimeout(() => filterEl.focus(), 0);
+      } else {
+        setTimeout(() => cityInput.focus(), 0);
       }
-    }, 250);
-    */
+    }
+    combobox.classList.add('is-open');
+    cityInput.setAttribute('aria-expanded', 'true');
+    cityPanelActiveIdx = cityPanelFiltered.length ? 0 : -1;
+    renderCityPanelList();
+  }
+
+  function closeCityPanel() {
+    const combobox = document.getElementById('cityCombobox');
+    const cityInput = document.getElementById('cityInput');
+    const filterEl = document.getElementById('cityPanelFilter');
+    if (combobox) combobox.classList.remove('is-open');
+    if (cityInput) cityInput.setAttribute('aria-expanded', 'false');
+    if (filterEl) filterEl.value = '';
+    cityPanelActiveIdx = -1;
+    cityPanelFiltered = [];
+  }
+
+  function applyCityPanelFilter(fromPanel) {
+    const cityInput = document.getElementById('cityInput');
+    const filterEl = document.getElementById('cityPanelFilter');
+    const q = fromPanel ? (filterEl?.value || '') : (cityInput?.value || '');
+    cityPanelFiltered = filterSupportedCities(q);
+    cityPanelActiveIdx = cityPanelFiltered.length ? 0 : -1;
+    renderCityPanelList();
+    if (!isCityComboboxOpen()) openCityPanel(false);
+  }
+
+  function scrollCityPanelActiveIntoView() {
+    document.getElementById('cityPanelList')
+      ?.querySelector('.city-row.active')
+      ?.scrollIntoView({ block: 'nearest' });
+  }
+
+  function pickCityFromPanel(city) {
+    if (!city) return;
+    const cityInput = document.getElementById('cityInput');
+    if (cityInput) cityInput.value = city.name;
+    closeCityPanel();
+    updateHomePolaroids(city.name);
+    if (isHomeCityStepActive()) notifyHomeGoActivity(city.name);
+    selectCity({ name: city.name }, { source: 'combobox' });
+  }
+
+  function selectPopularCity(name) {
+    selectCity({ name }, { source: 'chip' });
+  }
+
+  /** Panel filter keyboard nav — inactive while #cityPanelFilter is commented out in index.html */
+  function onCityPanelFilterKeydown(e) {
+    if (e.key === 'ArrowDown' && cityPanelFiltered.length) {
+      e.preventDefault();
+      cityPanelActiveIdx = Math.min(cityPanelActiveIdx + 1, cityPanelFiltered.length - 1);
+      renderCityPanelList();
+      scrollCityPanelActiveIntoView();
+    } else if (e.key === 'ArrowUp' && cityPanelFiltered.length) {
+      e.preventDefault();
+      cityPanelActiveIdx = Math.max(cityPanelActiveIdx - 1, 0);
+      renderCityPanelList();
+      scrollCityPanelActiveIntoView();
+    } else if (e.key === 'Enter' && cityPanelActiveIdx >= 0) {
+      e.preventDefault();
+      pickCityFromPanel(cityPanelFiltered[cityPanelActiveIdx]);
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      closeCityPanel();
+      document.getElementById('cityInput')?.focus();
+    }
+  }
+
+  function initCityCombobox() {
+    const combobox = document.getElementById('cityCombobox');
+    const cityInput = document.getElementById('cityInput');
+    const cityBox = combobox?.querySelector('.city-box');
+    if (!combobox || !cityInput) return;
+
+    function revealCityPanel() {
+      if (_cityComboboxInit || isCityComboboxOpen()) return;
+      openCityPanel(false);
+    }
+
+    cityInput.addEventListener('pointerdown', (e) => {
+      if (_cityComboboxInit) return;
+      // Panel already open — let mobile place the caret / open keyboard normally.
+      if (isCityComboboxOpen()) return;
+      e.stopPropagation();
+      setTimeout(revealCityPanel, 0);
+    });
+    cityBox?.addEventListener('pointerdown', (e) => {
+      if (e.target.closest('.city-go-btn')) return;
+      if (e.target === cityInput) return;
+      revealCityPanel();
+    });
+    cityInput.addEventListener('input', () => {
+      if (!isCityComboboxOpen()) openCityPanel(false);
+      applyCityPanelFilter(false);
+      const v = (cityInput.value || '').trim();
+      if (SUPPORTED_CITIES.some(c => c.name.toLowerCase() === v.toLowerCase())) {
+        updateHomePolaroids(v);
+      }
+    });
+    // filterEl?.addEventListener('input', () => applyCityPanelFilter(true)); // restore with CITY_PANEL_SEARCH
+
+    if (!_cityComboboxOutsideBound) {
+      _cityComboboxOutsideBound = true;
+      document.addEventListener('mousedown', e => {
+        if (!combobox.contains(e.target)) closeCityPanel();
+      });
+      document.addEventListener('touchstart', e => {
+        if (!combobox.contains(e.target)) closeCityPanel();
+      }, { passive: true });
+    }
   }
 
   // cityData: {name, country_code, lat, lng} from autocomplete, or plain string from history/keyboard
@@ -13830,6 +13946,11 @@
 
   const POLAROID_IMG_FALLBACK = 'https://images.unsplash.com/photo-1477959858617-67f85cf4f1df?auto=format&fit=crop&w=520&q=80';
   const _U = (id, w = 520) => `https://images.unsplash.com/photo-${id}?auto=format&fit=crop&w=${w}&q=80`;
+
+  SUPPORTED_CITIES = [
+    { name: 'Mexico City', country: 'Mexico', thumb: _U('1584669727833-88b47506defb', 80) },
+    { name: 'Paris', country: 'France', thumb: _U('1502602898657-3e91760cbb34', 80) },
+  ];
   /** Slot index 1 maps to `.polaroid--2` (largest, centre frame). */
   const MX_HERO = { src: _U('1584669727833-88b47506defb', 600), alt: 'Mexico City skyline' };
   /** Six polaroid slots per home hero city — URLs HEAD-verified (invalid IDs 404 on Unsplash). */
@@ -13912,8 +14033,14 @@
   function homePolaroidSetKey(cityName) {
     const n = (cityName || '').trim().toLowerCase();
     if (HOME_POLAROID_SETS[n]) return n;
+    if (n === 'new york city') return 'new york';
     const hit = TOP_CITIES.find((c) => c.name.toLowerCase() === n);
-    return hit ? hit.name.toLowerCase() : '_default';
+    const hitSupported = SUPPORTED_CITIES.find((c) => c.name.toLowerCase() === n);
+    if (hit) return hit.name.toLowerCase();
+    if (hitSupported && HOME_POLAROID_SETS[hitSupported.name.toLowerCase()]) {
+      return hitSupported.name.toLowerCase();
+    }
+    return '_default';
   }
 
   function updateHomePolaroids(cityName) {
@@ -13979,15 +14106,20 @@
 
   function onCityGo() {
     const val = (document.getElementById('cityInput').value || '').trim();
-    if (val) {
-      notifyHomeGoActivity(val);
-      selectCity({ name: val });
+    if (!val) {
+      cityPanelFiltered = [...SUPPORTED_CITIES];
+      openCityPanel(true);
+      return;
     }
+    notifyHomeGoActivity(val);
+    selectCity({ name: val });
   }
 
   function selectCity(cityData, opts) {
     const name = typeof cityData === 'string' ? cityData : (cityData?.name || cityData);
-    document.getElementById('cityDropdown').classList.remove('visible');
+    closeCityPanel();
+    const dd = document.getElementById('cityDropdown');
+    if (dd) dd.classList.remove('visible');
     hideRecentDropdown('cityHistoryDropdown');
     selectedCityData = typeof cityData === 'object' ? cityData : { name };
     pickCity(name, opts);
@@ -13995,41 +14127,52 @@
 
   function selectRecentCityNew(value) {
     hideRecentDropdown('cityHistoryDropdown');
-    document.getElementById('cityDropdown').classList.remove('visible');
+    const dd = document.getElementById('cityDropdown');
+    if (dd) dd.classList.remove('visible');
     selectCity({ name: value });
   }
 
   function onCityKeydown(e) {
-    const dd   = document.getElementById('cityDropdown');
-    const opts = dd.querySelectorAll('.city-option');
+    if (!isCityComboboxOpen() && (e.key === 'ArrowDown' || e.key === 'ArrowUp')) {
+      e.preventDefault();
+      cityPanelFiltered = [...SUPPORTED_CITIES];
+      openCityPanel(false);
+      return;
+    }
     if (e.key === 'Enter') {
-      if (activeIdx >= 0 && opts[activeIdx]) {
-        e.preventDefault();
-        const name = opts[activeIdx].dataset.name;
+      e.preventDefault();
+      if (cityPanelActiveIdx >= 0 && cityPanelFiltered[cityPanelActiveIdx]) {
+        const name = cityPanelFiltered[cityPanelActiveIdx].name;
         if (isHomeCityStepActive()) notifyHomeGoActivity(name);
-        selectCity({ name });
+        pickCityFromPanel(cityPanelFiltered[cityPanelActiveIdx]);
       } else if (e.target.value.trim()) {
-        e.preventDefault();
         const name = e.target.value.trim();
         if (isHomeCityStepActive()) notifyHomeGoActivity(name);
         selectCity({ name });
+      } else {
+        cityPanelFiltered = [...SUPPORTED_CITIES];
+        openCityPanel(true);
       }
-    } else if (e.key === 'ArrowDown' && opts.length) {
+    } else if (e.key === 'ArrowDown' && cityPanelFiltered.length) {
       e.preventDefault();
-      activeIdx = Math.min(activeIdx + 1, opts.length - 1);
-      opts.forEach((o, i) => o.classList.toggle('active', i === activeIdx));
-    } else if (e.key === 'ArrowUp' && opts.length) {
+      cityPanelActiveIdx = Math.min(cityPanelActiveIdx + 1, cityPanelFiltered.length - 1);
+      renderCityPanelList();
+      scrollCityPanelActiveIntoView();
+    } else if (e.key === 'ArrowUp' && cityPanelFiltered.length) {
       e.preventDefault();
-      activeIdx = Math.max(activeIdx - 1, 0);
-      opts.forEach((o, i) => o.classList.toggle('active', i === activeIdx));
+      cityPanelActiveIdx = Math.max(cityPanelActiveIdx - 1, 0);
+      renderCityPanelList();
+      scrollCityPanelActiveIntoView();
     } else if (e.key === 'Escape') {
-      dd.classList.remove('visible');
+      closeCityPanel();
     }
   }
 
   function hideCitySuggestions() {
+    closeCityPanel();
     setTimeout(() => {
-      document.getElementById('cityDropdown').classList.remove('visible');
+      const dd = document.getElementById('cityDropdown');
+      if (dd) dd.classList.remove('visible');
       hideRecentDropdown('cityHistoryDropdown');
     }, 150);
   }
@@ -14279,9 +14422,12 @@
     // Build city quick-pick chips (top cities + recent)
     buildCityChips();
 
-    // City input: keyboard nav + history dropdown
+    // City combobox + keyboard nav
     const cityInput = document.getElementById('cityInput');
     if (!cityInput) return;
+
+    initCityCombobox();
+    _cityComboboxInit = false;
 
     // Marketing deep links: /?city=Mexico%20City → auto-start Boop wizard.
     try {
@@ -14297,64 +14443,12 @@
       }
     } catch (_) {}
 
-    if (!cityInput.value.trim()) cityInput.value = DEFAULT_HOME_CITY;
-    const launchFromInput = resolveLaunchCity(cityInput.value.trim());
-    if (launchFromInput) {
-      cityInput.value = launchFromInput;
-      S.city = launchFromInput;
-    } else {
-      S.city = normalizeCityName(cityInput.value.trim()) || DEFAULT_HOME_CITY;
-    }
-    updateHomePolaroids(cityInput.value.trim() || DEFAULT_HOME_CITY);
-    if (S.city) {
+    if (!cityInput.value.trim()) {
+      S.city = DEFAULT_HOME_CITY;
+      updateHomePolaroids(DEFAULT_HOME_CITY);
       prefetchBoopTripWizardImages(S.city);
       boopPreloadStaticWizardImages();
     }
-    cityInput.addEventListener('input', () => {
-      const v = (cityInput.value || '').trim();
-      if (TOP_CITIES.some((c) => c.name.toLowerCase() === v.toLowerCase())) {
-        updateHomePolaroids(v);
-      }
-    });
-
-    /* Recent popover on focus + duplicate arrow-key nav — paused with Geo autocomplete (use onCityKeydown on input)
-    cityInput.addEventListener('focus', () => {
-      if (cityInput.value.trim().length < 2) {
-        showRecentDropdown({
-          inputId: 'cityInput',
-          dropdownId: 'cityHistoryDropdown',
-          storageKey: CITY_HISTORY_KEY,
-          selectFn: 'selectRecentCity',
-          emptyText: 'Recent cities will appear here',
-          icon: '🕘',
-          label: 'Recent'
-        });
-      }
-    });
-
-    cityInput.addEventListener('keydown', e => {
-      const dd   = document.getElementById('cityDropdown');
-      const opts = dd.querySelectorAll('.city-option');
-      if (!opts.length) return;
-      if (e.key === 'ArrowDown') {
-        e.preventDefault();
-        activeIdx = Math.min(activeIdx + 1, opts.length - 1);
-        opts.forEach((o, i) => o.classList.toggle('active', i === activeIdx));
-      } else if (e.key === 'ArrowUp') {
-        e.preventDefault();
-        activeIdx = Math.max(activeIdx - 1, 0);
-        opts.forEach((o, i) => o.classList.toggle('active', i === activeIdx));
-      } else if (e.key === 'Enter' && activeIdx >= 0) {
-        e.preventDefault();
-        selectCity({ name: opts[activeIdx].dataset.name });
-      } else if (e.key === 'Escape') {
-        dd.classList.remove('visible');
-      }
-    });
-    */
-
-    // Focus city input on load
-    setTimeout(() => cityInput.focus(), 100);
   });
 
   // ── Lightbox ──────────────────────────────────────────────────────────────
