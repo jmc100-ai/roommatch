@@ -148,6 +148,13 @@ Or local:
 node scripts/v2-city-rollout.js --city=Paris --skip-reindex
 ```
 
+**Neighbourhood fence QA (all cities):** after `runNeighborhoods`, run:
+```powershell
+node scripts/city-launch.js --city=Paris --phase=repair-fences
+node scripts/city-launch.js --city=Paris --phase=verify
+```
+See `docs/next-10-cities-launch-plan.md` § Neighbourhood fence QA. Curated bbox overrides live in `scripts/neighborhood-fence-overrides.js`.
+
 ### 5 — Hotel-public photos (required if `V2_SKIP_HOTEL_PUBLIC=1` during index)
 
 ```powershell

@@ -33,7 +33,8 @@ DECLARE
     'v2_room_feature_facts',
     'v2_room_types_index',
     'v2_intent_cache',
-    'boop_trip_images'
+    'boop_trip_images',
+    'boop_nbhd_scene_images'
   ];
   beta_tables text[] := ARRAY[
     'beta_feedback',

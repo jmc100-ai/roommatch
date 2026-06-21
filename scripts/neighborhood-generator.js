@@ -22,6 +22,13 @@ const {
   photoSearchCityPhrase,
   ensureCityInPhotoQuery,
 } = require("./neighborhood-vibe-data");
+const {
+  isDegenerateBbox,
+  getCuratedNeighborhoodFence,
+  bboxSpanLabel,
+} = require("./neighborhood-fence-overrides");
+const { isInGeoZone } = require("./geo-index-helpers");
+const { resolveCityConfig } = require("./city-registry");
 
 try {
   // One line per process — confirms which file Node resolved (stale deploy / duplicate path).
@@ -77,9 +84,32 @@ function pickFromAltPoolEntry(alt) {
 
 // Canonical Gemini prompt for neighborhood generation
 function buildNeighborhoodPrompt(city) {
+  const cfg = resolveCityConfig(city);
+  if (cfg.displayName === "London" || city === "London") {
+    const { buildLondonTouristDistrictPrompt } = require("./london-canonical-districts");
+    return buildLondonTouristDistrictPrompt();
+  }
+
+  const tier = cfg.tier || "medium";
+  let countRange = "8–11";
+  let megaChecklist = "";
+  if (tier === "mega" || ((cfg.indexCap || 0) >= 3500 && tier !== "small" && tier !== "live")) {
+    countRange = "18–24";
+    megaChecklist = `
+MEGA-CITY CHECKLIST — hotel-search districts a tourist would pick (NOT exhaustive borough coverage):
+- Iconic first-timer cores (historic centre, museum districts, riverfront)
+- Trendy / local experience areas (café culture, nightlife, markets)
+- Business / transit hubs (financial district, major stations)
+- Airport or major hub zones when applicable (clear local label, e.g. Heathrow)
+Do NOT merge distinct stay choices into vague regions (avoid "East London" catch-alls).`;
+  } else if (tier === "large" || (cfg.indexCap || 0) >= 2500) {
+    countRange = "12–16";
+  }
+
   return `Act as a local travel expert with deep knowledge of hotel neighborhoods.
 
-For ${city}, return the top 8–11 distinct areas where travelers typically stay.
+For ${city}, return the top ${countRange} distinct areas where travelers typically stay.
+${megaChecklist}
 Cover ALL of these zone types that exist in the city — do NOT omit any category that applies:
 1. Iconic first-timer neighborhoods (historic centre, top cultural district)
 2. Trendy / bohemian areas (café culture, art galleries, local dining)
@@ -205,6 +235,27 @@ Field rules:
     "shops": ["vintage shops Colonia Roma", "design boutique Roma Norte"],
     "greenery": ["Roma Norte jacaranda tree lined avenue", "Colonia Roma leafy boulevard"]
   }`;
+}
+
+/** Second-pass prompt: fill gaps from orphan hotel clusters (coverage audit). */
+function buildSupplementalNeighborhoodPrompt(city, cfg, clusters, existingNames) {
+  const clusterLines = clusters
+    .map(
+      (c, i) =>
+        `Cluster ${i + 1}: ~${c.hotel_count} indexed hotels; centroid ${c.centroid.lat.toFixed(4)}, ${c.centroid.lng.toFixed(4)}; ` +
+        `bbox lat ${c.bbox.lat_min.toFixed(3)}–${c.bbox.lat_max.toFixed(3)}, lon ${c.bbox.lon_min.toFixed(3)}–${c.bbox.lon_max.toFixed(3)}`,
+    )
+    .join("\n");
+
+  return `Act as a local travel expert. ${city} already has these stay areas — do NOT duplicate names or overlap them heavily:
+${existingNames.join(", ")}
+
+We still have dense hotel clusters OUTSIDE those fences. Add 3–6 NEW neighborhood entries (JSON array only) covering:
+${clusterLines}
+
+Use the same JSON schema as a primary neighborhood list (name, bbox, polygon.ring with ≥6 vertices, vibe fields, tags, photo_queries).
+Polygons must fully cover each cluster bbox (slightly expanded). Bboxes must tightly contain polygons.
+Return ONLY a valid JSON array — no markdown, no explanation.`;
 }
 
 async function callGemini(prompt, geminiKey) {
@@ -819,7 +870,60 @@ async function fetchOsmBoundary(name, city, hintBbox = null) {
   const first = ring[0], last2 = ring[ring.length - 1];
   if (first.lat !== last2.lat || first.lng !== last2.lng) ring.push({ lat: first.lat, lng: first.lng });
 
+  const ringBbox = bboxFromRing(ring);
+  if (isDegenerateBbox(ringBbox)) {
+    console.log(
+      `[osm-boundary] "${name}" rejected: OSM polygon too small ` +
+      `(${(ringBbox.lat_max - ringBbox.lat_min).toFixed(4)}×${(ringBbox.lon_max - ringBbox.lon_min).toFixed(4)}°)`,
+    );
+    return null;
+  }
+
   return ring;
+}
+
+async function getHotelCountForGeoZone(city, zone, db) {
+  const { data, error } = await db
+    .from("v2_hotels_cache")
+    .select("lat, lng")
+    .eq("city", city)
+    .not("lat", "is", null)
+    .not("lng", "is", null);
+  if (error) return 0;
+  return (data || []).filter((h) => isInGeoZone(h.lat, h.lng, zone)).length;
+}
+
+async function loadCityHotelCoords(city, db) {
+  const { data: v2Hotels, error: v2Err } = await db
+    .from("v2_hotels_cache")
+    .select("hotel_id, lat, lng")
+    .eq("city", city);
+  if (v2Err) throw new Error(`loadCityHotelCoords: ${v2Err.message}`);
+  let rows = (v2Hotels || []).filter((h) => h.lat != null && h.lng != null);
+  if (!rows.length) {
+    const { data: v1Hotels } = await db.from("hotels_cache").select("hotel_id, lat, lng").eq("city", city);
+    rows = (v1Hotels || []).filter((h) => h.lat != null && h.lng != null);
+  }
+  return rows;
+}
+
+function countHotelsInFenceStrict(city, hoodName, bbox, polygonRing, hotelRows) {
+  const curated = getCuratedNeighborhoodFence(city, hoodName);
+  if (curated?.geoAnchor && curated?.geoRadiusMi) {
+    return hotelRows.filter((h) => isInGeoZone(h.lat, h.lng, curated)).length;
+  }
+  const pr = normalizePolygonRing(polygonRing);
+  const { bbox: fenceBbox, ring } = resolveNeighborhoodFence(city, hoodName, bbox, pr);
+  return hotelRows.filter((h) => placeInsideNeighborhoodFence(h.lat, h.lng, fenceBbox, ring)).length;
+}
+
+function hotelInsideResolvedFence(lat, lng, city, hoodName, bbox, polygonRing) {
+  const curated = getCuratedNeighborhoodFence(city, hoodName);
+  if (curated?.geoAnchor && curated?.geoRadiusMi) {
+    return isInGeoZone(lat, lng, curated);
+  }
+  const { bbox: fenceBbox, ring } = resolveNeighborhoodFence(city, hoodName, bbox, polygonRing);
+  return placeInsideNeighborhoodFence(lat, lng, fenceBbox, ring);
 }
 
 async function getHotelCountForBbox(city, bbox, db) {
@@ -835,13 +939,34 @@ async function getHotelCountForBbox(city, bbox, db) {
   return Math.max(r1.count ?? 0, r2.count ?? 0);
 }
 
-/** Counts hotels whose coordinates fall inside the bbox.
- * Deliberately uses bbox only (not polygon) so that hotels 100-200m outside
- * the precise colonia polygon boundary are still attributed to the neighbourhood
- * for display purposes.  Polygon precision is reserved for POI density scoring.
- */
-async function getHotelCountForFence(city, bbox, polygonRing, db) {
-  return getHotelCountForBbox(city, bbox, db);
+function resolveNeighborhoodFence(city, hoodName, bbox, polygonRing) {
+  const curated = getCuratedNeighborhoodFence(city, hoodName);
+  if (curated) {
+    return {
+      bbox: curated.bbox,
+      ring: bboxToOctagonRing(curated.bbox),
+      source: "curated",
+    };
+  }
+
+  const pr = normalizePolygonRing(polygonRing);
+  const ringBbox = pr?.length >= 4 ? bboxFromRing(pr) : null;
+  if (isDegenerateBbox(bbox) && ringBbox && !isDegenerateBbox(ringBbox)) {
+    return { bbox: ringBbox, ring: pr, source: "ring-bbox" };
+  }
+  if (bbox?.lat_min != null && !isDegenerateBbox(bbox)) {
+    return { bbox, ring: pr, source: "stored" };
+  }
+  if (ringBbox && !isDegenerateBbox(ringBbox)) {
+    return { bbox: ringBbox, ring: pr, source: "ring-bbox" };
+  }
+  return { bbox: bbox || ringBbox, ring: pr, source: "fallback" };
+}
+
+/** Count hotels strictly inside polygon/geo fence (not axis-aligned bbox alone). */
+async function getHotelCountForFence(city, bbox, polygonRing, db, hoodName = null) {
+  const rows = await loadCityHotelCoords(city, db);
+  return countHotelsInFenceStrict(city, hoodName, bbox, polygonRing, rows);
 }
 
 /**
@@ -849,19 +974,32 @@ async function getHotelCountForFence(city, bbox, polygonRing, db) {
  * Returns array of neighborhood rows.
  */
 async function generateNeighborhoods(city, db, geminiKey, unsplashKey, googlePlacesKey = null, pexelsKey = null, flickrKey = null) {
+  if (city === "London") {
+    const { rebuildLondonCanonicalDistricts } = require("./london-canonical-districts");
+    await rebuildLondonCanonicalDistricts(db);
+    const { data } = await db.from("neighborhoods").select("*").eq("city", city).order("id");
+    return data || [];
+  }
+
   const prompt = buildNeighborhoodPrompt(city);
-  const raw    = await callGemini(prompt, geminiKey);
-
-  // Strip markdown code fences if Gemini added them anyway
+  const raw = await callGemini(prompt, geminiKey);
   const cleaned = raw.replace(/^```(?:json)?\s*/i, "").replace(/\s*```\s*$/, "").trim();
-
   let items;
   try {
     items = JSON.parse(cleaned);
   } catch (e) {
     throw new Error(`Gemini returned invalid JSON for ${city}: ${e.message}\n${cleaned.slice(0, 200)}`);
   }
+  return ingestGeminiNeighborhoodItems(
+    city, items, db, geminiKey, unsplashKey, googlePlacesKey, pexelsKey, flickrKey,
+  );
+}
 
+/**
+ * ingestGeminiNeighborhoodItems — OSM polygons, Overpass, vibe photos, upsert.
+ * Shared by primary generation and supplemental coverage pass.
+ */
+async function ingestGeminiNeighborhoodItems(city, items, db, geminiKey, unsplashKey, googlePlacesKey = null, pexelsKey = null, flickrKey = null) {
   if (!Array.isArray(items) || items.length === 0) {
     throw new Error(`Gemini returned empty neighborhoods array for ${city}`);
   }
@@ -898,14 +1036,14 @@ async function generateNeighborhoods(city, db, geminiKey, unsplashKey, googlePla
     // Hotel count (skip if no lat/lng backfill done yet)
     let hotelCount = 0;
     if (bbox.lat_min != null) {
-      hotelCount = await getHotelCountForFence(city, bbox, polygonRing, db);
+      hotelCount = await getHotelCountForFence(city, bbox, polygonRing, db, item.name);
       // Widen bbox by 0.01° if no hotels found (covers sparse backfill)
       if (hotelCount === 0) {
         const widened = {
           lat_min: bbox.lat_min - 0.01, lat_max: bbox.lat_max + 0.01,
           lon_min: bbox.lon_min - 0.01, lon_max: bbox.lon_max + 0.01,
         };
-        hotelCount = await getHotelCountForFence(city, widened, polygonRing, db);
+        hotelCount = await getHotelCountForFence(city, widened, polygonRing, db, item.name);
       }
     }
 
@@ -1355,7 +1493,10 @@ async function recomputeNeighborhoodVibes(city, db, unsplashKey, googlePlacesKey
       .maybeSingle();
     const bboxForCount = geoRow?.bbox?.lat_min != null ? geoRow.bbox : row.bbox;
     const pr = normalizePolygonRing(geoRow?.polygon ?? row.polygon);
-    const freshHotelCount = await getHotelCountForFence(row.city, bboxForCount || {}, pr, db);
+    let freshHotelCount = row.hotel_count || 0;
+    if (row.city !== "London") {
+      freshHotelCount = await getHotelCountForFence(row.city, bboxForCount || {}, pr, db, row.name);
+    }
 
     const updatePayload = {
       vibe_elements: vibeData.vibeElements,
@@ -1375,30 +1516,53 @@ async function recomputeNeighborhoodVibes(city, db, unsplashKey, googlePlacesKey
     console.log(`[recompute] ${row.name}: hotel_count=${freshHotelCount}`);
   }
 
+  if (rows[0]?.city === "London") {
+    const { refreshLondonCanonicalHotelCounts } = require("./london-canonical-districts");
+    await refreshLondonCanonicalHotelCounts("London", db);
+  }
+
   return rows.length;
 }
 
 /**
- * refreshHotelCounts — recomputes hotel_count for all neighborhoods of a city.
- * Called after re-indexing when lat/lng have been backfilled.
+ * refreshHotelCounts — strict in-fence counts per hood (London: canonical tourist partition).
  */
 async function refreshHotelCounts(city, db) {
+  if (city === "London") {
+    const { refreshLondonCanonicalHotelCounts } = require("./london-canonical-districts");
+    return refreshLondonCanonicalHotelCounts(city, db);
+  }
+
+  const hotelRows = await loadCityHotelCoords(city, db);
   const { data: hoods, error } = await db
     .from("neighborhoods")
     .select("id, name, bbox, polygon")
     .eq("city", city);
+  if (error) throw new Error(`refreshHotelCounts load: ${error.message}`);
+  if (!hoods?.length) return { updated: 0, hotels: hotelRows.length, byName: {} };
 
-  if (error || !hoods?.length) return;
+  const byName = {};
+  for (const h of hoods) {
+    const pr = normalizePolygonRing(h.polygon);
+    const count = countHotelsInFenceStrict(city, h.name, h.bbox, pr, hotelRows);
+    const { error: upErr } = await db.from("neighborhoods").update({ hotel_count: count }).eq("id", h.id);
+    if (upErr) throw new Error(`hotel_count ${h.name}: ${upErr.message}`);
+    byName[h.name] = count;
+  }
 
-  await Promise.all(hoods.map(async (hood) => {
-    const bbox = hood.bbox;
-    if (!bbox?.lat_min) return;
-    const pr = normalizePolygonRing(hood.polygon);
-    const count = await getHotelCountForFence(city, bbox, pr, db);
-    await db.from("neighborhoods").update({ hotel_count: count }).eq("id", hood.id);
-  }));
-
-  console.log(`[neighborhoods] hotel_count refreshed for ${city} (${hoods.length} neighborhoods)`);
+  try {
+    const { auditNeighborhoodCoverage } = require("./neighborhood-coverage");
+    const audit = await auditNeighborhoodCoverage(city, db, { hotelRows });
+    console.log(
+      `[neighborhoods] strict hotel_count for ${city}: ` +
+      `${audit.hotels_in_areas}/${audit.catalog_total} in highlighted areas (${Math.round(audit.coverage_pct * 100)}%), ` +
+      `sum card counts=${audit.sum_hood_counts}`,
+    );
+    return { updated: hoods.length, hotels: hotelRows.length, byName, ...audit };
+  } catch (e) {
+    console.warn(`[neighborhoods] coverage audit skipped: ${e.message}`);
+    return { updated: hoods.length, hotels: hotelRows.length, byName };
+  }
 }
 
 /**
@@ -1547,13 +1711,12 @@ async function backfillNeighborhoodPolygons(city, db, force = false) {
     }
 
     const bb = row.bbox;
-    const latSpan = bb?.lat_min != null ? bb.lat_max - bb.lat_min : 0;
-    const lonSpan = bb?.lat_min != null ? bb.lon_max - bb.lon_min : 0;
-    const degenerateBbox = !bb || bb.lat_min == null || latSpan < 0.012 || lonSpan < 0.012;
+    const degenerateBbox = isDegenerateBbox(bb);
+    const curated = getCuratedNeighborhoodFence(city, row.name);
 
     // If already has an OSM-quality ring (≥20 vertices) and not forcing, skip — unless
-    // the row bbox is degenerate (bad prior import): those polygons are often wrong.
-    if (!force && existingRing?.length >= 20 && !degenerateBbox) {
+    // the row bbox is degenerate (bad prior import) or we have a curated override.
+    if (!force && existingRing?.length >= 20 && !degenerateBbox && !curated) {
       console.log(`[poly-backfill] "${row.name}" already has ${existingRing.length - 1}-vertex polygon — skipping`);
       skipped++;
       await new Promise(r => setTimeout(r, 300));
@@ -1561,6 +1724,21 @@ async function backfillNeighborhoodPolygons(city, db, force = false) {
     }
     if (degenerateBbox && existingRing?.length >= 4) {
       console.log(`[poly-backfill] "${row.name}": degenerate bbox — re-fetching OSM polygon`);
+    }
+    if (curated && (degenerateBbox || force)) {
+      console.log(`[poly-backfill] "${row.name}": applying curated London fence`);
+      const osmRing = bboxToOctagonRing(curated.bbox);
+      const { error: upErr } = await db
+        .from("neighborhoods")
+        .update({ polygon: { ring: osmRing }, bbox: curated.bbox })
+        .eq("id", row.id);
+      if (upErr) console.error(`[poly-backfill] DB update failed for "${row.name}": ${upErr.message}`);
+      else {
+        updated++;
+        console.log(`[poly-backfill] "${row.name}": curated fence applied`);
+      }
+      await new Promise(r => setTimeout(r, 300));
+      continue;
     }
 
     // Nominatim 1 req/sec ToS gap
@@ -1581,6 +1759,9 @@ async function backfillNeighborhoodPolygons(city, db, force = false) {
       if (canBboxFallback) {
         osmRing = bboxToOctagonRing(row.bbox);
         console.log(`[poly-backfill] "${row.name}": OSM miss — using bbox-derived fence (${osmRing.length - 1} verts)`);
+      } else if (curated) {
+        osmRing = bboxToOctagonRing(curated.bbox);
+        console.log(`[poly-backfill] "${row.name}": OSM miss — using curated fence`);
       } else {
         console.log(`[poly-backfill] No OSM boundary found for "${row.name}" — keeping existing`);
         skipped++;
@@ -1589,9 +1770,19 @@ async function backfillNeighborhoodPolygons(city, db, force = false) {
     }
 
     const newBbox = bboxFromRing(osmRing);
+    if (isDegenerateBbox(newBbox)) {
+      if (curated) {
+        osmRing = bboxToOctagonRing(curated.bbox);
+        console.log(`[poly-backfill] "${row.name}": OSM too small — using curated fence`);
+      } else {
+        console.log(`[poly-backfill] "${row.name}": OSM polygon still too small — keeping existing`);
+        skipped++;
+        continue;
+      }
+    }
     const updatePayload = {
       polygon: { ring: osmRing },
-      ...(newBbox ? { bbox: newBbox } : {}),
+      bbox: curated?.bbox || newBbox || bboxFromRing(osmRing),
     };
 
     const { error: upErr } = await db
@@ -1614,14 +1805,148 @@ async function backfillNeighborhoodPolygons(city, db, force = false) {
   return { updated, skipped };
 }
 
+/** Apply curated bbox+polygon overrides (London launch fixes) and refresh hotel_count. */
+async function applyCuratedNeighborhoodFences(city, db) {
+  const { data: rows, error } = await db
+    .from("neighborhoods")
+    .select("id, name, bbox")
+    .eq("city", city);
+  if (error || !rows?.length) return { updated: 0 };
+
+  let updated = 0;
+  for (const row of rows) {
+    const curated = getCuratedNeighborhoodFence(city, row.name);
+    if (!curated) continue;
+    const ring = bboxToOctagonRing(curated.bbox);
+    const { error: upErr } = await db
+      .from("neighborhoods")
+      .update({
+        bbox: curated.bbox,
+        polygon: { ring },
+      })
+      .eq("id", row.id);
+    if (upErr) throw new Error(`curated fence ${row.name}: ${upErr.message}`);
+    console.log(`[curated-fence] ${row.name}: bbox/polygon applied`);
+    updated++;
+  }
+  if (updated) {
+    await refreshHotelCounts(city, db);
+  }
+  return { updated };
+}
+
+/**
+ * QA gate: degenerate bboxes and zero hotel_count on non-sparse hoods fail launch verify.
+ * @returns {Promise<{ ok: boolean, issues: string[] }>}
+ */
+async function verifyNeighborhoodFences(city, db, { log = console.log, minHotelCount = 5 } = {}) {
+  const { data: hoods, error } = await db
+    .from("neighborhoods")
+    .select("id, name, bbox, hotel_count, vibe_last_computed_at")
+    .eq("city", city);
+  if (error) throw new Error(`verifyNeighborhoodFences load: ${error.message}`);
+  if (!hoods?.length) {
+    return { ok: false, issues: ["no neighborhoods rows in DB"] };
+  }
+
+  const { count: cityHotels } = await db
+    .from("v2_hotels_cache")
+    .select("*", { count: "exact", head: true })
+    .eq("city", city);
+  const cityHasCatalog = (cityHotels || 0) >= 100;
+
+  const issues = [];
+  for (const h of hoods) {
+    const curated = getCuratedNeighborhoodFence(city, h.name);
+    const sparseOk = curated?.sparse === true;
+
+    if (isDegenerateBbox(h.bbox) && !curated) {
+      issues.push(
+        `${h.name}: degenerate bbox (${bboxSpanLabel(h.bbox)}) — add OSM fix or curated fence in neighborhood-fence-overrides.js`,
+      );
+    }
+
+    if (curated && isDegenerateBbox(h.bbox) && (h.hotel_count || 0) < minHotelCount && !sparseOk) {
+      issues.push(
+        `${h.name}: curated fence configured but DB bbox still degenerate — run --phase=repair-fences`,
+      );
+    }
+
+    if (cityHasCatalog && (h.hotel_count || 0) === 0 && !sparseOk) {
+      issues.push(
+        `${h.name}: hotel_count=0 with ${cityHotels} city hotels — fence likely wrong (was OSM micro-polygon or bad bbox)`,
+      );
+    }
+
+    if (
+      cityHasCatalog &&
+      h.vibe_last_computed_at &&
+      (h.hotel_count || 0) > 0 &&
+      (h.hotel_count || 0) < minHotelCount &&
+      !sparseOk
+    ) {
+      issues.push(
+        `${h.name}: hotel_count=${h.hotel_count} (< ${minHotelCount}) — suspiciously low for a launch hood`,
+      );
+    }
+
+    const minGeo = curated?.minIndexedHotels;
+    if (cityHasCatalog && minGeo != null && (h.hotel_count || 0) < minGeo) {
+      issues.push(
+        `${h.name}: hotel_count=${h.hotel_count} (< ${minGeo} geo quota) — run --phase=geo-backfill then --phase=repair-fences`,
+      );
+    }
+  }
+
+  if (cityHasCatalog) {
+    try {
+      const { resolveCityConfig, getCoverageThreshold } = require("./city-registry");
+      const { auditNeighborhoodCoverage } = require("./neighborhood-coverage");
+      const cfg = resolveCityConfig(city);
+      if (city !== "London" && ((cfg.indexCap || 0) > 0 || cfg.minNeighborhoodCoveragePct != null)) {
+        const audit = await auditNeighborhoodCoverage(city, db);
+        const threshold = getCoverageThreshold(cfg);
+        if (audit.coverage_pct < threshold) {
+          issues.push(
+            `city coverage ${Math.round(audit.coverage_pct * 100)}% (${audit.hotels_in_areas}/${audit.catalog_total} hotels in fences) — need ≥${Math.round(threshold * 100)}%; run --phase=coverage or --phase=neighborhoods`,
+          );
+        }
+      }
+      if (city === "London" && hoods.length !== 12) {
+        issues.push(`London must have exactly 12 tourist districts (found ${hoods.length}) — run --phase=rebuild-districts`);
+      }
+    } catch (e) {
+      issues.push(`coverage audit failed: ${e.message}`);
+    }
+  }
+
+  if (issues.length) {
+    log("  NEIGHBORHOOD FENCE ISSUES:");
+    for (const i of issues) log(`    - ${i}`);
+  } else {
+    log("  neighborhood fences: OK");
+  }
+  return { ok: issues.length === 0, issues };
+}
+
 module.exports = {
   generateNeighborhoods,
+  ingestGeminiNeighborhoodItems,
   refreshHotelCounts,
   recomputeNeighborhoodVibes,
   backfillNeighborhoodPhotos,
   backfillPhotoQueries,
   backfillNeighborhoodPolygons,
+  applyCuratedNeighborhoodFences,
+  verifyNeighborhoodFences,
   prepareNeighborhoodsForClient,
   normalizePhotoUrl,
   sanitizeVibePhotos,
+  loadCityHotelCoords,
+  hotelInsideResolvedFence,
+  countHotelsInFenceStrict,
+  callGemini,
+  buildNeighborhoodPrompt,
+  buildSupplementalNeighborhoodPrompt,
+  bboxToOctagonRing,
 };

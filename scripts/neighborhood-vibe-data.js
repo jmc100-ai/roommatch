@@ -305,11 +305,9 @@ function overpassElementLatLng(el) {
 function placeInsideNeighborhoodFence(lat, lng, bbox, polygonRing) {
   if (polygonRing?.length >= 4) {
     if (pointInPolygon(lat, lng, polygonRing)) return true;
-    // For simple bbox-derived polygons (≤6 pts = no real OSM boundary, just Gemini rectangle),
-    // allow a ~400m buffer. Gemini bbox precision is ~0.001°–0.003° off, and genuine
-    // neighbourhood places at the edges get incorrectly rejected without this tolerance.
-    // Real OSM polygons (7+ pts) are accurate enough that strict boundary is correct.
-    if (polygonRing.length <= 6 && bbox?.lat_min != null) {
+    // Simple bbox-derived polygons (Gemini rectangle or octagon fence) — allow edge buffer.
+    // Octagon rings are 9 points (8 corners + closure); strict point-in-polygon drops edge hotels.
+    if (polygonRing.length <= 10 && bbox?.lat_min != null) {
       const BUF = 0.004; // ~400 m per side
       const expanded = {
         lat_min: bbox.lat_min - BUF, lat_max: bbox.lat_max + BUF,

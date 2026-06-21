@@ -4795,6 +4795,7 @@
       align-items:start;
     }
     .nbhd-top-main { min-width:0; max-width:660px; }
+    .nbhd-coverage-hint { margin-top:-20px; margin-bottom:28px; font-size:13px; color:var(--muted); max-width:520px; }
     .boop-summary {
       border:1px solid rgba(201,169,110,.42);
       border-radius:14px;

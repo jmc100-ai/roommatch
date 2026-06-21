@@ -1047,7 +1047,7 @@
   const HISTORY_LIMIT     = 6;
   /** Default city field + initial `S.city` — launch market (V2 catalog). */
   const DEFAULT_HOME_CITY = 'Mexico City';
-  const LAUNCH_CITY_ONLY_MSG = 'Only Mexico City and Paris are available for searching right now. More cities coming soon.';
+  const LAUNCH_CITY_ONLY_MSG = 'Only Mexico City, Paris, and London are available for searching right now. More cities coming soon.';
 
   // ════════════════════════════════════════════════════════
   //  DISCOVERY FLOW — 4-step state machine
@@ -1055,7 +1055,7 @@
 
   // Hardcoded neighborhood fallback for non-indexed cities
   // Cities that are indexed in our DB (real neighborhood data available)
-  const DB_INDEXED_CITIES = ['Mexico City', 'Paris', 'Kuala Lumpur'];
+  const DB_INDEXED_CITIES = ['Mexico City', 'Paris', 'London', 'Kuala Lumpur'];
 
   // Returns true if a city has neighborhood data (DB or fallback hardcoded)
   function cityHasNeighborhoods(name) {
@@ -1208,6 +1208,13 @@
   const BOOP_TRIP_READY = new Set();
   /** cityKeys where trip card pixels finished decoding (URLs may exist earlier). */
   const BOOP_TRIP_PIXELS_PRELOADED = new Set();
+  const BOOP_NBHD_SCENE_FETCHING = new Set();
+  /** cityKey -> Promise; dedupes concurrent nbhd-scene image fetches. */
+  const BOOP_NBHD_SCENE_LOAD_PROMISES = new Map();
+  /** cityKeys where nbhd-scene prefetch finished — safe to use static fallbacks. */
+  const BOOP_NBHD_SCENE_READY = new Set();
+  /** cityKeys where buzz_central card pixels finished decoding. */
+  const BOOP_NBHD_SCENE_PIXELS_PRELOADED = new Set();
   /** Dedupes wizard image preloads by resolved src (static + proxied external). */
   const _boopPreloadedSrc = new Set();
   // BOOP v5 wizard — 4 screens:
@@ -1537,6 +1544,7 @@
       k === 'distrito federal'
     ) return 'Mexico City';
     if (k === 'paris') return 'Paris';
+    if (k === 'london') return 'London';
     return null;
   }
 
@@ -2086,6 +2094,18 @@
     return nbhdDisplayPhotoUrl(url) || url;
   }
 
+  /** nbhdScene tiles with city-specific dynamic photos (via /api/boop-nbhd-scene-images). */
+  const BOOP_NBHD_SCENE_DYNAMIC = ['buzz_central', 'scenic_open'];
+
+  function boopGetNbhdSceneDynamicImage(optionId, fallback) {
+    if (!BOOP_NBHD_SCENE_DYNAMIC.includes(optionId)) return null;
+    const cityK = cityKey(S.city);
+    const dynamicUrl = cityK && BOOP_WIZARD_IMAGES[cityK]?.nbhdScene?.[optionId];
+    if (dynamicUrl) return boopWizardImageUrl(dynamicUrl);
+    if (cityK && BOOP_NBHD_SCENE_READY.has(cityK)) return fallback;
+    return '';
+  }
+
   function boopGetDynamicImage(questionId, optionId, fallback) {
     if (questionId === 'trip') {
       const cityK = cityKey(S.city);
@@ -2096,8 +2116,10 @@
       if (cityK && BOOP_TRIP_READY.has(cityK)) return fallback;
       return '';
     }
-    // Scenic & Open uses a single curated hero asset (must not swap after prefetch).
-    if (questionId === 'nbhdScene' && optionId === 'scenic_open') return fallback;
+    if (questionId === 'nbhdScene') {
+      const nbhdDynamic = boopGetNbhdSceneDynamicImage(optionId, fallback);
+      if (nbhdDynamic !== null) return nbhdDynamic;
+    }
     // Keep this card literal: users expect a car visual cue.
     if (questionId === 'mobility' && optionId === 'ride') return fallback;
     // Keep dealbreakers literal so intent images never drift.
@@ -2157,6 +2179,7 @@
         continue;
       }
       if (q.id === 'trip' && cityK && !BOOP_TRIP_READY.has(cityK)) continue;
+      if (q.id === 'nbhdScene' && BOOP_NBHD_SCENE_DYNAMIC.includes(o.id) && cityK && !BOOP_NBHD_SCENE_READY.has(cityK)) continue;
       if (o.image) hrefs.push(o.image);
     }
     return Promise.all(hrefs.map((href) => boopPreloadImageUrl(href)));
@@ -2170,6 +2193,9 @@
     }
     if (fromIdx === 0 && city) {
       prefetchBoopTripWizardImages(city);
+    }
+    if (fromIdx === 1 && city) {
+      prefetchBoopNbhdSceneWizardImages(city);
     }
   }
 
@@ -2233,6 +2259,95 @@
     BOOP_TRIP_LOAD_PROMISES.set(cityK, job);
     return job;
   }
+
+  async function boopPreloadNbhdSceneWizardImage(images) {
+    if (!images || typeof images !== 'object') return;
+    await Promise.all(
+      BOOP_NBHD_SCENE_DYNAMIC.map((id) => (images[id] ? boopPreloadImageUrl(images[id]) : Promise.resolve())),
+    );
+  }
+
+  function boopNbhdSceneImagesCached(cityK) {
+    const nbhd = BOOP_WIZARD_IMAGES[cityK]?.nbhdScene;
+    return nbhd && BOOP_NBHD_SCENE_DYNAMIC.every((id) => nbhd[id]);
+  }
+
+  function boopInvalidateNbhdSceneClientCache(cityK) {
+    if (!cityK) return;
+    if (BOOP_WIZARD_IMAGES[cityK]?.nbhdScene) delete BOOP_WIZARD_IMAGES[cityK].nbhdScene;
+    BOOP_NBHD_SCENE_READY.delete(cityK);
+    BOOP_NBHD_SCENE_PIXELS_PRELOADED.delete(cityK);
+    BOOP_NBHD_SCENE_LOAD_PROMISES.delete(cityK);
+  }
+
+  /** Load city-specific nbhdScene dynamic card photos (Historic & energetic + Central & connected). */
+  function prefetchBoopNbhdSceneWizardImages(city, { preloadImages = true, force = false } = {}) {
+    const cityK = cityKey(city);
+    if (!cityK) return Promise.resolve();
+    if (force) boopInvalidateNbhdSceneClientCache(cityK);
+    if (boopNbhdSceneImagesCached(cityK) && !force) {
+      if (preloadImages && !BOOP_NBHD_SCENE_PIXELS_PRELOADED.has(cityK)) {
+        BOOP_NBHD_SCENE_PIXELS_PRELOADED.add(cityK);
+        return boopPreloadNbhdSceneWizardImage(BOOP_WIZARD_IMAGES[cityK].nbhdScene);
+      }
+      return Promise.resolve();
+    }
+    const pending = BOOP_NBHD_SCENE_LOAD_PROMISES.get(cityK);
+    if (pending) return pending;
+
+    const job = (async () => {
+      BOOP_NBHD_SCENE_FETCHING.add(cityK);
+      let gotDynamic = false;
+      try {
+        const params = new URLSearchParams({ city });
+        const resp = await apiFetch(`${BACKEND}/api/boop-nbhd-scene-images?${params}`);
+        if (resp.ok) {
+          const data = await resp.json();
+          const images = data.images;
+          if (images && BOOP_NBHD_SCENE_DYNAMIC.every((id) => images[id])) {
+            gotDynamic = true;
+            if (!BOOP_WIZARD_IMAGES[cityK]) BOOP_WIZARD_IMAGES[cityK] = {};
+            if (!BOOP_WIZARD_IMAGES[cityK].nbhdScene) BOOP_WIZARD_IMAGES[cityK].nbhdScene = {};
+            for (const id of BOOP_NBHD_SCENE_DYNAMIC) {
+              BOOP_WIZARD_IMAGES[cityK].nbhdScene[id] = images[id];
+            }
+            if (preloadImages) {
+              await boopPreloadNbhdSceneWizardImage(images);
+              BOOP_NBHD_SCENE_PIXELS_PRELOADED.add(cityK);
+              const nbhdQ = BOOP_QUESTIONS.find((x) => x.id === 'nbhdScene');
+              for (const id of BOOP_NBHD_SCENE_DYNAMIC) {
+                const opt = nbhdQ?.options?.find((o) => o.id === id);
+                if (opt?.image) await boopPreloadImageUrl(opt.image);
+              }
+            }
+          }
+        }
+      } catch (_) {
+        // retry on next prefetch if gate/network failed
+      } finally {
+        BOOP_NBHD_SCENE_FETCHING.delete(cityK);
+        if (gotDynamic) BOOP_NBHD_SCENE_READY.add(cityK);
+        BOOP_NBHD_SCENE_LOAD_PROMISES.delete(cityK);
+        const q = BOOP_QUESTIONS[BOOP.idx];
+        if (
+          q?.id === 'nbhdScene' &&
+          cityKey(S.city) === cityK &&
+          document.getElementById('st-boop')?.style.display !== 'none'
+        ) {
+          renderBoopQuestion();
+        }
+      }
+    })();
+
+    BOOP_NBHD_SCENE_LOAD_PROMISES.set(cityK, job);
+    return job;
+  }
+
+  /** Dev helper: bust client cache + refetch nbhdScene images for current/specified city. */
+  window.boopRefreshNbhdSceneImages = (city = S.city) => {
+    if (!city) return Promise.resolve();
+    return prefetchBoopNbhdSceneWizardImages(city, { force: true, preloadImages: true });
+  };
 
   async function prefetchBoopWizardImages(city) {
     const cityK = cityKey(city);
@@ -2374,6 +2489,7 @@
     BOOP.idx = qIdx >= 0 ? qIdx : 0;
     showFlowStep('boop');
     if (qId === 'trip' && S.city) prefetchBoopTripWizardImages(S.city);
+    if (qId === 'nbhdScene' && S.city) prefetchBoopNbhdSceneWizardImages(S.city);
     renderBoopQuestion();
     refreshStory('boop');
   }
@@ -2382,7 +2498,10 @@
     const saved = loadBoopProfileForCity(S.city);
     BOOP.saved = saved;
     resetBoopState();
-    if (S.city) prefetchBoopTripWizardImages(S.city);
+    if (S.city) {
+      prefetchBoopTripWizardImages(S.city);
+      prefetchBoopNbhdSceneWizardImages(S.city);
+    }
     renderBoopQuestion();
   }
 
@@ -4197,6 +4316,7 @@
     // toggles; the .boop-overlay-mode CSS handles the rest.
     showFlowStep('boop');
     if (stepKey === 'trip') prefetchBoopTripWizardImages(S.city);
+    if (stepKey === 'nbhdScene') prefetchBoopNbhdSceneWizardImages(S.city);
     renderBoopQuestion();
     // Trap scroll on the results page while the overlay is open.
     if (typeof window !== 'undefined') window.scrollTo({ top: 0 });
@@ -4309,12 +4429,14 @@
         const isCurrent = overlayMode && o.id === currentPick;
         const imgSrc = boopGetDynamicImage(q.id, o.id, o.image);
         const tripImgPending = q.id === 'trip' && !imgSrc;
+        const nbhdDynamicPending = q.id === 'nbhdScene' && BOOP_NBHD_SCENE_DYNAMIC.includes(o.id) && !imgSrc;
+        const cardImgPending = tripImgPending || nbhdDynamicPending;
         const imgTag = imgSrc
           ? `<img src="${escAttr(imgSrc)}" alt="${escHtml(o.title)}" ${q.id === 'trip' ? `loading="eager" decoding="async"${cardIdx === 0 ? ' fetchpriority="high"' : ''}` : 'loading="lazy"'} onerror="this.onerror=null;this.src='https://images.unsplash.com/photo-1477959858617-67f85cf4f1df?auto=format&fit=crop&w=1200&q=80';" />`
-          : (tripImgPending ? '<div class="boop-card-img-skeleton" aria-hidden="true"></div>' : '');
+          : (cardImgPending ? '<div class="boop-card-img-skeleton" aria-hidden="true"></div>' : '');
         return `
         <button class="boop-card${isCurrent ? ' boop-card--current' : ''}" onclick="boopChoose('${q.id}','${o.id}')">
-          <div class="boop-card-media${tripImgPending ? ' boop-card-media--loading' : ''}">
+          <div class="boop-card-media${cardImgPending ? ' boop-card-media--loading' : ''}">
             ${imgTag}
             <div class="boop-card-grad"></div>
             <div class="boop-card-body">
@@ -4503,6 +4625,10 @@
       BOOP_TRIP_LOAD_PROMISES.clear();
       BOOP_TRIP_READY.clear();
       BOOP_TRIP_PIXELS_PRELOADED.clear();
+      BOOP_NBHD_SCENE_FETCHING.clear();
+      BOOP_NBHD_SCENE_LOAD_PROMISES.clear();
+      BOOP_NBHD_SCENE_READY.clear();
+      BOOP_NBHD_SCENE_PIXELS_PRELOADED.clear();
     }
     S.nbhd = null;
     S.nbhdBbox = null;
@@ -4514,6 +4640,7 @@
     clearNbhdPickerMatchCache();
     resetBudgetFilter();
     prefetchBoopTripWizardImages(city);
+    prefetchBoopNbhdSceneWizardImages(city);
     prefetchBoopWizardImages(city);
     boopPreloadStaticWizardImages();
 
@@ -5201,6 +5328,16 @@
           return;
         }
         const hoods = rankNeighborhoodsByBoop(data.neighborhoods || []);
+        const hintEl = document.getElementById('nbhd-coverage-hint');
+        const stats = data.stats;
+        if (hintEl && stats?.catalog_hotels) {
+          hintEl.hidden = false;
+          hintEl.textContent =
+            `${Number(stats.hotels_in_areas || 0).toLocaleString()} hotels in ${hoods.length} highlighted areas · ` +
+            `${Number(stats.catalog_hotels).toLocaleString()} indexed city-wide`;
+        } else if (hintEl) {
+          hintEl.hidden = true;
+        }
         NBHD_CITY_ROWS[cityKey(city)] = data.neighborhoods || [];
         fillNbhdPickerMatchCacheFromRanked(city, hoods);
         if (hoods.length) {
@@ -7608,7 +7745,7 @@
 
   async function pollIndexStatus(query, city) {
     try {
-      const r = await fetch(`${BACKEND}/api/index-status?` + new URLSearchParams({ city }));
+      const r = await fetch(`${BACKEND}/api/v2/index-status?` + new URLSearchParams({ city }));
       const d = await r.json();
       if (d.status === 'complete') {
         hideBanner();
@@ -13752,7 +13889,7 @@
       </div>`;
   }
 
-  // ── City combobox (curated list; Mexico City + Paris live) ─────────────────
+  // ── City combobox (curated list; Mexico City + Paris + London live) ────────
   let cityPanelActiveIdx = -1;
   let cityPanelFiltered = [];
   let _cityComboboxInit = true;
@@ -13950,6 +14087,7 @@
   SUPPORTED_CITIES = [
     { name: 'Mexico City', country: 'Mexico', thumb: _U('1584669727833-88b47506defb', 80) },
     { name: 'Paris', country: 'France', thumb: _U('1502602898657-3e91760cbb34', 80) },
+    { name: 'London', country: 'United Kingdom', thumb: _U('1513635269975-59663e0ac1ad', 80) },
   ];
   /** Slot index 1 maps to `.polaroid--2` (largest, centre frame). */
   const MX_HERO = { src: _U('1584669727833-88b47506defb', 600), alt: 'Mexico City skyline' };
@@ -14447,6 +14585,7 @@
       S.city = DEFAULT_HOME_CITY;
       updateHomePolaroids(DEFAULT_HOME_CITY);
       prefetchBoopTripWizardImages(S.city);
+      prefetchBoopNbhdSceneWizardImages(S.city);
       boopPreloadStaticWizardImages();
     }
   });

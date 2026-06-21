@@ -1,6 +1,6 @@
 /** Shared Playwright helpers for TravelByVibe UI tests. */
 
-const LAUNCH_CITIES = new Set(["Mexico City", "Paris"]);
+const LAUNCH_CITIES = new Set(["Mexico City", "Paris", "London"]);
 
 async function seedBetaConsent(page) {
   await page.addInitScript(() => {
@@ -42,7 +42,7 @@ async function dismissBetaConsentIfShown(page) {
 
 async function selectCityAndGo(page, city) {
   if (!LAUNCH_CITIES.has(city)) {
-    throw new Error(`"${city}" is not a launch city (only Mexico City + Paris).`);
+    throw new Error(`"${city}" is not a launch city (only Mexico City, Paris, and London).`);
   }
   const input = page.locator("#cityInput").first();
   await input.click();

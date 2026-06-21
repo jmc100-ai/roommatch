@@ -1600,6 +1600,8 @@ const API_GATE_ALLOWLIST = new Set([
   "/api/public-config",
   "/api/nbhd-img",
   "/api/public/marketing-hotels",
+  "/api/boop-trip-images",
+  "/api/boop-nbhd-scene-images",
 ]);
 function _apiBetaGate(req, res, next) {
   if (!SITE_GATE_ACTIVE) return next();
@@ -4452,6 +4454,75 @@ function loadBoopTripImages() {
   return require("./scripts/boop-trip-images");
 }
 
+function loadBoopNbhdSceneImages() {
+  return require("./scripts/boop-nbhd-scene-images");
+}
+
+const _boopNbhdSceneImgCache = new Map();
+const BOOP_NBHD_SCENE_CACHE_MS = 14 * 24 * 60 * 60 * 1000;
+
+app.get("/api/boop-nbhd-scene-images", async (req, res) => {
+  const cityInput = (req.query.city || "").trim();
+  if (!cityInput) return res.status(400).json({ error: "city required" });
+
+  try {
+    const city = await resolveCityName(
+      cityInput,
+      supabaseAdmin || supabase,
+      ["neighborhoods", "indexed_cities", "hotels_cache", "v2_indexed_cities", "boop_nbhd_scene_images"]
+    );
+    const ck = city.toLowerCase();
+    const cacheKey = ck;
+    const sec = req.headers["x-index-secret"] || req.query.secret;
+    const forceRefresh = req.query.refresh === "1" && sec && sec === process.env.INDEX_SECRET;
+    const db = supabaseAdmin || supabase;
+
+    if (!forceRefresh) {
+      const hit = _boopNbhdSceneImgCache.get(cacheKey);
+      if (hit && Date.now() - hit.at < BOOP_NBHD_SCENE_CACHE_MS) {
+        return res.json({ city, images: hit.images, meta: hit.meta, cached: true, db_cached: !!hit.db_cached });
+      }
+      if (db) {
+        const row = await loadBoopNbhdSceneImages().loadBoopNbhdSceneImagesFromDb(db, city);
+        if (row) {
+          _boopNbhdSceneImgCache.set(cacheKey, {
+            at: Date.now(),
+            images: row.images,
+            meta: row.meta,
+            db_cached: true,
+          });
+          return res.json({ city, images: row.images, meta: row.meta, cached: true, db_cached: true });
+        }
+      }
+    }
+
+    const t0 = Date.now();
+    const result = await loadBoopNbhdSceneImages().fetchNbhdSceneWizardImages(city, {
+      placesKey: process.env.GOOGLE_PLACES_KEY || null,
+      unsplashKey: process.env.UNSPLASH_KEY || null,
+      geminiKey: process.env.GEMINI_KEY || null,
+    });
+    if (db) await loadBoopNbhdSceneImages().saveBoopNbhdSceneImagesToDb(db, city, result);
+    _boopNbhdSceneImgCache.set(cacheKey, {
+      at: Date.now(),
+      images: result.images,
+      meta: result.meta,
+      db_cached: false,
+    });
+    console.log(
+      `[boop-nbhd-scene-images] ${city}: buzz_central=${result.meta?.buzz_central?.source} ` +
+      `scenic_open=${result.meta?.scenic_open?.source} in ${Date.now() - t0}ms` +
+      (forceRefresh ? " (refresh)" : " (computed)") +
+      (result.meta?.buzz_central?.geminiScore != null ? ` buzz_score=${result.meta.buzz_central.geminiScore}` : "") +
+      (result.meta?.scenic_open?.geminiScore != null ? ` scenic_score=${result.meta.scenic_open.geminiScore}` : "")
+    );
+    res.json({ city, images: result.images, meta: result.meta, cached: false, db_cached: false });
+  } catch (e) {
+    console.error("[boop-nbhd-scene-images]", e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
 app.get("/api/boop-trip-images", async (req, res) => {
   const cityInput = (req.query.city || "").trim();
   if (!cityInput) return res.status(400).json({ error: "city required" });
@@ -4533,7 +4604,20 @@ app.get("/api/neighborhoods", async (req, res) => {
     if (cached?.length > 0) {
       const prep = loadNeighborhoodGenerator().prepareNeighborhoodsForClient;
       const neighborhoods = prep ? prep(cached) : cached;
-      return res.json({ neighborhoods, city });
+      let stats = null;
+      try {
+        const { auditNeighborhoodCoverage } = require("./scripts/neighborhood-coverage");
+        const audit = await auditNeighborhoodCoverage(city, supabaseAdmin || supabase);
+        stats = {
+          catalog_hotels: audit.catalog_total,
+          hotels_in_areas: audit.hotels_in_areas,
+          coverage_pct: Math.round(audit.coverage_pct * 1000) / 10,
+          sum_hood_counts: audit.sum_hood_counts,
+        };
+      } catch (statsErr) {
+        console.warn(`[neighborhoods] coverage stats for ${city}:`, statsErr.message);
+      }
+      return res.json({ neighborhoods, city, stats });
     }
 
     // If generation already in-flight for this city, return 202
@@ -5811,6 +5895,7 @@ function resolveLaunchCityServer(name) {
     k === "distrito federal"
   ) return "Mexico City";
   if (k === "paris") return "Paris";
+  if (k === "london") return "London";
   return null;
 }
 

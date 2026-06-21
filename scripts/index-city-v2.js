@@ -107,22 +107,29 @@ async function fetchImageB64(imageUrl) {
   return out;
 }
 
-const COUNTRY_CODES = {
-  "mexico city": "MX",
-  "paris": "FR",
-  "kuala lumpur": "MY",
-  "london": "GB",
-  "new york city": "US",
-};
+const {
+  resolveCityConfig,
+  passesCatalogFilter,
+  listLiteapiCatalogCities,
+} = require("./city-registry");
+const {
+  isInGeoZone,
+  hotelListLatLng,
+  passesRoomQuality,
+} = require("./geo-index-helpers");
+const { listGeoQuotaFences } = require("./neighborhood-fence-overrides");
 
 function getDb() {
   if (!SUPABASE_URL || !SUPABASE_KEY) throw new Error("Missing Supabase env");
   return createClient(SUPABASE_URL, SUPABASE_KEY);
 }
 
-async function liteGet(path) {
+async function liteGet(path, timeoutMs = 45000) {
   const url = `https://api.liteapi.travel/v3.0${path}`;
-  const r = await fetch(url, { headers: { "X-API-Key": LITEAPI_KEY, accept: "application/json" }, signal: AbortSignal.timeout(20000) });
+  const r = await fetch(url, {
+    headers: { "X-API-Key": LITEAPI_KEY, accept: "application/json" },
+    signal: AbortSignal.timeout(timeoutMs),
+  });
   let data = null;
   try { data = await r.json(); } catch (_) {}
   return { ok: r.ok, status: r.status, data };
@@ -484,17 +491,37 @@ async function writeIndexProgress(db, city, progress) {
   if (error) console.warn(`[v2-index] progress update failed: ${error.message}`);
 }
 
+/** Rebuild v2_room_types_index so /api/vsearch Phase A sees newly indexed hotels. */
+async function rebuildV2RoomTypesIndex(db, city, { label = "final" } = {}) {
+  console.log(`[v2-index] rebuilding v2_room_types_index for "${city}" (${label})…`);
+  try {
+    const { data: rebuildCount, error: rebuildErr } = await db.rpc(
+      "rebuild_v2_room_types_index_city",
+      { p_city: city },
+    );
+    if (rebuildErr) {
+      console.error("[v2-index] rebuild index error:", rebuildErr.message);
+      return false;
+    }
+    console.log(`[v2-index] rebuilt ${rebuildCount} room types in v2_room_types_index (${label})`);
+    return true;
+  } catch (rebuildEx) {
+    console.error("[v2-index] rebuild index exception:", rebuildEx.message);
+    return false;
+  }
+}
+
 /**
  * Index one catalog hotel. Returns photos added; indexed=false when quality-filtered or detail fetch failed.
  */
-async function processOneHotel(db, { hotel, city, cc }) {
+async function processOneHotel(db, { hotel, city, cc, minRoomPhotos: minRoomPhotosArg = 2, geoQuality = null }) {
   const hotelId = String(hotel.id || hotel.hotelId);
   const detailRes = await liteGet(`/data/hotel?hotelId=${hotelId}`);
   if (!detailRes.ok) return { indexed: false, photosAdded: 0, skippedQuality: false };
 
   const detail = detailRes.data?.data || {};
-  const hasQualityRoom = (detail.rooms || []).some((room) => (room.photos || []).length >= 2);
-  if (!hasQualityRoom) {
+  const minRoomPhotos = Math.max(1, Number(minRoomPhotosArg) || 2);
+  if (!passesRoomQuality(detail, minRoomPhotos, geoQuality)) {
     return { indexed: false, photosAdded: 0, skippedQuality: true };
   }
 
@@ -616,27 +643,139 @@ async function processOneHotel(db, { hotel, city, cc }) {
   return { indexed: true, photosAdded, skippedQuality: false };
 }
 
-async function reindexCityV2(city, limit = 200, forceRebuild = true) {
+const LITEAPI_PAGE_SIZE = 1000;
+
+async function fetchOneCityCatalogPage(cityName, cc, offset, pageSize) {
+  const params = new URLSearchParams({ limit: String(pageSize), offset: String(offset) });
+  if (cc) {
+    params.set("countryCode", cc);
+    params.set("cityName", cityName);
+  } else {
+    params.set("city", cityName);
+  }
+  let hotelsRes = null;
+  for (let attempt = 0; attempt < 4; attempt++) {
+    hotelsRes = await liteGet(`/data/hotels?${params}`);
+    if (hotelsRes.ok) break;
+    const wait = Math.min(15000, 2000 * (attempt + 1));
+    console.warn(
+      `[v2-index] catalog ${cityName} offset=${offset} attempt ${attempt + 1} failed (${hotelsRes.status}) — retry in ${wait}ms`,
+    );
+    await new Promise((r) => setTimeout(r, wait));
+  }
+  if (!hotelsRes?.ok) throw new Error(`LiteAPI /data/hotels failed ${hotelsRes?.status} for ${cityName} at offset ${offset}`);
+  return hotelsRes.data?.data || [];
+}
+
+/**
+ * Merge primary + satellite LiteAPI city lists (deduped by hotel id).
+ * @param {import('./city-registry').CityConfig & object} cityCfg
+ */
+async function fetchMergedLiteapiCatalog(cityCfg, opts = {}) {
+  const cc = cityCfg.countryCode;
+  const catalogLimit = Math.max(1000, Number(opts.catalogLimit) || 50000);
+  const minQueueSize = Math.max(0, Number(opts.minQueueSize) || 0);
+  const fullScan = opts.fullScan === true;
+  const cityNames = listLiteapiCatalogCities(cityCfg);
+  const primary = cityCfg.liteapiCityName || cityCfg.displayName;
+  const byId = new Map();
+  let skippedStarFilter = 0;
+  let catalogScanned = 0;
+
+  for (const cityName of cityNames) {
+    const isPrimary = cityName === primary;
+    let offset = 0;
+    const cityScanLimit = isPrimary ? catalogLimit : Math.min(catalogLimit, 5000);
+    while (offset < cityScanLimit) {
+      const pageSize = Math.min(LITEAPI_PAGE_SIZE, cityScanLimit - offset);
+      const page = await fetchOneCityCatalogPage(cityName, cc, offset, pageSize);
+      if (!page.length) break;
+      for (const h of page) {
+        catalogScanned++;
+        if (passesCatalogFilter(h, cityCfg)) {
+          if (!byId.has(h.id)) byId.set(h.id, h);
+        } else {
+          skippedStarFilter++;
+        }
+      }
+      offset += page.length;
+      if (page.length < pageSize) break;
+      if (!fullScan && isPrimary && minQueueSize > 0 && byId.size >= minQueueSize) {
+        console.log(
+          `[v2-index] catalog scan early stop: queue=${byId.size} >= minQueueSize=${minQueueSize} at ${cityName} offset=${offset}`,
+        );
+        break;
+      }
+    }
+    if (cityName !== primary) {
+      console.log(`[v2-index] satellite catalog ${cityName}: merged total=${byId.size}`);
+    }
+  }
+
+  return { hotels: [...byId.values()], skippedStarFilter, catalogScanned };
+}
+
+/** Walk LiteAPI catalog (primary + satellites), apply star filter, sort best-first. */
+async function fetchAndSortCatalog(liteapiCity, cc, catalogLimit, cityCfg, opts = {}) {
+  const { hotels, skippedStarFilter, catalogScanned } = await fetchMergedLiteapiCatalog(cityCfg, {
+    catalogLimit,
+    minQueueSize: opts.minQueueSize || 0,
+    fullScan: false,
+  });
+  hotels.sort((a, b) => {
+    const sa = Number(a.stars ?? a.starRating ?? 0);
+    const sb = Number(b.stars ?? b.starRating ?? 0);
+    if (sb !== sa) return sb - sa;
+    return Number(b.rating ?? b.guestRating ?? 0) - Number(a.rating ?? a.guestRating ?? 0);
+  });
+  return { hotels, skippedStarFilter, catalogScanned };
+}
+
+/**
+ * @param {string} city
+ * @param {number} [limit] — max LiteAPI catalog rows to scan when building sorted queue
+ * @param {boolean} [forceRebuild]
+ * @param {{ indexCapOverride?: number }} [opts]
+ */
+async function reindexCityV2(city, limit = 200, forceRebuild = true, opts = {}) {
   if (!LITEAPI_KEY || !SUPABASE_URL || !SUPABASE_KEY) throw new Error("Missing required env vars");
+  const cityCfg = resolveCityConfig(city);
+  const displayCity = cityCfg.displayName;
+  const liteapiCity = cityCfg.liteapiCityName;
+  const cc = cityCfg.countryCode;
+  const indexCap = Math.max(
+    0,
+    Number(opts.indexCapOverride ?? process.env.V2_INDEX_CAP ?? cityCfg.indexCap) || 0,
+  );
+  const minRoomPhotos = cityCfg.minRoomPhotos;
+
   const db = getDb();
-  const cc = COUNTRY_CODES[String(city || "").toLowerCase()] || "";
   const started = new Date().toISOString();
   let resumeProgress = null;
+  const existing = new Set();
+
   if (!forceRebuild) {
     const { data: row } = await db
       .from("v2_indexed_cities")
-      .select("index_progress")
-      .eq("city", city)
+      .select("index_progress, photo_count")
+      .eq("city", displayCity)
       .maybeSingle();
     resumeProgress = row?.index_progress || null;
+    const { data: existingRows } = await db
+      .from("v2_hotels_cache")
+      .select("hotel_id")
+      .eq("city", displayCity);
+    for (const r of existingRows || []) existing.add(String(r.hotel_id));
   }
 
+  const resumeHotelCount = resumeProgress?.indexed_in_cache ?? existing.size;
+
   await db.from("v2_indexed_cities").upsert({
-    city,
+    city: displayCity,
     country_code: cc,
     status: "indexing",
-    hotel_count: resumeProgress?.indexed_in_cache ?? 0,
-    photo_count: 0,
+    hotel_count: resumeHotelCount,
+    photo_count: resumeProgress?.photos_done ?? undefined,
     started_at: forceRebuild ? started : undefined,
     updated_at: started,
     last_error: null,
@@ -644,113 +783,129 @@ async function reindexCityV2(city, limit = 200, forceRebuild = true) {
   }, { onConflict: "city" });
 
   if (forceRebuild) {
-    await clearCityV2Data(db, city);
+    await clearCityV2Data(db, displayCity);
     resumeProgress = null;
+    existing.clear();
   }
 
-  const existing = new Set();
-  if (!forceRebuild) {
-    const { data: existingRows } = await db
-      .from("v2_hotels_cache")
-      .select("hotel_id")
-      .eq("city", city);
-    for (const r of existingRows || []) existing.add(String(r.hotel_id));
-  }
-
-  const LITEAPI_PAGE_SIZE = 1000;
-  let liteapiOffset = resumeProgress?.liteapi_offset || 0;
+  const minQueueSize = indexCap > 0 ? indexCap + Math.max(50, Math.floor(indexCap * 0.25)) : 0;
+  console.log(
+    `[v2-index] building sorted catalog for ${displayCity} (liteapi=${liteapiCity}, scan_limit=${limit}` +
+    `${minQueueSize ? `, min_queue=${minQueueSize}` : ""})…`,
+  );
+  const { hotels: sortedHotels, skippedStarFilter: skippedStarBuilt } = await fetchAndSortCatalog(
+    liteapiCity, cc, limit, cityCfg, { minQueueSize },
+  );
+  let queueOffset = forceRebuild ? 0 : (resumeProgress?.queue_offset || 0);
   let catalogScanned = resumeProgress?.catalog_scanned || 0;
   let hotelsSkippedQuality = resumeProgress?.skipped_quality || 0;
   let hotelsSkippedExisting = resumeProgress?.skipped_existing || 0;
+  let hotelsSkippedStarFilter = resumeProgress?.skipped_star_filter ?? skippedStarBuilt;
   let hotelsFailed = resumeProgress?.hotels_failed || 0;
-  let photosDone = 0;
+  let photosDone = resumeProgress?.photos_done || 0;
+  let stoppedAtCap = false;
   let lastHeartbeat = Date.now();
   const HEARTBEAT_MS = Math.max(60_000, Number(process.env.V2_PROGRESS_HEARTBEAT_MS) || 180_000);
+  const REBUILD_SEARCH_EVERY = Math.max(
+    10,
+    Number(process.env.V2_REBUILD_SEARCH_EVERY) || 50,
+  );
+  let lastSearchRebuildCount = resumeProgress?.indexed_in_cache ?? existing.size;
 
   const snapshotProgress = () => ({
-    liteapi_offset: liteapiOffset,
-    catalog_scanned: catalogScanned,
+    queue_offset: queueOffset,
+    queue_total: sortedHotels.length,
     catalog_limit: limit,
+    index_cap: indexCap,
     indexed_in_cache: existing.size,
     skipped_quality: hotelsSkippedQuality,
     skipped_existing: hotelsSkippedExisting,
+    skipped_star_filter: hotelsSkippedStarFilter,
     hotels_failed: hotelsFailed,
     photos_done: photosDone,
+    catalog_scanned: catalogScanned,
+    stopped_at_cap: stoppedAtCap,
+    quality_policy: {
+      minStars: cityCfg.minStars,
+      minGuestRating: cityCfg.minGuestRating,
+      minRoomPhotos,
+      indexCap,
+    },
   });
 
   console.log(
-    `[v2-index] ${city}: limit=${limit} batch=${BATCH_SIZE} hotel_conc=${HOTEL_CONCURRENCY} ` +
-    `max_inflight_photos=${MAX_INFLIGHT_PHOTOS} skip_hotel_public=${SKIP_HOTEL_PUBLIC} ` +
-    `resume_offset=${liteapiOffset} indexed_cache=${existing.size}`
+    `[v2-index] ${displayCity}: scan_limit=${limit} queue=${sortedHotels.length} ` +
+    `index_cap=${indexCap || "none"} min_stars=${cityCfg.minStars} ` +
+    `batch=${BATCH_SIZE} hotel_conc=${HOTEL_CONCURRENCY} max_inflight_photos=${MAX_INFLIGHT_PHOTOS} ` +
+    `skip_hotel_public=${SKIP_HOTEL_PUBLIC} skip_star_filter=${hotelsSkippedStarFilter} ` +
+    `resume_queue_offset=${queueOffset} indexed_cache=${existing.size}`
   );
 
-  // Paginate by liteapi_offset (not catalogScanned) so we advance through catalog pages.
-  while (liteapiOffset < limit) {
-    const pageSize = Math.min(LITEAPI_PAGE_SIZE, limit - liteapiOffset);
-    const params = new URLSearchParams({ limit: String(pageSize), offset: String(liteapiOffset) });
-    if (cc) {
-      params.set("countryCode", cc);
-      params.set("cityName", city);
-    } else {
-      params.set("city", city);
+  while (queueOffset < sortedHotels.length) {
+    if (indexCap > 0 && existing.size >= indexCap) {
+      stoppedAtCap = true;
+      break;
     }
-    const hotelsRes = await liteGet(`/data/hotels?${params}`);
-    if (!hotelsRes.ok) throw new Error(`LiteAPI /data/hotels failed ${hotelsRes.status}`);
-    const page = hotelsRes.data?.data || [];
-    if (!page.length) break;
 
-    for (let pi = 0; pi < page.length; pi += BATCH_SIZE) {
-      const batch = page.slice(pi, pi + BATCH_SIZE);
-      for (let hi = 0; hi < batch.length; hi += HOTEL_CONCURRENCY) {
-        const hotelSlice = batch.slice(hi, hi + HOTEL_CONCURRENCY);
-        for (const hotel of hotelSlice) {
-          catalogScanned++;
-          const hotelId = String(hotel.id || hotel.hotelId);
-          if (existing.has(hotelId)) {
-            hotelsSkippedExisting++;
-            continue;
-          }
-
-          try {
-            const result = await processOneHotel(db, { hotel, city, cc });
-            if (result.skippedQuality) hotelsSkippedQuality++;
-            else if (result.indexed) {
-              existing.add(hotelId);
-              photosDone += result.photosAdded || 0;
-            }
-          } catch (e) {
-            hotelsFailed++;
-            console.warn(`[v2-index] hotel ${hotelId} failed: ${e.message}`);
-          }
-
-          const now = Date.now();
-          if (catalogScanned % PROGRESS_EVERY_HOTELS === 0 || now - lastHeartbeat >= HEARTBEAT_MS) {
-            lastHeartbeat = now;
-            await writeIndexProgress(db, city, snapshotProgress());
-            const pct = Math.round((liteapiOffset / limit) * 100);
-            console.log(
-              `[v2-index] progress ${city}: offset_pct≈${pct}% liteapi_offset=${liteapiOffset} ` +
-              `catalog_scanned=${catalogScanned}/${limit} indexed=${existing.size} ` +
-              `skip_existing=${hotelsSkippedExisting} skip_quality=${hotelsSkippedQuality} failed=${hotelsFailed}`
-            );
-          }
-        }
+    const slice = [];
+    while (slice.length < HOTEL_CONCURRENCY && queueOffset < sortedHotels.length) {
+      if (indexCap > 0 && existing.size >= indexCap) {
+        stoppedAtCap = true;
+        break;
       }
+      slice.push(sortedHotels[queueOffset++]);
     }
+    if (!slice.length) break;
 
-    liteapiOffset += page.length;
-    await writeIndexProgress(db, city, snapshotProgress());
-    console.log(
-      `[v2-index] page done ${city}: liteapi_offset=${liteapiOffset} scanned=${catalogScanned} ` +
-      `indexed=${existing.size} skip_existing=${hotelsSkippedExisting}`
-    );
-    if (page.length < pageSize) break;
+    await Promise.all(slice.map(async (hotel) => {
+      catalogScanned++;
+      const hotelId = String(hotel.id || hotel.hotelId);
+      if (existing.has(hotelId)) {
+        hotelsSkippedExisting++;
+        return;
+      }
+      try {
+        const result = await processOneHotel(db, { hotel, city: displayCity, cc, minRoomPhotos });
+        if (result.skippedQuality) hotelsSkippedQuality++;
+        else if (result.indexed) {
+          existing.add(hotelId);
+          photosDone += result.photosAdded || 0;
+        }
+      } catch (e) {
+        hotelsFailed++;
+        console.warn(`[v2-index] hotel ${hotelId} failed: ${e.message}`);
+      }
+    }));
+
+    const now = Date.now();
+    if (catalogScanned % PROGRESS_EVERY_HOTELS === 0 || now - lastHeartbeat >= HEARTBEAT_MS) {
+      lastHeartbeat = now;
+      await writeIndexProgress(db, displayCity, snapshotProgress());
+      if (existing.size - lastSearchRebuildCount >= REBUILD_SEARCH_EVERY) {
+        const ok = await rebuildV2RoomTypesIndex(db, displayCity, {
+          label: `incremental @ ${existing.size} hotels`,
+        });
+        if (ok) lastSearchRebuildCount = existing.size;
+      }
+      console.log(
+        `[v2-index] progress ${displayCity}: queue=${queueOffset}/${sortedHotels.length} ` +
+        `indexed=${existing.size}${indexCap ? `/${indexCap}` : ""} ` +
+        `skip_star=${hotelsSkippedStarFilter} skip_quality=${hotelsSkippedQuality} ` +
+        `skip_existing=${hotelsSkippedExisting} failed=${hotelsFailed}`
+      );
+    }
   }
+
+  if (!stoppedAtCap && indexCap > 0 && existing.size >= indexCap) stoppedAtCap = true;
+
+  await writeIndexProgress(db, displayCity, snapshotProgress());
 
   const hotelsDone = catalogScanned;
   console.log(
-    `[v2-index] catalog pass done ${city}: scanned=${catalogScanned} indexed=${existing.size} ` +
-    `skipped_quality=${hotelsSkippedQuality} failed=${hotelsFailed} photos=${photosDone}`
+    `[v2-index] catalog pass done ${displayCity}: queue_processed=${catalogScanned}/${sortedHotels.length} ` +
+    `indexed=${existing.size} stopped_at_cap=${stoppedAtCap} ` +
+    `skipped_star=${hotelsSkippedStarFilter} skipped_quality=${hotelsSkippedQuality} ` +
+    `failed=${hotelsFailed} photos=${photosDone}`
   );
 
   // Use a fresh client for all final steps — the long-lived `db` connection often expires
@@ -758,8 +913,8 @@ async function reindexCityV2(city, limit = 200, forceRebuild = true) {
   const dbFinal = getDb();
 
   const [{ count: totalHotels }, { count: totalPhotos }] = await Promise.all([
-    dbFinal.from("v2_hotels_cache").select("*", { count: "exact", head: true }).eq("city", city),
-    dbFinal.from("v2_room_inventory").select("*", { count: "exact", head: true }).eq("city", city),
+    dbFinal.from("v2_hotels_cache").select("*", { count: "exact", head: true }).eq("city", displayCity),
+    dbFinal.from("v2_room_inventory").select("*", { count: "exact", head: true }).eq("city", displayCity),
   ]);
   await dbFinal.from("v2_indexed_cities").update({
     status: "complete",
@@ -769,14 +924,14 @@ async function reindexCityV2(city, limit = 200, forceRebuild = true) {
     updated_at: new Date().toISOString(),
     last_error: null,
     index_progress: null,
-  }).eq("city", city);
+  }).eq("city", displayCity);
 
   // Copy hotel spatial data to hotels_cache so neighbourhood RPC (get_primary_nbhds_for_hotels)
   // can assign hotels to neighbourhoods. Only copies hotel_id + coords — no LiteAPI content.
   try {
     const { data: v2Hotels } = await dbFinal.from("v2_hotels_cache")
       .select("hotel_id, city, country_code, lat, lng")
-      .eq("city", city)
+      .eq("city", displayCity)
       .not("lat", "is", null);
     if (v2Hotels?.length) {
       const rows = v2Hotels.map(h => ({ hotel_id: h.hotel_id, city: h.city, country_code: h.country_code, lat: h.lat, lng: h.lng }));
@@ -789,35 +944,135 @@ async function reindexCityV2(city, limit = 200, forceRebuild = true) {
   }
 
   // Auto-rebuild v2_room_types_index (pre-aggregated per-room facts for fast Phase A search).
-  console.log(`[v2-index] rebuilding v2_room_types_index for "${city}"...`);
-  try {
-    const { data: rebuildCount, error: rebuildErr } = await dbFinal.rpc(
-      "rebuild_v2_room_types_index_city",
-      { p_city: city }
-    );
-    if (rebuildErr) {
-      console.error("[v2-index] rebuild index error:", rebuildErr.message);
-    } else {
-      console.log(`[v2-index] rebuilt ${rebuildCount} room types in v2_room_types_index`);
-      // Verify the rebuild actually landed — if still 0 something is wrong
-      const { count: indexCount } = await dbFinal
-        .from("v2_room_types_index")
-        .select("*", { count: "exact", head: true })
-        .eq("city", city);
-      console.log(`[v2-index] v2_room_types_index now has ${indexCount} rows for ${city}`);
-      if (!indexCount) console.error("[v2-index] WARNING: index count is 0 after rebuild — manual rebuild may be needed");
-    }
-  } catch (rebuildEx) {
-    console.error("[v2-index] rebuild index exception:", rebuildEx.message);
-  }
+  await rebuildV2RoomTypesIndex(dbFinal, displayCity, { label: "final" });
+  const { count: indexCount } = await dbFinal
+    .from("v2_room_types_index")
+    .select("*", { count: "exact", head: true })
+    .eq("city", displayCity);
+  console.log(`[v2-index] v2_room_types_index now has ${indexCount} rows for ${displayCity}`);
+  if (!indexCount) console.error("[v2-index] WARNING: index count is 0 after rebuild — manual rebuild may be needed");
 
   console.log(
     `[v2-index] done: ${hotelsDone} processed, ${hotelsSkippedQuality} skipped (quality filter), ` +
     `${photosDone} photos captioned`
   );
   return {
-    city, hotelsDone, hotelsSkippedQuality, photosDone,
-    totalHotels: totalHotels || 0, totalPhotos: totalPhotos || 0,
+    city: displayCity,
+    hotelsDone,
+    hotelsSkippedQuality,
+    hotelsSkippedStarFilter,
+    photosDone,
+    stoppedAtCap,
+    indexCap,
+    totalHotels: totalHotels || 0,
+    totalPhotos: totalPhotos || 0,
+  };
+}
+
+/**
+ * Post-cap geographic backfill — index hotels inside curated geoQuota zones
+ * (e.g. Heathrow 3 mi from T5) without raising the global indexCap.
+ */
+async function geoBackfillCityV2(city, opts = {}) {
+  if (!LITEAPI_KEY || !SUPABASE_URL || !SUPABASE_KEY) throw new Error("Missing required env vars");
+  const cityCfg = resolveCityConfig(city);
+  const displayCity = cityCfg.displayName;
+  const cc = cityCfg.countryCode;
+  const zones = listGeoQuotaFences(displayCity);
+  if (!zones.length) {
+    console.log(`[geo-backfill] ${displayCity}: no geoQuota fences configured`);
+    return { city: displayCity, zones: [], totalIndexed: 0, totalPhotos: 0 };
+  }
+
+  const db = getDb();
+  const { data: existingRows } = await db
+    .from("v2_hotels_cache")
+    .select("hotel_id")
+    .eq("city", displayCity);
+  const existing = new Set((existingRows || []).map((r) => String(r.hotel_id)));
+
+  console.log(`[geo-backfill] ${displayCity}: loading merged catalog (full scan)…`);
+  const { hotels: catalog, catalogScanned } = await fetchMergedLiteapiCatalog(cityCfg, { fullScan: true });
+  console.log(`[geo-backfill] catalog=${catalog.length} rows scanned=${catalogScanned} already_indexed=${existing.size}`);
+
+  const zoneResults = [];
+  let totalIndexed = 0;
+  let totalPhotos = 0;
+  let totalSkippedQuality = 0;
+
+  for (const zone of zones) {
+    const quota = Math.max(1, Number(opts.quotaOverride ?? zone.geoQuota) || 50);
+    const candidates = catalog.filter((h) => {
+      const id = String(h.id);
+      if (existing.has(id)) return false;
+      if (!passesCatalogFilter(h, cityCfg)) return false;
+      const { lat, lng } = hotelListLatLng(h);
+      return isInGeoZone(lat, lng, zone);
+    });
+    candidates.sort(
+      (a, b) => Number(b.rating ?? b.guestRating ?? 0) - Number(a.rating ?? a.guestRating ?? 0)
+        || Number(b.stars ?? b.starRating ?? 0) - Number(a.stars ?? a.starRating ?? 0),
+    );
+
+    console.log(
+      `[geo-backfill] ${zone.hoodName}: candidates=${candidates.length} quota=${quota} ` +
+      `(radius=${zone.geoRadiusMi}mi from ${zone.geoAnchor.lat},${zone.geoAnchor.lng})`,
+    );
+
+    let indexed = 0;
+    let skippedQuality = 0;
+    let photosAdded = 0;
+    const geoQuality = zone.airportQuality
+      ? {
+        geoAnchor: zone.geoAnchor,
+        geoRadiusMi: zone.geoRadiusMi,
+        minHotelImages: zone.minHotelImages || 6,
+      }
+      : null;
+
+    for (const hotel of candidates) {
+      if (indexed >= quota) break;
+      const result = await processOneHotel(db, {
+        hotel,
+        city: displayCity,
+        cc,
+        minRoomPhotos: cityCfg.minRoomPhotos,
+        geoQuality,
+      });
+      if (result.indexed) {
+        indexed++;
+        photosAdded += result.photosAdded;
+        existing.add(String(hotel.id));
+        console.log(`[geo-backfill]   + ${hotel.id} ${(hotel.name || "").slice(0, 50)} (${result.photosAdded} photos)`);
+      } else if (result.skippedQuality) {
+        skippedQuality++;
+      }
+    }
+
+    totalIndexed += indexed;
+    totalPhotos += photosAdded;
+    totalSkippedQuality += skippedQuality;
+    zoneResults.push({
+      hoodName: zone.hoodName,
+      candidates: candidates.length,
+      quota,
+      indexed,
+      skippedQuality,
+      photosAdded,
+    });
+    console.log(`[geo-backfill] ${zone.hoodName}: indexed=${indexed}/${quota} skip_quality=${skippedQuality}`);
+  }
+
+  if (totalIndexed > 0) {
+    await rebuildV2RoomTypesIndex(db, displayCity, { label: "geo-backfill" });
+  }
+
+  return {
+    city: displayCity,
+    zones: zoneResults,
+    totalIndexed,
+    totalPhotos,
+    totalSkippedQuality,
   };
 }
 
@@ -825,16 +1080,19 @@ async function reindexCityV2(city, limit = 200, forceRebuild = true) {
 const _reindexJobs = new Map();
 
 function isV2ReindexActive(city) {
-  return _reindexJobs.has(city);
+  const cfg = resolveCityConfig(city);
+  return _reindexJobs.has(cfg.displayName) || _reindexJobs.has(String(city || "").trim());
 }
 
-async function reindexCityV2Guarded(city, limit, forceRebuild) {
-  const inFlight = _reindexJobs.get(city);
+async function reindexCityV2Guarded(city, limit, forceRebuild, opts = {}) {
+  const cfg = resolveCityConfig(city);
+  const key = cfg.displayName;
+  const inFlight = _reindexJobs.get(key);
   if (inFlight) {
-    console.log(`[v2-index] ${city}: joined in-flight reindex`);
+    console.log(`[v2-index] ${key}: joined in-flight reindex`);
     return inFlight;
   }
-  const job = reindexCityV2(city, limit, forceRebuild)
+  const job = reindexCityV2(city, limit, forceRebuild, opts)
     .catch(async (e) => {
       try {
         const db = getDb();
@@ -842,14 +1100,14 @@ async function reindexCityV2Guarded(city, limit, forceRebuild) {
           status: "failed",
           last_error: e.message,
           updated_at: new Date().toISOString(),
-        }).eq("city", city);
+        }).eq("city", key);
       } catch (_) { /* ignore */ }
       throw e;
     })
     .finally(() => {
-      _reindexJobs.delete(city);
+      _reindexJobs.delete(key);
     });
-  _reindexJobs.set(city, job);
+  _reindexJobs.set(key, job);
   return job;
 }
 
@@ -857,4 +1115,8 @@ module.exports = {
   reindexCityV2: reindexCityV2Guarded,
   isV2ReindexActive,
   _reindexJobs,
+  fetchAndSortCatalog,
+  fetchMergedLiteapiCatalog,
+  geoBackfillCityV2,
+  rebuildV2RoomTypesIndex,
 };
