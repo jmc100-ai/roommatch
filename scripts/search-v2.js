@@ -865,20 +865,15 @@ async function runV2Search({ req, supabase, supabaseAdmin, resolveCityName }) {
       })
     : Promise.resolve(null);
 
-  const needPrimaryNbhdRpc = nbhdPrimaryByHotel.size === 0;
-
   const phaseBPromises = [
     fetchClient.rpc("get_v2_room_photos", { p_hotel_ids: topHotelIds, p_city: city, p_max_per_hotel: 10 }),
     hotelVibePromise,
+    // Always RPC for visible hotels — BOOP primary-by-city cache may hold stale
+    // neighborhood ids after regen; labels must not depend on that cache alone.
+    fetchClient.rpc("get_primary_nbhds_for_hotels", { p_hotel_ids: topHotelIds }),
   ];
-  if (needPrimaryNbhdRpc) {
-    phaseBPromises.push(
-      fetchClient.rpc("get_primary_nbhds_for_hotels", { p_hotel_ids: topHotelIds })
-    );
-  }
   const phaseB = await Promise.all(phaseBPromises);
-  const [photosResult, hotelVibeResult] = phaseB;
-  const primaryNbhdRpcResult = needPrimaryNbhdRpc ? phaseB[2] : null;
+  const [photosResult, hotelVibeResult, primaryNbhdRpcResult] = phaseB;
 
   _perf.phase_b_ms = Date.now() - _t0;
   console.log(`[v2 perf] phase-B parallel (photos+vibe+nbhd): ${_perf.phase_b_ms}ms  photos=${photosResult.data?.length}`);
@@ -959,12 +954,24 @@ async function runV2Search({ req, supabase, supabaseAdmin, resolveCityName }) {
   const HOTEL_SIM_MIN  = Math.max(HOTEL_SIM_MAX - 0.30, 0);
   const hotelSimSpan   = Math.max(HOTEL_SIM_MAX - HOTEL_SIM_MIN, 1e-9);
 
-  // Primary neighbourhood map — covers ALL hotels when BOOP was active.
+  // Primary neighbourhood map — fresh RPC for visible hotels; BOOP cache for tail.
   const primaryNbhdMap = new Map();
+  if (primaryNbhdRpcResult && !primaryNbhdRpcResult.error) {
+    for (const r of (primaryNbhdRpcResult.data || [])) {
+      primaryNbhdMap.set(r.hotel_id, {
+        id:         r.neighborhood_id,
+        name:       r.name,
+        vibe_short: r.vibe_short,
+        attributes: r.attributes || null,
+      });
+    }
+  } else if (primaryNbhdRpcResult?.error) {
+    console.warn(`[v2] get_primary_nbhds_for_hotels error (non-fatal): ${primaryNbhdRpcResult.error.message}`);
+  }
   if (nbhdPrimaryByHotel.size > 0 && nbhdHoodRows.length > 0) {
-    // Use already-fetched data from applyNbhdBoopRank (covers all ranked hotels).
     const hoodById = new Map(nbhdHoodRows.map((h) => [h.id, h]));
     for (const [hotelId, nbhdId] of nbhdPrimaryByHotel) {
+      if (primaryNbhdMap.has(hotelId)) continue;
       const hood = hoodById.get(nbhdId);
       if (hood) {
         primaryNbhdMap.set(hotelId, {
@@ -974,16 +981,6 @@ async function runV2Search({ req, supabase, supabaseAdmin, resolveCityName }) {
           attributes: hood.attributes || null,
         });
       }
-    }
-  } else if (primaryNbhdRpcResult && !primaryNbhdRpcResult.error) {
-    // Fallback: no BOOP — use the Phase B RPC result (top 250 hotels only).
-    for (const r of (primaryNbhdRpcResult.data || [])) {
-      primaryNbhdMap.set(r.hotel_id, {
-        id:         r.neighborhood_id,
-        name:       r.name,
-        vibe_short: r.vibe_short,
-        attributes: r.attributes || null,
-      });
     }
   }
 

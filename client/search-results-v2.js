@@ -489,6 +489,12 @@
       </div>`;
   }
 
+  function pickNbhdLabel(h) {
+    const sub = bridge()?.hotelSublineLocation?.(h) || '';
+    if (sub) return sub;
+    return h?.city || '';
+  }
+
   function starsHtml(h) {
     const n = Math.min(5, Math.max(0, Math.round(Number(h.starRating) || 0)));
     if (!n) return '';
@@ -516,7 +522,7 @@
     const photo = heroPhotoUrl(h);
     const b = bridge();
     const title = b ? b.hotelDisplayTitle(h) : (h.name || 'Hotel');
-    const nbhd = h.primary_nbhd?.name || h.city || '';
+    const nbhd = pickNbhdLabel(h);
     const stars = starsHtml(h);
     const metaLine = nbhd || stars
       ? `<p class="sr2-pick-meta">${nbhd ? `<span class="sr2-pick-nbhd">${esc(nbhd)}</span>` : ''}${nbhd && stars ? ' · ' : ''}${stars}</p>`
@@ -561,7 +567,7 @@
     const photo = heroPhotoUrl(h);
     const b = bridge();
     const title = b ? b.hotelDisplayTitle(h) : (h.name || 'Hotel');
-    const nbhd = h.primary_nbhd?.name || h.city || '';
+    const nbhd = pickNbhdLabel(h);
     const rating = h.rating > 0
       ? `<span class="sr2-more-rating">${starsHtml(h)} <strong>${Number(h.rating).toFixed(1)}</strong> (${formatReviewCount(h.reviewCount)})</span>`
       : '';
@@ -723,7 +729,7 @@
           ${photo ? `<img src="${esc(photo)}" alt="" class="sr2-offer-hero-img" />` : '<div class="sr2-offer-hero-img sr2-offer-hero-img--ph"></div>'}
           <div class="sr2-offer-hero-meta">
             <h1 class="sr2-offer-name">${esc(title)}</h1>
-            <p class="sr2-offer-loc">${esc(hotel.primary_nbhd?.name || hotel.city || '')} · ${starsHtml(hotel)}</p>
+            <p class="sr2-offer-loc">${esc(pickNbhdLabel(hotel))} · ${starsHtml(hotel)}</p>
           </div>
         </div>
         <div class="sr2-offer-context">

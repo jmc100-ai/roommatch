@@ -4956,6 +4956,15 @@
     return city ? `Hotel in ${city}` : 'Hotel';
   }
 
+  /** Subtitle under hotel name — neighbourhood when known, else address line. */
+  function hotelSublineLocation(h) {
+    if (!h) return '';
+    const nbhd = String(h.primary_nbhd?.name || '').trim();
+    const city = String(h.city || '').trim();
+    if (nbhd && (!city || nbhd.toLowerCase() !== city.toLowerCase())) return nbhd;
+    return [h.address, h.city, h.country].filter(Boolean).join(', ');
+  }
+
   /** Vibe tour headline — prefers real LiteAPI name; never raw `lp…` ids. */
   function vibeTourHotelTitle(h) {
     const t = hotelDisplayTitle(h);
@@ -8807,7 +8816,7 @@
       const metaEl = document.getElementById(`hotel-meta-${h.id}`);
       if (metaEl) {
         const stars    = '★'.repeat(Math.min(Math.max(Math.round(h.starRating || 0), 0), 5));
-        const location = [h.address, h.city, h.country].filter(Boolean).join(', ');
+        const location = hotelSublineLocation(h);
         const rating   = h.rating > 0
           ? `<button type="button" class="hotel-guest-score" data-hotel-id="${escHtml(String(h.id))}"${hotelDetailPrefetchIntentAttrs(h.id)} onclick="event.stopPropagation();openHotelDetailPage(this.dataset.hotelId, { scrollTo: 'reviews' })" title="See guest reviews"><strong>${parseFloat(h.rating).toFixed(1)}</strong> guest score</button>`
           : '';
@@ -10150,7 +10159,7 @@
             ${overallBubble}
             <div class="hotel-row-name">${escHtml(hotelDisplayTitle(h))}</div>
           </div>
-          <div class="hotel-row-meta">${stars ? `<span style="color:var(--accent);font-size:10px">${stars}</span> · ` : ''}${h.address || h.city || ''}</div>
+          <div class="hotel-row-meta">${stars ? `<span style="color:var(--accent);font-size:10px">${stars}</span> · ` : ''}${escHtml(hotelSublineLocation(h))}</div>
           <div class="hotel-row-score">${rating}
             <button type="button" class="hotel-row-tour-link" data-hotel-id="${hotelIdAttr}" onclick="event.stopPropagation();openVibeTourForHotel(this.dataset.hotelId)">Vibe tour</button>
           </div>
@@ -13582,6 +13591,7 @@
     escHtml,
     addDatesLinkHtml: (label) => addDatesLink(label || 'Add dates', 'sr2'),
     hotelDisplayTitle,
+    hotelSublineLocation,
     roomVibeMatchDisplayPct,
     hotelStyleMatchDisplayPct,
     hotelEffectiveScore,
@@ -13621,7 +13631,7 @@
 
   function hotelHTML(h, cardIndex = -1) {
     const stars    = '★'.repeat(Math.min(Math.max(Math.round(h.starRating || 0), 0), 5));
-    const location = [h.address, h.city, h.country].filter(Boolean).join(', ');
+    const location = hotelSublineLocation(h);
     const rating   = h.rating > 0
       ? `<button type="button" class="hotel-guest-score" data-hotel-id="${escHtml(String(h.id))}"${hotelDetailPrefetchIntentAttrs(h.id)} onclick="event.stopPropagation();openHotelDetailPage(this.dataset.hotelId, { scrollTo: 'reviews' })" title="See guest reviews"><strong>${parseFloat(h.rating).toFixed(1)}</strong> guest score</button>`
       : '';
