@@ -23,7 +23,11 @@ const {
   resolveMustRequireSpec,
   specFingerprint,
 } = require("../lib/must-have-spec");
-const { normalizePolygonRing, pointInPolygon, bboxFromRing } = require("./neighborhood-vibe-data");
+const { normalizePolygonRing, pointInPolygon, bboxFromRing, placeInsideNeighborhoodFence } = require("./neighborhood-vibe-data");
+const { hotelInsideResolvedFence } = require("./neighborhood-generator");
+
+/** Must match placeInsideNeighborhoodFence edge buffer (~400 m). */
+const FENCE_EDGE_BUF = 0.004;
 
 function slimStubsEnabled() {
   return process.env.VSEARCH_SLIM_STUBS === "1" || process.env.VSEARCH_SLIM_STUBS === "true";
@@ -457,23 +461,38 @@ async function runV2Search({ req, supabase, supabaseAdmin, resolveCityName }) {
   if (polygonRing?.length >= 4) {
     const pb = bboxFromRing(polygonRing);
     if (pb?.lat_min != null) {
+      const hoodName = String(req.query.nbhd || req.query.nbhd_name || "").trim() || null;
+      // Octagon / rectangle fences use an edge buffer in placeInsideNeighborhoodFence;
+      // SQL prefilter must include that margin or edge hotels never enter the candidate set.
+      const edgeBuf = polygonRing.length <= 10 ? FENCE_EDGE_BUF : 0;
+      const queryBbox = {
+        lat_min: pb.lat_min - edgeBuf,
+        lat_max: pb.lat_max + edgeBuf,
+        lon_min: pb.lon_min - edgeBuf,
+        lon_max: pb.lon_max + edgeBuf,
+      };
       const { data: polyHotels } = await fetchClient
-        .from("hotels_cache")
+        .from("v2_hotels_cache")
         .select("hotel_id,lat,lng")
         .eq("city", city)
-        .gte("lat", pb.lat_min).lte("lat", pb.lat_max)
-        .gte("lng", pb.lon_min).lte("lng", pb.lon_max);
-      const inside = (polyHotels || []).filter(
-        (h) => Number.isFinite(Number(h.lat)) && Number.isFinite(Number(h.lng)) &&
-               pointInPolygon(Number(h.lat), Number(h.lng), polygonRing)
-      );
+        .gte("lat", queryBbox.lat_min).lte("lat", queryBbox.lat_max)
+        .gte("lng", queryBbox.lon_min).lte("lng", queryBbox.lon_max);
+      const inside = (polyHotels || []).filter((h) => {
+        const lat = Number(h.lat);
+        const lng = Number(h.lng);
+        if (!Number.isFinite(lat) || !Number.isFinite(lng)) return false;
+        if (hoodName) {
+          return hotelInsideResolvedFence(lat, lng, city, hoodName, pb, polygonRing);
+        }
+        return placeInsideNeighborhoodFence(lat, lng, pb, polygonRing);
+      });
       hotelIdsByGeo = inside.map((h) => h.hotel_id);
-      console.log(`[v2] polygon filter: ${hotelIdsByGeo.length} hotels`);
+      console.log(`[v2] polygon filter: ${hotelIdsByGeo.length} hotels (fence+buffer${hoodName ? ` nbhd=${hoodName}` : ""})`);
       if (!hotelIdsByGeo.length) hotelIdsByGeo = null;
     }
   } else if (bbox) {
     const { data: bboxHotels } = await fetchClient
-      .from("hotels_cache")
+      .from("v2_hotels_cache")
       .select("hotel_id")
       .eq("city", city)
       .gte("lat", bbox.lat_min).lte("lat", bbox.lat_max)

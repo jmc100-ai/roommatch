@@ -7626,8 +7626,10 @@
       const vsearchParams = { query, city };
       if (activePoly) {
         vsearchParams.polygon = typeof activePoly === 'string' ? activePoly : JSON.stringify(activePoly);
+        if (nbhdLabel) vsearchParams.nbhd = nbhdLabel;
       } else if (activeBbox) {
         vsearchParams.bbox = activeBbox;
+        if (nbhdLabel) vsearchParams.nbhd = nbhdLabel;
       }
       // BOOP v4 — pass hotel_query + must_haves when boopFinish populated them.
       if (S.hotelQ)    vsearchParams.hotel_query = S.hotelQ;

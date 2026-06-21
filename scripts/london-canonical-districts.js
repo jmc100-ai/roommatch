@@ -165,11 +165,17 @@ async function refreshLondonCanonicalHotelCounts(city, db) {
     });
 
   const counts = new Map(hoodMeta.map((h) => [h.id, 0]));
+  const inFenceCounts = new Map(hoodMeta.map((h) => [h.id, 0]));
   const byName = {};
+  const inFenceByName = {};
 
   for (const hotel of hotelRows) {
     const { lat, lng } = hotel;
     const matches = hoodMeta.filter((h) => hotelInDistrict(lat, lng, city, h.district, ng));
+    for (const h of matches) {
+      inFenceCounts.set(h.id, (inFenceCounts.get(h.id) || 0) + 1);
+      inFenceByName[h.name] = (inFenceByName[h.name] || 0) + 1;
+    }
     let pick = null;
     if (matches.length === 1) {
       pick = matches[0];
@@ -193,23 +199,27 @@ async function refreshLondonCanonicalHotelCounts(city, db) {
   }
 
   for (const h of hoodMeta) {
-    const count = counts.get(h.id) || 0;
-    const { error: upErr } = await db.from("neighborhoods").update({ hotel_count: count }).eq("id", h.id);
+    const inFence = inFenceCounts.get(h.id) || 0;
+    const { error: upErr } = await db.from("neighborhoods").update({ hotel_count: inFence }).eq("id", h.id);
     if (upErr) throw new Error(`hotel_count ${h.name}: ${upErr.message}`);
   }
 
   const assigned = [...counts.values()].reduce((a, b) => a + b, 0);
+  const inFenceTotal = [...inFenceCounts.values()].reduce((a, b) => a + b, 0);
   console.log(
-    `[london-districts] partitioned ${assigned}/${hotelRows.length} hotels across ${hoodMeta.length} tourist districts`,
+    `[london-districts] partitioned ${assigned}/${hotelRows.length} hotels across ${hoodMeta.length} tourist districts; ` +
+    `in-fence totals ${inFenceTotal} (card hotel_count uses in-fence only)`,
   );
+  console.log(`[london-districts] in-fence by district: ${JSON.stringify(inFenceByName)}`);
   return {
     updated: hoodMeta.length,
     hotels: hotelRows.length,
     assigned,
     byName,
+    inFenceByName,
     catalog_total: hotelRows.length,
-    hotels_in_areas: assigned,
-    coverage_pct: hotelRows.length ? assigned / hotelRows.length : 0,
+    hotels_in_areas: inFenceTotal,
+    coverage_pct: hotelRows.length ? inFenceTotal / hotelRows.length : 0,
     hood_count: hoodMeta.length,
   };
 }
