@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Resolve Wikimedia Commons thumbs for marketing cityscapes (Paris + CDMX).
+ * Resolve Wikimedia Commons thumbs for marketing cityscapes (Paris + CDMX + London).
  * Writes client/marketing/city-marketing-images.json (run rarely; commit output).
  */
 const fs = require("fs");
@@ -37,7 +37,23 @@ const CDMX_FILES = {
     "Museo Nacional de Antropología - Sala Grandeza y Diversidad Cultural de México - 99.jpg",
 };
 
-const WIDTHS = [960]; // apply script derives 1280/1920/2000/1400/640/480 from 960px thumb
+const LONDON_FILES = {
+  hero: "Palace of Westminster, London - Feb 2007.jpg",
+  westminster: "Palace of Westminster, London - Feb 2007.jpg",
+  coventGarden: "Covent Garden, London, UK.jpg",
+  southKensington: "Natural History Museum, London, UK.jpg",
+  marylebone: "Marylebone High Street, London.jpg",
+  nottingHill: "Portobello Road, Notting Hill, London.jpg",
+  shoreditch: "Street art in Shoreditch, London (2014).jpg",
+  southBank: "London Eye - panoramio.jpg",
+  soho: "Piccadilly Circus, London - England - DSCF6824.jpg",
+  towerBridge: "Tower Bridge from Shad Thames.jpg",
+  tube: "London Underground sign at Westminster station.jpg",
+  hydePark: "Hyde Park, London - June 2009.jpg",
+};
+
+const HERO_WIDTHS = [960, 1280, 1920];
+const WIDTHS = [960];
 
 async function commonsThumb(fileTitle, width) {
   const title = `File:${fileTitle}`;
@@ -64,11 +80,12 @@ async function commonsThumb(fileTitle, width) {
   return null;
 }
 
-async function resolveSet(files) {
+async function resolveSet(files, { heroKey = "hero" } = {}) {
   const out = {};
   for (const [key, title] of Object.entries(files)) {
     out[key] = {};
-    for (const w of WIDTHS) {
+    const widths = key === heroKey ? HERO_WIDTHS : WIDTHS;
+    for (const w of widths) {
       const url = await commonsThumb(title, w);
       if (url) out[key][String(w)] = url;
       process.stderr.write(url ? "." : "x");
@@ -83,6 +100,8 @@ async function resolveSet(files) {
   const paris = await resolveSet(PARIS_FILES);
   process.stderr.write("CDMX…\n");
   const mexicoCity = await resolveSet(CDMX_FILES);
+  process.stderr.write("London…\n");
+  const london = await resolveSet(LONDON_FILES);
   const catalog = {
     generatedAt: new Date().toISOString(),
     /** Unsplash IDs that must not be used for city/landmark slots (wrong city). */
@@ -94,6 +113,7 @@ async function resolveSet(files) {
     ],
     paris,
     mexicoCity,
+    london,
   };
   const outPath = path.join(__dirname, "..", "client", "marketing", "city-marketing-images.json");
   fs.writeFileSync(outPath, JSON.stringify(catalog, null, 2));

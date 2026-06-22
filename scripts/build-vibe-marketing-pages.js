@@ -27,7 +27,7 @@ const IMG = {
   "Mexico City":
     "https://upload.wikimedia.org/wikipedia/commons/thumb/4/4f/Mexico_City_Skyline_%285604867225%29.jpg/1280px-Mexico_City_Skyline_%285604867225%29.jpg",
   London:
-    "https://upload.wikimedia.org/wikipedia/commons/thumb/b/b1/Big_Ben%2C_London%2C_UK_-_Dawn_-_November_2008_-_Cut.jpg/1280px-Big_Ben%2C_London%2C_UK_-_Dawn_-_November_2008_-_Cut.jpg",
+    "https://upload.wikimedia.org/wikipedia/commons/thumb/9/97/Palace_of_Westminster%2C_London_-_Feb_2007.jpg/1280px-Palace_of_Westminster%2C_London_-_Feb_2007.jpg",
 };
 
 const CITY_HUB_PATH = {
