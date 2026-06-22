@@ -523,12 +523,24 @@ const SITEMAP_FILENAMES = [
 function serveSitemapFile(filename) {
   const fp = path.join(__dirname, "client", filename);
   return (_req, res) => {
+    if (!fs.existsSync(fp)) {
+      res.setHeader("Cache-Control", "no-store, no-cache");
+      res.setHeader("CDN-Cache-Control", "no-store");
+      res.setHeader("Pragma", "no-cache");
+      return res.status(404).type("text/plain").send("sitemap not found");
+    }
     res.setHeader("Content-Type", "application/xml; charset=utf-8");
-    res.setHeader("Cache-Control", "public, max-age=86400, s-maxage=604800");
+    // Cache successes only — never let Cloudflare store a 404 for 7 days when a
+    // new sitemap file ships before the route/file exists on the prior deploy.
+    res.setHeader("Cache-Control", "public, max-age=3600, s-maxage=86400");
     res.sendFile(fp, (err) => {
       if (err) {
         console.error("[sitemap]", filename, err.message);
-        if (!res.headersSent) res.status(404).type("text/plain").send("sitemap not found");
+        if (!res.headersSent) {
+          res.setHeader("Cache-Control", "no-store, no-cache");
+          res.setHeader("CDN-Cache-Control", "no-store");
+          res.status(404).type("text/plain").send("sitemap not found");
+        }
       }
     });
   };
