@@ -44,12 +44,12 @@ const LONDON_FILES = {
   southKensington: "Natural History Museum, London, UK.jpg",
   marylebone: "Marylebone High Street, London.jpg",
   nottingHill: "Portobello Road, Notting Hill, London.jpg",
-  shoreditch: "Street art in Shoreditch, London (2014).jpg",
+  shoreditch: "Street art in Chance Street, Shoreditch - geograph.org.uk - 3810142.jpg",
   southBank: "London Eye - panoramio.jpg",
-  soho: "Piccadilly Circus, London - England - DSCF6824.jpg",
+  soho: "London, Piccadilly Circus -- 2016 -- 4866.jpg",
   towerBridge: "Tower Bridge from Shad Thames.jpg",
-  tube: "London Underground sign at Westminster station.jpg",
-  hydePark: "Hyde Park, London - June 2009.jpg",
+  tube: "Westminster station entrance 2020.jpg",
+  hydePark: "Hyde Park July 2015-1.jpg",
 };
 
 const HERO_WIDTHS = [960, 1280, 1920];
