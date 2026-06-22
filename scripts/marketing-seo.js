@@ -7,6 +7,7 @@ const { searchableLabel } = require("./marketing-city-stats");
 
 const PARIS_COUNT = searchableLabel("Paris");
 const CDMX_COUNT = searchableLabel("Mexico City");
+const LONDON_COUNT = searchableLabel("London");
 
 function attrEsc(s) {
   return String(s || "")
@@ -410,6 +411,100 @@ const HUB_FAQS = {
       a: `Yes — TravelByVibe ranks ${CDMX_COUNT} Mexico City hotels by real room and bathroom photos. Describe rainfall shower, bright suite, or design mood before you commit elsewhere.`,
     },
   ],
+  "where-to-stay-in-london": [
+    {
+      q: "What is the best neighborhood to stay in London for first-time visitors?",
+      a: "Westminster and Covent Garden are the most popular first-timer picks: walkable, central, and full of icons. South Kensington suits museum-heavy trips. Use our neighborhood guide, then match hotels by real room photos.",
+    },
+    {
+      q: "Is Covent Garden a good area to stay in London?",
+      a: "Yes — Covent Garden is one of London's best-loved districts for hotels: flat, theatre-dense, and lively without needing a car. Compare it with Marylebone if you prefer quieter evenings.",
+    },
+    {
+      q: "Which London neighborhood is best for couples?",
+      a: "Notting Hill and South Kensington lead for romance — village streets and museum mornings versus pastel townhouses. Search for moody lighting, soaking tubs, or Thames views on TravelByVibe.",
+    },
+    {
+      q: "Can I search London hotels by bathroom photos?",
+      a: "Yes. TravelByVibe indexes real room and bathroom photography. Describe rainfall shower, marble bath, or double vanity and we rank hotels whose photos match.",
+    },
+    {
+      q: "How does TravelByVibe differ from Booking or Expedia?",
+      a: "We rank hotels by neighborhood vibe and actual room photos — not just star ratings and lobby shots. Describe the room you want, then browse matches before you add dates.",
+    },
+  ],
+  "london-hotels": [
+    {
+      q: "How do I find London hotels with real room photos?",
+      a: `TravelByVibe indexes room photography across ${LONDON_COUNT} London hotels with searchable room photos. Search by vibe — bathroom features, Victorian light, design mood — before you commit on a booking site.`,
+    },
+    {
+      q: "What is visual hotel search for London?",
+      a: "Type the room you picture — Victorian bedroom, rainfall shower, Thames view — and we rank London hotels whose indexed photos look like your description.",
+    },
+    {
+      q: "Which London district has the best boutique hotels?",
+      a: "Marylebone, Covent Garden, and Notting Hill have the deepest boutique stock. Browse our boutique hotels guide or search by vibe for design-forward small hotels.",
+    },
+    {
+      q: "Is TravelByVibe free to use?",
+      a: "Yes — browsing and visual search are free. Add travel dates when you are ready to see live rates, then book through our partner links.",
+    },
+    {
+      q: "How many London hotels does TravelByVibe cover?",
+      a: `We index ${LONDON_COUNT} London hotels with enough room photography for visual search. Paris (${PARIS_COUNT}) and Mexico City (${CDMX_COUNT}) are comparably deep on the same platform.`,
+    },
+  ],
+  "london-hotel-finder": [
+    {
+      q: "Where should I stay in London for 3 days?",
+      a: "For a short trip, stay central: Westminster, Covent Garden, or South Kensington keep museums and dinner within walking distance. Our vibe quiz narrows neighborhood and room style in under a minute.",
+    },
+    {
+      q: "Westminster or Covent Garden — which is better?",
+      a: "Westminster is iconic and park-led; Covent Garden is buzzier and theatre-focused. See our Westminster vs Covent Garden comparison, then search hotels by room photos.",
+    },
+    {
+      q: "Is Shoreditch too far from central London?",
+      a: "Shoreditch is east of the core but well connected by Tube and Overground. Trade a few extra minutes on the line for street art and rooftop bars.",
+    },
+    {
+      q: "What is the vibe wizard?",
+      a: "A short quiz that captures trip pace, neighborhood feel, and room must-haves — then opens TravelByVibe with your city and context pre-loaded.",
+    },
+  ],
+  "london-visual-search": [
+    {
+      q: "Can I search London hotels by describing the bathroom?",
+      a: "Yes — try rainfall shower, marble bathroom, soaking tub, or walk-in shower. We surface hotels whose indexed bathroom photos match.",
+    },
+    {
+      q: "What should I type for a classic Victorian London hotel room?",
+      a: "Try Victorian light, tall windows, mouldings, or classic London townhouse hotel. Visual search ranks rooms with that photography.",
+    },
+    {
+      q: "Does visual search work for luxury London hotels?",
+      a: "Yes. Westminster and Marylebone have strong luxury coverage. Describe palace bath, Thames view, or art-deco mood to see matching suites.",
+    },
+    {
+      q: "Do I need an account to search?",
+      a: "No account required during beta. Open a city, describe your room, and browse ranked results.",
+    },
+  ],
+  "travel-london-hotels": [
+    {
+      q: "How do I find hotels when traveling to London?",
+      a: `Start with neighborhood — Westminster, Covent Garden, South Kensington, Marylebone, or Shoreditch — then run TravelByVibe's vibe quiz or describe the room you want. We rank ${LONDON_COUNT} London hotels by real photography before you book elsewhere.`,
+    },
+    {
+      q: "What is the best area to stay when traveling to London?",
+      a: "First-time visitors often pick Westminster or Covent Garden for walkable icons and theatres. South Kensington suits museum trips; Marylebone for boutique calm.",
+    },
+    {
+      q: "Can I see hotel rooms before booking my London trip?",
+      a: "Yes — TravelByVibe is built for that. Search rainfall shower, bright suite, or design mood and browse indexed room and bathroom photos across the city.",
+    },
+  ],
 };
 
 const CITY_HUB = {
@@ -426,6 +521,20 @@ const CITY_HUB = {
     visualLabel: "Paris visual search",
     crossCity: { href: "/where-to-stay-in-mexico-city", label: "Where to stay in Mexico City" },
     footerLine: "photo-first hotel discovery for Paris travellers",
+  },
+  London: {
+    hotels: "/london-hotels",
+    hotelsLabel: "London hotels",
+    travelGuide: "/travel-london-hotels",
+    travelGuideLabel: "Travel London hotels",
+    where: "/where-to-stay-in-london",
+    whereLabel: "Where to stay in London",
+    finder: "/london-hotel-finder",
+    finderLabel: "London hotel finder",
+    visual: "/london-visual-search",
+    visualLabel: "London visual search",
+    crossCity: { href: "/where-to-stay-in-paris", label: "Where to stay in Paris" },
+    footerLine: "photo-first hotel discovery for London travellers",
   },
   "Mexico City": {
     hotels: "/mexico-city-hotels",
@@ -446,27 +555,67 @@ const CITY_HUB = {
 function hubLinks(city) {
   const c = CITY_HUB[city];
   if (!c) return "";
-  const guide =
-    city === "Paris"
-      ? `<a href="__ORIGIN__/best-area-to-stay-in-paris-first-time">Paris first-time guide</a>
+  const guideByCity = {
+    Paris: `<a href="__ORIGIN__/best-area-to-stay-in-paris-first-time">Paris first-time guide</a>
       <a href="__ORIGIN__/travel-paris-hotels">Travel Paris hotels</a>
       <a href="__ORIGIN__/safe-neighborhoods-paris">Best areas for tourists</a>
       <a href="__ORIGIN__/paris-walkable-hotels">Walkable Paris hotels</a>
       <a href="__ORIGIN__/paris-hotels-near-eiffel-tower">Hotels near Eiffel Tower</a>
-      <a href="__ORIGIN__/paris-cafe-vibe-hotels">Café culture hotels</a>`
-      : `<a href="__ORIGIN__/best-area-to-stay-in-mexico-city-first-time">Mexico City first-time guide</a>
+      <a href="__ORIGIN__/paris-cafe-vibe-hotels">Café culture hotels</a>`,
+    "Mexico City": `<a href="__ORIGIN__/best-area-to-stay-in-mexico-city-first-time">Mexico City first-time guide</a>
       <a href="__ORIGIN__/travel-mexico-city-hotels">Travel Mexico City hotels</a>
       <a href="__ORIGIN__/safe-neighborhoods-mexico-city">Safe neighborhoods CDMX</a>
-      <a href="__ORIGIN__/hotels-near-chapultepec">Hotels near Chapultepec</a>`;
+      <a href="__ORIGIN__/hotels-near-chapultepec">Hotels near Chapultepec</a>`,
+    London: `<a href="__ORIGIN__/best-area-to-stay-in-london-first-time">London first-time guide</a>
+      <a href="__ORIGIN__/travel-london-hotels">Travel London hotels</a>
+      <a href="__ORIGIN__/safe-neighborhoods-london">Best areas for tourists</a>
+      <a href="__ORIGIN__/london-walkable-hotels">Walkable London hotels</a>
+      <a href="__ORIGIN__/london-hotels-near-big-ben">Hotels near Big Ben</a>
+      <a href="__ORIGIN__/london-cafe-vibe-hotels">Café culture hotels</a>`,
+  };
+  const nbhdByCity = {
+    Paris: {
+      a: "le-marais",
+      aLabel: "Hotels in Le Marais",
+      b: "saint-germain",
+      bLabel: "Hotels in Saint-Germain",
+      cmp: "marais-vs-saint-germain",
+      cmpLabel: "Marais vs Saint-Germain",
+      vibe: "paris-boutique-hotels",
+      vibeLabel: "Paris boutique hotels",
+    },
+    "Mexico City": {
+      a: "condesa",
+      aLabel: "Hotels in Condesa",
+      b: "polanco",
+      bLabel: "Hotels in Polanco",
+      cmp: "condesa-vs-polanco",
+      cmpLabel: "Condesa vs Polanco",
+      vibe: "mexico-city-boutique-hotels",
+      vibeLabel: "Boutique hotels in Mexico City",
+    },
+    London: {
+      a: "westminster",
+      aLabel: "Hotels in Westminster",
+      b: "covent-garden",
+      bLabel: "Hotels in Covent Garden",
+      cmp: "westminster-vs-covent-garden",
+      cmpLabel: "Westminster vs Covent Garden",
+      vibe: "london-boutique-hotels",
+      vibeLabel: "London boutique hotels",
+    },
+  };
+  const n = nbhdByCity[city] || nbhdByCity.Paris;
+  const guide = guideByCity[city] || guideByCity.Paris;
   return `
     <nav class="hub-links" aria-label="${city} guides">
       <a href="__ORIGIN__${c.hotels}">${c.hotelsLabel}</a>
       <a href="__ORIGIN__${c.where}">${c.whereLabel}</a>
       ${guide}
-      <a href="__ORIGIN__/hotels-in-${city === "Paris" ? "le-marais" : "condesa"}">${city === "Paris" ? "Hotels in Le Marais" : "Hotels in Condesa"}</a>
-      <a href="__ORIGIN__/hotels-in-${city === "Paris" ? "saint-germain" : "polanco"}">${city === "Paris" ? "Hotels in Saint-Germain" : "Hotels in Polanco"}</a>
-      <a href="__ORIGIN__/${city === "Paris" ? "marais-vs-saint-germain" : "condesa-vs-polanco"}">${city === "Paris" ? "Marais vs Saint-Germain" : "Condesa vs Polanco"}</a>
-      <a href="__ORIGIN__/${city === "Paris" ? "paris-boutique-hotels" : "mexico-city-boutique-hotels"}">${city === "Paris" ? "Paris boutique hotels" : "Boutique hotels in Mexico City"}</a>
+      <a href="__ORIGIN__/hotels-in-${n.a}">${n.aLabel}</a>
+      <a href="__ORIGIN__/hotels-in-${n.b}">${n.bLabel}</a>
+      <a href="__ORIGIN__/${n.cmp}">${n.cmpLabel}</a>
+      <a href="__ORIGIN__/${n.vibe}">${n.vibeLabel}</a>
       <a href="__ORIGIN__${c.finder}">${c.finderLabel}</a>
     </nav>`;
 }
@@ -668,6 +817,7 @@ function footer(city, extraLinks) {
           <ul class="mfoot-links">
             <li><a href="__ORIGIN__/mexico-city-hotels">Mexico City hotels</a></li>
             <li><a href="__ORIGIN__/paris-hotels">Paris hotels</a></li>
+            <li><a href="__ORIGIN__/london-hotels">London hotels</a></li>
             <li><a href="__ORIGIN__/destinations">All destination guides</a></li>
           </ul>
         </div>

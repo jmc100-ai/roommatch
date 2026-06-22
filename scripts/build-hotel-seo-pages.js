@@ -32,6 +32,7 @@ function arg(name, def) {
 const LIMITS = {
   "Mexico City": Number(arg("mxLimit", arg("limit", "200"))) || 200,
   Paris: Number(arg("parisLimit", "200")) || 200,
+  London: Number(arg("londonLimit", "200")) || 200,
 };
 const ONLY_CITY = arg("city", "");
 
@@ -42,7 +43,12 @@ function stars(n) {
 }
 
 function header(city, campaign, slug) {
-  const isParis = city === "Paris";
+  const hub =
+    city === "Paris"
+      ? { hotels: "paris-hotels", short: "Paris" }
+      : city === "London"
+        ? { hotels: "london-hotels", short: "London" }
+        : { hotels: "mexico-city-hotels", short: "CDMX" };
   return `<header class="mhead">
     <div class="mhead-inner">
       <a class="mbrand" href="__ORIGIN__/">
@@ -50,9 +56,9 @@ function header(city, campaign, slug) {
         TravelByVibe
       </a>
       <nav class="mnav" aria-label="Marketing">
-        <a href="__ORIGIN__/${isParis ? "paris-hotels" : "mexico-city-hotels"}">${isParis ? "Paris hotels" : "CDMX hotels"}</a>
+        <a href="__ORIGIN__/${hub.hotels}">${hub.short} hotels</a>
         <a href="__ORIGIN__/destinations">Destinations</a>
-        <a class="mcta" href="${utmLink(city, campaign, slug + "-nav")}">Search ${isParis ? "Paris" : "CDMX"} →</a>
+        <a class="mcta" href="${utmLink(city, campaign, slug + "-nav")}">Search ${hub.short} →</a>
       </nav>
     </div>
   </header>`;
@@ -243,7 +249,7 @@ async function main() {
   generated.staysRoutes = [];
   generated.slugByHotelId = {};
 
-  const cities = ONLY_CITY ? [ONLY_CITY] : ["Mexico City", "Paris"];
+  const cities = ONLY_CITY ? [ONLY_CITY] : ["Mexico City", "Paris", "London"];
   const allManifest = { slugByHotelId: {}, hotels: [] };
 
   for (const city of cities) {

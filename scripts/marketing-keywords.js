@@ -2,6 +2,7 @@ const { searchableLabel } = require("./marketing-city-stats");
 
 const PARIS_COUNT = searchableLabel("Paris");
 const CDMX_COUNT = searchableLabel("Mexico City");
+const LONDON_COUNT = searchableLabel("London");
 
 /**
  * Per-page SEO copy: titles, descriptions, H1/H2 overrides.
@@ -9,8 +10,8 @@ const CDMX_COUNT = searchableLabel("Mexico City");
  */
 const SEO_META = {
   destinations: {
-    title: "Paris & Mexico City Hotel Guides — Search by Room Photos",
-    desc: "Hotel guides for Paris and Mexico City (CDMX): where to stay, neighborhood comparisons, and visual room search using real bathroom and suite photos. Free on TravelByVibe.",
+    title: "Paris, Mexico City & London Hotel Guides — Search by Room Photos",
+    desc: "Hotel guides for Paris, Mexico City (CDMX), and London: where to stay, neighborhood comparisons, and visual room search using real bathroom and suite photos. Free on TravelByVibe.",
   },
   "where-to-stay-in-paris": {
     title: "Where to Stay in Paris — Hotels by Neighborhood (2026)",
@@ -289,6 +290,191 @@ const SEO_META = {
     breadcrumbLabel: "Best area for first-time visitors",
     h2Featured: "Best Mexico City neighborhoods for first-time visitors",
     h2Hotels: "Best Mexico City hotels for first-time visitors",
+  },
+  // ── London hub pages ───────────────────────────────────────────────────────
+  "where-to-stay-in-london": {
+    title: "Where to Stay in London — Hotels by Neighborhood (2026)",
+    h1: "Where to Stay in London — Hotels by Neighborhood",
+    desc: "Where to stay in London: compare Westminster, Covent Garden, South Kensington, Marylebone, and Shoreditch. Match hotels by neighborhood vibe and real room photos.",
+    h2Featured: "Best London neighborhoods for hotels",
+    h2Hotels: "Best London hotels by neighborhood",
+  },
+  "london-hotels": {
+    title: "London Hotels — Search by Real Room Photos",
+    h1: "Best Hotels in London",
+    desc: `Best hotels in London: browse ${LONDON_COUNT} properties with real room and bathroom photos — Victorian light, rainfall shower, Thames views — free on TravelByVibe.`,
+    h2Travel: "Best London hotels by neighborhood",
+  },
+  "travel-london-hotels": {
+    title: "Travel London Hotels — Plan Your Stay by Vibe",
+    h1: "Travel London Hotels",
+    desc: `Travel London hotels the smart way — pick Westminster, Covent Garden, or South Kensington, run the vibe quiz, then search ${LONDON_COUNT} London hotels by real room photos before you book.`,
+    breadcrumbLabel: "Travel London hotels",
+    h2Featured: "How to plan travel to London hotels",
+    h2Hotels: "Best London hotels for travellers",
+    h2Neighborhoods: "Travel London hotels by neighborhood",
+  },
+  "safe-neighborhoods-london": {
+    title: "Best Areas to Stay in London for Tourists — Hotels by Neighborhood",
+    h1: "Best Areas to Stay in London for Tourists",
+    desc: "Where to stay in London: Westminster, Covent Garden, South Kensington, and Marylebone are popular visitor districts. Compare areas, then match hotels by real room photos.",
+    breadcrumbLabel: "Best areas for tourists",
+    h2Featured: "Best London neighborhoods for visitors",
+    h2Hotels: "Best hotels in visitor-friendly London neighborhoods",
+  },
+  "london-walkable-hotels": {
+    title: "Best Walkable Hotels in London — Westminster, Covent Garden & South Bank",
+    h1: "Best Walkable Hotels in London",
+    desc: "Walkable London hotels in Westminster, Covent Garden, and South Kensington — central districts where museums and pubs are on foot. Search real room photos.",
+    h2Intro: "Best walkable London hotel neighborhoods",
+    h2Featured: "Walkable London hotel picks",
+  },
+  "london-cafe-vibe-hotels": {
+    title: "Best Café Culture Hotels in London (Marylebone & Notting Hill)",
+    h1: "Best Café Culture Hotels in London",
+    desc: "Hotels near London café culture — Marylebone High Street mornings, Notting Hill market weekends, and Soho wine bars. Search real room photos by vibe.",
+    h2Intro: "Best café-culture hotels in London",
+    h2Featured: "London hotels near great cafés",
+  },
+  "london-neighborhood-stays": {
+    title: "London Hotels by Neighborhood — Where to Stay",
+    h1: "London Hotels by Neighborhood",
+    desc: "Pick a London district that fits your trip — Westminster, Covent Garden, South Kensington, Shoreditch, or Notting Hill — then find hotels with real room photos.",
+  },
+  "london-neighborhood-guide": {
+    title: "London Neighborhood Guide — Hotels & Where to Stay",
+    h1: "London Neighborhood Guide — Hotels by Area",
+    desc: "London neighborhood guide: Westminster, Covent Garden, South Kensington, Marylebone, Shoreditch, and Notting Hill — hotel picks and vibe search.",
+    h2Hotels: "Best London hotels by neighborhood",
+  },
+  "london-hotel-finder": {
+    title: "London Hotel Finder — Where to Stay by Vibe",
+    desc: "Where should you stay in London? Compare Westminster, Covent Garden, South Kensington, and more — then search hotels with real room photos.",
+  },
+  "london-visual-search": {
+    title: "London Hotels — Search by Rainfall Shower & Room Photos",
+    h1: "Search London Hotels by Room & Bathroom Photos",
+    desc: "Search London hotels by describing your ideal room — rainfall shower, Victorian windows, Thames view — matched to real hotel photography.",
+    h2Featured: "London hotel rooms that match your description",
+  },
+  "london-boutique-hotels": {
+    title: "Best Boutique Hotels in London",
+    desc: "Best boutique hotels in London — Georgian townhouses and design-forward small hotels in Marylebone, Covent Garden, and Notting Hill. Search real room photos on TravelByVibe.",
+    h2Intro: "Best boutique hotels in London by neighborhood",
+    h2Featured: "Boutique hotel picks in Westminster, Covent Garden & Marylebone",
+  },
+  "london-luxury-hotels": {
+    title: "Best Luxury Hotels in London",
+    desc: "Best luxury hotels in London — Mayfair flagships, South Kensington classics, and suites with real marble baths. Browse indexed room photography before you book.",
+    h2Intro: "Best luxury hotels in London — Westminster, Marylebone & South Kensington",
+    h2Featured: "Luxury London hotels to start with",
+  },
+  "london-romantic-hotels": {
+    title: "Best Romantic Hotels in London with Soaking Tub",
+    h1: "Best Romantic Hotels in London",
+    desc: "Romantic London hotels with soaking tubs, moody lighting, and Notting Hill views — search real room photos before you book.",
+    h2Intro: "Best romantic hotels in London for couples",
+    h2Featured: "Romantic London hotel picks",
+  },
+  "london-classic-hotels": {
+    title: "Best Victorian & Classic Hotels in London",
+    h1: "Best Classic & Victorian Hotels in London",
+    desc: "Victorian townhouse hotels in London — tall windows, mouldings, and pale morning light. Search real room photography on TravelByVibe.",
+    h2Intro: "Best Victorian and classic London hotels",
+    h2Featured: "Classic London hotel stays",
+  },
+  "hotels-in-westminster": {
+    title: "Best Hotels in Westminster London",
+    desc: "Best hotels in Westminster, London — Big Ben, Westminster Abbey, and St James's Park on your doorstep. See real room and bathroom photos before you book.",
+    h2Featured: "Best hotels in Westminster London",
+    heroAlt: "Westminster London Big Ben and Parliament",
+  },
+  "hotels-in-covent-garden": {
+    title: "Best Hotels in Covent Garden London",
+    desc: "Best hotels in Covent Garden, London — West End theatre, street performers, and buzzy pedestrian streets. Real room photos on TravelByVibe.",
+    h2Featured: "Best hotels in Covent Garden London",
+    heroAlt: "Covent Garden London market and theatre district",
+  },
+  "hotels-in-south-kensington": {
+    title: "Best Hotels in South Kensington London",
+    desc: "Best hotels in South Kensington, London — V&A, Natural History Museum, and refined Victorian streets near Hyde Park.",
+    h2Featured: "Best hotels in South Kensington London",
+    heroAlt: "South Kensington London museum quarter",
+  },
+  "hotels-in-marylebone": {
+    title: "Best Hotels in Marylebone London",
+    desc: "Best hotels in Marylebone, London — boutique charm on Marylebone High Street, leafy squares, minutes from Oxford Street.",
+    h2Featured: "Best hotels in Marylebone London",
+    heroAlt: "Marylebone High Street London",
+  },
+  "hotels-in-shoreditch": {
+    title: "Best Hotels in Shoreditch London",
+    desc: "Best hotels in Shoreditch, London — street art, rooftop bars, and East London warehouse conversions. Browse real suite photos.",
+    h2Featured: "Best hotels in Shoreditch London",
+    heroAlt: "Shoreditch London street art district",
+  },
+  "hotels-in-notting-hill": {
+    title: "Best Hotels in Notting Hill London",
+    desc: "Best hotels in Notting Hill, London — Portobello Road, pastel townhouses, and village feel in west London.",
+    h2Featured: "Best hotels in Notting Hill London",
+    heroAlt: "Notting Hill London Portobello Road",
+  },
+  "westminster-vs-covent-garden": {
+    title: "Westminster vs Covent Garden: Where to Stay in London",
+    desc: "Westminster vs Covent Garden — royal icons or West End buzz? Compare London neighborhoods, then find hotels by real photos.",
+  },
+  "south-kensington-vs-marylebone": {
+    title: "South Kensington vs Marylebone: Where to Stay in London",
+    desc: "South Kensington vs Marylebone — museum mornings or village boutiques? Compare London neighborhoods and hotel vibes.",
+  },
+  "shoreditch-vs-westminster": {
+    title: "Shoreditch vs Westminster: Where to Stay in London",
+    desc: "Shoreditch vs Westminster — East London edge or postcard icons? Compare London hotel neighborhoods.",
+  },
+  "best-area-to-stay-in-london-first-time": {
+    title: "Best Area to Stay in London for First-Time Visitors — Hotels",
+    h1: "Best Area to Stay in London for First-Time Visitors",
+    desc: "First trip to London? Compare Westminster, Covent Garden, and South Kensington for walkable museums, pubs, and hotels — then see real room photos.",
+    breadcrumbLabel: "Best area for first-time visitors",
+    h2Featured: "Best London neighborhoods for first-time visitors",
+    h2Hotels: "Best London hotels for first-time visitors",
+  },
+  "london-hotels-near-big-ben": {
+    title: "London Hotels Near Big Ben — See Real Rooms",
+    h1: "London Hotels Near Big Ben & Westminster",
+    desc: "Hotels near Big Ben and Westminster Abbey in London — river walks, royal London, and indexed room photos you can verify before booking.",
+    breadcrumbLabel: "Hotels near Big Ben",
+    h2Featured: "Best areas near Westminster and Big Ben",
+  },
+  "london-hotels-with-rainfall-shower": {
+    title: "Best London Hotels with Rainfall Shower",
+    h1: "Best London Hotels with Rainfall Shower",
+    desc: "Search London hotels whose indexed bathroom photos show rainfall showers — boutique and luxury picks across Westminster, Marylebone, and South Kensington.",
+    h2Featured: "London hotels with rainfall shower bathrooms",
+  },
+  "london-hotels-with-balcony": {
+    title: "Best London Hotels with a Balcony",
+    h1: "Best London Hotels with a Balcony",
+    desc: "Terrace mornings and Thames glimpses — London hotels with balcony room photos you can verify before you book.",
+    h2Featured: "London hotels with balcony rooms",
+  },
+  "london-hotels-for-couples": {
+    title: "Best Romantic Hotels in London for Couples",
+    h1: "Best London Hotels for Couples",
+    desc: "Romantic London hotels with soaking tubs, moody suites, and Notting Hill views — matched to real room photography.",
+    h2Featured: "Romantic London hotel picks for couples",
+  },
+  "london-quiet-hotels": {
+    title: "Best Quiet Hotels in London",
+    h1: "Best Quiet Hotels in London",
+    desc: "Marylebone calm, South Kensington hush, and cozy room moods — for travellers who want rest after busy London days.",
+    h2Featured: "Quiet London hotel neighborhoods",
+  },
+  "london-design-hotels": {
+    title: "Best Design Hotels in London",
+    h1: "Best Design Hotels in London",
+    desc: "Sleek Shoreditch conversions, polished Marylebone boutiques, and design-forward rooms — ranked by real photos, not lobby renders.",
+    h2Featured: "Design-forward London hotel picks",
   },
 };
 

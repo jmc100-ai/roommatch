@@ -27,6 +27,16 @@ const EXISTING_PATHS = new Set(MARKETING_ROUTES.map((r) => r.path));
 /** Hand-built Paris slugs — skip DB pages that overlap these. */
 const PARIS_HAND_BUILT = new Set(["le-marais", "saint-germain", "montmartre", "latin-quarter", "opera"]);
 
+/** Hand-built London slugs — skip DB pages that overlap these. */
+const LONDON_HAND_BUILT = new Set([
+  "westminster",
+  "covent-garden",
+  "south-kensington",
+  "marylebone",
+  "shoreditch",
+  "notting-hill",
+]);
+
 const SKIP_NBHD_SLUGS = new Set([
   "saint-germain-des-pres",
   "opera-grands-boulevards",
@@ -37,6 +47,14 @@ const IMG = {
   Paris: "https://upload.wikimedia.org/wikipedia/commons/thumb/8/85/Tour_Eiffel_Wikimedia_Commons_%28cropped%29.jpg/1280px-Tour_Eiffel_Wikimedia_Commons_%28cropped%29.jpg",
   "Mexico City":
     "https://upload.wikimedia.org/wikipedia/commons/thumb/4/4f/Mexico_City_Skyline_%285604867225%29.jpg/1280px-Mexico_City_Skyline_%285604867225%29.jpg",
+  London:
+    "https://upload.wikimedia.org/wikipedia/commons/thumb/b/b1/Big_Ben%2C_London%2C_UK_-_Dawn_-_November_2008_-_Cut.jpg/1280px-Big_Ben%2C_London%2C_UK_-_Dawn_-_November_2008_-_Cut.jpg",
+};
+
+const CITY_HUB_PATH = {
+  Paris: { hotels: "paris-hotels", where: "where-to-stay-in-paris", short: "Paris" },
+  "Mexico City": { hotels: "mexico-city-hotels", where: "where-to-stay-in-mexico-city", short: "CDMX" },
+  London: { hotels: "london-hotels", where: "where-to-stay-in-london", short: "London" },
 };
 
 function normalizeName(name) {
@@ -61,11 +79,18 @@ function shouldSkipNeighborhood(name) {
       if (EXISTING_PATHS.has(`/hotels-in-${hs}`)) return true;
     }
   }
+  for (const hs of LONDON_HAND_BUILT) {
+    const hsNorm = hs.replace(/-/g, " ");
+    if (norm.includes(hsNorm) || slug.startsWith(hs + "-") || slug === hs) {
+      if (EXISTING_PATHS.has(`/hotels-in-${hs}`)) return true;
+    }
+  }
   return false;
 }
 
 function buildMetaDesc(nbhd, city, h1) {
-  const cityLabel = city === "Paris" ? "Paris" : "Mexico City (CDMX)";
+  const cityLabel =
+    city === "Paris" ? "Paris" : city === "London" ? "London" : "Mexico City (CDMX)";
   const long = (nbhd.vibe_long || "").replace(/\s+/g, " ").trim();
   const short = (nbhd.vibe_short || "").trim();
   const tags = Array.isArray(nbhd.tags) ? nbhd.tags.slice(0, 3).join(", ") : "";
@@ -79,7 +104,7 @@ function buildMetaDesc(nbhd, city, h1) {
 }
 
 function header(city, campaign, slug) {
-  const isParis = city === "Paris";
+  const hub = CITY_HUB_PATH[city] || CITY_HUB_PATH.Paris;
   return `<header class="mhead">
     <div class="mhead-inner">
       <a class="mbrand" href="__ORIGIN__/">
@@ -87,8 +112,8 @@ function header(city, campaign, slug) {
         TravelByVibe
       </a>
       <nav class="mnav" aria-label="Marketing">
-        <a href="__ORIGIN__/${isParis ? "paris-hotels" : "mexico-city-hotels"}">${isParis ? "Paris hotels" : "CDMX hotels"}</a>
-        <a href="__ORIGIN__/${isParis ? "where-to-stay-in-paris" : "where-to-stay-in-mexico-city"}">Where to stay</a>
+        <a href="__ORIGIN__/${hub.hotels}">${hub.short} hotels</a>
+        <a href="__ORIGIN__/${hub.where}">Where to stay</a>
         <a href="__ORIGIN__/destinations">Destinations</a>
         <a class="mcta" href="${utmLink(city, campaign, slug + "-nav")}">Try search →</a>
       </nav>
@@ -218,7 +243,7 @@ async function main() {
   const { data: neighborhoods, error } = await db
     .from("neighborhoods")
     .select("name, city, vibe_short, vibe_long, tags, photo_url, bbox, attributes, hotel_count")
-    .in("city", ["Mexico City", "Paris"])
+    .in("city", ["Mexico City", "Paris", "London"])
     .order("hotel_count", { ascending: false });
   if (error) throw error;
 
@@ -237,8 +262,11 @@ async function main() {
     const pathKey = `/${fileSlug}`;
     activePaths.add(pathKey);
 
-    const campaign = nbhd.city === "Paris" ? "paris_seo_2026" : "cdmx_seo_2026";
-    const h1 = `Best Hotels in ${nbhd.name}, ${nbhd.city === "Paris" ? "Paris" : "Mexico City"}`;
+    const campaign =
+      nbhd.city === "Paris" ? "paris_seo_2026" : nbhd.city === "London" ? "london_seo_2026" : "cdmx_seo_2026";
+    const cityLabel =
+      nbhd.city === "Paris" ? "Paris" : nbhd.city === "London" ? "London" : "Mexico City";
+    const h1 = `Best Hotels in ${nbhd.name}, ${cityLabel}`;
     const hotelIds = await hotelsInBbox(db, nbhd.city, nbhd.bbox, 9);
     const meta = await fetchLiteMetaBatch(hotelIds);
     const photosByHotel = {};

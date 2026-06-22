@@ -14,9 +14,12 @@ function run(cmd) {
 
 run("node scripts/marketing-city-stats.js");
 run("node scripts/refresh-paris-marketing-hotels.js");
+run("node scripts/refresh-london-marketing-hotels.js");
 run("node scripts/build-paris-marketing-pages.js");
+run("node scripts/build-london-marketing-pages.js");
 run("node scripts/build-mexico-marketing-pages.js");
 run("node scripts/build-spoke-seo-pages.js");
+run("node scripts/build-london-spoke-seo-pages.js");
 run("node scripts/build-hotel-seo-pages.js");
 run("node scripts/build-vibe-marketing-pages.js");
 run("node scripts/build-neighborhood-marketing-pages.js");

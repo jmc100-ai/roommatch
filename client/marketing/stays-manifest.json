@@ -399,7 +399,207 @@
     "lp2d774": "hotel-de-la-place-du-louvre-paris",
     "lp33a96": "grand-hotel-lafayette-paris",
     "lp1aa77": "renaissance-paris-nobel-tour-eiffel-hotel-paris",
-    "lp3c54c": "mercure-paris-alesia-paris"
+    "lp3c54c": "mercure-paris-alesia-paris",
+    "lp36a51": "the-soho-hotel-firmdale-hotels-london",
+    "lp2c14a": "the-cadogan-a-belmond-hotel-london-london",
+    "lp2c662": "the-lanesborough-oetker-hotels-london",
+    "lp19e32": "jumeirah-carlton-tower-london-london",
+    "lp1c17a": "four-seasons-hotel-london-at-park-lane-london",
+    "lp2f30c": "taj-51-buckingham-gate-suites-and-residences-london",
+    "lp2b2b8": "the-stafford-london-london",
+    "lp19e0b": "royal-lancaster-london-london",
+    "lp2289a": "one-aldwych-london",
+    "lp24f5c": "como-the-halkin-london",
+    "lp2a32c": "claridge-s-maybourne-london",
+    "lp2a32e": "the-connaught-maybourne-london",
+    "lp1a3581": "imperial-xiii-london",
+    "lp1f78e5": "maida-vale-apartment-with-private-terrace-london",
+    "lp22f5ce": "the-london-agent-fulham-pied-a-terre-london",
+    "lp39226b": "english-garden-apartment-london",
+    "lp1bea4": "the-montague-on-the-gardens-london",
+    "lp214a59": "the-standard-london-london",
+    "lp2a32f": "the-savoy-london",
+    "lp2ca11": "the-kensington-hotel-london",
+    "lp39590": "london-marriott-hotel-county-hall-london",
+    "lp420f8": "dukes-london-london",
+    "lp1f858": "the-milestone-hotel-london",
+    "lp30cd0": "sofitel-london-st-james-london",
+    "lp29cad": "brown-s-hotel-a-rocco-forte-hotel-london",
+    "lp3e139": "haymarket-hotel-firmdale-hotels-london",
+    "lp236e7": "the-ritz-london-london",
+    "lp2286f": "the-landmark-london-london",
+    "lp282f9": "charlotte-street-hotel-firmdale-hotels-london",
+    "lp1c019d": "beaufort-house-knightsbridge-london",
+    "lp1f940": "the-london-edition-london",
+    "lp19c1d": "the-chesterfield-mayfair-london",
+    "lp1a8e1": "mandarin-oriental-hyde-park-london-london",
+    "lp34a047": "the-glasshouse-apartments-london",
+    "lp2f448": "kimpton-fitzroy-london-by-ihg-london",
+    "lp2847d": "rosewood-london-london",
+    "lp1be03": "rubens-at-the-palace-london",
+    "lp2a91b": "the-goring-london",
+    "lp19c1a": "60-hyde-park-gate-hotel-by-accor-london",
+    "lp27581": "roseate-house-london-london",
+    "lp19f05": "intercontinental-london-park-lane-by-ihg-london",
+    "lp1e9bc": "the-langham-london-london",
+    "lp35552": "hyatt-regency-london-blackfriars-london",
+    "lp31b8d": "hampton-by-hilton-london-city-london",
+    "lp20554": "hyatt-regency-london-the-churchill-london",
+    "lp192e47": "vintry-and-mercer-hotel-small-luxury-hotels-of-t-london",
+    "lp1be07": "the-mayfair-townhouse-an-iconic-luxury-hotel-london",
+    "lp2b675": "holmes-hotel-london-london",
+    "lp1007cf": "great-mayfair-apartment-sleeps-6-london",
+    "lp1a8ff4": "d-arblay-street-london",
+    "lp1ad1d7": "bright-comfy-2-bed-in-trendy-dalston-london",
+    "lp1c078f": "luxury-holborn-1-bedroom-flats-london",
+    "lp1c9c81": "chelsea-residential-atmosphere-london",
+    "lp1ca018": "allegra-house-london",
+    "lp2091e0": "iverna-gardens-by-lime-street-london",
+    "lp20980d": "luxury-penthouse-camden-town-london",
+    "lp209908": "modern-stylish-and-luxurious-1-bed-flat-london",
+    "lp32361f": "amazing-apart-city-airport-and-excel-1-london",
+    "lp323f7c": "bloomsbury-apartments-by-allo-housing-london",
+    "lp39129b": "quiet-historic-mews-hyde-park-london",
+    "lp22a087": "great-scotland-yard-hotel-part-of-hyatt-london",
+    "lp1d73f": "the-marylebone-hotel-london",
+    "lp1a23a": "1-hotel-mayfair-london",
+    "lp2e920": "the-bloomsbury-hotel-london",
+    "lp1f76a1": "md-luxury-apartment-london",
+    "lp19f23": "the-biltmore-mayfair-london",
+    "lp1dc4e": "47-park-street-grand-residences-by-marriott-london",
+    "lp1dc6d": "the-caesar-hotel-london",
+    "lp2c997": "dorset-square-hotel-firmdale-hotels-london",
+    "lp33bd4": "riu-plaza-london-the-westminster-london",
+    "lp18e025": "the-resident-covent-garden-london",
+    "lp282fc": "the-capital-hotel-apartments-and-townhouse-small-london",
+    "lp3fb10": "cheval-harrington-court-at-south-kensington-london",
+    "lp2fa49": "the-trafalgar-st-james-london-curio-collection-b-london",
+    "lp38449": "the-hari-london-london",
+    "lp2152d": "the-chelsea-harbour-hotel-and-spa-london-london",
+    "lp1c8a7": "montcalm-piccadilly-townhouse-london-west-end-london",
+    "lp2a0d6": "st-martins-lane-london-london",
+    "lp2a166": "canary-riverside-plaza-hotel-london",
+    "lp2ac3d": "the-athenaeum-hotel-and-residences-london",
+    "lp19e07": "royal-garden-hotel-london",
+    "lp1f890": "the-clermont-london-victoria-london",
+    "lp24f6f": "como-metropolitan-london-london",
+    "lp350f69": "carlton-court-mayfair-london",
+    "lp2f6af": "miiro-templeton-garden-london",
+    "lp29945": "hilton-london-metropole-london",
+    "lp4004d": "sanctum-london-maida-vale-london",
+    "lp441a8": "11-cadogan-gardens-and-the-apartments-london",
+    "lp19a253": "templeton-place-by-supercity-aparthotels-london",
+    "lp19a355": "the-chronicle-by-supercity-aparthotels-london",
+    "lp1cb71": "the-dilly-london",
+    "lp1df1a": "radisson-blu-hotel-london-leicester-square-london",
+    "lp25748": "nyx-hotel-london-holborn-by-leonardo-hotels-london",
+    "lp2a261": "sanderson-london-london",
+    "lp2a32d": "the-berkeley-maybourne-london",
+    "lp2b67b": "althoff-st-james-s-hotel-and-club-london-london",
+    "lp3197e": "london-marriott-hotel-park-lane-london",
+    "lp234ce4": "citadines-islington-london-london",
+    "lp1ff72": "the-pelham-london-starhotels-collezione-london",
+    "lp2952e": "andaz-london-liverpool-street-by-hyatt-london",
+    "lp1df1b": "radisson-blu-hotel-london-mercer-street-london",
+    "lp1c715b": "sonder-the-arts-council-london",
+    "lp41a14": "mama-shelter-london-shoreditch-london",
+    "lp1d45f": "the-exhibitionist-hotel-london",
+    "lp1bf51": "jw-marriott-grosvenor-house-london-london",
+    "lp276d72": "nell-gwynn-chelsea-accommodation-london",
+    "lp2cd9b7": "page8-page-hotels-london",
+    "lp1cb92": "middle-eight-covent-garden-london",
+    "lp1b8a7a": "the-museum-penthouse-london",
+    "lp1f65f5": "nhow-london-london",
+    "lp2efb0": "club-quarters-hotel-st-paul-s-london-london",
+    "lp214f3e": "westow-house-london",
+    "lp3f160": "park-plaza-county-hall-london-london",
+    "lp209513": "lovely-studio-apartments-thamesmead-london",
+    "lp2ad20": "st-ermin-s-hotel-autograph-collection-london",
+    "lp1b9f6": "london-hilton-on-park-lane-london",
+    "lp3944f": "hilton-london-canary-wharf-london",
+    "lp358dd": "marriott-executive-apartments-london-canary-whar-london",
+    "lp26fd09": "the-carlyle-elegant-serviced-apartments-london",
+    "lp307d9": "threadneedles-autograph-collection-london",
+    "lp3083e": "hazlitt-s-london",
+    "lp18b302": "super-central-london-sleeps-4-london",
+    "lp1ce628": "modern-family-home-close-to-victoria-station-london",
+    "lp1d9984": "cj8-medium-studio-london",
+    "lp1e4124": "luxury-2-bed-flat-parking-and-close-to-the-tube-london",
+    "lp1f1875": "charming-2-bedroom-home-3-near-arsenal-station-london",
+    "lp2261c6": "spacious-apartment-berwick-st-and-oxford-st-london",
+    "lp22f49c": "cosy-apartment-in-islington-c-london",
+    "lp1c522": "flemings-mayfair-small-luxury-hotel-of-the-world-london",
+    "lp2a74a": "the-rookery-hotel-london",
+    "lp1c34b": "the-resident-kensington-london",
+    "lp26aa62": "hart-shoreditch-hotel-london-curio-collection-by-london",
+    "lp1e139": "the-lowndes-london-a-jumeirah-partner-hotel-london",
+    "lp19c25": "100-queen-s-gate-hotel-london-kensington-curio-c-london",
+    "lp22f1a8": "queensway-1-london",
+    "lp20e425": "the-hoxton-southwark-london",
+    "lp31744": "the-windermere-hotel-london-london",
+    "lp3c551": "hilton-london-tower-bridge-london",
+    "lp1bee9": "strand-palace-london",
+    "lp2a0b7": "park-grand-paddington-court-london",
+    "lp19a10e": "the-rosebery-by-supercity-aparthotels-london",
+    "lp387f7": "apex-city-of-london-hotel-london",
+    "lp1c192": "sheraton-grand-london-park-lane-london",
+    "lp3394a": "collingham-serviced-apartments-london",
+    "lp1be1b": "the-welbeck-hotel-by-ihg-london",
+    "lp1c794": "the-lodge-hotel-putney-london",
+    "lp1e3c5": "melia-london-kensington-a-melia-collection-hotel-london",
+    "lp1fe50": "nobu-hotel-london-portman-square-london",
+    "lp35cf8": "one-hundred-shoreditch-london",
+    "lp27eb8": "club-quarters-hotel-london-city-london-london",
+    "lp19c23": "the-marble-arch-hotel-by-thistle-london",
+    "lp1be14": "the-mandeville-hotel-london",
+    "lp22420": "park-avenue-bayswater-inn-hyde-park-london",
+    "lp1bf50": "the-cavendish-london-london",
+    "lp2cb70": "doubletree-by-hilton-london-angel-kings-cross-london",
+    "lp1baa8": "the-royal-horseguards-hotel-london-london",
+    "lp2c566": "the-cura-hotel-kensington-london-a-tribute-portf-london",
+    "lp1abbf4": "blackbird-london",
+    "lp34aec": "holiday-inn-london-camden-lock-by-ihg-london",
+    "lp1b845": "st-james-court-a-taj-hotel-london-london",
+    "lp10266f": "cleveland-residences-russell-square-london",
+    "lp1d972b": "sloane-place-london",
+    "lp2d019": "the-portobello-hotel-london",
+    "lp1b5176": "cavendish-by-sojourn-london",
+    "lp29cd4": "pullman-london-st-pancras-london",
+    "lp44172": "bentley-london-london",
+    "lp27ed1": "hotel-indigo-london-hyde-park-paddington-by-ihg-london",
+    "lp3c218": "clayton-hotel-chiswick-london",
+    "lp40bfe": "montcalm-mayfair-autograph-collection-london",
+    "lp390f79": "ruby-lucy-hotel-london-by-ihg-london",
+    "lp37b67": "park-plaza-london-riverbank-london",
+    "lp2276e": "the-park-tower-knightsbridge-a-luxury-collection-london",
+    "lp1035e3": "the-stratford-autograph-collection-london",
+    "lp2226b": "the-prime-london-hotel-london",
+    "lp319d1": "the-westbourne-hyde-park-london",
+    "lp1e894": "oliver-plaza-london",
+    "lp1b282d": "roomspace-apartments-sterling-house-london",
+    "lp267aaf": "stylish-light-filled-1-bedroom-flat-in-hammersmi-london",
+    "lp2706cd": "harlinger-lodge-annexe-london",
+    "lp19f47": "london-marriott-hotel-grosvenor-square-london",
+    "lp24b61": "the-bailey-s-hotel-london-kensington-london",
+    "lp1a252": "doubletree-by-hilton-london-kensington-london",
+    "lp2c0ab": "club-quarters-hotel-trafalgar-square-london-london",
+    "lp102d75": "the-bridge-in-barnes-london",
+    "lp19020c": "chapel-market-serviced-apartments-by-concept-apa-london",
+    "lp19ec4": "the-may-fair-a-radisson-collection-hotel-mayfair-london",
+    "lp339fc": "treehouse-hotel-london-london",
+    "lp4346c": "leonardo-royal-london-st-paul-s-london",
+    "lp34886": "the-chamberlain-london",
+    "lp2eb7b": "leonardo-royal-hotel-london-city-tower-of-london-london",
+    "lp35be8": "holiday-inn-london-west-by-ihg-london",
+    "lp219df4": "the-gyle-kings-cross-st-pancras-london-london",
+    "lp1bee8": "the-cumberland-london-london",
+    "lp32bbd": "novotel-london-bridge-london",
+    "lp37008": "the-clermont-london-charing-cross-london",
+    "lp21aba": "the-belgrave-hotel-london",
+    "lp39892": "london-heathrow-marriott-hotel-london",
+    "lp2acde": "novotel-london-tower-bridge-london",
+    "lp1db46": "ten-manchester-street-london",
+    "lp30c34": "eccleston-square-hotel-london"
   },
   "hotels": [
     {
@@ -3201,6 +3401,1406 @@
       "city": "Paris",
       "name": "Mercure Paris Alesia",
       "path": "/stays/mercure-paris-alesia-paris"
+    },
+    {
+      "hotelId": "lp36a51",
+      "slug": "the-soho-hotel-firmdale-hotels-london",
+      "city": "London",
+      "name": "The Soho Hotel, Firmdale Hotels",
+      "path": "/stays/the-soho-hotel-firmdale-hotels-london"
+    },
+    {
+      "hotelId": "lp2c14a",
+      "slug": "the-cadogan-a-belmond-hotel-london-london",
+      "city": "London",
+      "name": "The Cadogan, A Belmond Hotel, London",
+      "path": "/stays/the-cadogan-a-belmond-hotel-london-london"
+    },
+    {
+      "hotelId": "lp2c662",
+      "slug": "the-lanesborough-oetker-hotels-london",
+      "city": "London",
+      "name": "The Lanesborough, Oetker Hotels",
+      "path": "/stays/the-lanesborough-oetker-hotels-london"
+    },
+    {
+      "hotelId": "lp19e32",
+      "slug": "jumeirah-carlton-tower-london-london",
+      "city": "London",
+      "name": "Jumeirah Carlton Tower London",
+      "path": "/stays/jumeirah-carlton-tower-london-london"
+    },
+    {
+      "hotelId": "lp1c17a",
+      "slug": "four-seasons-hotel-london-at-park-lane-london",
+      "city": "London",
+      "name": "Four Seasons Hotel London at Park Lane",
+      "path": "/stays/four-seasons-hotel-london-at-park-lane-london"
+    },
+    {
+      "hotelId": "lp2f30c",
+      "slug": "taj-51-buckingham-gate-suites-and-residences-london",
+      "city": "London",
+      "name": "Taj 51 Buckingham Gate Suites and Residences",
+      "path": "/stays/taj-51-buckingham-gate-suites-and-residences-london"
+    },
+    {
+      "hotelId": "lp2b2b8",
+      "slug": "the-stafford-london-london",
+      "city": "London",
+      "name": "The Stafford London",
+      "path": "/stays/the-stafford-london-london"
+    },
+    {
+      "hotelId": "lp19e0b",
+      "slug": "royal-lancaster-london-london",
+      "city": "London",
+      "name": "Royal Lancaster London",
+      "path": "/stays/royal-lancaster-london-london"
+    },
+    {
+      "hotelId": "lp2289a",
+      "slug": "one-aldwych-london",
+      "city": "London",
+      "name": "One Aldwych",
+      "path": "/stays/one-aldwych-london"
+    },
+    {
+      "hotelId": "lp24f5c",
+      "slug": "como-the-halkin-london",
+      "city": "London",
+      "name": "COMO The Halkin",
+      "path": "/stays/como-the-halkin-london"
+    },
+    {
+      "hotelId": "lp2a32c",
+      "slug": "claridge-s-maybourne-london",
+      "city": "London",
+      "name": "Claridge's, Maybourne",
+      "path": "/stays/claridge-s-maybourne-london"
+    },
+    {
+      "hotelId": "lp2a32e",
+      "slug": "the-connaught-maybourne-london",
+      "city": "London",
+      "name": "The Connaught, Maybourne",
+      "path": "/stays/the-connaught-maybourne-london"
+    },
+    {
+      "hotelId": "lp1a3581",
+      "slug": "imperial-xiii-london",
+      "city": "London",
+      "name": "Imperial XIII",
+      "path": "/stays/imperial-xiii-london"
+    },
+    {
+      "hotelId": "lp1f78e5",
+      "slug": "maida-vale-apartment-with-private-terrace-london",
+      "city": "London",
+      "name": "Maida Vale, apartment with private terrace",
+      "path": "/stays/maida-vale-apartment-with-private-terrace-london"
+    },
+    {
+      "hotelId": "lp22f5ce",
+      "slug": "the-london-agent-fulham-pied-a-terre-london",
+      "city": "London",
+      "name": "The London Agent Fulham Pied-a-Terre",
+      "path": "/stays/the-london-agent-fulham-pied-a-terre-london"
+    },
+    {
+      "hotelId": "lp39226b",
+      "slug": "english-garden-apartment-london",
+      "city": "London",
+      "name": "English Garden Apartment",
+      "path": "/stays/english-garden-apartment-london"
+    },
+    {
+      "hotelId": "lp1bea4",
+      "slug": "the-montague-on-the-gardens-london",
+      "city": "London",
+      "name": "The Montague On The Gardens",
+      "path": "/stays/the-montague-on-the-gardens-london"
+    },
+    {
+      "hotelId": "lp214a59",
+      "slug": "the-standard-london-london",
+      "city": "London",
+      "name": "The Standard London",
+      "path": "/stays/the-standard-london-london"
+    },
+    {
+      "hotelId": "lp2a32f",
+      "slug": "the-savoy-london",
+      "city": "London",
+      "name": "The Savoy",
+      "path": "/stays/the-savoy-london"
+    },
+    {
+      "hotelId": "lp2ca11",
+      "slug": "the-kensington-hotel-london",
+      "city": "London",
+      "name": "The Kensington Hotel",
+      "path": "/stays/the-kensington-hotel-london"
+    },
+    {
+      "hotelId": "lp39590",
+      "slug": "london-marriott-hotel-county-hall-london",
+      "city": "London",
+      "name": "London Marriott Hotel County Hall",
+      "path": "/stays/london-marriott-hotel-county-hall-london"
+    },
+    {
+      "hotelId": "lp420f8",
+      "slug": "dukes-london-london",
+      "city": "London",
+      "name": "Dukes London",
+      "path": "/stays/dukes-london-london"
+    },
+    {
+      "hotelId": "lp1f858",
+      "slug": "the-milestone-hotel-london",
+      "city": "London",
+      "name": "The Milestone Hotel",
+      "path": "/stays/the-milestone-hotel-london"
+    },
+    {
+      "hotelId": "lp30cd0",
+      "slug": "sofitel-london-st-james-london",
+      "city": "London",
+      "name": "Sofitel London St James",
+      "path": "/stays/sofitel-london-st-james-london"
+    },
+    {
+      "hotelId": "lp29cad",
+      "slug": "brown-s-hotel-a-rocco-forte-hotel-london",
+      "city": "London",
+      "name": "Brown's Hotel, a Rocco Forte Hotel",
+      "path": "/stays/brown-s-hotel-a-rocco-forte-hotel-london"
+    },
+    {
+      "hotelId": "lp3e139",
+      "slug": "haymarket-hotel-firmdale-hotels-london",
+      "city": "London",
+      "name": "Haymarket Hotel, Firmdale Hotels",
+      "path": "/stays/haymarket-hotel-firmdale-hotels-london"
+    },
+    {
+      "hotelId": "lp236e7",
+      "slug": "the-ritz-london-london",
+      "city": "London",
+      "name": "The Ritz London",
+      "path": "/stays/the-ritz-london-london"
+    },
+    {
+      "hotelId": "lp2286f",
+      "slug": "the-landmark-london-london",
+      "city": "London",
+      "name": "The Landmark London",
+      "path": "/stays/the-landmark-london-london"
+    },
+    {
+      "hotelId": "lp282f9",
+      "slug": "charlotte-street-hotel-firmdale-hotels-london",
+      "city": "London",
+      "name": "Charlotte Street Hotel, Firmdale Hotels",
+      "path": "/stays/charlotte-street-hotel-firmdale-hotels-london"
+    },
+    {
+      "hotelId": "lp1c019d",
+      "slug": "beaufort-house-knightsbridge-london",
+      "city": "London",
+      "name": "Beaufort House - Knightsbridge",
+      "path": "/stays/beaufort-house-knightsbridge-london"
+    },
+    {
+      "hotelId": "lp1f940",
+      "slug": "the-london-edition-london",
+      "city": "London",
+      "name": "The London EDITION",
+      "path": "/stays/the-london-edition-london"
+    },
+    {
+      "hotelId": "lp19c1d",
+      "slug": "the-chesterfield-mayfair-london",
+      "city": "London",
+      "name": "The Chesterfield Mayfair",
+      "path": "/stays/the-chesterfield-mayfair-london"
+    },
+    {
+      "hotelId": "lp1a8e1",
+      "slug": "mandarin-oriental-hyde-park-london-london",
+      "city": "London",
+      "name": "Mandarin Oriental Hyde Park, London",
+      "path": "/stays/mandarin-oriental-hyde-park-london-london"
+    },
+    {
+      "hotelId": "lp34a047",
+      "slug": "the-glasshouse-apartments-london",
+      "city": "London",
+      "name": "The Glasshouse Apartments",
+      "path": "/stays/the-glasshouse-apartments-london"
+    },
+    {
+      "hotelId": "lp2f448",
+      "slug": "kimpton-fitzroy-london-by-ihg-london",
+      "city": "London",
+      "name": "Kimpton Fitzroy London by IHG",
+      "path": "/stays/kimpton-fitzroy-london-by-ihg-london"
+    },
+    {
+      "hotelId": "lp2847d",
+      "slug": "rosewood-london-london",
+      "city": "London",
+      "name": "Rosewood London",
+      "path": "/stays/rosewood-london-london"
+    },
+    {
+      "hotelId": "lp1be03",
+      "slug": "rubens-at-the-palace-london",
+      "city": "London",
+      "name": "Rubens At The Palace",
+      "path": "/stays/rubens-at-the-palace-london"
+    },
+    {
+      "hotelId": "lp2a91b",
+      "slug": "the-goring-london",
+      "city": "London",
+      "name": "The Goring",
+      "path": "/stays/the-goring-london"
+    },
+    {
+      "hotelId": "lp19c1a",
+      "slug": "60-hyde-park-gate-hotel-by-accor-london",
+      "city": "London",
+      "name": "60 Hyde Park Gate Hotel by Accor",
+      "path": "/stays/60-hyde-park-gate-hotel-by-accor-london"
+    },
+    {
+      "hotelId": "lp27581",
+      "slug": "roseate-house-london-london",
+      "city": "London",
+      "name": "Roseate House London",
+      "path": "/stays/roseate-house-london-london"
+    },
+    {
+      "hotelId": "lp19f05",
+      "slug": "intercontinental-london-park-lane-by-ihg-london",
+      "city": "London",
+      "name": "InterContinental London Park Lane by IHG",
+      "path": "/stays/intercontinental-london-park-lane-by-ihg-london"
+    },
+    {
+      "hotelId": "lp1e9bc",
+      "slug": "the-langham-london-london",
+      "city": "London",
+      "name": "The Langham London",
+      "path": "/stays/the-langham-london-london"
+    },
+    {
+      "hotelId": "lp35552",
+      "slug": "hyatt-regency-london-blackfriars-london",
+      "city": "London",
+      "name": "Hyatt Regency London Blackfriars",
+      "path": "/stays/hyatt-regency-london-blackfriars-london"
+    },
+    {
+      "hotelId": "lp31b8d",
+      "slug": "hampton-by-hilton-london-city-london",
+      "city": "London",
+      "name": "Hampton By Hilton London City",
+      "path": "/stays/hampton-by-hilton-london-city-london"
+    },
+    {
+      "hotelId": "lp20554",
+      "slug": "hyatt-regency-london-the-churchill-london",
+      "city": "London",
+      "name": "Hyatt Regency London - The Churchill",
+      "path": "/stays/hyatt-regency-london-the-churchill-london"
+    },
+    {
+      "hotelId": "lp192e47",
+      "slug": "vintry-and-mercer-hotel-small-luxury-hotels-of-t-london",
+      "city": "London",
+      "name": "Vintry & Mercer Hotel - Small Luxury Hotels of the World",
+      "path": "/stays/vintry-and-mercer-hotel-small-luxury-hotels-of-t-london"
+    },
+    {
+      "hotelId": "lp1be07",
+      "slug": "the-mayfair-townhouse-an-iconic-luxury-hotel-london",
+      "city": "London",
+      "name": "The Mayfair Townhouse – an Iconic Luxury Hotel",
+      "path": "/stays/the-mayfair-townhouse-an-iconic-luxury-hotel-london"
+    },
+    {
+      "hotelId": "lp2b675",
+      "slug": "holmes-hotel-london-london",
+      "city": "London",
+      "name": "Holmes Hotel London",
+      "path": "/stays/holmes-hotel-london-london"
+    },
+    {
+      "hotelId": "lp1007cf",
+      "slug": "great-mayfair-apartment-sleeps-6-london",
+      "city": "London",
+      "name": "Great Mayfair Apartment - Sleeps 6",
+      "path": "/stays/great-mayfair-apartment-sleeps-6-london"
+    },
+    {
+      "hotelId": "lp1a8ff4",
+      "slug": "d-arblay-street-london",
+      "city": "London",
+      "name": "D'Arblay Street",
+      "path": "/stays/d-arblay-street-london"
+    },
+    {
+      "hotelId": "lp1ad1d7",
+      "slug": "bright-comfy-2-bed-in-trendy-dalston-london",
+      "city": "London",
+      "name": "Bright Comfy 2 bed in trendy Dalston",
+      "path": "/stays/bright-comfy-2-bed-in-trendy-dalston-london"
+    },
+    {
+      "hotelId": "lp1c078f",
+      "slug": "luxury-holborn-1-bedroom-flats-london",
+      "city": "London",
+      "name": "Luxury Holborn 1 Bedroom Flats",
+      "path": "/stays/luxury-holborn-1-bedroom-flats-london"
+    },
+    {
+      "hotelId": "lp1c9c81",
+      "slug": "chelsea-residential-atmosphere-london",
+      "city": "London",
+      "name": "Chelsea Residential Atmosphere",
+      "path": "/stays/chelsea-residential-atmosphere-london"
+    },
+    {
+      "hotelId": "lp1ca018",
+      "slug": "allegra-house-london",
+      "city": "London",
+      "name": "Allegra House",
+      "path": "/stays/allegra-house-london"
+    },
+    {
+      "hotelId": "lp2091e0",
+      "slug": "iverna-gardens-by-lime-street-london",
+      "city": "London",
+      "name": "Iverna Gardens by Lime Street",
+      "path": "/stays/iverna-gardens-by-lime-street-london"
+    },
+    {
+      "hotelId": "lp20980d",
+      "slug": "luxury-penthouse-camden-town-london",
+      "city": "London",
+      "name": "Luxury Penthouse Camden Town",
+      "path": "/stays/luxury-penthouse-camden-town-london"
+    },
+    {
+      "hotelId": "lp209908",
+      "slug": "modern-stylish-and-luxurious-1-bed-flat-london",
+      "city": "London",
+      "name": "Modern stylish and luxurious 1 bed flat",
+      "path": "/stays/modern-stylish-and-luxurious-1-bed-flat-london"
+    },
+    {
+      "hotelId": "lp32361f",
+      "slug": "amazing-apart-city-airport-and-excel-1-london",
+      "city": "London",
+      "name": "Amazing Apart. -City Airport and Excel 1",
+      "path": "/stays/amazing-apart-city-airport-and-excel-1-london"
+    },
+    {
+      "hotelId": "lp323f7c",
+      "slug": "bloomsbury-apartments-by-allo-housing-london",
+      "city": "London",
+      "name": "Bloomsbury Apartments by Allô Housing",
+      "path": "/stays/bloomsbury-apartments-by-allo-housing-london"
+    },
+    {
+      "hotelId": "lp39129b",
+      "slug": "quiet-historic-mews-hyde-park-london",
+      "city": "London",
+      "name": "Quiet Historic Mews- Hyde Park",
+      "path": "/stays/quiet-historic-mews-hyde-park-london"
+    },
+    {
+      "hotelId": "lp22a087",
+      "slug": "great-scotland-yard-hotel-part-of-hyatt-london",
+      "city": "London",
+      "name": "Great Scotland Yard Hotel, part of Hyatt",
+      "path": "/stays/great-scotland-yard-hotel-part-of-hyatt-london"
+    },
+    {
+      "hotelId": "lp1d73f",
+      "slug": "the-marylebone-hotel-london",
+      "city": "London",
+      "name": "The Marylebone Hotel",
+      "path": "/stays/the-marylebone-hotel-london"
+    },
+    {
+      "hotelId": "lp1a23a",
+      "slug": "1-hotel-mayfair-london",
+      "city": "London",
+      "name": "1 Hotel Mayfair",
+      "path": "/stays/1-hotel-mayfair-london"
+    },
+    {
+      "hotelId": "lp2e920",
+      "slug": "the-bloomsbury-hotel-london",
+      "city": "London",
+      "name": "The Bloomsbury Hotel",
+      "path": "/stays/the-bloomsbury-hotel-london"
+    },
+    {
+      "hotelId": "lp1f76a1",
+      "slug": "md-luxury-apartment-london",
+      "city": "London",
+      "name": "MD Luxury Apartment",
+      "path": "/stays/md-luxury-apartment-london"
+    },
+    {
+      "hotelId": "lp19f23",
+      "slug": "the-biltmore-mayfair-london",
+      "city": "London",
+      "name": "The Biltmore Mayfair",
+      "path": "/stays/the-biltmore-mayfair-london"
+    },
+    {
+      "hotelId": "lp1dc4e",
+      "slug": "47-park-street-grand-residences-by-marriott-london",
+      "city": "London",
+      "name": "47 Park Street - Grand Residences by Marriott",
+      "path": "/stays/47-park-street-grand-residences-by-marriott-london"
+    },
+    {
+      "hotelId": "lp1dc6d",
+      "slug": "the-caesar-hotel-london",
+      "city": "London",
+      "name": "The Caesar Hotel",
+      "path": "/stays/the-caesar-hotel-london"
+    },
+    {
+      "hotelId": "lp2c997",
+      "slug": "dorset-square-hotel-firmdale-hotels-london",
+      "city": "London",
+      "name": "Dorset Square Hotel, Firmdale Hotels",
+      "path": "/stays/dorset-square-hotel-firmdale-hotels-london"
+    },
+    {
+      "hotelId": "lp33bd4",
+      "slug": "riu-plaza-london-the-westminster-london",
+      "city": "London",
+      "name": "Riu Plaza London The Westminster",
+      "path": "/stays/riu-plaza-london-the-westminster-london"
+    },
+    {
+      "hotelId": "lp18e025",
+      "slug": "the-resident-covent-garden-london",
+      "city": "London",
+      "name": "The Resident Covent Garden",
+      "path": "/stays/the-resident-covent-garden-london"
+    },
+    {
+      "hotelId": "lp282fc",
+      "slug": "the-capital-hotel-apartments-and-townhouse-small-london",
+      "city": "London",
+      "name": "The Capital Hotel, Apartments & Townhouse - Small Luxury Hotels of The World",
+      "path": "/stays/the-capital-hotel-apartments-and-townhouse-small-london"
+    },
+    {
+      "hotelId": "lp3fb10",
+      "slug": "cheval-harrington-court-at-south-kensington-london",
+      "city": "London",
+      "name": "Cheval Harrington Court at South Kensington",
+      "path": "/stays/cheval-harrington-court-at-south-kensington-london"
+    },
+    {
+      "hotelId": "lp2fa49",
+      "slug": "the-trafalgar-st-james-london-curio-collection-b-london",
+      "city": "London",
+      "name": "The Trafalgar St James London Curio Collection by Hilton",
+      "path": "/stays/the-trafalgar-st-james-london-curio-collection-b-london"
+    },
+    {
+      "hotelId": "lp38449",
+      "slug": "the-hari-london-london",
+      "city": "London",
+      "name": "The Hari London",
+      "path": "/stays/the-hari-london-london"
+    },
+    {
+      "hotelId": "lp2152d",
+      "slug": "the-chelsea-harbour-hotel-and-spa-london-london",
+      "city": "London",
+      "name": "The Chelsea Harbour Hotel & Spa London",
+      "path": "/stays/the-chelsea-harbour-hotel-and-spa-london-london"
+    },
+    {
+      "hotelId": "lp1c8a7",
+      "slug": "montcalm-piccadilly-townhouse-london-west-end-london",
+      "city": "London",
+      "name": "Montcalm Piccadilly Townhouse, London West End",
+      "path": "/stays/montcalm-piccadilly-townhouse-london-west-end-london"
+    },
+    {
+      "hotelId": "lp2a0d6",
+      "slug": "st-martins-lane-london-london",
+      "city": "London",
+      "name": "St Martins Lane London",
+      "path": "/stays/st-martins-lane-london-london"
+    },
+    {
+      "hotelId": "lp2a166",
+      "slug": "canary-riverside-plaza-hotel-london",
+      "city": "London",
+      "name": "Canary Riverside Plaza Hotel",
+      "path": "/stays/canary-riverside-plaza-hotel-london"
+    },
+    {
+      "hotelId": "lp2ac3d",
+      "slug": "the-athenaeum-hotel-and-residences-london",
+      "city": "London",
+      "name": "The Athenaeum Hotel & Residences",
+      "path": "/stays/the-athenaeum-hotel-and-residences-london"
+    },
+    {
+      "hotelId": "lp19e07",
+      "slug": "royal-garden-hotel-london",
+      "city": "London",
+      "name": "Royal Garden Hotel",
+      "path": "/stays/royal-garden-hotel-london"
+    },
+    {
+      "hotelId": "lp1f890",
+      "slug": "the-clermont-london-victoria-london",
+      "city": "London",
+      "name": "The Clermont London, Victoria",
+      "path": "/stays/the-clermont-london-victoria-london"
+    },
+    {
+      "hotelId": "lp24f6f",
+      "slug": "como-metropolitan-london-london",
+      "city": "London",
+      "name": "COMO Metropolitan London",
+      "path": "/stays/como-metropolitan-london-london"
+    },
+    {
+      "hotelId": "lp350f69",
+      "slug": "carlton-court-mayfair-london",
+      "city": "London",
+      "name": "CARLTON COURT - MAYFAIR",
+      "path": "/stays/carlton-court-mayfair-london"
+    },
+    {
+      "hotelId": "lp2f6af",
+      "slug": "miiro-templeton-garden-london",
+      "city": "London",
+      "name": "Miiro Templeton Garden",
+      "path": "/stays/miiro-templeton-garden-london"
+    },
+    {
+      "hotelId": "lp29945",
+      "slug": "hilton-london-metropole-london",
+      "city": "London",
+      "name": "Hilton London Metropole",
+      "path": "/stays/hilton-london-metropole-london"
+    },
+    {
+      "hotelId": "lp4004d",
+      "slug": "sanctum-london-maida-vale-london",
+      "city": "London",
+      "name": "Sanctum London Maida Vale",
+      "path": "/stays/sanctum-london-maida-vale-london"
+    },
+    {
+      "hotelId": "lp441a8",
+      "slug": "11-cadogan-gardens-and-the-apartments-london",
+      "city": "London",
+      "name": "11 Cadogan Gardens and The Apartments",
+      "path": "/stays/11-cadogan-gardens-and-the-apartments-london"
+    },
+    {
+      "hotelId": "lp19a253",
+      "slug": "templeton-place-by-supercity-aparthotels-london",
+      "city": "London",
+      "name": "Templeton Place by Supercity Aparthotels",
+      "path": "/stays/templeton-place-by-supercity-aparthotels-london"
+    },
+    {
+      "hotelId": "lp19a355",
+      "slug": "the-chronicle-by-supercity-aparthotels-london",
+      "city": "London",
+      "name": "The Chronicle by Supercity Aparthotels",
+      "path": "/stays/the-chronicle-by-supercity-aparthotels-london"
+    },
+    {
+      "hotelId": "lp1cb71",
+      "slug": "the-dilly-london",
+      "city": "London",
+      "name": "The Dilly",
+      "path": "/stays/the-dilly-london"
+    },
+    {
+      "hotelId": "lp1df1a",
+      "slug": "radisson-blu-hotel-london-leicester-square-london",
+      "city": "London",
+      "name": "Radisson Blu Hotel, London Leicester Square",
+      "path": "/stays/radisson-blu-hotel-london-leicester-square-london"
+    },
+    {
+      "hotelId": "lp25748",
+      "slug": "nyx-hotel-london-holborn-by-leonardo-hotels-london",
+      "city": "London",
+      "name": "NYX Hotel London Holborn by Leonardo Hotels",
+      "path": "/stays/nyx-hotel-london-holborn-by-leonardo-hotels-london"
+    },
+    {
+      "hotelId": "lp2a261",
+      "slug": "sanderson-london-london",
+      "city": "London",
+      "name": "Sanderson London",
+      "path": "/stays/sanderson-london-london"
+    },
+    {
+      "hotelId": "lp2a32d",
+      "slug": "the-berkeley-maybourne-london",
+      "city": "London",
+      "name": "The Berkeley, Maybourne",
+      "path": "/stays/the-berkeley-maybourne-london"
+    },
+    {
+      "hotelId": "lp2b67b",
+      "slug": "althoff-st-james-s-hotel-and-club-london-london",
+      "city": "London",
+      "name": "Althoff St James's Hotel & Club London",
+      "path": "/stays/althoff-st-james-s-hotel-and-club-london-london"
+    },
+    {
+      "hotelId": "lp3197e",
+      "slug": "london-marriott-hotel-park-lane-london",
+      "city": "London",
+      "name": "London Marriott Hotel Park Lane",
+      "path": "/stays/london-marriott-hotel-park-lane-london"
+    },
+    {
+      "hotelId": "lp234ce4",
+      "slug": "citadines-islington-london-london",
+      "city": "London",
+      "name": "Citadines Islington London",
+      "path": "/stays/citadines-islington-london-london"
+    },
+    {
+      "hotelId": "lp1ff72",
+      "slug": "the-pelham-london-starhotels-collezione-london",
+      "city": "London",
+      "name": "The Pelham London - Starhotels Collezione",
+      "path": "/stays/the-pelham-london-starhotels-collezione-london"
+    },
+    {
+      "hotelId": "lp2952e",
+      "slug": "andaz-london-liverpool-street-by-hyatt-london",
+      "city": "London",
+      "name": "Andaz London Liverpool Street, By Hyatt",
+      "path": "/stays/andaz-london-liverpool-street-by-hyatt-london"
+    },
+    {
+      "hotelId": "lp1df1b",
+      "slug": "radisson-blu-hotel-london-mercer-street-london",
+      "city": "London",
+      "name": "Radisson Blu Hotel, London Mercer Street",
+      "path": "/stays/radisson-blu-hotel-london-mercer-street-london"
+    },
+    {
+      "hotelId": "lp1c715b",
+      "slug": "sonder-the-arts-council-london",
+      "city": "London",
+      "name": "Sonder The Arts Council",
+      "path": "/stays/sonder-the-arts-council-london"
+    },
+    {
+      "hotelId": "lp41a14",
+      "slug": "mama-shelter-london-shoreditch-london",
+      "city": "London",
+      "name": "Mama Shelter London - Shoreditch",
+      "path": "/stays/mama-shelter-london-shoreditch-london"
+    },
+    {
+      "hotelId": "lp1d45f",
+      "slug": "the-exhibitionist-hotel-london",
+      "city": "London",
+      "name": "The Exhibitionist Hotel",
+      "path": "/stays/the-exhibitionist-hotel-london"
+    },
+    {
+      "hotelId": "lp1bf51",
+      "slug": "jw-marriott-grosvenor-house-london-london",
+      "city": "London",
+      "name": "JW Marriott Grosvenor House London",
+      "path": "/stays/jw-marriott-grosvenor-house-london-london"
+    },
+    {
+      "hotelId": "lp276d72",
+      "slug": "nell-gwynn-chelsea-accommodation-london",
+      "city": "London",
+      "name": "Nell Gwynn Chelsea Accommodation",
+      "path": "/stays/nell-gwynn-chelsea-accommodation-london"
+    },
+    {
+      "hotelId": "lp2cd9b7",
+      "slug": "page8-page-hotels-london",
+      "city": "London",
+      "name": "Page8, Page Hotels",
+      "path": "/stays/page8-page-hotels-london"
+    },
+    {
+      "hotelId": "lp1cb92",
+      "slug": "middle-eight-covent-garden-london",
+      "city": "London",
+      "name": "Middle Eight - Covent Garden",
+      "path": "/stays/middle-eight-covent-garden-london"
+    },
+    {
+      "hotelId": "lp1b8a7a",
+      "slug": "the-museum-penthouse-london",
+      "city": "London",
+      "name": "The Museum Penthouse",
+      "path": "/stays/the-museum-penthouse-london"
+    },
+    {
+      "hotelId": "lp1f65f5",
+      "slug": "nhow-london-london",
+      "city": "London",
+      "name": "nhow London",
+      "path": "/stays/nhow-london-london"
+    },
+    {
+      "hotelId": "lp2efb0",
+      "slug": "club-quarters-hotel-st-paul-s-london-london",
+      "city": "London",
+      "name": "Club Quarters Hotel St Paul's, London",
+      "path": "/stays/club-quarters-hotel-st-paul-s-london-london"
+    },
+    {
+      "hotelId": "lp214f3e",
+      "slug": "westow-house-london",
+      "city": "London",
+      "name": "Westow House",
+      "path": "/stays/westow-house-london"
+    },
+    {
+      "hotelId": "lp3f160",
+      "slug": "park-plaza-county-hall-london-london",
+      "city": "London",
+      "name": "Park Plaza County Hall London",
+      "path": "/stays/park-plaza-county-hall-london-london"
+    },
+    {
+      "hotelId": "lp209513",
+      "slug": "lovely-studio-apartments-thamesmead-london",
+      "city": "London",
+      "name": "Lovely Studio Apartments - Thamesmead",
+      "path": "/stays/lovely-studio-apartments-thamesmead-london"
+    },
+    {
+      "hotelId": "lp2ad20",
+      "slug": "st-ermin-s-hotel-autograph-collection-london",
+      "city": "London",
+      "name": "St. Ermin's Hotel, Autograph Collection",
+      "path": "/stays/st-ermin-s-hotel-autograph-collection-london"
+    },
+    {
+      "hotelId": "lp1b9f6",
+      "slug": "london-hilton-on-park-lane-london",
+      "city": "London",
+      "name": "London Hilton on Park Lane",
+      "path": "/stays/london-hilton-on-park-lane-london"
+    },
+    {
+      "hotelId": "lp3944f",
+      "slug": "hilton-london-canary-wharf-london",
+      "city": "London",
+      "name": "Hilton London Canary Wharf",
+      "path": "/stays/hilton-london-canary-wharf-london"
+    },
+    {
+      "hotelId": "lp358dd",
+      "slug": "marriott-executive-apartments-london-canary-whar-london",
+      "city": "London",
+      "name": "Marriott Executive Apartments London, Canary Wharf",
+      "path": "/stays/marriott-executive-apartments-london-canary-whar-london"
+    },
+    {
+      "hotelId": "lp26fd09",
+      "slug": "the-carlyle-elegant-serviced-apartments-london",
+      "city": "London",
+      "name": "The Carlyle - Elegant Serviced Apartments",
+      "path": "/stays/the-carlyle-elegant-serviced-apartments-london"
+    },
+    {
+      "hotelId": "lp307d9",
+      "slug": "threadneedles-autograph-collection-london",
+      "city": "London",
+      "name": "Threadneedles, Autograph Collection",
+      "path": "/stays/threadneedles-autograph-collection-london"
+    },
+    {
+      "hotelId": "lp3083e",
+      "slug": "hazlitt-s-london",
+      "city": "London",
+      "name": "Hazlitt's",
+      "path": "/stays/hazlitt-s-london"
+    },
+    {
+      "hotelId": "lp18b302",
+      "slug": "super-central-london-sleeps-4-london",
+      "city": "London",
+      "name": "Super Central London - sleeps 4",
+      "path": "/stays/super-central-london-sleeps-4-london"
+    },
+    {
+      "hotelId": "lp1ce628",
+      "slug": "modern-family-home-close-to-victoria-station-london",
+      "city": "London",
+      "name": "Modern Family Home close to Victoria Station",
+      "path": "/stays/modern-family-home-close-to-victoria-station-london"
+    },
+    {
+      "hotelId": "lp1d9984",
+      "slug": "cj8-medium-studio-london",
+      "city": "London",
+      "name": "CJ8 Medium Studio",
+      "path": "/stays/cj8-medium-studio-london"
+    },
+    {
+      "hotelId": "lp1e4124",
+      "slug": "luxury-2-bed-flat-parking-and-close-to-the-tube-london",
+      "city": "London",
+      "name": "Luxury 2-bed Flat, Parking and Close to the Tube",
+      "path": "/stays/luxury-2-bed-flat-parking-and-close-to-the-tube-london"
+    },
+    {
+      "hotelId": "lp1f1875",
+      "slug": "charming-2-bedroom-home-3-near-arsenal-station-london",
+      "city": "London",
+      "name": "Charming 2 Bedroom Home 3 Near Arsenal Station",
+      "path": "/stays/charming-2-bedroom-home-3-near-arsenal-station-london"
+    },
+    {
+      "hotelId": "lp2261c6",
+      "slug": "spacious-apartment-berwick-st-and-oxford-st-london",
+      "city": "London",
+      "name": "Spacious Apartment Berwick St &Oxford St",
+      "path": "/stays/spacious-apartment-berwick-st-and-oxford-st-london"
+    },
+    {
+      "hotelId": "lp22f49c",
+      "slug": "cosy-apartment-in-islington-c-london",
+      "city": "London",
+      "name": "Cosy Apartment in Islington - C",
+      "path": "/stays/cosy-apartment-in-islington-c-london"
+    },
+    {
+      "hotelId": "lp1c522",
+      "slug": "flemings-mayfair-small-luxury-hotel-of-the-world-london",
+      "city": "London",
+      "name": "Flemings Mayfair - Small Luxury Hotel of the World",
+      "path": "/stays/flemings-mayfair-small-luxury-hotel-of-the-world-london"
+    },
+    {
+      "hotelId": "lp2a74a",
+      "slug": "the-rookery-hotel-london",
+      "city": "London",
+      "name": "The Rookery Hotel",
+      "path": "/stays/the-rookery-hotel-london"
+    },
+    {
+      "hotelId": "lp1c34b",
+      "slug": "the-resident-kensington-london",
+      "city": "London",
+      "name": "The Resident Kensington",
+      "path": "/stays/the-resident-kensington-london"
+    },
+    {
+      "hotelId": "lp26aa62",
+      "slug": "hart-shoreditch-hotel-london-curio-collection-by-london",
+      "city": "London",
+      "name": "Hart Shoreditch Hotel London, Curio Collection by Hilton",
+      "path": "/stays/hart-shoreditch-hotel-london-curio-collection-by-london"
+    },
+    {
+      "hotelId": "lp1e139",
+      "slug": "the-lowndes-london-a-jumeirah-partner-hotel-london",
+      "city": "London",
+      "name": "The Lowndes London – A Jumeirah Partner Hotel",
+      "path": "/stays/the-lowndes-london-a-jumeirah-partner-hotel-london"
+    },
+    {
+      "hotelId": "lp19c25",
+      "slug": "100-queen-s-gate-hotel-london-kensington-curio-c-london",
+      "city": "London",
+      "name": "100 Queen's Gate Hotel London Kensington, Curio Collection by Hilton",
+      "path": "/stays/100-queen-s-gate-hotel-london-kensington-curio-c-london"
+    },
+    {
+      "hotelId": "lp22f1a8",
+      "slug": "queensway-1-london",
+      "city": "London",
+      "name": "Queensway 1",
+      "path": "/stays/queensway-1-london"
+    },
+    {
+      "hotelId": "lp20e425",
+      "slug": "the-hoxton-southwark-london",
+      "city": "London",
+      "name": "The Hoxton, Southwark",
+      "path": "/stays/the-hoxton-southwark-london"
+    },
+    {
+      "hotelId": "lp31744",
+      "slug": "the-windermere-hotel-london-london",
+      "city": "London",
+      "name": "The Windermere Hotel, London",
+      "path": "/stays/the-windermere-hotel-london-london"
+    },
+    {
+      "hotelId": "lp3c551",
+      "slug": "hilton-london-tower-bridge-london",
+      "city": "London",
+      "name": "Hilton London Tower Bridge",
+      "path": "/stays/hilton-london-tower-bridge-london"
+    },
+    {
+      "hotelId": "lp1bee9",
+      "slug": "strand-palace-london",
+      "city": "London",
+      "name": "Strand Palace",
+      "path": "/stays/strand-palace-london"
+    },
+    {
+      "hotelId": "lp2a0b7",
+      "slug": "park-grand-paddington-court-london",
+      "city": "London",
+      "name": "Park Grand Paddington Court",
+      "path": "/stays/park-grand-paddington-court-london"
+    },
+    {
+      "hotelId": "lp19a10e",
+      "slug": "the-rosebery-by-supercity-aparthotels-london",
+      "city": "London",
+      "name": "The Rosebery by Supercity Aparthotels",
+      "path": "/stays/the-rosebery-by-supercity-aparthotels-london"
+    },
+    {
+      "hotelId": "lp387f7",
+      "slug": "apex-city-of-london-hotel-london",
+      "city": "London",
+      "name": "Apex City Of London Hotel",
+      "path": "/stays/apex-city-of-london-hotel-london"
+    },
+    {
+      "hotelId": "lp1c192",
+      "slug": "sheraton-grand-london-park-lane-london",
+      "city": "London",
+      "name": "Sheraton Grand London Park Lane",
+      "path": "/stays/sheraton-grand-london-park-lane-london"
+    },
+    {
+      "hotelId": "lp3394a",
+      "slug": "collingham-serviced-apartments-london",
+      "city": "London",
+      "name": "Collingham Serviced Apartments",
+      "path": "/stays/collingham-serviced-apartments-london"
+    },
+    {
+      "hotelId": "lp1be1b",
+      "slug": "the-welbeck-hotel-by-ihg-london",
+      "city": "London",
+      "name": "The Welbeck Hotel by IHG",
+      "path": "/stays/the-welbeck-hotel-by-ihg-london"
+    },
+    {
+      "hotelId": "lp1c794",
+      "slug": "the-lodge-hotel-putney-london",
+      "city": "London",
+      "name": "The Lodge Hotel - Putney",
+      "path": "/stays/the-lodge-hotel-putney-london"
+    },
+    {
+      "hotelId": "lp1e3c5",
+      "slug": "melia-london-kensington-a-melia-collection-hotel-london",
+      "city": "London",
+      "name": "Melia London Kensington a Melia Collection Hotel",
+      "path": "/stays/melia-london-kensington-a-melia-collection-hotel-london"
+    },
+    {
+      "hotelId": "lp1fe50",
+      "slug": "nobu-hotel-london-portman-square-london",
+      "city": "London",
+      "name": "Nobu Hotel London Portman Square",
+      "path": "/stays/nobu-hotel-london-portman-square-london"
+    },
+    {
+      "hotelId": "lp35cf8",
+      "slug": "one-hundred-shoreditch-london",
+      "city": "London",
+      "name": "One Hundred Shoreditch",
+      "path": "/stays/one-hundred-shoreditch-london"
+    },
+    {
+      "hotelId": "lp27eb8",
+      "slug": "club-quarters-hotel-london-city-london-london",
+      "city": "London",
+      "name": "Club Quarters Hotel London City, London",
+      "path": "/stays/club-quarters-hotel-london-city-london-london"
+    },
+    {
+      "hotelId": "lp19c23",
+      "slug": "the-marble-arch-hotel-by-thistle-london",
+      "city": "London",
+      "name": "The Marble Arch Hotel, by Thistle",
+      "path": "/stays/the-marble-arch-hotel-by-thistle-london"
+    },
+    {
+      "hotelId": "lp1be14",
+      "slug": "the-mandeville-hotel-london",
+      "city": "London",
+      "name": "The Mandeville Hotel",
+      "path": "/stays/the-mandeville-hotel-london"
+    },
+    {
+      "hotelId": "lp22420",
+      "slug": "park-avenue-bayswater-inn-hyde-park-london",
+      "city": "London",
+      "name": "Park Avenue Bayswater Inn Hyde Park",
+      "path": "/stays/park-avenue-bayswater-inn-hyde-park-london"
+    },
+    {
+      "hotelId": "lp1bf50",
+      "slug": "the-cavendish-london-london",
+      "city": "London",
+      "name": "The Cavendish London",
+      "path": "/stays/the-cavendish-london-london"
+    },
+    {
+      "hotelId": "lp2cb70",
+      "slug": "doubletree-by-hilton-london-angel-kings-cross-london",
+      "city": "London",
+      "name": "DoubleTree by Hilton London Angel Kings Cross",
+      "path": "/stays/doubletree-by-hilton-london-angel-kings-cross-london"
+    },
+    {
+      "hotelId": "lp1baa8",
+      "slug": "the-royal-horseguards-hotel-london-london",
+      "city": "London",
+      "name": "The Royal Horseguards Hotel, London",
+      "path": "/stays/the-royal-horseguards-hotel-london-london"
+    },
+    {
+      "hotelId": "lp2c566",
+      "slug": "the-cura-hotel-kensington-london-a-tribute-portf-london",
+      "city": "London",
+      "name": "The Cura Hotel Kensington, London, a Tribute Portfolio Hotel",
+      "path": "/stays/the-cura-hotel-kensington-london-a-tribute-portf-london"
+    },
+    {
+      "hotelId": "lp1abbf4",
+      "slug": "blackbird-london",
+      "city": "London",
+      "name": "Blackbird",
+      "path": "/stays/blackbird-london"
+    },
+    {
+      "hotelId": "lp34aec",
+      "slug": "holiday-inn-london-camden-lock-by-ihg-london",
+      "city": "London",
+      "name": "Holiday Inn London Camden Lock by IHG",
+      "path": "/stays/holiday-inn-london-camden-lock-by-ihg-london"
+    },
+    {
+      "hotelId": "lp1b845",
+      "slug": "st-james-court-a-taj-hotel-london-london",
+      "city": "London",
+      "name": "St. James' Court, A Taj Hotel, London",
+      "path": "/stays/st-james-court-a-taj-hotel-london-london"
+    },
+    {
+      "hotelId": "lp10266f",
+      "slug": "cleveland-residences-russell-square-london",
+      "city": "London",
+      "name": "Cleveland Residences Russell Square",
+      "path": "/stays/cleveland-residences-russell-square-london"
+    },
+    {
+      "hotelId": "lp1d972b",
+      "slug": "sloane-place-london",
+      "city": "London",
+      "name": "Sloane Place",
+      "path": "/stays/sloane-place-london"
+    },
+    {
+      "hotelId": "lp2d019",
+      "slug": "the-portobello-hotel-london",
+      "city": "London",
+      "name": "The Portobello Hotel",
+      "path": "/stays/the-portobello-hotel-london"
+    },
+    {
+      "hotelId": "lp1b5176",
+      "slug": "cavendish-by-sojourn-london",
+      "city": "London",
+      "name": "Cavendish - By Sojourn",
+      "path": "/stays/cavendish-by-sojourn-london"
+    },
+    {
+      "hotelId": "lp29cd4",
+      "slug": "pullman-london-st-pancras-london",
+      "city": "London",
+      "name": "Pullman London St Pancras",
+      "path": "/stays/pullman-london-st-pancras-london"
+    },
+    {
+      "hotelId": "lp44172",
+      "slug": "bentley-london-london",
+      "city": "London",
+      "name": "Bentley London",
+      "path": "/stays/bentley-london-london"
+    },
+    {
+      "hotelId": "lp27ed1",
+      "slug": "hotel-indigo-london-hyde-park-paddington-by-ihg-london",
+      "city": "London",
+      "name": "Hotel Indigo London Hyde Park Paddington by IHG",
+      "path": "/stays/hotel-indigo-london-hyde-park-paddington-by-ihg-london"
+    },
+    {
+      "hotelId": "lp3c218",
+      "slug": "clayton-hotel-chiswick-london",
+      "city": "London",
+      "name": "Clayton Hotel Chiswick",
+      "path": "/stays/clayton-hotel-chiswick-london"
+    },
+    {
+      "hotelId": "lp40bfe",
+      "slug": "montcalm-mayfair-autograph-collection-london",
+      "city": "London",
+      "name": "Montcalm Mayfair, Autograph Collection",
+      "path": "/stays/montcalm-mayfair-autograph-collection-london"
+    },
+    {
+      "hotelId": "lp390f79",
+      "slug": "ruby-lucy-hotel-london-by-ihg-london",
+      "city": "London",
+      "name": "Ruby Lucy Hotel London by IHG",
+      "path": "/stays/ruby-lucy-hotel-london-by-ihg-london"
+    },
+    {
+      "hotelId": "lp37b67",
+      "slug": "park-plaza-london-riverbank-london",
+      "city": "London",
+      "name": "Park Plaza London Riverbank",
+      "path": "/stays/park-plaza-london-riverbank-london"
+    },
+    {
+      "hotelId": "lp2276e",
+      "slug": "the-park-tower-knightsbridge-a-luxury-collection-london",
+      "city": "London",
+      "name": "The Park Tower Knightsbridge, a Luxury Collection Hotel, London",
+      "path": "/stays/the-park-tower-knightsbridge-a-luxury-collection-london"
+    },
+    {
+      "hotelId": "lp1035e3",
+      "slug": "the-stratford-autograph-collection-london",
+      "city": "London",
+      "name": "The Stratford, Autograph Collection",
+      "path": "/stays/the-stratford-autograph-collection-london"
+    },
+    {
+      "hotelId": "lp2226b",
+      "slug": "the-prime-london-hotel-london",
+      "city": "London",
+      "name": "The Prime London Hotel",
+      "path": "/stays/the-prime-london-hotel-london"
+    },
+    {
+      "hotelId": "lp319d1",
+      "slug": "the-westbourne-hyde-park-london",
+      "city": "London",
+      "name": "The Westbourne Hyde Park",
+      "path": "/stays/the-westbourne-hyde-park-london"
+    },
+    {
+      "hotelId": "lp1e894",
+      "slug": "oliver-plaza-london",
+      "city": "London",
+      "name": "Oliver Plaza",
+      "path": "/stays/oliver-plaza-london"
+    },
+    {
+      "hotelId": "lp1b282d",
+      "slug": "roomspace-apartments-sterling-house-london",
+      "city": "London",
+      "name": "Roomspace Apartments -Sterling House",
+      "path": "/stays/roomspace-apartments-sterling-house-london"
+    },
+    {
+      "hotelId": "lp267aaf",
+      "slug": "stylish-light-filled-1-bedroom-flat-in-hammersmi-london",
+      "city": "London",
+      "name": "Stylish Light-filled 1 Bedroom Flat In Hammersmith",
+      "path": "/stays/stylish-light-filled-1-bedroom-flat-in-hammersmi-london"
+    },
+    {
+      "hotelId": "lp2706cd",
+      "slug": "harlinger-lodge-annexe-london",
+      "city": "London",
+      "name": "Harlinger Lodge Annexe",
+      "path": "/stays/harlinger-lodge-annexe-london"
+    },
+    {
+      "hotelId": "lp19f47",
+      "slug": "london-marriott-hotel-grosvenor-square-london",
+      "city": "London",
+      "name": "London Marriott Hotel Grosvenor Square",
+      "path": "/stays/london-marriott-hotel-grosvenor-square-london"
+    },
+    {
+      "hotelId": "lp24b61",
+      "slug": "the-bailey-s-hotel-london-kensington-london",
+      "city": "London",
+      "name": "The Bailey's Hotel London Kensington",
+      "path": "/stays/the-bailey-s-hotel-london-kensington-london"
+    },
+    {
+      "hotelId": "lp1a252",
+      "slug": "doubletree-by-hilton-london-kensington-london",
+      "city": "London",
+      "name": "Doubletree By Hilton London Kensington",
+      "path": "/stays/doubletree-by-hilton-london-kensington-london"
+    },
+    {
+      "hotelId": "lp2c0ab",
+      "slug": "club-quarters-hotel-trafalgar-square-london-london",
+      "city": "London",
+      "name": "Club Quarters Hotel Trafalgar Square, London",
+      "path": "/stays/club-quarters-hotel-trafalgar-square-london-london"
+    },
+    {
+      "hotelId": "lp102d75",
+      "slug": "the-bridge-in-barnes-london",
+      "city": "London",
+      "name": "The Bridge in Barnes",
+      "path": "/stays/the-bridge-in-barnes-london"
+    },
+    {
+      "hotelId": "lp19020c",
+      "slug": "chapel-market-serviced-apartments-by-concept-apa-london",
+      "city": "London",
+      "name": "Chapel Market Serviced Apartments by Concept Apartments",
+      "path": "/stays/chapel-market-serviced-apartments-by-concept-apa-london"
+    },
+    {
+      "hotelId": "lp19ec4",
+      "slug": "the-may-fair-a-radisson-collection-hotel-mayfair-london",
+      "city": "London",
+      "name": "The May Fair, A Radisson Collection Hotel, Mayfair London",
+      "path": "/stays/the-may-fair-a-radisson-collection-hotel-mayfair-london"
+    },
+    {
+      "hotelId": "lp339fc",
+      "slug": "treehouse-hotel-london-london",
+      "city": "London",
+      "name": "Treehouse Hotel London",
+      "path": "/stays/treehouse-hotel-london-london"
+    },
+    {
+      "hotelId": "lp4346c",
+      "slug": "leonardo-royal-london-st-paul-s-london",
+      "city": "London",
+      "name": "Leonardo Royal London St Paul’s",
+      "path": "/stays/leonardo-royal-london-st-paul-s-london"
+    },
+    {
+      "hotelId": "lp34886",
+      "slug": "the-chamberlain-london",
+      "city": "London",
+      "name": "The Chamberlain",
+      "path": "/stays/the-chamberlain-london"
+    },
+    {
+      "hotelId": "lp2eb7b",
+      "slug": "leonardo-royal-hotel-london-city-tower-of-london-london",
+      "city": "London",
+      "name": "Leonardo Royal Hotel London City - Tower of London",
+      "path": "/stays/leonardo-royal-hotel-london-city-tower-of-london-london"
+    },
+    {
+      "hotelId": "lp35be8",
+      "slug": "holiday-inn-london-west-by-ihg-london",
+      "city": "London",
+      "name": "Holiday Inn London West by IHG",
+      "path": "/stays/holiday-inn-london-west-by-ihg-london"
+    },
+    {
+      "hotelId": "lp219df4",
+      "slug": "the-gyle-kings-cross-st-pancras-london-london",
+      "city": "London",
+      "name": "The Gyle - Kings Cross St Pancras, London",
+      "path": "/stays/the-gyle-kings-cross-st-pancras-london-london"
+    },
+    {
+      "hotelId": "lp1bee8",
+      "slug": "the-cumberland-london-london",
+      "city": "London",
+      "name": "The Cumberland, London",
+      "path": "/stays/the-cumberland-london-london"
+    },
+    {
+      "hotelId": "lp32bbd",
+      "slug": "novotel-london-bridge-london",
+      "city": "London",
+      "name": "Novotel London Bridge",
+      "path": "/stays/novotel-london-bridge-london"
+    },
+    {
+      "hotelId": "lp37008",
+      "slug": "the-clermont-london-charing-cross-london",
+      "city": "London",
+      "name": "The Clermont London, Charing Cross",
+      "path": "/stays/the-clermont-london-charing-cross-london"
+    },
+    {
+      "hotelId": "lp21aba",
+      "slug": "the-belgrave-hotel-london",
+      "city": "London",
+      "name": "The Belgrave Hotel",
+      "path": "/stays/the-belgrave-hotel-london"
+    },
+    {
+      "hotelId": "lp39892",
+      "slug": "london-heathrow-marriott-hotel-london",
+      "city": "London",
+      "name": "London Heathrow Marriott Hotel",
+      "path": "/stays/london-heathrow-marriott-hotel-london"
+    },
+    {
+      "hotelId": "lp2acde",
+      "slug": "novotel-london-tower-bridge-london",
+      "city": "London",
+      "name": "Novotel London Tower Bridge",
+      "path": "/stays/novotel-london-tower-bridge-london"
+    },
+    {
+      "hotelId": "lp1db46",
+      "slug": "ten-manchester-street-london",
+      "city": "London",
+      "name": "Ten Manchester Street",
+      "path": "/stays/ten-manchester-street-london"
+    },
+    {
+      "hotelId": "lp30c34",
+      "slug": "eccleston-square-hotel-london",
+      "city": "London",
+      "name": "Eccleston Square Hotel",
+      "path": "/stays/eccleston-square-hotel-london"
     }
   ]
 }

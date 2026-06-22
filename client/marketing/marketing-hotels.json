@@ -682,5 +682,409 @@
         "tag": "Walkable base"
       }
     ]
+  },
+  "london-covent-garden": {
+    "luxury": [
+      {
+        "id": "lpec097",
+        "fallbackName": "London luxury hotel",
+        "tag": "Palace stay"
+      },
+      {
+        "id": "lp2a32f",
+        "fallbackName": "London luxury hotel",
+        "tag": "Five-star London"
+      }
+    ],
+    "boutique": [
+      {
+        "id": "lp2289a",
+        "fallbackName": "London boutique hotel",
+        "tag": "Design boutique"
+      },
+      {
+        "id": "lp7574c",
+        "fallbackName": "London boutique hotel",
+        "tag": "Neighborhood gem"
+      }
+    ],
+    "value": [
+      {
+        "id": "lp57344",
+        "fallbackName": "London value hotel",
+        "tag": "Central value"
+      },
+      {
+        "id": "lp2847d",
+        "fallbackName": "London value hotel",
+        "tag": "Walkable base"
+      }
+    ]
+  },
+  "london-marylebone": {
+    "luxury": [
+      {
+        "id": "lp657484d5",
+        "fallbackName": "London luxury hotel",
+        "tag": "Palace stay"
+      },
+      {
+        "id": "lp1d73f",
+        "fallbackName": "London luxury hotel",
+        "tag": "Five-star London"
+      }
+    ],
+    "boutique": [
+      {
+        "id": "lp655a4af1",
+        "fallbackName": "London boutique hotel",
+        "tag": "Design boutique"
+      },
+      {
+        "id": "lp1e9bc",
+        "fallbackName": "London boutique hotel",
+        "tag": "Neighborhood gem"
+      }
+    ],
+    "value": [
+      {
+        "id": "lp656d2b32",
+        "fallbackName": "London value hotel",
+        "tag": "Central value"
+      },
+      {
+        "id": "lp1fe50",
+        "fallbackName": "London value hotel",
+        "tag": "Walkable base"
+      }
+    ]
+  },
+  "london-notting-hill": {
+    "luxury": [
+      {
+        "id": "lp655564f6",
+        "fallbackName": "London luxury hotel",
+        "tag": "Palace stay"
+      },
+      {
+        "id": "lpc98e0",
+        "fallbackName": "London luxury hotel",
+        "tag": "Five-star London"
+      }
+    ],
+    "boutique": [
+      {
+        "id": "lp65889ce2",
+        "fallbackName": "London boutique hotel",
+        "tag": "Design boutique"
+      },
+      {
+        "id": "lp1a3581",
+        "fallbackName": "London boutique hotel",
+        "tag": "Neighborhood gem"
+      }
+    ],
+    "value": [
+      {
+        "id": "lp655f86b1",
+        "fallbackName": "London value hotel",
+        "tag": "Central value"
+      },
+      {
+        "id": "lp657ae5cc",
+        "fallbackName": "London value hotel",
+        "tag": "Walkable base"
+      }
+    ]
+  },
+  "london-shoreditch": {
+    "luxury": [
+      {
+        "id": "lp8cbeb",
+        "fallbackName": "London luxury hotel",
+        "tag": "Palace stay"
+      },
+      {
+        "id": "lp6559e524",
+        "fallbackName": "London luxury hotel",
+        "tag": "Five-star London"
+      }
+    ],
+    "boutique": [
+      {
+        "id": "lp8ded9",
+        "fallbackName": "London boutique hotel",
+        "tag": "Design boutique"
+      },
+      {
+        "id": "lp65583fb0",
+        "fallbackName": "London boutique hotel",
+        "tag": "Neighborhood gem"
+      }
+    ],
+    "value": [
+      {
+        "id": "lpa77e5",
+        "fallbackName": "London value hotel",
+        "tag": "Central value"
+      },
+      {
+        "id": "lp88700",
+        "fallbackName": "London value hotel",
+        "tag": "Walkable base"
+      }
+    ]
+  },
+  "london-south-kensington": {
+    "luxury": [
+      {
+        "id": "lp69349",
+        "fallbackName": "London luxury hotel",
+        "tag": "Palace stay"
+      },
+      {
+        "id": "lp1f858",
+        "fallbackName": "London luxury hotel",
+        "tag": "Five-star London"
+      }
+    ],
+    "boutique": [
+      {
+        "id": "lp2ca11",
+        "fallbackName": "London boutique hotel",
+        "tag": "Design boutique"
+      },
+      {
+        "id": "lp67fb6",
+        "fallbackName": "London boutique hotel",
+        "tag": "Neighborhood gem"
+      }
+    ],
+    "value": [
+      {
+        "id": "lp6934a",
+        "fallbackName": "London value hotel",
+        "tag": "Central value"
+      },
+      {
+        "id": "lp5ad4c",
+        "fallbackName": "London value hotel",
+        "tag": "Walkable base"
+      }
+    ]
+  },
+  "london-westminster": {
+    "luxury": [
+      {
+        "id": "lp3e139",
+        "fallbackName": "London luxury hotel",
+        "tag": "Palace stay"
+      },
+      {
+        "id": "lp36a51",
+        "fallbackName": "London luxury hotel",
+        "tag": "Five-star London"
+      }
+    ],
+    "boutique": [
+      {
+        "id": "lp60042",
+        "fallbackName": "London boutique hotel",
+        "tag": "Design boutique"
+      },
+      {
+        "id": "lp67fad",
+        "fallbackName": "London boutique hotel",
+        "tag": "Neighborhood gem"
+      }
+    ],
+    "value": [
+      {
+        "id": "lp236e7",
+        "fallbackName": "London value hotel",
+        "tag": "Central value"
+      },
+      {
+        "id": "lp2b2b8",
+        "fallbackName": "London value hotel",
+        "tag": "Walkable base"
+      }
+    ]
+  },
+  "london-luxury": [
+    {
+      "id": "lpec097",
+      "fallbackName": "Luxury London hotel",
+      "tag": "Palace stay"
+    },
+    {
+      "id": "lp2a32f",
+      "fallbackName": "Luxury London hotel",
+      "tag": "Five-star London"
+    },
+    {
+      "id": "lp2289a",
+      "fallbackName": "Luxury London hotel",
+      "tag": "London stay"
+    },
+    {
+      "id": "lp7574c",
+      "fallbackName": "Luxury London hotel",
+      "tag": "London stay"
+    }
+  ],
+  "london-romantic": [
+    {
+      "id": "lp2289a",
+      "fallbackName": "Romantic London hotel",
+      "tag": "Palace stay"
+    },
+    {
+      "id": "lp7574c",
+      "fallbackName": "Romantic London hotel",
+      "tag": "Five-star London"
+    },
+    {
+      "id": "lp57344",
+      "fallbackName": "Romantic London hotel",
+      "tag": "London stay"
+    },
+    {
+      "id": "lp2847d",
+      "fallbackName": "Romantic London hotel",
+      "tag": "London stay"
+    }
+  ],
+  "london-classic": [
+    {
+      "id": "lp57344",
+      "fallbackName": "Classic London hotel",
+      "tag": "Palace stay"
+    },
+    {
+      "id": "lp2847d",
+      "fallbackName": "Classic London hotel",
+      "tag": "Five-star London"
+    },
+    {
+      "id": "lp657484d5",
+      "fallbackName": "Classic London hotel",
+      "tag": "London stay"
+    },
+    {
+      "id": "lp1d73f",
+      "fallbackName": "Classic London hotel",
+      "tag": "London stay"
+    }
+  ],
+  "london-boutique": {
+    "westminster": [
+      {
+        "id": "lp60042",
+        "fallbackName": "London boutique hotel",
+        "tag": "Design boutique"
+      },
+      {
+        "id": "lp67fad",
+        "fallbackName": "London boutique hotel",
+        "tag": "Neighborhood gem"
+      }
+    ],
+    "covent-garden": [
+      {
+        "id": "lp2289a",
+        "fallbackName": "London boutique hotel",
+        "tag": "Design boutique"
+      },
+      {
+        "id": "lp7574c",
+        "fallbackName": "London boutique hotel",
+        "tag": "Neighborhood gem"
+      }
+    ],
+    "marylebone": [
+      {
+        "id": "lp655a4af1",
+        "fallbackName": "London boutique hotel",
+        "tag": "Design boutique"
+      },
+      {
+        "id": "lp1e9bc",
+        "fallbackName": "London boutique hotel",
+        "tag": "Neighborhood gem"
+      }
+    ],
+    "romantic": [
+      {
+        "id": "lp2289a",
+        "fallbackName": "Romantic London hotel",
+        "tag": "Palace stay"
+      },
+      {
+        "id": "lp7574c",
+        "fallbackName": "Romantic London hotel",
+        "tag": "Five-star London"
+      }
+    ]
+  },
+  "london-cafe-vibe": [
+    {
+      "id": "lp655a4af1",
+      "fallbackName": "London boutique hotel",
+      "tag": "Design boutique"
+    },
+    {
+      "id": "lp1e9bc",
+      "fallbackName": "London boutique hotel",
+      "tag": "Neighborhood gem"
+    },
+    {
+      "id": "lp65889ce2",
+      "fallbackName": "London boutique hotel",
+      "tag": "Design boutique"
+    },
+    {
+      "id": "lp1a3581",
+      "fallbackName": "London boutique hotel",
+      "tag": "Neighborhood gem"
+    }
+  ],
+  "london-walkable": {
+    "westminster": [
+      {
+        "id": "lp236e7",
+        "fallbackName": "London value hotel",
+        "tag": "Central value"
+      },
+      {
+        "id": "lp2b2b8",
+        "fallbackName": "London value hotel",
+        "tag": "Walkable base"
+      }
+    ],
+    "covent-garden": [
+      {
+        "id": "lp57344",
+        "fallbackName": "London value hotel",
+        "tag": "Central value"
+      },
+      {
+        "id": "lp2847d",
+        "fallbackName": "London value hotel",
+        "tag": "Walkable base"
+      }
+    ],
+    "south-kensington": [
+      {
+        "id": "lp6934a",
+        "fallbackName": "London value hotel",
+        "tag": "Central value"
+      },
+      {
+        "id": "lp5ad4c",
+        "fallbackName": "London value hotel",
+        "tag": "Walkable base"
+      }
+    ]
   }
 }

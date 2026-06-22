@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-06-19T15:35:48.541Z",
+  "generatedAt": "2026-06-22T17:16:56.977Z",
   "cities": {
     "Paris": {
       "status": "complete",
@@ -16,6 +16,14 @@
       "searchableHotels": 3465,
       "searchableLabel": "3,400+",
       "catalogLabel": "3,400+"
+    },
+    "London": {
+      "status": "complete",
+      "catalogHotels": 4000,
+      "photoCount": 97701,
+      "searchableHotels": 4051,
+      "searchableLabel": "4,000+",
+      "catalogLabel": "4,000+"
     }
   }
 }

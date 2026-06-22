@@ -14,6 +14,7 @@ const ROUTES = new Set([
   "/sitemap-marketing.xml",
   "/sitemap-stays-mexico-city.xml",
   "/sitemap-stays-paris.xml",
+  "/sitemap-stays-london.xml",
   ...Object.keys(marketingHtmlMap()),
 ]);
 

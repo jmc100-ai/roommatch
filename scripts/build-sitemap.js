@@ -34,6 +34,7 @@ ${entries.join("\n")}
 const allPaths = sitemapPaths();
 const stayMx = staysSitemapPaths("Mexico City");
 const stayParis = staysSitemapPaths("Paris");
+const stayLondon = staysSitemapPaths("London");
 const marketingOnly = allPaths.filter((p) => !p.startsWith("/stays/"));
 
 const coreEntries = [
@@ -45,14 +46,17 @@ const coreEntries = [
 
 const stayMxEntries = stayMx.map((p) => urlEntry(`${ORIGIN}${p}`, "monthly", "0.7"));
 const stayParisEntries = stayParis.map((p) => urlEntry(`${ORIGIN}${p}`, "monthly", "0.7"));
+const stayLondonEntries = stayLondon.map((p) => urlEntry(`${ORIGIN}${p}`, "monthly", "0.7"));
 
 writeUrlset("sitemap-marketing.xml", coreEntries);
 if (stayMxEntries.length) writeUrlset("sitemap-stays-mexico-city.xml", stayMxEntries);
 if (stayParisEntries.length) writeUrlset("sitemap-stays-paris.xml", stayParisEntries);
+if (stayLondonEntries.length) writeUrlset("sitemap-stays-london.xml", stayLondonEntries);
 
 const sitemapFiles = ["sitemap-marketing.xml"];
 if (stayMxEntries.length) sitemapFiles.push("sitemap-stays-mexico-city.xml");
 if (stayParisEntries.length) sitemapFiles.push("sitemap-stays-paris.xml");
+if (stayLondonEntries.length) sitemapFiles.push("sitemap-stays-london.xml");
 
 const indexXml = `<?xml version="1.0" encoding="UTF-8"?>
 <sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
@@ -66,7 +70,7 @@ fs.writeFileSync(path.join(CLIENT, "sitemap-index.xml"), indexXml, "utf8");
 
 // Legacy single file — marketing + first 500 stays for older GSC entries
 const legacyStayCap = 500;
-const legacyStays = [...stayMx, ...stayParis].slice(0, legacyStayCap);
+const legacyStays = [...stayMx, ...stayParis, ...stayLondon].slice(0, legacyStayCap);
 const legacyEntries = [
   ...coreEntries,
   ...legacyStays.map((p) => urlEntry(`${ORIGIN}${p}`, "monthly", "0.7")),
@@ -74,12 +78,12 @@ const legacyEntries = [
 writeUrlset("sitemap.xml", legacyEntries);
 
 console.log(
-  `Sitemaps: marketing=${marketingOnly.length + 3}, stays MX=${stayMx.length}, stays Paris=${stayParis.length}, index=${sitemapFiles.length} files`
+  `Sitemaps: marketing=${marketingOnly.length + 3}, stays MX=${stayMx.length}, stays Paris=${stayParis.length}, stays London=${stayLondon.length}, index=${sitemapFiles.length} files`
 );
 
 // HTML sitemap for humans + crawl discovery
 function routesByCity() {
-  const groups = { hub: [], Paris: [], "Mexico City": [], stays: [] };
+  const groups = { hub: [], Paris: [], "Mexico City": [], London: [], stays: [] };
   const seen = new Set();
   for (const r of allMarketingRoutes()) {
     if (r.alias || seen.has(r.path) || r.path === "/sitemap") continue;
@@ -88,6 +92,7 @@ function routesByCity() {
     else if (r.path === "/destinations") groups.hub.push(r);
     else if (r.city === "Paris") groups.Paris.push(r);
     else if (r.city === "Mexico City") groups["Mexico City"].push(r);
+    else if (r.city === "London") groups.London.push(r);
     else groups.hub.push(r);
   }
   return groups;
@@ -108,7 +113,7 @@ const htmlSitemap = `<!DOCTYPE html>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="robots" content="index,follow" />
   <title>Site Map — All TravelByVibe Destination Guides</title>
-  <meta name="description" content="Complete list of TravelByVibe SEO destination guides: Paris and Mexico City hotel search, neighborhood guides, hotel stay pages, and visual room search." />
+  <meta name="description" content="Complete list of TravelByVibe SEO destination guides: Paris, Mexico City, and London hotel search, neighborhood guides, hotel stay pages, and visual room search." />
   <link rel="canonical" href="__ORIGIN__/sitemap" />
   <link rel="icon" href="/favicon.ico" sizes="48x48" />
   <link rel="stylesheet" href="/marketing/marketing.css" />
@@ -147,11 +152,17 @@ ${linkList(g["Mexico City"])}
       </ul>
     </section>
     <section class="sitemap-sec">
+      <h2>London guides</h2>
+      <ul class="sitemap-list">
+${linkList(g.London)}
+      </ul>
+    </section>
+    <section class="sitemap-sec">
       <h2>Hotel stay pages (sample)</h2>
       <ul class="sitemap-list">
 ${linkList(g.stays, 40)}
       </ul>
-      <p style="font-size:14px;margin-top:8px"><a href="__ORIGIN__/sitemap-stays-mexico-city.xml">All Mexico City stays (XML)</a> · <a href="__ORIGIN__/sitemap-stays-paris.xml">All Paris stays (XML)</a></p>
+      <p style="font-size:14px;margin-top:8px"><a href="__ORIGIN__/sitemap-stays-mexico-city.xml">All Mexico City stays (XML)</a> · <a href="__ORIGIN__/sitemap-stays-paris.xml">All Paris stays (XML)</a> · <a href="__ORIGIN__/sitemap-stays-london.xml">All London stays (XML)</a></p>
     </section>
     <p style="margin-top:32px"><a href="__ORIGIN__/sitemap-index.xml">Sitemap index (XML)</a></p>
   </main>

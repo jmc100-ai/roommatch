@@ -52,7 +52,7 @@ async function refreshCityStats() {
   const db = createClient(url, key);
   const stats = { generatedAt: new Date().toISOString(), cities: {} };
 
-  for (const city of ["Paris", "Mexico City"]) {
+  for (const city of ["Paris", "Mexico City", "London"]) {
     const [{ data: ic }, inv] = await Promise.all([
       db.from("v2_indexed_cities").select("status,hotel_count,photo_count").eq("city", city).maybeSingle(),
       countSearchableHotels(db, city),
@@ -79,6 +79,7 @@ function loadCityStats() {
       cities: {
         Paris: { searchableLabel: "4,900+", searchableHotels: 4900, status: "complete" },
         "Mexico City": { searchableLabel: "3,400+", searchableHotels: 3400, status: "complete" },
+        London: { searchableLabel: "3,900+", searchableHotels: 3900, status: "complete" },
       },
     };
   }
@@ -90,11 +91,13 @@ function cityStat(city, field) {
 }
 
 function searchableLabel(city) {
-  return cityStat(city, "searchableLabel") || (city === "Paris" ? "700+" : "3,500+");
+  const fallbacks = { Paris: "700+", "Mexico City": "3,500+", London: "3,900+" };
+  return cityStat(city, "searchableLabel") || fallbacks[city] || "1,000+";
 }
 
 function socialProofSpan(city) {
-  return `${searchableLabel(city)} ${city === "Paris" ? "Paris" : "Mexico City"} hotels with room photos`;
+  const labels = { Paris: "Paris", "Mexico City": "Mexico City", London: "London" };
+  return `${searchableLabel(city)} ${labels[city] || city} hotels with room photos`;
 }
 
 if (require.main === module) {

@@ -16,11 +16,16 @@
   function marketingCampaign() {
     const body = document.body;
     if (body && body.dataset && body.dataset.marketingCampaign) return body.dataset.marketingCampaign;
-    return marketingCity() === 'Paris' ? 'paris_seo_2026' : 'cdmx_seo_2026';
+    const city = marketingCity();
+    if (city === 'Paris') return 'paris_seo_2026';
+    if (city === 'London') return 'london_seo_2026';
+    return 'cdmx_seo_2026';
   }
 
   function cityLabel(city) {
-    return city === 'Paris' ? 'Paris' : 'Mexico City';
+    if (city === 'Paris') return 'Paris';
+    if (city === 'London') return 'London';
+    return 'Mexico City';
   }
 
   function stars(n) {

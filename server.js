@@ -518,6 +518,7 @@ const SITEMAP_FILENAMES = [
   "sitemap-marketing.xml",
   "sitemap-stays-mexico-city.xml",
   "sitemap-stays-paris.xml",
+  "sitemap-stays-london.xml",
 ];
 function serveSitemapFile(filename) {
   const fp = path.join(__dirname, "client", filename);

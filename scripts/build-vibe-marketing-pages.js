@@ -26,6 +26,14 @@ const IMG = {
   Paris: "https://upload.wikimedia.org/wikipedia/commons/thumb/8/85/Tour_Eiffel_Wikimedia_Commons_%28cropped%29.jpg/1280px-Tour_Eiffel_Wikimedia_Commons_%28cropped%29.jpg",
   "Mexico City":
     "https://upload.wikimedia.org/wikipedia/commons/thumb/4/4f/Mexico_City_Skyline_%285604867225%29.jpg/1280px-Mexico_City_Skyline_%285604867225%29.jpg",
+  London:
+    "https://upload.wikimedia.org/wikipedia/commons/thumb/b/b1/Big_Ben%2C_London%2C_UK_-_Dawn_-_November_2008_-_Cut.jpg/1280px-Big_Ben%2C_London%2C_UK_-_Dawn_-_November_2008_-_Cut.jpg",
+};
+
+const CITY_HUB_PATH = {
+  Paris: { hotels: "paris-hotels", where: "where-to-stay-in-paris", label: "Paris" },
+  "Mexico City": { hotels: "mexico-city-hotels", where: "where-to-stay-in-mexico-city", label: "Mexico City" },
+  London: { hotels: "london-hotels", where: "where-to-stay-in-london", label: "London" },
 };
 
 const VIBE_PAGES = [
@@ -119,6 +127,51 @@ const VIBE_PAGES = [
     lead: "Sleek lines, statement baths, and design-forward boutiques — ranked by real room photos, not lobby renders.",
     searchQ: "sleek design hotel room",
   },
+  {
+    slug: "london-hotels-with-rainfall-shower",
+    city: "London",
+    campaign: "london_seo_2026",
+    fact: "rainfall_shower",
+    h1: "Best London Hotels with Rainfall Shower",
+    lead: "Palace baths and boutique rain showers — search London hotels by real bathroom photography.",
+    searchQ: "rainfall shower",
+  },
+  {
+    slug: "london-hotels-with-balcony",
+    city: "London",
+    campaign: "london_seo_2026",
+    fact: "balcony",
+    h1: "Best London Hotels with a Balcony",
+    lead: "Terrace mornings, Thames glimpses, and Notting Hill views — verify the room before you commit.",
+    searchQ: "balcony view",
+  },
+  {
+    slug: "london-hotels-for-couples",
+    city: "London",
+    campaign: "london_seo_2026",
+    fact: "soaking_tub",
+    h1: "Best London Hotels for Couples",
+    lead: "Romantic London is in the details — soaking tubs, moody suites, and village-hill views matched to photos.",
+    searchQ: "romantic soaking tub",
+  },
+  {
+    slug: "london-quiet-hotels",
+    city: "London",
+    campaign: "london_seo_2026",
+    style: "cozy_warm",
+    h1: "Best Quiet Hotels in London",
+    lead: "Marylebone calm, South Kensington hush, and cozy room moods — when you want London without the late-night buzz.",
+    searchQ: "quiet cozy Marylebone",
+  },
+  {
+    slug: "london-design-hotels",
+    city: "London",
+    campaign: "london_seo_2026",
+    style: "sleek_polished",
+    h1: "Best Design Hotels in London",
+    lead: "Sleek Shoreditch conversions, polished Marylebone boutiques — ranked by real room photos, not lobby renders.",
+    searchQ: "sleek design hotel room",
+  },
 ];
 
 const ALIAS_ROUTES = [
@@ -138,10 +191,18 @@ const ALIAS_ROUTES = [
     category: "hub",
     alias: true,
   },
+  {
+    path: "/london-hotels-by-vibe",
+    file: "london-hotels.html",
+    title: "London Hotels by Vibe — Visual Search",
+    city: "London",
+    category: "hub",
+    alias: true,
+  },
 ];
 
 function header(city, campaign, navUtm) {
-  const isParis = city === "Paris";
+  const hub = CITY_HUB_PATH[city] || CITY_HUB_PATH.Paris;
   return `<header class="mhead">
     <div class="mhead-inner">
       <a class="mbrand" href="__ORIGIN__/">
@@ -149,10 +210,10 @@ function header(city, campaign, navUtm) {
         TravelByVibe
       </a>
       <nav class="mnav" aria-label="Marketing">
-        <a href="__ORIGIN__/${isParis ? "paris-hotels" : "mexico-city-hotels"}">${isParis ? "Paris hotels" : "CDMX hotels"}</a>
-        <a href="__ORIGIN__/${isParis ? "where-to-stay-in-paris" : "where-to-stay-in-mexico-city"}">Where to stay</a>
+        <a href="__ORIGIN__/${hub.hotels}">${hub.label} hotels</a>
+        <a href="__ORIGIN__/${hub.where}">Where to stay</a>
         <a href="__ORIGIN__/destinations">Destinations</a>
-        <a class="mcta" href="${utmLink(city, campaign, navUtm)}">Try ${isParis ? "Paris" : "Mexico City"} →</a>
+        <a class="mcta" href="${utmLink(city, campaign, navUtm)}">Try ${hub.label} →</a>
       </nav>
     </div>
   </header>`;
@@ -192,9 +253,10 @@ function staticHotelCards(hotelIds, meta, photosByHotel, slugMap, city, campaign
 }
 
 function embedSearch(city, campaign, slug, defaultQ) {
-  const cVal = city === "Paris" ? "Paris" : "Mexico City";
+  const cVal = city;
+  const label = city === "Mexico City" ? "CDMX" : city;
   return `<div class="embed-search">
-      <h3>Find your ${city === "Paris" ? "Paris" : "CDMX"} hotel match</h3>
+      <h3>Find your ${label} hotel match</h3>
       <p>Describe the room you want — then we rank real hotel photos for you.</p>
       <form class="embed-search-row" action="__ORIGIN__/" method="get">
         <input type="hidden" name="city" value="${escHtml(cVal)}" />
