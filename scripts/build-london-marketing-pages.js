@@ -185,6 +185,9 @@ PAGES.push({
     }) +
       `<div class="wrap-wide">
     <section class="msec" style="padding-top:36px;margin-top:0;border-top:none">
+      <p class="msec-lead">Choosing <strong>where to stay in London</strong> is mostly a neighborhood decision — Westminster for royal icons, Covent Garden for West End theatre, South Kensington for museums, Marylebone for village charm, or Shoreditch for East London energy. This guide compares each district, then TravelByVibe matches you to hotels using <strong>real room photos</strong>.</p>
+      <h2 class="msec-title">Where to stay in London for first-timers</h2>
+      <p class="msec-lead"><strong>Westminster</strong> and <strong>Covent Garden</strong> are the most popular first-time picks — flat, walkable, and packed with landmarks. For a longer breakdown, see our <a href="__ORIGIN__/best-area-to-stay-in-london-first-time">best area to stay in London for first-time visitors</a> guide.</p>
       <p class="msec-kicker">At a glance</p>
       <h2 class="msec-title">${seoField("where-to-stay-in-london", "h2Featured", "Best neighborhoods at a glance")}</h2>
       ${HUB_LINKS}

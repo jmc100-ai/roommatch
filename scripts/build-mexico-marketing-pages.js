@@ -200,6 +200,9 @@ PAGES.push({
     }) +
       `<div class="wrap-wide">
     <section class="msec" style="padding-top:36px;margin-top:0;border-top:none">
+      <p class="msec-lead">Choosing <strong>where to stay in Mexico City</strong> (CDMX) is mostly a barrio call — Condesa for leafy cafés, Roma Norte for food and design, Polanco for luxury, Juárez for central value, or Centro Histórico for maximum sightseeing. This guide compares each neighborhood, then TravelByVibe matches you to hotels using <strong>real room photos</strong>.</p>
+      <h2 class="msec-title">Where to stay in Mexico City for first-timers</h2>
+      <p class="msec-lead"><strong>Condesa</strong> and <strong>Roma Norte</strong> are the most popular first-time picks — walkable, restaurant-dense, and easy without a car. For a longer breakdown, see our <a href="__ORIGIN__/best-area-to-stay-in-mexico-city-first-time">best area to stay in Mexico City for first-time visitors</a> guide.</p>
       <p class="msec-kicker">At a glance</p>
       <h2 class="msec-title">${seoField("where-to-stay-in-mexico-city", "h2Featured", "Best neighborhoods at a glance")}</h2>
       ${HUB_LINKS}

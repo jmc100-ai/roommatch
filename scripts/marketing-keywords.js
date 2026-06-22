@@ -23,7 +23,7 @@ const SEO_META = {
   "paris-hotels": {
     title: "Paris Hotels — Search by Real Room Photos",
     h1: "Best Hotels in Paris",
-    desc: `Best hotels in Paris: browse ${PARIS_COUNT} properties with real room and bathroom photos — Haussmann light, rainfall shower, Left Bank mood — free on TravelByVibe.`,
+    desc: `Best hotels in Paris: browse ${PARIS_COUNT} properties with real room photos — plus where to stay in Paris by neighborhood (Marais, Saint-Germain, Montmartre). Free on TravelByVibe.`,
     h2Travel: "Best Paris hotels by neighborhood",
   },
   "travel-paris-hotels": {
@@ -156,7 +156,7 @@ const SEO_META = {
   "mexico-city-hotels": {
     title: "Best Hotels in Mexico City — Search by Real Room Photos",
     h1: "Best Hotels in Mexico City",
-    desc: `Best hotels in Mexico City (CDMX): browse ${CDMX_COUNT} properties by neighborhood vibe and real room photos — rainfall shower, bright suite, design mood — free on TravelByVibe.`,
+    desc: `Best hotels in Mexico City (CDMX): browse ${CDMX_COUNT} properties with real room photos — plus where to stay in Mexico City by neighborhood (Condesa, Roma, Polanco). Free on TravelByVibe.`,
     h2Travel: "Best hotels in Mexico City by neighborhood",
   },
   "travel-mexico-city-hotels": {
@@ -302,7 +302,7 @@ const SEO_META = {
   "london-hotels": {
     title: "London Hotels — Search by Real Room Photos",
     h1: "Best Hotels in London",
-    desc: `Best hotels in London: browse ${LONDON_COUNT} properties with real room and bathroom photos — Victorian light, rainfall shower, Thames views — free on TravelByVibe.`,
+    desc: `Best hotels in London: browse ${LONDON_COUNT} properties with real room photos — plus where to stay in London by neighborhood (Westminster, Covent Garden, Marylebone). Free on TravelByVibe.`,
     h2Travel: "Best London hotels by neighborhood",
   },
   "travel-london-hotels": {
