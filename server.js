@@ -557,7 +557,7 @@ function serveRobotsTxt(_req, res) {
   res.setHeader("Content-Type", "text/plain; charset=utf-8");
   res.setHeader("Cache-Control", "public, max-age=86400, s-maxage=604800");
   res.send(
-    `User-agent: *\nAllow: /\nDisallow: /api/\n\nSitemap: ${SITE_PUBLIC_ORIGIN}/sitemap-index.xml\nSitemap: ${SITE_PUBLIC_ORIGIN}/sitemap.xml\n`
+    `User-agent: *\nAllow: /\nAllow: /marketing/marketing.css\nDisallow: /marketing/\nDisallow: /api/\n\nSitemap: ${SITE_PUBLIC_ORIGIN}/sitemap-index.xml\nSitemap: ${SITE_PUBLIC_ORIGIN}/sitemap.xml\n`
   );
 }
 app.get("/robots.txt", serveRobotsTxt);
@@ -1690,8 +1690,9 @@ function travelboopHostMiddleware(req, res, next) {
 app.use(travelboopHostMiddleware);
 
 /** Indexable marketing landing pages (static HTML). */
-const { marketingHtmlMap } = require("./scripts/marketing-paths");
+const { marketingHtmlMap, marketingStaticRedirectMap } = require("./scripts/marketing-paths");
 const MARKETING_HTML = marketingHtmlMap();
+const MARKETING_STATIC_REDIRECT = marketingStaticRedirectMap();
 
 // ── Password gate (BETA_GATE_ENABLED=0 disables; otherwise active when codes/passwords set) ─
 if (SITE_GATE_ACTIVE) {
@@ -1815,24 +1816,11 @@ async function serveGatedAppHtml(req, res) {
   return serveAppHtml(res);
 }
 
-function marketingOrigin(req) {
-  let proto = (req.headers["x-forwarded-proto"] || "https").split(",")[0].trim();
-  if (proto !== "http" && proto !== "https") proto = "https";
-  const host = (req.headers["x-forwarded-host"] || req.headers.host || "")
-    .split(",")[0]
-    .trim()
-    .replace(/:\d+$/, "");
-  if (host) return `${proto}://${host}`;
-  const base = (process.env.RENDER_EXTERNAL_URL || SITE_PUBLIC_ORIGIN).replace(/\/$/, "");
-  return /^https?:\/\//i.test(base) ? base : `https://${base}`;
-}
-
 function serveMarketingHtml(req, res, filename) {
   const fp = path.join(__dirname, "client", "marketing", filename);
   try {
     let html = fs.readFileSync(fp, "utf8");
-    const origin = marketingOrigin(req);
-    html = html.replace(/__ORIGIN__/g, origin);
+    html = html.replace(/__ORIGIN__/g, SITE_PUBLIC_ORIGIN);
     res.setHeader("Content-Type", "text/html; charset=utf-8");
     res.setHeader("Cache-Control", "public, max-age=120, s-maxage=600");
     setIndexableRobotsHeaders(res);
@@ -1981,6 +1969,18 @@ app.get("/must-have-spec.js", (_req, res) => {
   res.type("application/javascript");
   res.sendFile(path.join(__dirname, "lib", "must-have-spec.js"));
 });
+
+/** Raw files under /marketing/*.html bypass __ORIGIN__ injection — 301 to canonical routes. */
+function marketingStaticHtmlRedirect(req, res, next) {
+  const p = req.path || "";
+  if (!p.startsWith("/marketing/") || !p.endsWith(".html")) return next();
+  const rel = p.slice("/marketing/".length);
+  const canonical = MARKETING_STATIC_REDIRECT[rel];
+  if (!canonical) return res.status(404).type("text/plain").send("Not found");
+  const q = req.url.includes("?") ? req.url.slice(req.url.indexOf("?")) : "";
+  return res.redirect(301, `${canonical}${q}`);
+}
+app.use(marketingStaticHtmlRedirect);
 
 app.use(express.static(path.join(__dirname, "client"), {
   index: false,

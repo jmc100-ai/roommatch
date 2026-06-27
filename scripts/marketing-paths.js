@@ -131,6 +131,16 @@ function marketingHtmlMap() {
   return map;
 }
 
+/** Map marketing HTML file (under client/marketing/) → canonical public path for static redirects. */
+function marketingStaticRedirectMap() {
+  const map = {};
+  for (const r of allMarketingRoutes()) {
+    if (r.alias || map[r.file]) continue;
+    map[r.file] = r.path;
+  }
+  return map;
+}
+
 function staySlugForHotelId(hotelId) {
   return (GENERATED.slugByHotelId || {})[hotelId] || null;
 }
@@ -142,6 +152,7 @@ module.exports = {
   sitemapPaths,
   staysSitemapPaths,
   marketingHtmlMap,
+  marketingStaticRedirectMap,
   staySlugForHotelId,
   loadGeneratedRoutes,
 };
