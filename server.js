@@ -5912,17 +5912,9 @@ function resolveLaunchCityServer(name) {
   return null;
 }
 
-function _cityDedupeKey(name) {
-  return _cityKey(name).slice(0, 120);
-}
-
 function _clientIp(req) {
   const xff = (req.headers["x-forwarded-for"] || "").split(",")[0].trim();
   return xff || req.ip || req.connection?.remoteAddress || "";
-}
-
-function _utcDateStr(d = new Date()) {
-  return d.toISOString().slice(0, 10);
 }
 
 function _betaHtmlEscape(s) {
@@ -6054,8 +6046,8 @@ app.post("/api/feedback", async (req, res) => {
   }
 });
 
-// City Go / chip activity — always logs beta_city_entries; emails at most once per
-// distinct_id per UTC day per city when BETA_ACTIVITY_EMAIL_ENABLED (master switch).
+// City Go / chip activity — always logs beta_city_entries; emails on every entry when
+// BETA_ACTIVITY_EMAIL_ENABLED (master switch).
 // Body: { distinctId, rawCity, source?: 'go'|'chip', release?, viewport? }.
 // Legacy: `city` accepted as alias for rawCity.
 app.post("/api/activity", async (req, res) => {
@@ -6069,8 +6061,6 @@ app.post("/api/activity", async (req, res) => {
     const source = sourceRaw === "chip" ? "chip" : "go";
     const resolvedCity = resolveLaunchCityServer(rawCity);
     const isLaunchCity = !!resolvedCity;
-    const activityDay = _utcDateStr();
-    const dedupeKey = _cityDedupeKey(rawCity);
     const ctxMeta = {
       release: String(b.release || "").slice(0, 80) || null,
       viewport: String(b.viewport || "").slice(0, 32) || null,
@@ -6104,57 +6094,35 @@ app.post("/api/activity", async (req, res) => {
 
     if (!betaActivityEmailSwitch()) {
       reason = "disabled";
-    } else if (!supabaseAdmin) {
-      reason = "no_db";
     } else if (!process.env.BETA_ACTIVITY_EMAIL || !process.env.RESEND_API_KEY || !process.env.BETA_FROM) {
       reason = "email_not_configured";
     } else {
-      const notifyRow = {
-        distinct_id: distinctId,
-        activity_day: activityDay,
-        city: dedupeKey,
+      notified = true;
+      const posthogPersonUrl = betaPosthogPersonUrl(distinctId);
+      trackServer(distinctId, "city_activity_email_server", {
         raw_city: rawCity,
         resolved_city: resolvedCity,
         is_launch_city: isLaunchCity,
         source,
-        ...ctxMeta,
-      };
-      const { error: insErr } = await supabaseAdmin.from("beta_activity_notify").insert(notifyRow);
-      if (insErr) {
-        if (insErr.code === "23505") {
-          reason = "already_notified_today_for_city";
-        } else {
-          console.error("[activity] notify insert failed:", insErr.message);
-          return res.status(500).json({ error: "db_insert_failed" });
-        }
-      } else {
-        notified = true;
-        const posthogPersonUrl = betaPosthogPersonUrl(distinctId);
-        trackServer(distinctId, "city_activity_email_server", {
-          raw_city: rawCity,
-          resolved_city: resolvedCity,
-          is_launch_city: isLaunchCity,
-          source,
-          activity_day: activityDay,
-        });
+      });
 
-        const resend = _getResend();
-        if (resend) {
-          const escape = _betaHtmlEscape;
-          const actionLabel = source === "chip" ? "picked a city chip" : "clicked Go";
-          const headline = isLaunchCity
-            ? `Someone ${actionLabel} — launch city`
-            : `City request — not a launch city yet`;
-          const subject = isLaunchCity
-            ? `[TravelByVibe beta] ${source === "chip" ? "City chip" : "Home Go"} — ${rawCity}`
-            : `[TravelByVibe beta] City request — ${rawCity}`;
-          const resolvedLine = resolvedCity && resolvedCity !== rawCity
-            ? `<tr><td style="padding:2px 8px 2px 0;color:#888">resolved to</td><td>${escape(resolvedCity)}</td></tr>`
-            : "";
-          const launchBadge = isLaunchCity
-            ? `<span style="color:#2d6a4f;font-weight:600">✓ launch city</span>`
-            : `<span style="color:#b45309;font-weight:600">⛔ not launch</span>`;
-          const html = `
+      const resend = _getResend();
+      if (resend) {
+        const escape = _betaHtmlEscape;
+        const actionLabel = source === "chip" ? "picked a city chip" : "clicked Go";
+        const headline = isLaunchCity
+          ? `Someone ${actionLabel} — launch city`
+          : `City request — not a launch city yet`;
+        const subject = isLaunchCity
+          ? `[TravelByVibe beta] ${source === "chip" ? "City chip" : "Home Go"} — ${rawCity}`
+          : `[TravelByVibe beta] City request — ${rawCity}`;
+        const resolvedLine = resolvedCity && resolvedCity !== rawCity
+          ? `<tr><td style="padding:2px 8px 2px 0;color:#888">resolved to</td><td>${escape(resolvedCity)}</td></tr>`
+          : "";
+        const launchBadge = isLaunchCity
+          ? `<span style="color:#2d6a4f;font-weight:600">✓ launch city</span>`
+          : `<span style="color:#b45309;font-weight:600">⛔ not launch</span>`;
+        const html = `
           <div style="font-family:-apple-system,Segoe UI,Roboto,sans-serif;color:#1a1a1e;max-width:560px">
             <h2 style="font-family:Georgia,serif;color:#a8893d;margin:0 0 4px">${escape(headline)}</h2>
             <p style="color:#666;font-size:12px;margin:0 0 16px">${escape(new Date().toUTCString())}</p>
@@ -6163,34 +6131,33 @@ app.post("/api/activity", async (req, res) => {
               ${resolvedLine}
               <tr><td style="padding:2px 8px 2px 0;color:#888">status</td><td>${launchBadge}</td></tr>
               <tr><td style="padding:2px 8px 2px 0;color:#888">source</td><td>${escape(source)}</td></tr>
-              ${notifyRow.distinct_id ? `<tr><td style="padding:2px 8px 2px 0;color:#888">distinct_id</td><td><code>${escape(notifyRow.distinct_id)}</code></td></tr>` : ""}
+              ${distinctId ? `<tr><td style="padding:2px 8px 2px 0;color:#888">distinct_id</td><td><code>${escape(distinctId)}</code></td></tr>` : ""}
               ${posthogPersonUrl ? `<tr><td style="padding:2px 8px 2px 0;color:#888">PostHog</td><td><a href="${escape(posthogPersonUrl)}">session replay</a></td></tr>` : ""}
-              ${notifyRow.release ? `<tr><td style="padding:2px 8px 2px 0;color:#888">release</td><td><code>${escape(notifyRow.release)}</code></td></tr>` : ""}
-              ${notifyRow.viewport ? `<tr><td style="padding:2px 8px 2px 0;color:#888">viewport</td><td>${escape(notifyRow.viewport)}</td></tr>` : ""}
-              ${notifyRow.user_agent ? `<tr><td style="padding:2px 8px 2px 0;color:#888">user-agent</td><td style="color:#999;font-size:11px">${escape(notifyRow.user_agent)}</td></tr>` : ""}
+              ${ctxMeta.release ? `<tr><td style="padding:2px 8px 2px 0;color:#888">release</td><td><code>${escape(ctxMeta.release)}</code></td></tr>` : ""}
+              ${ctxMeta.viewport ? `<tr><td style="padding:2px 8px 2px 0;color:#888">viewport</td><td>${escape(ctxMeta.viewport)}</td></tr>` : ""}
+              ${ctxMeta.user_agent ? `<tr><td style="padding:2px 8px 2px 0;color:#888">user-agent</td><td style="color:#999;font-size:11px">${escape(ctxMeta.user_agent)}</td></tr>` : ""}
             </table>
-            <p style="color:#999;font-size:11px;margin:20px 0 0">At most one email per browser per city per UTC day. All entries in <code>beta_city_entries</code>.</p>
+            <p style="color:#999;font-size:11px;margin:20px 0 0">All entries logged in <code>beta_city_entries</code>.</p>
           </div>`;
-          const plain =
-            `${headline}\n\n` +
-            `city entered: ${rawCity}\n` +
-            (resolvedCity && resolvedCity !== rawCity ? `resolved to: ${resolvedCity}\n` : "") +
-            `status: ${isLaunchCity ? "launch city" : "not launch"}\n` +
-            `source: ${source}\n` +
-            (notifyRow.distinct_id ? `distinct_id: ${notifyRow.distinct_id}\n` : "") +
-            (posthogPersonUrl ? `posthog: ${posthogPersonUrl}\n` : "") +
-            (notifyRow.release ? `release: ${notifyRow.release}\n` : "") +
-            (notifyRow.viewport ? `viewport: ${notifyRow.viewport}\n` : "");
-          resend.emails.send({
-            from: process.env.BETA_FROM,
-            to: process.env.BETA_ACTIVITY_EMAIL,
-            subject,
-            html,
-            text: plain,
-          }).then((r) => {
-            if (r?.error) console.warn("[activity] resend error:", r.error.message || r.error);
-          }).catch((e) => console.warn("[activity] resend send failed:", e.message));
-        }
+        const plain =
+          `${headline}\n\n` +
+          `city entered: ${rawCity}\n` +
+          (resolvedCity && resolvedCity !== rawCity ? `resolved to: ${resolvedCity}\n` : "") +
+          `status: ${isLaunchCity ? "launch city" : "not launch"}\n` +
+          `source: ${source}\n` +
+          (distinctId ? `distinct_id: ${distinctId}\n` : "") +
+          (posthogPersonUrl ? `posthog: ${posthogPersonUrl}\n` : "") +
+          (ctxMeta.release ? `release: ${ctxMeta.release}\n` : "") +
+          (ctxMeta.viewport ? `viewport: ${ctxMeta.viewport}\n` : "");
+        resend.emails.send({
+          from: process.env.BETA_FROM,
+          to: process.env.BETA_ACTIVITY_EMAIL,
+          subject,
+          html,
+          text: plain,
+        }).then((r) => {
+          if (r?.error) console.warn("[activity] resend error:", r.error.message || r.error);
+        }).catch((e) => console.warn("[activity] resend send failed:", e.message));
       }
     }
 

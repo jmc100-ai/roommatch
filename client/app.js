@@ -238,7 +238,7 @@
   }
   window._tbTrack = track;
 
-  /** Fire-and-forget: log city entry; server emails at most once per browser/city/UTC day. */
+  /** Fire-and-forget: log city entry; server emails on every Go/chip when activity email is enabled. */
   function notifyBetaCityEntry(rawCity, source) {
     const raw = String(rawCity || '').trim();
     if (!raw) return;
